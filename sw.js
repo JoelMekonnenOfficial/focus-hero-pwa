@@ -1,8 +1,8 @@
 /* Focus Hero v4 — service worker
  * versioned cache + stale-while-revalidate for HTML, skipWaiting + clients.claim.
- * v4 bump: fh-v4-3 — ships stopwatch (v4.1) + laps panel (v4.2.1) to live PWA clients.
+ * v4 bump: fh-v4-4 — adds analytics modal, per-task daily log, full emoji picker grid.
  */
-const CACHE_VERSION = "fh-v4-3";
+const CACHE_VERSION = "fh-v4-4";
 const CACHE_NAME = `focus-hero-${CACHE_VERSION}`;
 const PRECACHE = [
   "./",

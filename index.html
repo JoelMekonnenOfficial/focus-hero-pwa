@@ -266,11 +266,12 @@ kbd{font-family:var(--mono);font-size:.78em;padding:1px 6px;border-radius:6px;ba
 .task-add-row .emoji-btn{padding:.5rem .7rem;font-size:1.1rem;min-width:3rem;text-align:center}
 .task-add-row input[type=text]{flex:1;min-width:140px}
 
-/* emoji picker popover */
-.emoji-pop{position:absolute;z-index:90;background:var(--panel);border:1px solid var(--border-strong);border-radius:12px;padding:8px;box-shadow:var(--shadow);display:grid;grid-template-columns:repeat(8,1fr);gap:4px;max-width:280px}
-.emoji-pop button{padding:4px 6px;font-size:1.15rem;border:1px solid transparent;border-radius:6px;background:transparent}
+/* emoji picker popover — v4.3: scrollable for the expanded grid */
+.emoji-pop{position:absolute;z-index:90;background:var(--panel);border:1px solid var(--border-strong);border-radius:12px;padding:8px;box-shadow:var(--shadow);display:grid;grid-template-columns:repeat(8,1fr);gap:4px;max-width:300px;max-height:340px;overflow-y:auto;overflow-x:hidden}
+.emoji-pop button{padding:6px 6px;font-size:1.2rem;border:1px solid transparent;border-radius:6px;background:transparent;cursor:pointer}
 .emoji-pop button:hover{border-color:var(--accent);background:var(--panel-2)}
-.emoji-pop .emoji-custom{grid-column:1/-1;display:flex;gap:4px;margin-top:4px}
+.emoji-pop button:focus{outline:none;border-color:var(--accent)}
+.emoji-pop .emoji-custom{grid-column:1/-1;display:flex;gap:4px;margin-top:4px;position:sticky;bottom:-8px;background:var(--panel);padding-top:6px;border-top:1px solid var(--border)}
 .emoji-pop .emoji-custom input{flex:1;font-size:1.05rem;text-align:center}
 
 /* active-task inline display on timer card */
@@ -308,6 +309,22 @@ kbd{font-family:var(--mono);font-size:.78em;padding:1px 6px;border-radius:6px;ba
 .stat-strip{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-top:10px;font-size:.82rem;color:var(--ink-dim)}
 .stat-strip b{color:var(--ink);font-variant-numeric:tabular-nums}
 
+/* --------- v4.3: analytics modal --------- */
+.analytics-body{display:flex;flex-direction:column;gap:14px;font-size:.92rem}
+.analytics-body h4{margin:0 0 6px;font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-dim)}
+.analytics-totals{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.analytics-card{background:var(--panel-2);border:1px solid var(--border);border-radius:10px;padding:10px 12px}
+.analytics-card .big{font-size:1.4rem;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums}
+.analytics-card .lbl{font-size:.78rem;color:var(--ink-dim);margin-top:2px}
+.analytics-list{display:flex;flex-direction:column;gap:6px}
+.analytics-row{display:grid;grid-template-columns:1.6rem 1fr auto;gap:10px;align-items:center;padding:6px 8px;border-radius:8px;background:var(--panel-2);border:1px solid var(--border)}
+.analytics-row .em{font-size:1.1rem;line-height:1;text-align:center}
+.analytics-row .nm{color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.analytics-row .vl{color:var(--ink);font-variant-numeric:tabular-nums;font-weight:600}
+.analytics-row .bar{grid-column:1/-1;height:4px;background:var(--panel);border-radius:3px;overflow:hidden;margin-top:2px}
+.analytics-row .bar > span{display:block;height:100%;background:linear-gradient(90deg,rgba(var(--accent-rgb),.9),rgba(var(--accent-2-rgb),.9))}
+.analytics-empty{color:var(--ink-mute);font-size:.86rem;font-style:italic;padding:6px 2px}
+
 /* --------- v4: touch targets (mobile) --------- */
 @media (pointer:coarse),(hover:none){
   button{min-height:44px;padding:.65rem 1rem}
@@ -333,13 +350,14 @@ kbd{font-family:var(--mono);font-size:.78em;padding:1px 6px;border-radius:6px;ba
     <div class="brand">
       <div class="logo" aria-hidden="true">FH</div>
       <div>
-        <h1>Focus Hero <span class="level-badge" id="version-badge">v4.0.1</span></h1>
+        <h1>Focus Hero <span class="level-badge" id="version-badge">v4.3</span></h1>
         <div class="sub" id="tagline">Slay distractions. Level up your life.</div>
       </div>
     </div>
     <div class="actions" role="toolbar" aria-label="Top actions">
       <button id="btn-settings" title="Settings (,)" aria-label="Settings">Settings</button>
       <button id="btn-sync" title="Cloud sync (Y)" aria-label="Cloud sync">Sync</button>
+      <button id="btn-analytics" title="Analytics — totals + this week (S)" aria-label="Analytics">Stats</button>
       <button id="btn-theme" title="Toggle theme (T)" aria-label="Toggle theme">Theme</button>
       <button id="btn-help" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">?</button>
     </div>
@@ -569,6 +587,7 @@ kbd{font-family:var(--mono);font-size:.78em;padding:1px 6px;border-radius:6px;ba
         <tr><td><kbd>Shift</kbd>+<kbd>B</kbd></td><td>Back up all data now</td></tr>
         <tr><td><kbd>T</kbd></td><td>Toggle theme</td></tr>
         <tr><td><kbd>Y</kbd></td><td>Open sync panel</td></tr>
+        <tr><td><kbd>S</kbd></td><td>Open analytics (totals + this week)</td></tr>
         <tr><td><kbd>,</kbd></td><td>Open settings</td></tr>
         <tr><td><kbd>?</kbd></td><td>This help</td></tr>
         <tr><td><kbd>Esc</kbd></td><td>Close dialogs / cancel rename</td></tr>
@@ -579,12 +598,23 @@ kbd{font-family:var(--mono);font-size:.78em;padding:1px 6px;border-radius:6px;ba
   </div>
 </div>
 
+<!-- Analytics modal — v4.3 -->
+<div class="modal-backdrop" id="analytics-modal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="analytics-title">
+    <button class="close" aria-label="Close" data-close>✕</button>
+    <h3 id="analytics-title">Analytics</h3>
+    <div id="analytics-body" class="analytics-body">Loading…</div>
+    <hr>
+    <div class="muted" style="font-size:.78rem">Per-task daily minutes accumulate forever and merge across devices via cloud sync — counts can never decrease.</div>
+  </div>
+</div>
+
 <!-- ================================================================
  * Focus Hero v4 — inline script (one file, no deps)
  * ================================================================ -->
 <script>
 "use strict";
-/* v4.2.1 build marker */
+/* v4.3 build marker — full emoji picker, analytics modal, per-task daily log */
 
 /* -------- cloud sync config (user edits) -------- */
 // Leave these empty to skip Supabase entirely and use the jsonstorage.net fallback.
@@ -600,7 +630,27 @@ const PBKDF2_ITERATIONS = 100_000;
 const AES_KEY_LENGTH = 256;
 const SALT_BYTES = 16;
 const IV_BYTES = 12;
-const DEFAULT_TASK_EMOJIS = ["📚","💻","✍️","🎨","🏃","🧘","🎸","🔬","📈","🗂️","🛠️","🧠","🎯","⚗️","🧪","🎮","📝","🌱","🎥","🎼","🧑‍🍳","📐","🧹","🛒","💤"];
+/* v4.3: full emoji picker grid — common categories so any task has a fitting choice. */
+const DEFAULT_TASK_EMOJIS = [
+  /* work / study */
+  "📚","💻","✍️","📝","📖","📒","📓","📔","📕","📗","📘","📙","📰","🗂️","📁","📂","🗃️","🗄️","📊","📈","📉","📋","📌","📍","🔖","🏷️","✉️","📧","📞","💼",
+  /* creative / hobbies */
+  "🎨","🎭","🎬","🎥","🎞️","📷","📸","🎼","🎵","🎶","🎤","🎧","🎸","🎹","🥁","🎺","🎻","🪕","🎯","🎲","🧩","♟️","🎮","🕹️","🎳","🎴",
+  /* science / craft */
+  "🔬","⚗️","🧪","🧬","🧮","📐","📏","🛠️","🔧","🔨","⚒️","🪛","🧰","🪚","🪡","🧵","🪢",
+  /* sports / health / wellness */
+  "🏃","🚶","🧘","🏋️","🤸","🤺","🤾","🏊","🚴","🚵","⛹️","🧗","🏄","🏌️","⚽","🏀","🏈","⚾","🥎","🎾","🏐","🏓","🥊","🥋","⛳","🎿","🏂",
+  /* food / cooking */
+  "🍳","🥗","🥘","🍲","🍱","🍣","🍜","🍞","🥐","🧁","🍰","🍪","🍎","🍌","🍇","🍓","☕","🍵","🍷","🍺","🧑‍🍳",
+  /* nature / outdoors */
+  "🌱","🌿","🍀","🌳","🌲","🌵","🌴","🌷","🌸","🌻","🌼","🌺","🌞","🌝","🌚","🌙","⭐","🌟","✨","☀️","☁️","🌧️","🌈","🔥","❄️",
+  /* travel / vehicles */
+  "✈️","🚗","🚙","🚌","🚎","🚓","🚑","🚒","🚐","🛻","🚛","🛵","🏍️","🚲","🛴","🛹","🚂","🚆","🛳️","⛵","🚀",
+  /* objects / household */
+  "🏠","🏡","🛏️","🪑","🚿","🧹","🧺","🧼","🧽","🛒","🛍️","💡","🔋","🔌","🔍","🗝️","🔑","💰","💵","💳",
+  /* abstract / symbols */
+  "🧠","💭","💡","❤️","💖","🔥","💯","✅","✔️","⭐","🌟","🏆","🥇","🥈","🥉","🎖️","🏅","🎁","🎉","🎊","🪄","💎","🚀","💤","⏰","⏳","🛡️","⚔️"
+];
 
 const DEFAULTS = {
   dataVersion: DATA_VERSION,
@@ -884,6 +934,13 @@ function migrate(raw){
     if (typeof s.timer.swSessionStartedAt !== "number") s.timer.swSessionStartedAt = 0;
     /* v4.2.1: stopwatch laps */
     if (!Array.isArray(s.timer.swLaps)) s.timer.swLaps = [];
+    /* v4.3: per-task daily minutes log for analytics. Additive — preserves existing
+       totals exactly (we only initialise the new field; we never invent past days). */
+    if (Array.isArray(s.tasks)){
+      for (const t of s.tasks){
+        if (!t.dailyMin || typeof t.dailyMin !== "object" || Array.isArray(t.dailyMin)) t.dailyMin = {};
+      }
+    }
     if (!s.sync || typeof s.sync !== "object") s.sync = deepClone(DEFAULTS.sync);
     if (!("saltB64" in s.sync)) s.sync.saltB64 = null;
     s.dataVersion = 4;
@@ -1496,6 +1553,9 @@ function createTask({ name, emoji, pinned=false } = {}){
   emoji = (emoji||pickRandomEmoji()).slice(0,4);
   const t = { id: uid(), name, emoji, pinned: !!pinned,
               totalFocusMin: 0, sessions: 0,
+              /* v4.3: per-day minutes log for weekly analytics. Map of YYYY-MM-DD → minutes.
+                 Merged with Math.max during cloud sync so it can never decrease. */
+              dailyMin: {},
               createdAt: now(), lastUsedAt: null };
   state.tasks.unshift(t);
   // Make it the active task unless one is already set
@@ -1566,6 +1626,10 @@ function logMinutesToTask(taskId, minutes){
   t.totalFocusMin = (t.totalFocusMin|0) + minutes;
   t.sessions = (t.sessions|0) + 1;
   t.lastUsedAt = now();
+  /* v4.3: per-day minutes log for analytics (weekly view). */
+  if (!t.dailyMin || typeof t.dailyMin !== "object" || Array.isArray(t.dailyMin)) t.dailyMin = {};
+  const tk = todayKey();
+  t.dailyMin[tk] = (t.dailyMin[tk]||0) + minutes;
 }
 function formatHours(minutes){
   const m = Math.max(0, minutes|0);
@@ -2255,20 +2319,32 @@ let emojiPopEl = null;
 function closeEmojiPicker(){
   if (emojiPopEl){ emojiPopEl.remove(); emojiPopEl = null; }
 }
-function openEmojiPicker(taskId, anchor){
+/* v4.3: picker accepts either a taskId (existing-task edit) OR an onPick callback
+ * (new-task button, where there is no task yet). The dedupe + unique() keeps
+ * categories tidy when the curated list grows. */
+function openEmojiPicker(taskIdOrOpts, anchor){
   closeEmojiPicker();
+  const opts = (taskIdOrOpts && typeof taskIdOrOpts === "object") ? taskIdOrOpts : { taskId: taskIdOrOpts };
+  const apply = (em)=>{
+    if (opts.onPick) opts.onPick(em);
+    else if (opts.taskId) setTaskEmoji(opts.taskId, em);
+  };
   const pop = document.createElement("div");
   pop.className = "emoji-pop";
+  // dedupe in case the curated list ever has overlap between categories
+  const seen = new Set();
   DEFAULT_TASK_EMOJIS.forEach(em=>{
+    if (seen.has(em)) return; seen.add(em);
     const b = document.createElement("button");
     b.type = "button"; b.textContent = em;
-    b.onclick = ()=>{ setTaskEmoji(taskId, em); closeEmojiPicker(); };
+    b.title = em;
+    b.onclick = ()=>{ apply(em); closeEmojiPicker(); };
     pop.appendChild(b);
   });
   const custom = document.createElement("div"); custom.className = "emoji-custom";
   custom.innerHTML = '<input type="text" maxlength="4" aria-label="Custom emoji" placeholder="🎯"><button type="button">Set</button>';
   const inp = custom.querySelector("input"); const btn = custom.querySelector("button");
-  btn.onclick = ()=>{ const v = inp.value.trim(); if (v){ setTaskEmoji(taskId, v); closeEmojiPicker(); } };
+  btn.onclick = ()=>{ const v = inp.value.trim(); if (v){ apply(v); closeEmojiPicker(); } };
   inp.addEventListener("keydown", e=>{ if (e.key==="Enter"){ btn.click(); } });
   pop.appendChild(custom);
   document.body.appendChild(pop);
@@ -2691,6 +2767,12 @@ function mergeRemoteState(local, remote){
     if ((t.lastUsedAt||t.createdAt||0) > (cur.lastUsedAt||cur.createdAt||0)){
       cur.name = t.name; cur.emoji = t.emoji;
     }
+    /* v4.3: per-day task minutes — Math.max per day (cumulative-safe; never decreases). */
+    if (!cur.dailyMin || typeof cur.dailyMin !== "object" || Array.isArray(cur.dailyMin)) cur.dailyMin = {};
+    const remoteDM = (t.dailyMin && typeof t.dailyMin === "object" && !Array.isArray(t.dailyMin)) ? t.dailyMin : {};
+    for (const k of Object.keys(remoteDM)){
+      cur.dailyMin[k] = Math.max(cur.dailyMin[k]||0, remoteDM[k]||0);
+    }
   }
   out.tasks = Array.from(tmap.values());
   out.settings = Object.assign({}, local.settings, {
@@ -2739,6 +2821,7 @@ function openModal(id){
   m.hidden = false;
   if (id === "settings-modal") fillSettingsForm();
   if (id === "sync-modal"){ renderSyncStatus(); renderSecurityPanel(); }
+  if (id === "analytics-modal") renderAnalytics(); // v4.3
 }
 function closeAllModals(){ $$(".modal-backdrop").forEach(m=>m.hidden=true); }
 
@@ -2855,6 +2938,79 @@ function bindSync(){
 
 function bindHelp(){ $("#btn-help").onclick = ()=>openModal("help-modal"); }
 
+/* ================================================================
+ * v4.3 — Analytics
+ * ================================================================ */
+function bindAnalytics(){
+  const btn = $("#btn-analytics");
+  if (btn) btn.onclick = ()=>openModal("analytics-modal");
+}
+/* Last-N-days date keys (today first → today-N+1) in local TZ. */
+function lastNDayKeys(n){
+  const out = [];
+  const d = new Date(); d.setHours(0,0,0,0);
+  for (let i = 0; i < n; i++){
+    const cd = new Date(d.getTime() - i*86400000);
+    const y = cd.getFullYear();
+    const m = String(cd.getMonth()+1).padStart(2,"0");
+    const day = String(cd.getDate()).padStart(2,"0");
+    out.push(`${y}-${m}-${day}`);
+  }
+  return out;
+}
+function weekKeysLocal(){ return lastNDayKeys(7); }
+function fmtMin(min){
+  min = Math.max(0, min|0);
+  if (min === 0) return "0m";
+  if (min < 60) return `${min}m`;
+  const h = Math.floor(min/60), r = min%60;
+  return r === 0 ? `${h}h` : `${h}h ${r}m`;
+}
+function renderAnalytics(){
+  const host = $("#analytics-body"); if (!host) return;
+  const weekKeys = new Set(weekKeysLocal());
+  const tasks = (state.tasks||[]).map(t=>{
+    const dm = (t.dailyMin && typeof t.dailyMin === "object" && !Array.isArray(t.dailyMin)) ? t.dailyMin : {};
+    let weekMin = 0;
+    for (const k of Object.keys(dm)) if (weekKeys.has(k)) weekMin += (dm[k]|0);
+    return { id:t.id, name:t.name||"(unnamed)", emoji:t.emoji||"•", total:(t.totalFocusMin|0), week:weekMin, sessions:(t.sessions|0) };
+  });
+  /* Total app uptime + this-week from state.history (per-day total minutes). */
+  let weekTotal = 0;
+  for (const k of Object.keys(state.history||{})) if (weekKeys.has(k)) weekTotal += (state.history[k]|0);
+  const allTimeTotal = state.totalFocusMin|0;
+
+  const allTimeRanked = tasks.slice().filter(t=>t.total>0).sort((a,b)=>b.total-a.total);
+  const weekRanked    = tasks.slice().filter(t=>t.week >0).sort((a,b)=>b.week -a.week );
+  const maxAllTime = allTimeRanked[0]?.total || 1;
+  const maxWeek    = weekRanked[0]?.week || 1;
+
+  const renderList = (rows, key, max)=>{
+    if (!rows.length) return `<div class="analytics-empty">No focus minutes logged in this range yet.</div>`;
+    return `<div class="analytics-list">${rows.map(t=>`
+      <div class="analytics-row">
+        <div class="em">${escapeHtml(t.emoji)}</div>
+        <div class="nm">${escapeHtml(t.name)}</div>
+        <div class="vl">${fmtMin(t[key])}</div>
+        <div class="bar"><span style="width:${Math.max(2, Math.round((t[key]/max)*100))}%"></span></div>
+      </div>`).join("")}</div>`;
+  };
+
+  host.innerHTML = `
+    <h4>Totals</h4>
+    <div class="analytics-totals">
+      <div class="analytics-card"><div class="big">${fmtMin(allTimeTotal)}</div><div class="lbl">Focused — all time</div></div>
+      <div class="analytics-card"><div class="big">${fmtMin(weekTotal)}</div><div class="lbl">Focused — last 7 days</div></div>
+      <div class="analytics-card"><div class="big">${formatHMS(state.totalAppOpenMs|0)}</div><div class="lbl">App uptime — all time</div></div>
+      <div class="analytics-card"><div class="big">${state.completedFocusSessions|0}</div><div class="lbl">Completed sessions</div></div>
+    </div>
+    <h4>Most-used tasks — this week</h4>
+    ${renderList(weekRanked, "week", maxWeek)}
+    <h4>Most-used tasks — all time</h4>
+    ${renderList(allTimeRanked, "total", maxAllTime)}
+  `;
+}
+
 /* v4.2: theme presets — keep VALID_THEMES in sync with the [data-theme="…"] CSS blocks */
 const VALID_THEMES = ["dark","light","auto","forest","ocean","ember","cyber","minimal"];
 const THEME_LABELS = {
@@ -2899,10 +3055,31 @@ function bindModeTabs(){
   });
 }
 function bindTasks(){
-  const submit = ()=>{ const name = $("#new-task-name").value; const t = createTask({ name }); if (t) $("#new-task-name").value = ""; };
+  const emojiBtn = $("#btn-new-task-emoji");
+  // v4.3: read the chosen emoji from the button when adding a task. The button
+  // starts on a placeholder (✨); only override if the user picked something.
+  const submit = ()=>{
+    const name = $("#new-task-name").value;
+    const picked = emojiBtn?.dataset?.picked || null;
+    const t = createTask(picked ? { name, emoji: picked } : { name });
+    if (t){
+      $("#new-task-name").value = "";
+      // Reset to placeholder for the next add so each new task gets a deliberate choice.
+      if (emojiBtn){ emojiBtn.textContent = "✨"; delete emojiBtn.dataset.picked; }
+    }
+  };
   $("#btn-new-task").onclick = submit;
   $("#new-task-name").addEventListener("keydown", e=>{ if (e.key==="Enter") submit(); });
-  $("#btn-new-task-emoji").onclick = e=>{ e.currentTarget.textContent = pickRandomEmoji(); };
+  // v4.3: replace the cycle-through-random with the full picker grid.
+  if (emojiBtn){
+    emojiBtn.onclick = (e)=>{
+      e.stopPropagation();
+      openEmojiPicker({ onPick: (em)=>{
+        emojiBtn.textContent = em;
+        emojiBtn.dataset.picked = em;
+      }}, emojiBtn);
+    };
+  }
 }
 function bindQuests(){
   $("#btn-add-quest").onclick = ()=>{ const inp = $("#quest-input"); addQuest(inp.value); inp.value=""; };
@@ -2936,6 +3113,7 @@ function bindKeys(){
     else if (!e.shiftKey && e.key.toLowerCase() === "l" && isStopwatch()) lapStopwatch();
     else if (e.key.toLowerCase() === "t") toggleTheme();
     else if (e.key.toLowerCase() === "y") openModal("sync-modal");
+    else if (!e.shiftKey && e.key.toLowerCase() === "s") openModal("analytics-modal"); // v4.3: analytics
     else if (e.key.toLowerCase() === "a") $("#new-task-name")?.focus();
     else if (e.key.toLowerCase() === "q") $("#quest-input")?.focus();
     else if (e.key === "?") openModal("help-modal");
@@ -3111,7 +3289,7 @@ function renderTestBanner(results){
 /* -------- Boot -------- */
 async function boot(){
   applyTheme();
-  bindSettings(); bindSync(); bindHelp(); bindTabs(); bindModeTabs();
+  bindSettings(); bindSync(); bindHelp(); bindAnalytics(); bindTabs(); bindModeTabs();
   bindTasks(); bindQuests(); bindTimer(); bindKeys(); bindMultiTab();
   $("#btn-theme").onclick = toggleTheme;
   renderAll();
