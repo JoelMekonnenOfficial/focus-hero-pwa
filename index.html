@@ -1,0 +1,3140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b0d1a" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f4f5fb" media="(prefers-color-scheme: light)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Focus Hero">
+<meta name="description" content="Focus Hero v4 — a Pomodoro RPG with custom tasks, tiered XP, background-safe timer, and iron-clad data durability.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<title>Focus Hero v4</title>
+<style>
+/* ================================================================
+ * Focus Hero v4 — inline styles (single-file PWA)
+ * ================================================================ */
+:root{
+  --bg:#0b0d1a; --bg-2:#111427; --panel:#171a30; --panel-2:#1f2340;
+  --ink:#e8ecff; --ink-dim:#9aa3cf; --ink-mute:#6d76a5;
+  --accent:#8b9cff; --accent-2:#b48dff; --good:#6ee7a3; --warn:#f6c177;
+  --bad:#ff7a8a; --rare:#6cd1ff; --epic:#c58bff; --legend:#ffd76b; --myth:#ff8ad0;
+  --border:rgba(255,255,255,.08); --border-strong:rgba(255,255,255,.16);
+  --shadow:0 12px 40px rgba(0,0,0,.45);
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --radius:14px;
+  /* RGB triplets for rgba() use — keep in sync with --accent / --accent-2 */
+  --accent-rgb:139,156,255; --accent-2-rgb:180,141,255;
+}
+[data-theme="light"]{
+  --bg:#f4f5fb; --bg-2:#e9ecf7; --panel:#ffffff; --panel-2:#f2f4fb;
+  --ink:#17192c; --ink-dim:#4c537a; --ink-mute:#747caa;
+  --accent:#4a5ce0; --accent-2:#8250e0;
+  --border:rgba(0,0,0,.08); --border-strong:rgba(0,0,0,.16);
+  --shadow:0 12px 40px rgba(15,20,50,.14);
+  --accent-rgb:74,92,224; --accent-2-rgb:130,80,224;
+}
+/* ---------- Color theme presets (v4.2) ---------- */
+[data-theme="forest"]{
+  --bg:#0c1310; --bg-2:#101a14; --panel:#152620; --panel-2:#1c322a;
+  --ink:#e7f5ee; --ink-dim:#a3c0b1; --ink-mute:#6f8d7e;
+  --accent:#7bc99a; --accent-2:#c9b56a;
+  --good:#9af0b5; --warn:#f6c177;
+  --bad:#ff8a8a; --rare:#7ad6c1; --epic:#b8d27a; --legend:#ffd76b; --myth:#ffb37a;
+  --border:rgba(220,255,235,.07); --border-strong:rgba(220,255,235,.16);
+  --shadow:0 12px 40px rgba(0,20,10,.5);
+  --accent-rgb:123,201,154; --accent-2-rgb:201,181,106;
+}
+[data-theme="ocean"]{
+  --bg:#08111e; --bg-2:#0d1b2c; --panel:#132438; --panel-2:#1c3149;
+  --ink:#e6f2ff; --ink-dim:#9bbcd6; --ink-mute:#6a8aa8;
+  --accent:#5cc4ff; --accent-2:#7ee4d2;
+  --good:#7ee4d2; --warn:#f6c177;
+  --bad:#ff7a8a; --rare:#7ed8ff; --epic:#88c1ff; --legend:#ffd76b; --myth:#aef0e0;
+  --border:rgba(180,220,255,.08); --border-strong:rgba(180,220,255,.18);
+  --shadow:0 12px 40px rgba(0,15,30,.5);
+  --accent-rgb:92,196,255; --accent-2-rgb:126,228,210;
+}
+[data-theme="ember"]{
+  --bg:#150906; --bg-2:#1d0d09; --panel:#27130e; --panel-2:#321912;
+  --ink:#fff0e6; --ink-dim:#d6a99a; --ink-mute:#a87f6f;
+  --accent:#ff8a3d; --accent-2:#ffc66e;
+  --good:#a8e08f; --warn:#ffc66e;
+  --bad:#ff6a6a; --rare:#ff9f5c; --epic:#ffb37a; --legend:#ffd76b; --myth:#ff8ad0;
+  --border:rgba(255,200,160,.09); --border-strong:rgba(255,200,160,.20);
+  --shadow:0 12px 40px rgba(40,5,0,.5);
+  --accent-rgb:255,138,61; --accent-2-rgb:255,198,110;
+}
+[data-theme="cyber"]{
+  --bg:#05060d; --bg-2:#0a0b18; --panel:#101327; --panel-2:#171a36;
+  --ink:#e8f1ff; --ink-dim:#9aa3cf; --ink-mute:#6d76a5;
+  --accent:#ff4ddc; --accent-2:#3df5e8;
+  --good:#3df5b5; --warn:#ffe066;
+  --bad:#ff4d6a; --rare:#3df5e8; --epic:#ff4ddc; --legend:#ffe066; --myth:#ff4ddc;
+  --border:rgba(255,77,220,.10); --border-strong:rgba(255,77,220,.24);
+  --shadow:0 12px 40px rgba(255,77,220,.18);
+  --accent-rgb:255,77,220; --accent-2-rgb:61,245,232;
+}
+[data-theme="minimal"]{
+  --bg:#fafafa; --bg-2:#f0f1f5; --panel:#ffffff; --panel-2:#f5f6fa;
+  --ink:#1a1c25; --ink-dim:#5b6079; --ink-mute:#8a90a8;
+  --accent:#3a7bd5; --accent-2:#6c63ff;
+  --good:#34c081; --warn:#e6a82e;
+  --bad:#e25c5c; --rare:#5cc4ff; --epic:#9c63ff; --legend:#e6a82e; --myth:#e25c9c;
+  --border:rgba(0,0,0,.07); --border-strong:rgba(0,0,0,.16);
+  --shadow:0 8px 24px rgba(20,30,60,.08);
+  --accent-rgb:58,123,213; --accent-2-rgb:108,99,255;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; font-family:var(--font); color:var(--ink); background:var(--bg);
+  background-image:radial-gradient(1100px 600px at 10% -10%,rgba(var(--accent-rgb),.12),transparent 60%),
+    radial-gradient(900px 500px at 110% 0%,rgba(var(--accent-2-rgb),.10),transparent 60%);
+  -webkit-font-smoothing:antialiased; line-height:1.45;
+}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;background:transparent;border:1px solid var(--border-strong);color:var(--ink);padding:.55rem .9rem;border-radius:10px;transition:transform .08s ease,background .15s ease,border-color .15s ease}
+button:hover{background:var(--panel-2);border-color:var(--accent)}
+button:active{transform:translateY(1px)}
+button.primary{background:linear-gradient(135deg,var(--accent),var(--accent-2));border-color:transparent;color:white;font-weight:600}
+button.primary:hover{filter:brightness(1.1)}
+button.ghost{border-color:var(--border)}
+input[type=text],input[type=number],input[type=password],textarea,select{
+  background:var(--panel-2);border:1px solid var(--border);color:var(--ink);padding:.5rem .7rem;border-radius:10px;outline:none;width:100%}
+input:focus,textarea:focus,select:focus{border-color:var(--accent)}
+a{color:var(--accent)}
+hr{border:none;border-top:1px solid var(--border);margin:1rem 0}
+
+.app{max-width:1180px;margin:0 auto;padding:24px 20px 120px;display:grid;gap:20px;grid-template-columns:1.1fr 1fr;align-items:start}
+header.topbar{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:12px}
+.brand .logo{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:grid;place-items:center;color:white;font-weight:800;box-shadow:var(--shadow)}
+.brand h1{font-size:1.15rem;margin:0;letter-spacing:.3px}
+.brand .sub{font-size:.78rem;color:var(--ink-dim)}
+.topbar .actions{display:flex;gap:8px;flex-wrap:wrap}
+.topbar .actions button{padding:.45rem .7rem;font-size:.85rem}
+
+.card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
+.card h2{font-size:1.0rem;margin:0 0 10px;letter-spacing:.3px;color:var(--ink-dim);text-transform:uppercase;font-weight:600}
+.grid{display:grid;gap:16px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.space-between{justify-content:space-between}
+.muted{color:var(--ink-dim)}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border:1px solid var(--border-strong);border-radius:999px;font-size:.78rem;color:var(--ink-dim);background:var(--panel-2)}
+
+/* --------- timer --------- */
+.timer-card{position:relative;overflow:hidden}
+.mode-tabs{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.mode-tabs button{padding:.4rem .75rem;font-size:.85rem;border-radius:999px}
+.mode-tabs button[aria-pressed="true"]{background:var(--panel-2);border-color:var(--accent)}
+.timer-display{font-family:var(--mono);font-size:clamp(4rem,15vw,8rem);font-weight:700;text-align:center;letter-spacing:-.02em;margin:.35rem 0;line-height:1;text-shadow:0 6px 40px rgba(var(--accent-rgb),.25)}
+.progress{height:6px;background:var(--panel-2);border-radius:999px;overflow:hidden}
+.progress > div{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2));transition:width .3s linear}
+.timer-controls{display:flex;gap:10px;justify-content:center;margin-top:14px;flex-wrap:wrap}
+.timer-controls button{min-width:110px}
+.session-meta{display:flex;gap:10px;justify-content:center;margin-top:10px;flex-wrap:wrap;color:var(--ink-dim);font-size:.85rem}
+/* v4.2.1: stopwatch laps */
+.sw-laps{margin-top:12px;padding:8px 10px;background:var(--panel-2);border-radius:10px;border:1px solid var(--border)}
+.sw-laps .sw-laps-head{display:flex;justify-content:space-between;align-items:center;color:var(--ink-dim);font-size:.74rem;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px}
+.sw-laps ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px;max-height:180px;overflow:auto}
+.sw-laps li{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:baseline;font-family:var(--mono);font-size:.86rem;padding:3px 4px;border-radius:6px}
+.sw-laps li:nth-child(odd){background:rgba(var(--accent-rgb),.05)}
+.sw-laps li .lap-n{color:var(--ink-mute);font-size:.78rem}
+.sw-laps li .lap-split{color:var(--ink)}
+.sw-laps li .lap-total{color:var(--ink-dim);font-size:.78rem}
+.sw-laps .lap-best .lap-split{color:var(--good)}
+.sw-laps .lap-worst .lap-split{color:var(--warn)}
+
+/* --------- hero --------- */
+.hero-card .avatar{width:88px;height:88px;border-radius:18px;background:var(--panel-2);display:grid;place-items:center;flex-shrink:0;position:relative;overflow:hidden}
+.hero-card .avatar svg{width:100%;height:100%}
+.hero-card .top{display:flex;gap:14px;align-items:center}
+.hero-card .name{font-weight:700;font-size:1.15rem}
+.hero-card .title{color:var(--ink-dim);font-size:.9rem}
+.stat-row{display:flex;justify-content:space-between;align-items:center;margin:8px 0 4px;font-size:.85rem;color:var(--ink-dim)}
+.bar{height:10px;background:var(--panel-2);border-radius:999px;overflow:hidden;position:relative}
+.bar > div{height:100%;transition:width .4s ease}
+.bar.xp > div{background:linear-gradient(90deg,#8bffd2,#67a0ff)}
+.bar.hp > div{background:linear-gradient(90deg,#ff7a8a,#ffc67a)}
+.bar.energy > div{background:linear-gradient(90deg,#b48dff,#6cd1ff)}
+
+/* --------- quests --------- */
+.quest{display:flex;gap:10px;align-items:center;padding:.5rem .7rem;border-radius:10px;border:1px solid var(--border);background:var(--panel-2);margin-bottom:6px}
+.quest.active{border-color:var(--accent);box-shadow:0 0 0 2px rgba(var(--accent-rgb),.15)}
+.quest.done{opacity:.55;text-decoration:line-through}
+.quest .title{flex:1;min-width:0}
+.quest .title input{background:transparent;border:none;padding:0;width:100%}
+.quest .chip{font-size:.72rem;color:var(--ink-mute)}
+.quest .icon-btn{padding:.2rem .5rem;border:none}
+.quest .icon-btn:hover{color:var(--accent)}
+
+/* --------- loot / achievements --------- */
+.loot-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px}
+.loot-item{padding:.6rem;border-radius:12px;border:1px solid var(--border);background:var(--panel-2);text-align:center;position:relative}
+.loot-item .sym{font-size:1.6rem;line-height:1}
+.loot-item .name{font-size:.82rem;margin-top:4px}
+.loot-item .rar{font-size:.66rem;text-transform:uppercase;letter-spacing:.08em;margin-top:3px}
+.rar-common{color:var(--ink-dim)} .rar-uncommon{color:var(--good)} .rar-rare{color:var(--rare)} .rar-epic{color:var(--epic)} .rar-legendary{color:var(--legend)} .rar-mythic{color:var(--myth)}
+.loot-item.locked{opacity:.28;filter:grayscale(.8)}
+.ach-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+.ach{padding:.6rem;border-radius:12px;border:1px solid var(--border);background:var(--panel-2)}
+.ach .sym{font-size:1.35rem}
+.ach .name{font-size:.85rem;margin-top:3px;font-weight:600}
+.ach .desc{font-size:.73rem;color:var(--ink-dim);margin-top:2px}
+.ach.unlocked{border-color:var(--good);box-shadow:inset 0 0 0 1px rgba(110,231,163,.25)}
+.ach.locked{opacity:.45;filter:grayscale(.5)}
+
+/* --------- heatmap --------- */
+.heatmap{display:grid;grid-template-columns:repeat(14,1fr);gap:3px}
+.heat-col{display:grid;grid-template-rows:repeat(7,1fr);gap:3px}
+.heat-cell{aspect-ratio:1;border-radius:3px;background:var(--panel-2);position:relative}
+.heat-cell[data-v="1"]{background:rgba(var(--accent-rgb),.25)}
+.heat-cell[data-v="2"]{background:rgba(var(--accent-rgb),.45)}
+.heat-cell[data-v="3"]{background:rgba(var(--accent-rgb),.65)}
+.heat-cell[data-v="4"]{background:rgba(var(--accent-rgb),.85)}
+.heat-cell[data-v="5"]{background:linear-gradient(135deg,var(--accent),var(--accent-2))}
+
+/* --------- tabs --------- */
+.tabs{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.tabs button{padding:.4rem .75rem;font-size:.85rem;border-radius:999px}
+.tabs button[aria-pressed="true"]{background:var(--panel-2);border-color:var(--accent)}
+
+/* --------- toasts --------- */
+.toast-wrap{position:fixed;right:20px;bottom:20px;display:flex;flex-direction:column;gap:8px;z-index:50;max-width:calc(100% - 40px)}
+.toast{background:var(--panel);border:1px solid var(--border-strong);border-left:4px solid var(--accent);padding:.7rem .9rem;border-radius:12px;box-shadow:var(--shadow);font-size:.9rem;display:flex;align-items:center;gap:10px;animation:slide-in .25s ease}
+.toast.good{border-left-color:var(--good)}
+.toast.bad{border-left-color:var(--bad)}
+.toast.warn{border-left-color:var(--warn)}
+.toast button{padding:.2rem .55rem;font-size:.8rem}
+@keyframes slide-in{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important}}
+
+/* --------- modal --------- */
+.modal-backdrop{position:fixed;inset:0;background:rgba(5,6,16,.65);display:grid;place-items:center;z-index:80;padding:16px}
+.modal-backdrop[hidden]{display:none !important}
+.modal{background:var(--panel);border:1px solid var(--border-strong);border-radius:18px;padding:22px;max-width:560px;width:100%;box-shadow:var(--shadow);max-height:90vh;overflow:auto}
+.modal h3{margin:0 0 12px}
+.modal .close{float:right;border:none;padding:.25rem .5rem}
+
+/* --------- settings form --------- */
+.form-row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:.3rem 0}
+.form-row label{color:var(--ink-dim)}
+.form-row .val{display:flex;gap:6px;align-items:center}
+.form-row .val input[type=number]{width:96px}
+.toggle{position:relative;width:46px;height:26px;background:var(--panel-2);border-radius:999px;border:1px solid var(--border);cursor:pointer}
+.toggle::after{content:"";position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:var(--ink);transition:left .15s ease,background .15s ease}
+.toggle[aria-checked="true"]{background:linear-gradient(90deg,var(--accent),var(--accent-2));border-color:transparent}
+.toggle[aria-checked="true"]::after{left:22px;background:white}
+
+/* --------- sync --------- */
+.sync-code{font-family:var(--mono);font-size:1.35rem;letter-spacing:.18em;padding:.5rem .7rem;background:var(--panel-2);border-radius:10px;text-align:center;user-select:all}
+.qr-wrap{display:grid;place-items:center;padding:.8rem;background:white;border-radius:12px;margin:10px 0}
+.qr-wrap svg{width:180px;height:180px}
+
+/* --------- responsive --------- */
+@media (max-width:860px){
+  .app{grid-template-columns:1fr;padding:16px 12px 140px}
+  .timer-display{font-size:clamp(3.4rem,18vw,5.5rem)}
+}
+
+/* --------- misc --------- */
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+kbd{font-family:var(--mono);font-size:.78em;padding:1px 6px;border-radius:6px;background:var(--panel-2);border:1px solid var(--border-strong)}
+.level-badge{font-size:.72rem;padding:2px 8px;border-radius:999px;background:var(--panel-2);border:1px solid var(--border-strong);color:var(--ink-dim)}
+.update-toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:60}
+.error-line{color:var(--bad);font-size:.8rem}
+.ok-line{color:var(--good);font-size:.8rem}
+
+/* --------- v4: tasks card --------- */
+.task{display:flex;gap:8px;align-items:center;padding:.5rem .55rem;border-radius:10px;border:1px solid var(--border);background:var(--panel-2);margin-bottom:6px;transition:border-color .15s ease}
+.task.active{border-color:var(--accent);box-shadow:0 0 0 2px rgba(var(--accent-rgb),.15)}
+.task .emoji{font-size:1.25rem;line-height:1;cursor:pointer;padding:0 2px;border-radius:6px}
+.task .emoji:hover{background:var(--panel)}
+.task .name{flex:1;min-width:0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+.task .name input{background:transparent;border:1px dashed var(--accent);padding:2px 4px;width:100%;border-radius:6px}
+.task .total{font-size:.72rem;color:var(--ink-dim);white-space:nowrap;font-variant-numeric:tabular-nums}
+.task .actions{display:flex;gap:2px}
+.task .actions button{padding:.15rem .4rem;border:none;font-size:.85rem;opacity:.6}
+.task .actions button:hover{opacity:1;color:var(--accent)}
+.task.pinned{background:linear-gradient(0deg,var(--panel-2),var(--panel-2)),linear-gradient(90deg,rgba(var(--accent-rgb),.08),rgba(var(--accent-2-rgb),.08))}
+.task-add-row{display:flex;gap:6px;margin-top:8px;align-items:center;flex-wrap:wrap}
+.task-add-row .emoji-btn{padding:.5rem .7rem;font-size:1.1rem;min-width:3rem;text-align:center}
+.task-add-row input[type=text]{flex:1;min-width:140px}
+
+/* emoji picker popover */
+.emoji-pop{position:absolute;z-index:90;background:var(--panel);border:1px solid var(--border-strong);border-radius:12px;padding:8px;box-shadow:var(--shadow);display:grid;grid-template-columns:repeat(8,1fr);gap:4px;max-width:280px}
+.emoji-pop button{padding:4px 6px;font-size:1.15rem;border:1px solid transparent;border-radius:6px;background:transparent}
+.emoji-pop button:hover{border-color:var(--accent);background:var(--panel-2)}
+.emoji-pop .emoji-custom{grid-column:1/-1;display:flex;gap:4px;margin-top:4px}
+.emoji-pop .emoji-custom input{flex:1;font-size:1.05rem;text-align:center}
+
+/* active-task inline display on timer card */
+.active-task-row{display:flex;gap:8px;align-items:center;justify-content:center;margin-top:8px;min-height:30px;font-size:.92rem;color:var(--ink-dim)}
+.active-task-row .lbl-edit{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;background:var(--panel-2);border:1px solid var(--border-strong);cursor:pointer}
+.active-task-row .lbl-edit:hover{border-color:var(--accent)}
+.active-task-row .lbl-edit input{background:transparent;border:none;padding:0;width:auto;min-width:80px;max-width:180px;font-weight:600;color:var(--ink)}
+
+/* xp breakdown overlay (session end) */
+.xp-breakdown{background:var(--panel);border:1px solid var(--border-strong);border-radius:14px;padding:14px 16px;margin:10px auto;max-width:360px;box-shadow:var(--shadow);animation:pop-in .35s ease}
+.xp-breakdown .row{justify-content:space-between;padding:3px 0;border-bottom:1px dashed var(--border);font-size:.88rem}
+.xp-breakdown .row:last-child{border-bottom:none;font-weight:700;color:var(--good);padding-top:8px;font-size:1rem}
+.xp-breakdown .sub{color:var(--ink-dim);font-size:.75rem;margin-bottom:6px;text-align:center}
+@keyframes pop-in{from{opacity:0;transform:translateY(-6px) scale(.98)}to{opacity:1;transform:none}}
+.xp-pill{display:inline-flex;align-items:center;gap:4px;font-size:.72rem;padding:2px 8px;border-radius:999px;background:var(--panel-2);border:1px solid var(--border-strong);color:var(--ink-dim)}
+.xp-pill.combo{color:var(--warn);border-color:var(--warn)}
+.xp-pill.streak{color:var(--good);border-color:var(--good)}
+.xp-pill.floor{color:var(--bad);border-color:var(--bad)}
+
+/* drag handle */
+.drag-handle{cursor:grab;color:var(--ink-mute);user-select:none;padding:0 4px}
+.task.dragging{opacity:.5}
+
+/* --------- v4: security status in sync panel --------- */
+.sec-panel{padding:.65rem .8rem;border-radius:12px;border:1px solid var(--border-strong);background:var(--panel-2);margin:10px 0;font-size:.82rem}
+.sec-panel .row{justify-content:space-between;align-items:center}
+.sec-panel .lbl{display:inline-flex;align-items:center;gap:6px}
+.sec-panel .dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+.sec-panel.good .dot{background:var(--good);box-shadow:0 0 0 3px rgba(110,231,163,.18)}
+.sec-panel.warn .dot{background:var(--warn);box-shadow:0 0 0 3px rgba(246,193,119,.18)}
+.sec-panel.bad  .dot{background:var(--bad);box-shadow:0 0 0 3px rgba(255,122,138,.18)}
+.sec-panel ul{margin:6px 0 0;padding-left:22px;color:var(--ink-dim);font-size:.78rem}
+
+/* --------- v4: app-time + focus-time stat strip --------- */
+.stat-strip{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-top:10px;font-size:.82rem;color:var(--ink-dim)}
+.stat-strip b{color:var(--ink);font-variant-numeric:tabular-nums}
+
+/* --------- v4: touch targets (mobile) --------- */
+@media (pointer:coarse),(hover:none){
+  button{min-height:44px;padding:.65rem 1rem}
+  .task .actions button{min-width:40px;min-height:40px}
+  .mode-tabs button, .tabs button{min-height:44px}
+  input[type=text],input[type=number],select{min-height:44px;padding:.6rem .8rem}
+  .timer-controls button{min-width:120px;min-height:50px;font-size:1rem}
+  .toggle{width:52px;height:30px}
+  .toggle::after{width:24px;height:24px}
+  .toggle[aria-checked="true"]::after{left:24px}
+}
+
+/* smoke test banner (?test=1) */
+.test-banner{position:fixed;top:0;left:0;right:0;background:var(--panel);border-bottom:1px solid var(--border-strong);padding:8px 12px;font-family:var(--mono);font-size:.8rem;z-index:100;max-height:70vh;overflow:auto}
+.test-banner .pass{color:var(--good)}
+.test-banner .fail{color:var(--bad)}
+.test-banner .hdr{font-weight:700;margin-bottom:4px}
+</style>
+</head>
+<body>
+<div class="app" role="main" id="app">
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo" aria-hidden="true">FH</div>
+      <div>
+        <h1>Focus Hero <span class="level-badge" id="version-badge">v4.0.1</span></h1>
+        <div class="sub" id="tagline">Slay distractions. Level up your life.</div>
+      </div>
+    </div>
+    <div class="actions" role="toolbar" aria-label="Top actions">
+      <button id="btn-settings" title="Settings (,)" aria-label="Settings">Settings</button>
+      <button id="btn-sync" title="Cloud sync (Y)" aria-label="Cloud sync">Sync</button>
+      <button id="btn-theme" title="Toggle theme (T)" aria-label="Toggle theme">Theme</button>
+      <button id="btn-help" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">?</button>
+    </div>
+  </header>
+
+  <!-- LEFT COLUMN -->
+  <section class="grid">
+    <div class="card timer-card" aria-labelledby="timer-heading">
+      <h2 id="timer-heading">Session</h2>
+      <div class="mode-tabs" role="tablist" aria-label="Timer mode">
+        <button role="tab" data-mode="focus" aria-pressed="true">Focus</button>
+        <button role="tab" data-mode="short" aria-pressed="false">Short break</button>
+        <button role="tab" data-mode="long" aria-pressed="false">Long break</button>
+        <button role="tab" data-mode="stopwatch" aria-pressed="false" title="Open-ended count-up timer (Shift+S)">Stopwatch</button>
+      </div>
+      <div class="timer-display" id="timer-display" role="timer" aria-live="polite" aria-atomic="true">25:00</div>
+      <div class="progress"><div id="progress-bar" style="width:0%"></div></div>
+      <div class="active-task-row" id="active-task-row" hidden>
+        <span>Working on</span>
+        <span class="lbl-edit" id="active-task-label" title="Click to rename this task (safe mid-session)"></span>
+      </div>
+      <div class="timer-controls">
+        <button class="primary" id="btn-start">Start</button>
+        <button id="btn-stop-log" title="Stop & log this stopwatch session" hidden>Stop & log</button>
+        <button id="btn-lap" title="Lap (L) — capture current stopwatch time" hidden>Lap</button>
+        <button id="btn-skip" title="Skip (N)">Skip</button>
+        <button id="btn-reset-timer" title="Reset timer (R)">Reset</button>
+      </div>
+      <div id="sw-laps" class="sw-laps" hidden aria-label="Stopwatch laps"></div>
+      <div class="session-meta">
+        <span>Cycle: <b id="cycle-count">0</b> / <b id="cycle-target">4</b></span>
+        <span>•</span>
+        <span>Today: <b id="today-focus">0</b>m focus</span>
+        <span>•</span>
+        <span>Streak: <b id="streak">0</b>d</span>
+        <span>•</span>
+        <span>Combo: <b id="combo-count">0</b></span>
+      </div>
+      <div class="stat-strip" id="stat-strip">
+        <span>Focused time: <b id="stat-focus-total">0h</b></span>
+        <span title="Total time the app has been open across all sessions (live counter)">App uptime: <b id="stat-open-total">0:00:00</b></span>
+        <span>Sessions: <b id="stat-sessions">0</b></span>
+      </div>
+      <div id="xp-breakdown-slot"></div>
+    </div>
+
+    <div class="card hero-card" aria-labelledby="hero-heading">
+      <h2 id="hero-heading">Hero</h2>
+      <div class="top">
+        <div class="avatar" id="avatar" aria-hidden="true"></div>
+        <div style="flex:1;min-width:0">
+          <div class="name" id="hero-name">Hero</div>
+          <div class="title" id="hero-title">Novice · Mage</div>
+          <div class="row" style="margin-top:4px">
+            <span class="pill" id="hero-class">Mage</span>
+            <span class="pill">Lv <b id="hero-level">1</b></span>
+          </div>
+        </div>
+      </div>
+      <div class="stat-row"><span>XP</span><span><b id="xp-cur">0</b> / <span id="xp-need">100</span></span></div>
+      <div class="bar xp"><div id="bar-xp" style="width:0%"></div></div>
+      <div class="stat-row"><span>HP</span><span><b id="hp-cur">100</b> / 100</span></div>
+      <div class="bar hp"><div id="bar-hp" style="width:100%"></div></div>
+      <div class="stat-row"><span>Energy</span><span><b id="en-cur">100</b> / 100</span></div>
+      <div class="bar energy"><div id="bar-en" style="width:100%"></div></div>
+    </div>
+
+    <div class="card" aria-labelledby="tasks-heading">
+      <h2 id="tasks-heading">Tasks <span class="muted" style="font-size:.72rem;text-transform:none;margin-left:6px">(categories — minutes per task accumulate forever)</span></h2>
+      <div id="task-list" role="list"></div>
+      <div class="task-add-row">
+        <button class="emoji-btn ghost" id="btn-new-task-emoji" title="Pick emoji" aria-label="Pick emoji">✨</button>
+        <input type="text" id="new-task-name" placeholder="New task… (e.g. Study)" maxlength="40" aria-label="New task name">
+        <button class="primary" id="btn-new-task" title="Add task (A)">Add task</button>
+      </div>
+    </div>
+
+    <div class="card" aria-labelledby="quest-heading">
+      <h2 id="quest-heading">Quests <span class="muted" style="font-size:.72rem;text-transform:none;margin-left:6px">(one-off to-dos — tick to earn XP)</span></h2>
+      <div id="quest-list" role="list"></div>
+      <form id="quest-form" class="row" style="margin-top:8px" onsubmit="return false;">
+        <input id="quest-input" type="text" placeholder="Add a quest… (e.g. Finish chapter 3)" autocomplete="off" maxlength="140" aria-label="New quest">
+        <button class="primary" id="btn-add-quest" type="submit">Add</button>
+      </form>
+    </div>
+
+    <div class="card" aria-labelledby="daily-heading">
+      <h2 id="daily-heading">Daily challenges</h2>
+      <div id="daily-list"></div>
+    </div>
+  </section>
+
+  <!-- RIGHT COLUMN -->
+  <section class="grid">
+    <div class="card" aria-labelledby="tabs-heading">
+      <h2 id="tabs-heading" class="sr-only">Progression</h2>
+      <div class="tabs" role="tablist" aria-label="Progression">
+        <button role="tab" data-tab="loot" aria-pressed="true">Loot</button>
+        <button role="tab" data-tab="ach" aria-pressed="false">Achievements</button>
+        <button role="tab" data-tab="heat" aria-pressed="false">Heatmap</button>
+      </div>
+      <div id="tab-loot" class="tab-panel"><div id="loot-grid" class="loot-grid"></div></div>
+      <div id="tab-ach" class="tab-panel" hidden><div id="ach-grid" class="ach-grid"></div></div>
+      <div id="tab-heat" class="tab-panel" hidden>
+        <div class="muted" style="font-size:.8rem;margin-bottom:6px">Last 14 weeks · darker = more focus minutes</div>
+        <div class="heatmap" id="heatmap"></div>
+      </div>
+    </div>
+
+    <div class="card" aria-labelledby="log-heading">
+      <h2 id="log-heading">Log</h2>
+      <div id="log" style="max-height:260px;overflow:auto;font-size:.85rem;color:var(--ink-dim)"></div>
+    </div>
+  </section>
+</div>
+
+<div class="toast-wrap" id="toasts" aria-live="polite" aria-atomic="false"></div>
+
+<!-- Settings modal -->
+<div class="modal-backdrop" id="settings-modal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <button class="close" aria-label="Close" data-close>✕</button>
+    <h3 id="settings-title">Settings</h3>
+    <div class="form-row"><label>Focus minutes</label><div class="val"><input type="number" id="cfg-focus" min="1" max="180" step="1"></div></div>
+    <div class="form-row"><label>Short break</label><div class="val"><input type="number" id="cfg-short" min="1" max="60" step="1"></div></div>
+    <div class="form-row"><label>Long break</label><div class="val"><input type="number" id="cfg-long" min="1" max="120" step="1"></div></div>
+    <div class="form-row"><label>Cycles before long break</label><div class="val"><input type="number" id="cfg-cycles" min="1" max="12" step="1"></div></div>
+    <div class="form-row"><label>Hero name</label><div class="val"><input type="text" id="cfg-name" maxlength="32" style="width:180px"></div></div>
+    <div class="form-row"><label>Class</label><div class="val"><select id="cfg-class">
+      <option value="mage">Mage</option><option value="rogue">Rogue</option><option value="warrior">Warrior</option>
+      <option value="druid">Druid</option><option value="bard">Bard</option></select></div></div>
+    <hr>
+    <div class="form-row"><label>Auto-start next session</label><div class="val"><button class="toggle" id="tog-auto" aria-checked="false" aria-label="Auto-start next session"></button></div></div>
+    <div class="form-row"><label>Tick sounds</label><div class="val"><button class="toggle" id="tog-tick" aria-checked="false" aria-label="Tick sounds"></button></div></div>
+    <div class="form-row"><label>Chime on session end</label><div class="val"><button class="toggle" id="tog-chime" aria-checked="true" aria-label="Chime sound"></button></div></div>
+    <div class="form-row"><label>Browser notifications</label><div class="val"><button class="toggle" id="tog-notif" aria-checked="false" aria-label="Notifications"></button></div></div>
+    <div class="form-row"><label>Theme</label><div class="val"><select id="cfg-theme">
+      <option value="dark">Dark Fantasy (default)</option>
+      <option value="light">Light</option>
+      <option value="auto">Auto (system)</option>
+      <option value="forest">Forest / Druid</option>
+      <option value="ocean">Ocean / Frost</option>
+      <option value="ember">Sunset / Ember</option>
+      <option value="cyber">Cyberpunk Neon</option>
+      <option value="minimal">Minimal Light</option>
+    </select></div></div>
+    <hr>
+    <h4 style="margin:.25rem 0 .25rem;font-size:.82rem;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.1em">Reward rules</h4>
+    <div class="form-row"><label title="Sessions shorter than this earn no XP, loot, or achievements">Minimum session length for rewards (minutes)</label><div class="val"><input type="number" id="cfg-min-reward" min="1" max="15" step="1"></div></div>
+    <div class="form-row"><label title="Streak day N adds N% bonus XP, up to this cap">Daily streak XP cap (%)</label><div class="val"><input type="number" id="cfg-streak-cap" min="0" max="200" step="1"></div></div>
+    <div class="form-row"><label title="Each back-to-back focus session today adds 10% XP, up to this cap">Combo XP cap (%)</label><div class="val"><input type="number" id="cfg-combo-cap" min="0" max="200" step="1"></div></div>
+    <hr>
+    <h4 style="margin:.25rem 0 .25rem;font-size:.82rem;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.1em">Background play (iOS/Safari stays alive)</h4>
+    <div class="form-row"><label title="Silent audio tone keeps the timer running when the tab is backgrounded">Audio keepalive during focus</label><div class="val"><button class="toggle" id="tog-keepalive" aria-checked="true" aria-label="Audio keepalive"></button></div></div>
+    <div class="form-row"><label title="Prevents your screen from dimming during a focus session">Keep screen awake (wakeLock)</label><div class="val"><button class="toggle" id="tog-wakelock" aria-checked="false" aria-label="Screen wakelock"></button></div></div>
+    <hr>
+    <h4 style="margin:.25rem 0 .25rem;font-size:.82rem;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.1em">Backups (your hours are sacred)</h4>
+    <div class="form-row"><label title="Silently downloads a full backup JSON once per calendar month">Monthly auto-backup</label><div class="val"><button class="toggle" id="tog-monthly-backup" aria-checked="true" aria-label="Monthly auto-backup"></button></div></div>
+    <div class="row" style="gap:8px;margin-top:8px">
+      <button id="btn-backup-now" class="primary" title="Download a full, dated JSON backup right now">Back up all data</button>
+      <span class="muted" style="font-size:.75rem" id="backup-last">Last backup: never</span>
+    </div>
+    <hr>
+    <div class="row" style="gap:8px">
+      <button id="btn-export">Export JSON</button>
+      <button id="btn-import">Import JSON</button>
+      <button id="btn-reset" style="margin-left:auto;color:var(--bad);border-color:var(--bad)">Reset everything</button>
+    </div>
+    <input type="file" id="import-file" hidden accept="application/json,.json">
+  </div>
+</div>
+
+<!-- Sync modal -->
+<div class="modal-backdrop" id="sync-modal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="sync-title">
+    <button class="close" aria-label="Close" data-close>✕</button>
+    <h3 id="sync-title">Cloud sync</h3>
+    <div id="sync-status" class="muted" style="font-size:.85rem;margin-bottom:8px"></div>
+    <div id="sec-panel" class="sec-panel warn">
+      <div class="row space-between"><div class="lbl"><span class="dot"></span><span id="sec-headline">Security: not configured</span></div><span class="muted" id="sec-sub"></span></div>
+      <ul id="sec-details"></ul>
+    </div>
+    <div class="form-row"><label>Enable cloud sync</label><div class="val"><button class="toggle" id="tog-sync" aria-checked="false" aria-label="Enable cloud sync"></button></div></div>
+    <div class="form-row"><label title="Before pushing, the state blob is encrypted with AES-GCM 256 using a key derived from your sync code (PBKDF2-SHA256, 100k iterations). The server only sees ciphertext.">End-to-end encryption (recommended)</label><div class="val"><button class="toggle" id="tog-e2e" aria-checked="true" aria-label="End-to-end encryption"></button></div></div>
+    <div id="sync-active" hidden>
+      <p class="muted" style="font-size:.85rem">Syncing via <b id="sync-backend">—</b>. Last pushed <span id="sync-last">never</span>.</p>
+      <div class="row" style="gap:8px">
+        <button id="btn-gen-code">Generate sync code</button>
+        <button id="btn-enter-code">Enter code from other device</button>
+        <button id="btn-sync-now">Sync now</button>
+        <button id="btn-disconnect" style="margin-left:auto">Disconnect</button>
+      </div>
+      <div id="code-area" hidden style="margin-top:10px">
+        <div class="sync-code" id="code-text">—</div>
+        <div class="qr-wrap"><div id="qr"></div></div>
+        <div class="muted" style="font-size:.78rem;text-align:center">Scan or type this code on your other device. Keep this screen open until it connects.</div>
+      </div>
+      <div id="enter-area" hidden style="margin-top:10px">
+        <div class="form-row"><label>Enter code</label><div class="val"><input type="text" id="enter-code" maxlength="64" placeholder="CODE-SECRET" style="width:240px;font-family:var(--mono);letter-spacing:.06em;text-transform:uppercase"></div></div>
+        <button class="primary" id="btn-claim">Claim</button>
+        <div id="claim-msg"></div>
+      </div>
+    </div>
+    <hr>
+    <div class="muted" style="font-size:.78rem">
+      Two backends: Supabase (if you configured the keys at the top of focus-hero.html) and jsonstorage.net (free public KV — no setup). Your data is encrypted locally with the sync code secret before upload on the public backend.
+    </div>
+  </div>
+</div>
+
+<!-- Help modal -->
+<div class="modal-backdrop" id="help-modal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="help-title">
+    <button class="close" aria-label="Close" data-close>✕</button>
+    <h3 id="help-title">Keyboard shortcuts</h3>
+    <table style="width:100%;font-size:.88rem">
+      <tbody>
+        <tr><td><kbd>Space</kbd></td><td>Start / pause timer</td></tr>
+        <tr><td><kbd>R</kbd></td><td>Reset timer</td></tr>
+        <tr><td><kbd>N</kbd></td><td>Skip to next session</td></tr>
+        <tr><td><kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd>/<kbd>4</kbd></td><td>Focus / short / long / stopwatch</td></tr>
+        <tr><td><kbd>Shift</kbd>+<kbd>S</kbd></td><td>Switch to stopwatch</td></tr>
+        <tr><td><kbd>Shift</kbd>+<kbd>L</kbd></td><td>Stop &amp; log stopwatch session</td></tr>
+        <tr><td><kbd>L</kbd></td><td>Lap (in stopwatch mode) — captures last 10 splits</td></tr>
+        <tr><td><kbd>A</kbd></td><td>Add a new task</td></tr>
+        <tr><td><kbd>Q</kbd></td><td>Focus quest input</td></tr>
+        <tr><td><kbd>Shift</kbd>+<kbd>B</kbd></td><td>Back up all data now</td></tr>
+        <tr><td><kbd>T</kbd></td><td>Toggle theme</td></tr>
+        <tr><td><kbd>Y</kbd></td><td>Open sync panel</td></tr>
+        <tr><td><kbd>,</kbd></td><td>Open settings</td></tr>
+        <tr><td><kbd>?</kbd></td><td>This help</td></tr>
+        <tr><td><kbd>Esc</kbd></td><td>Close dialogs / cancel rename</td></tr>
+      </tbody>
+    </table>
+    <hr>
+    <div class="muted" style="font-size:.78rem">Built as a PWA. Install it from your browser's menu to get a standalone icon and full offline support.</div>
+  </div>
+</div>
+
+<!-- ================================================================
+ * Focus Hero v4 — inline script (one file, no deps)
+ * ================================================================ -->
+<script>
+"use strict";
+/* v4.2.1 build marker */
+
+/* -------- cloud sync config (user edits) -------- */
+// Leave these empty to skip Supabase entirely and use the jsonstorage.net fallback.
+const SUPABASE_URL = "https://fkhzpscihafekhtcyvlt.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZraHpwc2NpaGFmZWtodGN5dmx0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwNzA1MzIsImV4cCI6MjA5MjY0NjUzMn0.mHJHPxDhJ6ZSn9dZjGKGkCKw1e7_b1y7rnu7G9Ev1-M";
+
+/* -------- constants -------- */
+const STORAGE_KEY     = "focusHero.v4.state";
+const LEGACY_KEYS     = ["focusHero.v3.state", "focusHero.v2.state", "focusHero.v1.state"];
+const BC_KEY          = "focusHero.v4";
+const DATA_VERSION    = 4;
+const PBKDF2_ITERATIONS = 100_000;
+const AES_KEY_LENGTH = 256;
+const SALT_BYTES = 16;
+const IV_BYTES = 12;
+const DEFAULT_TASK_EMOJIS = ["📚","💻","✍️","🎨","🏃","🧘","🎸","🔬","📈","🗂️","🛠️","🧠","🎯","⚗️","🧪","🎮","📝","🌱","🎥","🎼","🧑‍🍳","📐","🧹","🛒","💤"];
+
+const DEFAULTS = {
+  dataVersion: DATA_VERSION,
+  hero: { name: "Hero", cls: "mage", level: 1, xp: 0, hp: 100, energy: 100 },
+  settings: {
+    focusMin: 25, shortMin: 5, longMin: 15, cyclesBeforeLong: 4,
+    autoStart: false, tick: false, chime: true, notif: false, theme: "dark",
+    /* v4 additions */
+    minRewardMinutes: 5,
+    streakBonusCap: 30,
+    comboBonusCap: 50,
+    keepalive: true,
+    wakelock: false,
+    monthlyBackup: true,
+    lastAutoBackup: null,
+    lastManualBackup: null,
+    e2eEncryption: true
+  },
+  timer: { mode: "focus", endAt: 0, pausedAt: 0, running: false, msLeft: 25*60*1000,
+           activeTaskId: null, activeTaskNameAtStart: null,
+           // v4.1: stopwatch fields
+           swStartedAt: 0, swAccumulatedMs: 0, swSessionStartedAt: 0,
+           // v4.2.1: stopwatch laps — array of {at, elapsedMs, splitMs}
+           swLaps: [] },
+  cycleCount: 0,
+  totalFocusMin: 0,
+  totalAppOpenMs: 0,
+  completedFocusSessions: 0,
+  streak: 0,
+  longestStreak: 0,
+  lastFocusDate: null,
+  combo: { count: 0, date: null },
+  tasks: [],
+  activeTaskId: null,
+  quests: [],
+  activeQuestId: null,
+  daily: { date: null, items: [] },
+  lootOwned: {},
+  achievements: {},
+  history: {},
+  sessionsLog: [],
+  sync: {
+    enabled: false, backend: null,
+    playerId: null, cloudRev: 0, lastPushedAt: 0, lastPulledAt: 0,
+    syncCode: null, syncSecret: null, syncSecretHash: null, userId: null,
+    jsonstorageUrl: null,
+    saltB64: null
+  }
+};
+
+/* -------- classes, titles, loot, achievements, daily templates -------- */
+const CLASSES = {
+  mage:    { name: "Mage",    palette: ["#b48dff","#6cd1ff","#170c33","#e7d8ff"],
+             titles: ["Apprentice","Adept","Mage","Archmage","Luminary","Stellar Sage"] },
+  rogue:   { name: "Rogue",   palette: ["#6ee7a3","#2aa890","#0d2018","#d7f7e8"],
+             titles: ["Shade","Scout","Rogue","Phantom","Nightblade","Whisperer"] },
+  warrior: { name: "Warrior", palette: ["#ff9a6b","#c23a3a","#2a0e0e","#ffe0cf"],
+             titles: ["Recruit","Guard","Warrior","Champion","Warlord","Blademaster"] },
+  druid:   { name: "Druid",   palette: ["#7bd88f","#f2b94b","#172312","#e9f6d6"],
+             titles: ["Seedling","Wildkin","Druid","Verdant","Greenwarden","Worldroot"] },
+  bard:    { name: "Bard",    palette: ["#ff8ad0","#ffd76b","#2a1029","#ffe6f5"],
+             titles: ["Minstrel","Chanter","Bard","Virtuoso","Maestro","Muse"] }
+};
+const TITLE_BANDS = [1, 5, 10, 20, 35, 60]; // idx into titles
+const RARITY = ["common","uncommon","rare","epic","legendary","mythic"]; // mythic bonus
+const LOOT_TABLE = [
+  // sym, name, rarity, weight
+  ["🪙","Copper Coin","common",40],
+  ["📜","Scroll of Focus","common",30],
+  ["🕯️","Candle of Clarity","common",20],
+  ["🌿","Calming Herb","uncommon",18],
+  ["🧃","Mana Potion","uncommon",15],
+  ["🍎","Golden Apple","uncommon",10],
+  ["🔮","Seer's Orb","rare",10],
+  ["🗡️","Whetstone Blade","rare",8],
+  ["📘","Tome of Tomorrow","rare",7],
+  ["🎯","Targeter's Ring","epic",5],
+  ["⚔️","Dualblade","epic",4],
+  ["🧿","Amulet of Drive","epic",3],
+  ["👑","Crown of Flow","legendary",2],
+  ["🦄","Unicorn Sigil","legendary",1],
+  ["🗝️","Key of Worlds","legendary",1],
+  ["🌌","Cosmic Fragment","mythic",1],
+  ["✨","Timekeeper's Spark","mythic",1]
+];
+const ACHIEVEMENTS = [
+  ["first_focus","First Focus","Complete 1 focus session","🥇",{sessions:1}],
+  ["five_focus","High Five","Complete 5 focus sessions","✋",{sessions:5}],
+  ["twenty_five","Quarter Century","25 focus sessions","🎖️",{sessions:25}],
+  ["hundred","Centurion","100 focus sessions","💯",{sessions:100}],
+  /* v4: cumulative-hours achievements */
+  ["hours_1","First Hour","1 cumulative focused hour","⏳",{totalMin:60}],
+  ["hours_10","Ten-Hour Club","10 cumulative focused hours","🕙",{totalMin:600}],
+  ["hours_50","Fifty and Fierce","50 cumulative focused hours","🕰️",{totalMin:3000}],
+  ["hours_100","Century Focus","100 cumulative focused hours","🗿",{totalMin:6000}],
+  ["hours_500","Grandmaster","500 cumulative focused hours","🏛️",{totalMin:30000}],
+  ["streak_3","On a Roll","3-day streak","🎳",{streak:3}],
+  ["streak_7","Week Warrior","7-day streak","🛡️",{streak:7}],
+  ["streak_30","Unstoppable","30-day streak","⚡",{streak:30}],
+  ["streak_100","Centenarian","100-day streak","🔱",{streak:100}],
+  ["level_5","Seasoned","Reach level 5","🌱",{level:5}],
+  ["level_10","Veteran","Reach level 10","🌳",{level:10}],
+  ["level_25","Legend","Reach level 25","🌟",{level:25}],
+  ["level_50","Paragon","Reach level 50","💠",{level:50}],
+  ["loot_rare","Treasure Hunter","Find a rare item","💎",{rarity:"rare"}],
+  ["loot_epic","Epic Finds","Find an epic item","🪙",{rarity:"epic"}],
+  ["loot_leg","Legend Holder","Find a legendary","👑",{rarity:"legendary"}],
+  ["loot_myth","Mythic!","Find a mythic","🌌",{rarity:"mythic"}],
+  ["quests_10","Task Slayer","Complete 10 quests","📋",{quests:10}],
+  ["deep_120","Deep Work","2+ hours in a day","🧠",{dayMin:120}],
+  ["deep_240","Deep Focus","4+ hours in a day","🔥",{dayMin:240}],
+  ["combo_3","Hot Streak","3-session combo in one day","🔥",{combo:3}],
+  ["combo_6","Unstoppable Combo","6-session combo cap","⚡",{combo:6}]
+];
+const DAILY_TEMPLATES = [
+  { id: "d_focus2", text: "Complete 2 focus sessions", target: 2, kind:"focus", xp: 40 },
+  { id: "d_focus4", text: "Complete 4 focus sessions", target: 4, kind:"focus", xp: 80 },
+  { id: "d_min60",  text: "Log 60 focus minutes",       target: 60, kind:"minutes", xp: 60 },
+  { id: "d_min90",  text: "Log 90 focus minutes",       target: 90, kind:"minutes", xp: 100 },
+  { id: "d_quest1", text: "Complete 1 quest",           target: 1, kind:"quests", xp: 30 },
+  { id: "d_quest3", text: "Complete 3 quests",          target: 3, kind:"quests", xp: 80 },
+  { id: "d_cycle",  text: "Finish 1 full pomodoro cycle (4 focus + long break)", target: 1, kind:"cycle", xp: 70 }
+];
+
+/* -------- utilities -------- */
+const $ = (s, r=document) => r.querySelector(s);
+const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
+const uid = () => Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4);
+const now = () => Date.now();
+const todayKey = (d=new Date()) => {
+  const y=d.getFullYear(), m=(d.getMonth()+1).toString().padStart(2,"0"), dd=d.getDate().toString().padStart(2,"0");
+  return `${y}-${m}-${dd}`;
+};
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const fmtTime = ms => {
+  ms = Math.max(0, ms);
+  const t = Math.ceil(ms/1000);
+  const m = Math.floor(t/60).toString().padStart(2,"0");
+  const s = (t%60).toString().padStart(2,"0");
+  return `${m}:${s}`;
+};
+/* v4.1: count-up format. ≥1h shows H:MM:SS, else MM:SS. */
+const fmtTimeLong = ms => {
+  ms = Math.max(0, ms);
+  const t = Math.floor(ms/1000);
+  const h = Math.floor(t/3600);
+  const m = Math.floor((t%3600)/60);
+  const s = t%60;
+  if (h > 0) return `${h}:${m.toString().padStart(2,"0")}:${s.toString().padStart(2,"0")}`;
+  return `${m.toString().padStart(2,"0")}:${s.toString().padStart(2,"0")}`;
+};
+const xpForLevel = lv => Math.floor(100 * Math.pow(lv, 1.35)); // curve
+const totalXpForLevel = lv => { let s=0; for (let i=1;i<lv;i++) s+=xpForLevel(i); return s; };
+const levelFromTotalXp = totalXp => {
+  let lv=1, acc=0;
+  while (true) { const need = xpForLevel(lv); if (acc+need>totalXp) return { lv, xp: totalXp-acc, need }; acc+=need; lv++; if (lv>999) return { lv, xp:0, need: xpForLevel(lv) }; }
+};
+async function sha256(text){
+  const enc=new TextEncoder().encode(text);
+  const buf=await (crypto.subtle||window.crypto.subtle).digest("SHA-256",enc);
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,"0")).join("");
+}
+const deepClone = o => JSON.parse(JSON.stringify(o));
+function deepMerge(target, source){
+  // last-write-wins per field by timestamp isn't natively trackable here; for now we shallow-merge by field group
+  const out = deepClone(target);
+  for (const k of Object.keys(source||{})){
+    if (source[k] && typeof source[k]==="object" && !Array.isArray(source[k]) && typeof target?.[k]==="object" && !Array.isArray(target?.[k])){
+      out[k] = deepMerge(target[k], source[k]);
+    } else {
+      out[k] = source[k];
+    }
+  }
+  return out;
+}
+
+/* -------- state + persistence -------- */
+let state = loadState();
+let bc = null;
+try { bc = new BroadcastChannel(BC_KEY); } catch { bc = null; }
+let saveTimer = null;
+let cloudDebounce = null;
+
+function loadState(){
+  let raw=null, foundUnder=null;
+  try { raw = localStorage.getItem(STORAGE_KEY); if (raw) foundUnder = STORAGE_KEY; } catch(e){}
+  if (!raw){
+    // v4: try legacy keys so a v3 user upgrades in-place with zero data loss
+    for (const k of LEGACY_KEYS){
+      try { const v = localStorage.getItem(k); if (v){ raw = v; foundUnder = k; break; } } catch(e){}
+    }
+  }
+  if (!raw) return migrate(deepClone(DEFAULTS));
+  let parsed;
+  try { parsed = JSON.parse(raw); }
+  catch(e){
+    console.warn("state parse failed — attempting degraded recovery", e);
+    // Try to salvage by searching for a top-level {"dataVersion": ...} JSON inside the blob
+    const m = /\{[\s\S]*\}/.exec(raw||"");
+    if (m){ try { parsed = JSON.parse(m[0]); } catch(_){ parsed = {}; } }
+    else parsed = {};
+  }
+  const migrated = migrate(parsed);
+  if (foundUnder && foundUnder !== STORAGE_KEY){
+    // Write the migrated state under the v4 key immediately — but KEEP the legacy key
+    // for at least one version so a rollback doesn't lose hours.
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated)); } catch(_){}
+  }
+  return migrated;
+}
+/*
+ * migrate(raw) → returns a v4 state.
+ *
+ * Iron-clad rules:
+ *   - Never DELETE an existing field. New versions add or deprecate; never wipe.
+ *   - Never RESET a cumulative number (totalFocusMin, streak, history, lootOwned...).
+ *   - Always fall back to DEFAULTS for missing pieces, but only for keys that are
+ *     genuinely absent or wrong type — not for legitimate zeros.
+ *   - If nested objects are malformed (null, wrong type), rebuild just that subtree.
+ */
+function migrate(raw){
+  let s;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) s = deepClone(DEFAULTS);
+  else s = raw;
+  if (typeof s.dataVersion !== "number") s.dataVersion = 1;
+
+  /* v4.2: pre-migration safety snapshot.
+     If we're about to migrate to a newer schema, copy the original raw state to
+     a versioned localStorage key first. If the migration ever loses data we
+     can recover by reading focusHero.v4.state.pre-v{N} from DevTools. */
+  try {
+    if (s.dataVersion < DATA_VERSION && raw && typeof raw === "object" && !Array.isArray(raw)){
+      const key = `${STORAGE_KEY}.pre-v${DATA_VERSION}`;
+      if (!localStorage.getItem(key)){
+        localStorage.setItem(key, JSON.stringify({ savedAt: new Date().toISOString(), state: raw }));
+      }
+    }
+  } catch(_){}
+
+  if (s.dataVersion < 2){
+    if (!s.daily || typeof s.daily !== "object") s.daily = { date:null, items:[] };
+    if (!Array.isArray(s.sessionsLog)) s.sessionsLog = [];
+    s.dataVersion = 2;
+  }
+  if (s.dataVersion < 3){
+    if (!s.sync || typeof s.sync !== "object") s.sync = deepClone(DEFAULTS.sync);
+    s.dataVersion = 3;
+  }
+  if (s.dataVersion < 4){
+    /* v3 → v4: add tasks, combo, app-open tracking, new settings — never wipe */
+    if (!Array.isArray(s.tasks)) s.tasks = [];
+    if (!s.combo || typeof s.combo !== "object") s.combo = { count:0, date:null };
+    if (typeof s.totalAppOpenMs !== "number") s.totalAppOpenMs = 0;
+    if (typeof s.longestStreak !== "number") s.longestStreak = Math.max(0, s.streak||0);
+    if (typeof s.completedFocusSessions !== "number"){
+      // Best-effort reconstruction from sessionsLog; never underestimate
+      const fromLog = Array.isArray(s.sessionsLog) ? s.sessionsLog.filter(x=>x && x.type==="focus").length : 0;
+      const fromHistory = s.history && typeof s.history === "object"
+        ? Object.values(s.history).reduce((a,b)=>a + Math.floor((b||0)/(s.settings?.focusMin||25)), 0) : 0;
+      s.completedFocusSessions = Math.max(fromLog, fromHistory, 0);
+    }
+    if (!("activeTaskId" in s)) s.activeTaskId = null;
+    if (!s.settings || typeof s.settings !== "object") s.settings = {};
+    const sd = DEFAULTS.settings;
+    const addIfMissing = (k, v) => { if (!(k in s.settings) || typeof s.settings[k] !== typeof v) s.settings[k] = v; };
+    addIfMissing("minRewardMinutes", sd.minRewardMinutes);
+    addIfMissing("streakBonusCap", sd.streakBonusCap);
+    addIfMissing("comboBonusCap", sd.comboBonusCap);
+    addIfMissing("keepalive", sd.keepalive);
+    addIfMissing("wakelock", sd.wakelock);
+    addIfMissing("monthlyBackup", sd.monthlyBackup);
+    if (!("lastAutoBackup" in s.settings)) s.settings.lastAutoBackup = null;
+    if (!("lastManualBackup" in s.settings)) s.settings.lastManualBackup = null;
+    addIfMissing("e2eEncryption", sd.e2eEncryption);
+    if (!s.timer || typeof s.timer !== "object") s.timer = deepClone(DEFAULTS.timer);
+    if (!("activeTaskId" in s.timer)) s.timer.activeTaskId = null;
+    if (!("activeTaskNameAtStart" in s.timer)) s.timer.activeTaskNameAtStart = null;
+    /* v4.1: stopwatch */
+    if (typeof s.timer.swStartedAt !== "number") s.timer.swStartedAt = 0;
+    if (typeof s.timer.swAccumulatedMs !== "number") s.timer.swAccumulatedMs = 0;
+    if (typeof s.timer.swSessionStartedAt !== "number") s.timer.swSessionStartedAt = 0;
+    /* v4.2.1: stopwatch laps */
+    if (!Array.isArray(s.timer.swLaps)) s.timer.swLaps = [];
+    if (!s.sync || typeof s.sync !== "object") s.sync = deepClone(DEFAULTS.sync);
+    if (!("saltB64" in s.sync)) s.sync.saltB64 = null;
+    s.dataVersion = 4;
+  }
+
+  /* Degraded-read resilience: rebuild malformed subtrees, but ONLY the malformed ones.
+   * We never touch subtrees that parse cleanly. */
+  for (const k of Object.keys(DEFAULTS)){
+    if (!(k in s)) s[k] = deepClone(DEFAULTS[k]);
+    const def = DEFAULTS[k];
+    if (def !== null && typeof def === "object" && !Array.isArray(def)){
+      if (!s[k] || typeof s[k] !== "object" || Array.isArray(s[k])) s[k] = deepClone(def);
+    } else if (Array.isArray(def)){
+      if (!Array.isArray(s[k])) s[k] = deepClone(def);
+    }
+  }
+  // sub-keys for nested objects (additive only)
+  ["hero","settings","timer","sync","daily","combo"].forEach(group=>{
+    s[group] = s[group]||{};
+    for (const k of Object.keys(DEFAULTS[group]||{})) if (!(k in s[group])) s[group][k]=deepClone(DEFAULTS[group][k]);
+  });
+  // Clamp obviously-bad values (don't wipe; just bound)
+  if (!(s.hero.hp >= 0 && s.hero.hp <= 100)) s.hero.hp = 100;
+  if (!(s.hero.energy >= 0 && s.hero.energy <= 100)) s.hero.energy = 100;
+  if (!(s.hero.level >= 1)) s.hero.level = Math.max(1, s.hero.level|0 || 1);
+  if (!(s.hero.xp >= 0)) s.hero.xp = 0;
+  if (!(s.totalFocusMin >= 0)) s.totalFocusMin = 0;
+  if (!(s.completedFocusSessions >= 0)) s.completedFocusSessions = 0;
+  if (!(s.totalAppOpenMs >= 0)) s.totalAppOpenMs = 0;
+  if (s.longestStreak < s.streak) s.longestStreak = s.streak;
+  return s;
+}
+/* v4.2: lightweight invariant check used to gate "lastKnownGood" snapshots.
+   If the live state is missing critical fields, has gone negative, OR has
+   regressed below the previous LKG on a monotonic counter, we DON'T overwrite
+   the LKG snapshot — that way if something corrupts state in memory or a
+   buggy merge writes a smaller value, the previous good copy stays
+   recoverable via window.__FocusHero.recover(). */
+function isStateSane(s){
+  if (!s || typeof s !== "object") return false;
+  if (typeof s.dataVersion !== "number") return false;
+  if (!s.hero || typeof s.hero.level !== "number" || s.hero.level < 1) return false;
+  if (!(s.totalFocusMin >= 0)) return false;
+  if (!(s.totalAppOpenMs >= 0)) return false;
+  if (!Array.isArray(s.tasks)) return false;
+  if (!s.settings || typeof s.settings !== "object") return false;
+  // Monotonicity check: the named counters MUST never decrease across saves.
+  // A regression means something miscomputed and we should NOT promote it to LKG.
+  try {
+    const prevRaw = localStorage.getItem(LKG_KEY);
+    if (prevRaw){
+      const prev = JSON.parse(prevRaw);
+      const ps = (prev && prev.state) || {};
+      if ((ps.totalFocusMin|0) > (s.totalFocusMin|0)) return false;
+      if ((ps.totalAppOpenMs|0) > (s.totalAppOpenMs|0)) return false;
+      if ((ps.completedFocusSessions|0) > (s.completedFocusSessions|0)) return false;
+      if ((ps.longestStreak|0) > (s.longestStreak|0)) return false;
+      const psLevel = ps.hero?.level|0, sLevel = s.hero?.level|0;
+      if (psLevel > sLevel) return false;
+      // At equal level, total XP earned should not regress either.
+      if (psLevel === sLevel && (ps.hero?.xp|0) > (s.hero?.xp|0)) return false;
+    }
+  } catch(_){}
+  return true;
+}
+const LKG_KEY = `${STORAGE_KEY}.lkg`;
+function saveState(opts={}){
+  let serialized = null;
+  try { serialized = JSON.stringify(state); localStorage.setItem(STORAGE_KEY, serialized); }
+  catch(e){ console.warn("save failed",e); }
+  /* v4.2: write a "last known good" mirror only when state passes invariants.
+     Throttled to ~once per 10s so we don't double localStorage write volume. */
+  try {
+    if (serialized && isStateSane(state)){
+      const lastLkg = saveState._lastLkgAt|0;
+      const t = Date.now();
+      if (t - lastLkg > 10_000){
+        localStorage.setItem(LKG_KEY, JSON.stringify({ savedAt: new Date().toISOString(), state }));
+        saveState._lastLkgAt = t;
+      }
+    }
+  } catch(_){}
+  if (bc && !opts.fromBroadcast){ try { bc.postMessage({ type:"state", state }); } catch(e){} }
+  if (state.sync.enabled && !opts.fromPull){
+    clearTimeout(cloudDebounce);
+    cloudDebounce = setTimeout(()=>cloudPush().catch(e=>{ console.warn("push failed", e); logLine("Cloud push failed: "+ (e.message||e), true); }), 500);
+  }
+}
+/* v4.2: emergency recovery helper exposed via window.__FocusHero.recover().
+   Reads the LKG snapshot, migrates it, and overwrites live state. Logs each
+   key it found to the console so you can see what's available. */
+function listRecoverySnapshots(){
+  const found = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++){
+      const k = localStorage.key(i);
+      if (k && k.startsWith(STORAGE_KEY) && k !== STORAGE_KEY){
+        const raw = localStorage.getItem(k);
+        let savedAt = "?", size = raw ? raw.length : 0;
+        try { savedAt = JSON.parse(raw).savedAt || "?"; } catch(_){}
+        found.push({ key:k, savedAt, size });
+      }
+    }
+  } catch(_){}
+  return found;
+}
+function recoverFromSnapshot(key){
+  key = key || LKG_KEY;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) throw new Error(`no snapshot at ${key}`);
+    const wrap = JSON.parse(raw);
+    const candidate = wrap.state || wrap;
+    state = migrate(candidate);
+    saveState();
+    if (typeof renderAll === "function") renderAll();
+    return { ok:true, savedAt: wrap.savedAt };
+  } catch(e){ return { ok:false, error: e.message||String(e) }; }
+}
+function scheduleSave(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveState, 80);
+}
+
+/* -------- event bus helpers -------- */
+function logLine(text, isErr){
+  const L = $("#log"); if (!L) return;
+  const d = document.createElement("div");
+  const t = new Date().toLocaleTimeString();
+  d.textContent = `[${t}] ${text}`;
+  if (isErr) d.style.color = "var(--bad)";
+  L.prepend(d);
+  while (L.childNodes.length > 200) L.lastChild.remove();
+  state.sessionsLog = (state.sessionsLog||[]).slice(-40);
+}
+function toast(msg, kind="", actions=[]){
+  const wrap = $("#toasts");
+  const el = document.createElement("div");
+  el.className = "toast " + (kind||"");
+  el.innerHTML = `<span>${escapeHtml(msg)}</span>`;
+  actions.forEach(a=>{
+    const b = document.createElement("button"); b.textContent = a.label; b.onclick = ()=>{ a.onClick?.(); el.remove(); };
+    el.appendChild(b);
+  });
+  const close = document.createElement("button"); close.textContent="✕"; close.style.padding=".1rem .45rem"; close.onclick=()=>el.remove();
+  el.appendChild(close);
+  wrap.appendChild(el);
+  setTimeout(()=>{ if (el.isConnected) el.remove(); }, 7000);
+}
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+/* -------- TIMER -------- */
+let tickInterval = null;
+let audioCtx = null;
+function getAudio(){
+  if (!audioCtx) { try { audioCtx = new (window.AudioContext||window.webkitAudioContext)(); } catch(e){} }
+  return audioCtx;
+}
+function playTick(){
+  if (!state.settings.tick) return;
+  const ctx = getAudio(); if (!ctx) return;
+  const o = ctx.createOscillator(), g = ctx.createGain();
+  o.type = "square"; o.frequency.value = 900; g.gain.value = 0.03;
+  g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.08);
+  o.connect(g).connect(ctx.destination); o.start(); o.stop(ctx.currentTime + 0.08);
+}
+function playChime(isBreak){
+  if (!state.settings.chime) return;
+  const ctx = getAudio(); if (!ctx) return;
+  const now = ctx.currentTime;
+  const notes = isBreak ? [880, 660] : [523.25, 659.25, 783.99, 1046.5];
+  notes.forEach((f,i)=>{
+    const o=ctx.createOscillator(), g=ctx.createGain();
+    o.type="sine"; o.frequency.value=f; g.gain.value=0.0001;
+    g.gain.exponentialRampToValueAtTime(0.15, now + i*0.18 + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + i*0.18 + 0.45);
+    o.connect(g).connect(ctx.destination); o.start(now + i*0.18); o.stop(now + i*0.18 + 0.5);
+  });
+}
+function modeMinutes(mode){
+  return mode==="short" ? state.settings.shortMin : mode==="long" ? state.settings.longMin : state.settings.focusMin;
+}
+function isStopwatch(){ return state.timer.mode === "stopwatch"; }
+/* v4.1: pure helper — total elapsed ms for stopwatch state. Testable. */
+function stopwatchElapsedMs(timer, nowMs){
+  const acc = (timer && timer.swAccumulatedMs) || 0;
+  if (timer && timer.running && timer.swStartedAt) return acc + Math.max(0, nowMs - timer.swStartedAt);
+  return acc;
+}
+function stopwatchMinutes(timer, nowMs){
+  // floor — Codex review (v4.1): rounding creates threshold-gaming; show rounded in UI, log floored.
+  return Math.floor(stopwatchElapsedMs(timer, nowMs) / 60000);
+}
+/* v4.2.1: pure lap helper — append a lap given the current elapsed ms and prior laps array.
+   Returns a NEW array (immutable-style) capped to most-recent 10. Each lap stores:
+   { at: wall-clock ms, elapsedMs: total since start, splitMs: ms since previous lap }. */
+function appendStopwatchLap(prevLaps, elapsedMs, atMs){
+  const arr = Array.isArray(prevLaps) ? prevLaps.slice() : [];
+  const prev = arr.length ? arr[arr.length-1] : null;
+  const splitMs = Math.max(0, elapsedMs - (prev ? prev.elapsedMs : 0));
+  arr.push({ at: atMs|0, elapsedMs: elapsedMs|0, splitMs });
+  // cap to last 10 — most-recent kept
+  while (arr.length > 10) arr.shift();
+  return arr;
+}
+function setMode(mode, {resetRun=true}={}){
+  // Leaving stopwatch mode while it's running → preserve accumulated ms but stop the run.
+  if (state.timer.mode === "stopwatch" && mode !== "stopwatch" && state.timer.running){
+    pauseTimer();
+  }
+  state.timer.mode = mode;
+  if (resetRun){
+    state.timer.running = false;
+    state.timer.endAt = 0;
+    state.timer.pausedAt = 0;
+    if (mode === "stopwatch"){
+      // entering stopwatch: keep prior unfinalised elapsed unless reset explicitly
+      state.timer.msLeft = 0;
+    } else {
+      state.timer.msLeft = modeMinutes(mode)*60*1000;
+    }
+  }
+  // toggle stopwatch-only button visibility
+  const btnStopLog = $("#btn-stop-log"); if (btnStopLog){ btnStopLog.hidden = mode !== "stopwatch"; }
+  const btnLap = $("#btn-lap"); if (btnLap){ btnLap.hidden = mode !== "stopwatch"; }
+  const btnSkip = $("#btn-skip"); if (btnSkip){ btnSkip.hidden = mode === "stopwatch"; }
+  saveState(); renderTimer(); renderModeTabs(); renderActiveTaskRow(); renderSwLaps();
+}
+function startTimer(){
+  if (state.timer.running) return;
+  if (isStopwatch()){
+    // stopwatch: count up
+    if (!state.timer.swSessionStartedAt) state.timer.swSessionStartedAt = now();
+    state.timer.swStartedAt = now();
+    state.timer.running = true;
+    state.timer.pausedAt = 0;
+    if (!state.timer.activeTaskId) state.timer.activeTaskId = state.activeTaskId || null;
+    const t = state.tasks.find(x=>x.id === state.timer.activeTaskId);
+    state.timer.activeTaskNameAtStart = t ? t.name : null;
+    startKeepalive(); acquireWakeLock();
+    saveState(); ensureTickInterval();
+    logLine("Started stopwatch");
+    renderActiveTaskRow(); renderTimer();
+    $("#btn-start").textContent = "Pause";
+    requestNotifPermIfNeeded();
+    return;
+  }
+  const base = state.timer.msLeft > 0 ? state.timer.msLeft : modeMinutes(state.timer.mode)*60*1000;
+  state.timer.endAt = now() + base;
+  state.timer.running = true;
+  state.timer.pausedAt = 0;
+  // v4: capture active task snapshot so the session logs to the right bucket even
+  // if the user switches active task mid-session. Rename is allowed mid-session
+  // and will propagate because we write minutes by id, not by name-at-start.
+  if (state.timer.mode === "focus"){
+    if (!state.timer.activeTaskId) state.timer.activeTaskId = state.activeTaskId || null;
+    const t = state.tasks.find(x=>x.id === state.timer.activeTaskId);
+    state.timer.activeTaskNameAtStart = t ? t.name : null;
+    // start keepalive + (optional) wakelock for focus sessions only
+    startKeepalive();
+    acquireWakeLock();
+  }
+  saveState();
+  ensureTickInterval();
+  logLine(`Started ${state.timer.mode} (${Math.round(base/60000)}m)`);
+  renderActiveTaskRow();
+  $("#btn-start").textContent = "Pause";
+  requestNotifPermIfNeeded();
+}
+function pauseTimer(){
+  if (!state.timer.running) return;
+  if (isStopwatch()){
+    state.timer.swAccumulatedMs = (state.timer.swAccumulatedMs|0) + Math.max(0, now() - state.timer.swStartedAt);
+    state.timer.swStartedAt = 0;
+    state.timer.running = false;
+    state.timer.pausedAt = now();
+    saveState(); renderTimer();
+    $("#btn-start").textContent = "Start";
+    logLine(`Paused stopwatch at ${fmtTimeLong(state.timer.swAccumulatedMs)}`);
+    stopKeepalive(); releaseWakeLock();
+    return;
+  }
+  const left = Math.max(0, state.timer.endAt - now());
+  state.timer.msLeft = left;
+  state.timer.running = false;
+  state.timer.endAt = 0;
+  state.timer.pausedAt = now();
+  saveState(); renderTimer();
+  $("#btn-start").textContent = "Start";
+  logLine(`Paused ${state.timer.mode} at ${fmtTime(left)}`);
+  stopKeepalive(); releaseWakeLock();
+}
+function resetTimer(){
+  if (isStopwatch()){
+    const hasLaps = Array.isArray(state.timer.swLaps) && state.timer.swLaps.length > 0;
+    if ((state.timer.swAccumulatedMs|0) > 60_000 || state.timer.running || hasLaps){
+      const msg = hasLaps
+        ? "Reset the stopwatch? You'll lose the elapsed time and all laps without logging them."
+        : "Reset the stopwatch? You'll lose the elapsed time without logging it.";
+      if (!confirm(msg)) return;
+    }
+    state.timer.running = false;
+    state.timer.swStartedAt = 0;
+    state.timer.swAccumulatedMs = 0;
+    state.timer.swSessionStartedAt = 0;
+    state.timer.swLaps = [];
+    state.timer.activeTaskId = null;
+    state.timer.activeTaskNameAtStart = null;
+    saveState(); renderTimer(); renderActiveTaskRow(); renderSwLaps();
+    $("#btn-start").textContent = "Start";
+    stopKeepalive(); releaseWakeLock();
+    return;
+  }
+  state.timer.running = false;
+  state.timer.endAt = 0;
+  state.timer.msLeft = modeMinutes(state.timer.mode)*60*1000;
+  state.timer.activeTaskId = null;
+  state.timer.activeTaskNameAtStart = null;
+  saveState(); renderTimer(); renderActiveTaskRow();
+  $("#btn-start").textContent = "Start";
+  stopKeepalive(); releaseWakeLock();
+}
+/* v4.2.1: capture a lap on the running stopwatch.
+   No-op if not in stopwatch mode or elapsed <1s (avoid empty laps). */
+function lapStopwatch(){
+  if (!isStopwatch()) return;
+  const elapsed = stopwatchElapsedMs(state.timer, now());
+  if (elapsed < 1000) return;
+  state.timer.swLaps = appendStopwatchLap(state.timer.swLaps, elapsed, now());
+  saveState(); renderSwLaps();
+}
+/* v4.1: stop-and-log a stopwatch session — runs the focus reward pipeline. */
+function finalizeStopwatch(){
+  if (!isStopwatch()) return;
+  // Capture elapsed first
+  if (state.timer.running){
+    state.timer.swAccumulatedMs = (state.timer.swAccumulatedMs|0) + Math.max(0, now() - state.timer.swStartedAt);
+    state.timer.swStartedAt = 0;
+    state.timer.running = false;
+  }
+  // Codex review (v4.1): floor for fairness — no half-minute freebies.
+  const minutes = Math.floor((state.timer.swAccumulatedMs||0) / 60000);
+  if (minutes <= 0){
+    toast("Nothing to log — stopwatch under 1 minute.", "warn");
+    return;
+  }
+  // Codex review (v4.1): stopwatch advances streak (showed up today) but does NOT
+  // increment combo. Combo measures back-to-back DECLARED focus runs of fixed length;
+  // an open-ended count-up timer is too easy to farm if it fed combo.
+  const tk = todayKey();
+  if (state.combo.date !== tk) state.combo = { count: 0, date: tk };
+  updateStreak(tk);
+  // Pass comboCount=0 explicitly so the breakdown shows no combo bonus on stopwatch sessions.
+  const xp = computeXpBreakdown(minutes, { comboCount: 0, streakDays: state.streak, settings: state.settings });
+  state.cycleCount += 1;
+  state.totalFocusMin += minutes;
+  state.history[tk] = (state.history[tk]||0) + minutes;
+  state.completedFocusSessions = (state.completedFocusSessions|0) + 1;
+  logMinutesToTask(state.timer.activeTaskId, minutes);
+  const floor = Math.max(1, state.settings.minRewardMinutes|0 || 5);
+  const earnedRewards = minutes >= floor;
+  if (earnedRewards){
+    awardXp(xp.total);
+    // Note: state.combo.count is intentionally not incremented for stopwatch sessions.
+    state.hero.energy = Math.max(0, state.hero.energy - 8);
+    state.hero.hp = Math.min(100, state.hero.hp + 2);
+    const lootItem = rollLoot(minutes);
+    updateDailyProgress("focus", 1);
+    updateDailyProgress("minutes", minutes);
+    showXpBreakdown(xp, { lootItem });
+    logLine(`Stopwatch logged: ${minutes}m · +${xp.total} XP (base ${xp.base}${xp.streakBonus?` +${xp.streakBonus} streak`:""})`);
+    notify("Stopwatch logged!", `+${xp.total} XP · ${minutes}m saved`);
+  } else {
+    showXpBreakdown(xp, { reasonShort: true });
+    logLine(`Stopwatch logged: ${minutes}m (no rewards — below ${floor}m floor)`);
+    notify("Stopwatch logged", `${minutes}m added to your totals (below ${floor}m reward floor)`);
+  }
+  pushSessionLog({ at: now(), type:"focus", source:"stopwatch", minutes, taskId: state.timer.activeTaskId||null, xp: earnedRewards ? xp.total : 0, rewarded: earnedRewards });
+  playChime(false);
+  // reset stopwatch counter, stay in stopwatch mode for another session
+  state.timer.swAccumulatedMs = 0;
+  state.timer.swStartedAt = 0;
+  state.timer.swSessionStartedAt = 0;
+  state.timer.swLaps = []; // v4.2.1: clear laps with the rest of the session state
+  state.timer.activeTaskNameAtStart = null;
+  stopKeepalive(); releaseWakeLock();
+  checkAchievements();
+  saveState(); renderAll();
+}
+function ensureTickInterval(){
+  if (tickInterval) return;
+  tickInterval = setInterval(tick, 250);
+}
+function tick(){
+  if (!state.timer.running) return;
+  if (isStopwatch()){
+    renderTimer();
+    return;
+  }
+  const left = state.timer.endAt - now();
+  if (left <= 0){
+    completeSession();
+  } else {
+    if (Math.floor(left/1000) !== Math.floor((left+250)/1000)) playTick();
+    renderTimer();
+  }
+}
+function completeSession(){
+  const wasMode = state.timer.mode;
+  const minutes = modeMinutes(wasMode);
+  state.timer.running = false;
+  state.timer.endAt = 0;
+  state.timer.msLeft = 0;
+  if (wasMode === "focus"){
+    stopKeepalive(); releaseWakeLock();
+    const tk = todayKey();
+    // Bump combo BEFORE computing bonus so the combo count represents "prior sessions today".
+    // Reset combo if a new day has dawned since last focus.
+    if (state.combo.date !== tk) state.combo = { count: 0, date: tk };
+    const comboPriorCount = state.combo.count;
+    // Update streak FIRST so streak day includes today
+    updateStreak(tk);
+    const xp = computeXpBreakdown(minutes, { comboCount: comboPriorCount, streakDays: state.streak, settings: state.settings });
+    // Commit cumulative counters whether or not we granted XP (hours are sacred)
+    state.cycleCount += 1;
+    state.totalFocusMin += minutes;
+    state.history[tk] = (state.history[tk]||0) + minutes;
+    state.completedFocusSessions = (state.completedFocusSessions|0) + 1;
+    // Log minutes to the active task, if any
+    logMinutesToTask(state.timer.activeTaskId, minutes);
+    // Decide whether rewards apply
+    const floor = Math.max(1, state.settings.minRewardMinutes|0 || 5);
+    const earnedRewards = minutes >= floor;
+    if (earnedRewards){
+      awardXp(xp.total);
+      state.combo.count = comboPriorCount + 1;
+      state.hero.energy = Math.max(0, state.hero.energy - 8);
+      state.hero.hp = Math.min(100, state.hero.hp + 2);
+      const lootItem = rollLoot(minutes);
+      updateDailyProgress("focus", 1);
+      updateDailyProgress("minutes", minutes);
+      showXpBreakdown(xp, { lootItem });
+      logLine(`Focus complete: ${minutes}m · +${xp.total} XP (base ${xp.base}${xp.comboBonus?` +${xp.comboBonus} combo`:""}${xp.streakBonus?` +${xp.streakBonus} streak`:""})`);
+      notify("Focus complete!", `+${xp.total} XP · time for a break`);
+    } else {
+      // Minutes still log, hours still accumulate. No XP, no loot, no achievements.
+      state.combo.count = comboPriorCount; // too short to extend combo
+      showXpBreakdown(xp, { reasonShort: true });
+      logLine(`Focus complete: ${minutes}m logged (no rewards — below ${floor}m floor)`);
+      notify("Focus session logged", `${minutes}m added to your totals (below ${floor}m reward floor)`);
+    }
+    pushSessionLog({ at: now(), type:"focus", minutes, taskId: state.timer.activeTaskId||null, xp: earnedRewards ? xp.total : 0, rewarded: earnedRewards });
+    playChime(false);
+    // pick next mode
+    const nextIsLong = state.cycleCount % state.settings.cyclesBeforeLong === 0;
+    if (nextIsLong && earnedRewards){ updateDailyProgress("cycle", 1); }
+    // carry the active task forward to the next focus session by default
+    const carriedTask = state.timer.activeTaskId;
+    setMode(nextIsLong ? "long" : "short");
+    state.timer.activeTaskId = carriedTask;
+    state.timer.activeTaskNameAtStart = null;
+  } else {
+    state.hero.energy = Math.min(100, state.hero.energy + (wasMode==="long"?40:18));
+    pushSessionLog({ at: now(), type: wasMode, minutes });
+    logLine(`${wasMode==="long"?"Long":"Short"} break done (+energy)`);
+    playChime(true);
+    notify("Break over!", "Ready for another focus session?");
+    setMode("focus");
+  }
+  checkAchievements();
+  renderAll();
+  if (state.settings.autoStart){ setTimeout(startTimer, 900); }
+}
+
+/* v4: pure function — tiered XP curve with combo + streak bonuses.
+ * Exposed on __FocusHero for smoke tests. */
+function computeXpBreakdown(minutes, opts){
+  opts = opts||{};
+  const settings = opts.settings||state.settings||DEFAULTS.settings;
+  const floor = Math.max(1, settings.minRewardMinutes|0 || 5);
+  if (!(minutes >= floor)){
+    return { minutes, base:0, comboCount:opts.comboCount||0, comboPct:0, comboBonus:0,
+             streakDays:opts.streakDays||0, streakPct:0, streakBonus:0, total:0, reason:"under_floor", floor };
+  }
+  // Band rates (XP per minute inside the band).
+  // Minutes below the floor have already been rejected above.
+  // 0-15 is the "base" band so a 5m session gets 5*2=10 XP (matches spec).
+  const bands = [
+    { from: 0,  to: 15,   rate: 2.0 }, // 2 XP/min
+    { from: 15, to: 30,   rate: 2.5 }, // 2 × 1.25
+    { from: 30, to: 60,   rate: 3.0 }, // 2 × 1.5
+    { from: 60, to: 90,   rate: 3.5 }, // 2 × 1.75
+    { from: 90, to: Infinity, rate: 4.0 } // 2 × 2.0
+  ];
+  let base = 0;
+  for (const b of bands){
+    if (minutes <= b.from) break;
+    const inBand = Math.min(minutes, b.to) - b.from;
+    base += inBand * b.rate;
+  }
+  // Deep focus bonus: +5 XP per 15m chunk past 90m
+  if (minutes > 90){
+    const chunks = Math.floor((minutes - 90) / 15);
+    base += chunks * 5;
+  }
+  base = Math.round(base);
+  const comboCount = Math.max(0, opts.comboCount|0);
+  const streakDays = Math.max(0, opts.streakDays|0);
+  const comboCap = Math.max(0, settings.comboBonusCap|0);
+  const streakCap = Math.max(0, settings.streakBonusCap|0);
+  const comboPct = Math.min(comboCount * 10, comboCap);
+  const streakPct = Math.min(streakDays, streakCap);
+  const comboBonus  = Math.round(base * comboPct  / 100);
+  const streakBonus = Math.round(base * streakPct / 100);
+  const total = base + comboBonus + streakBonus;
+  return { minutes, base, comboCount, comboPct, comboBonus, streakDays, streakPct, streakBonus, total, reason:null, floor };
+}
+
+/* v4: loot gate.
+ * <25: no roll at all
+ * 25+: common/uncommon allowed
+ * 50+: rare allowed
+ * 90+: epic allowed
+ * 120+: legendary/mythic allowed */
+function allowedRaritiesForMinutes(minutes){
+  const out = new Set();
+  if (minutes >= 25){ out.add("common"); out.add("uncommon"); }
+  if (minutes >= 50) out.add("rare");
+  if (minutes >= 90) out.add("epic");
+  if (minutes >= 120){ out.add("legendary"); out.add("mythic"); }
+  return out;
+}
+function pushSessionLog(entry){
+  state.sessionsLog = (state.sessionsLog||[]); state.sessionsLog.push(entry);
+  if (state.sessionsLog.length > 60) state.sessionsLog.shift();
+}
+function updateStreak(tk){
+  const prev = state.lastFocusDate;
+  if (prev === tk) return;
+  if (!prev){ state.streak = 1; }
+  else {
+    const pd = new Date(prev), td = new Date(tk);
+    const diff = Math.round((td-pd)/(1000*60*60*24));
+    state.streak = diff === 1 ? state.streak + 1 : 1;
+  }
+  if (state.streak > (state.longestStreak|0)) state.longestStreak = state.streak;
+  state.lastFocusDate = tk;
+}
+function awardXp(amount){
+  if (!(amount>0)) return;
+  const cur = totalXpForLevel(state.hero.level) + state.hero.xp + amount;
+  const info = levelFromTotalXp(cur);
+  if (info.lv > state.hero.level){
+    state.hero.level = info.lv;
+    toast(`Level up! Lv ${info.lv} (${CLASSES[state.hero.cls].titles[titleIdxFor(info.lv)]})`, "good");
+  }
+  state.hero.level = info.lv;
+  state.hero.xp = info.xp;
+}
+function titleIdxFor(lv){
+  let i=0; for (let k=0;k<TITLE_BANDS.length;k++) if (lv>=TITLE_BANDS[k]) i=k;
+  return i;
+}
+function rollLoot(minutes){
+  const allowed = allowedRaritiesForMinutes(minutes);
+  if (allowed.size === 0) return null;
+  // Scarcity: very-long sessions can still produce legendary/mythic, but the weight
+  // ladder keeps them rare.
+  const pool = LOOT_TABLE.filter(it => allowed.has(it[2]));
+  if (!pool.length) return null;
+  const base = clamp(minutes / 50, 0.3, 1.2);
+  let total = 0;
+  for (const it of pool) total += it[3] * rarityWeight(it[2], base);
+  const roll = Math.random() * total;
+  let cum = 0;
+  for (const item of pool){
+    const w = item[3] * rarityWeight(item[2], base);
+    cum += w;
+    if (roll < cum){
+      const id = lootId(item);
+      state.lootOwned[id] = (state.lootOwned[id]||0)+1;
+      toast(`${item[0]} Found ${item[1]} (${item[2]})`, "good");
+      if (["rare","epic","legendary","mythic"].includes(item[2])){
+        logLine(`Loot: ${item[1]} (${item[2]})`);
+      }
+      unlockAchievementsByRarity(item[2]);
+      return item;
+    }
+  }
+  return null;
+}
+function rarityWeight(r, focusBoost){
+  // biased roll: common heavy, up-skew with longer sessions
+  const lvlBoost = 1 + (state.hero.level * 0.01);
+  const map = { common:1.0, uncommon:0.75, rare:0.35 + focusBoost*0.10, epic:0.14 + focusBoost*0.08, legendary:0.05 + focusBoost*0.05, mythic:0.012 + focusBoost*0.02 };
+  return (map[r]||1) * lvlBoost;
+}
+function lootId(item){ return item[1].toLowerCase().replace(/[^a-z0-9]+/g,"_"); }
+
+/* ================================================================
+ * v4: TASKS — first-class categories with per-task minute totals.
+ * Distinct from quests: tasks are recurring labels (Study, Coding…),
+ * quests are one-off todos. Tasks accumulate minutes forever.
+ * ================================================================ */
+function createTask({ name, emoji, pinned=false } = {}){
+  name = (name||"").trim().slice(0,40);
+  if (!name) return null;
+  emoji = (emoji||pickRandomEmoji()).slice(0,4);
+  const t = { id: uid(), name, emoji, pinned: !!pinned,
+              totalFocusMin: 0, sessions: 0,
+              createdAt: now(), lastUsedAt: null };
+  state.tasks.unshift(t);
+  // Make it the active task unless one is already set
+  if (!state.activeTaskId) state.activeTaskId = t.id;
+  saveState(); renderTasks(); renderActiveTaskRow();
+  return t;
+}
+function pickRandomEmoji(){
+  return DEFAULT_TASK_EMOJIS[Math.floor(Math.random()*DEFAULT_TASK_EMOJIS.length)];
+}
+function renameTask(id, name){
+  const t = state.tasks.find(x=>x.id===id); if (!t) return;
+  t.name = (name||"").trim().slice(0,40) || t.name;
+  /* v4.2.1 (Codex review fix #3): bump lastUsedAt on name/emoji edits.
+     mergeRemoteState resolves task name/emoji conflicts by picking the row
+     whose lastUsedAt is newer. Before this, a rename on device A wouldn't
+     update lastUsedAt — so if device B merely USED the same task afterwards,
+     B's older name would win on merge and A's edit would silently revert. */
+  t.lastUsedAt = now();
+  saveState(); renderTasks(); renderActiveTaskRow();
+}
+function setTaskEmoji(id, emoji){
+  const t = state.tasks.find(x=>x.id===id); if (!t) return;
+  t.emoji = (emoji||"").slice(0,4) || t.emoji;
+  t.lastUsedAt = now(); // v4.2.1: same fix as renameTask above
+  saveState(); renderTasks(); renderActiveTaskRow();
+}
+function deleteTask(id, { confirmMsg=true } = {}){
+  const t = state.tasks.find(x=>x.id===id); if (!t) return;
+  // Confirm if the task has logged time — hours are sacred.
+  if (confirmMsg && (t.totalFocusMin|0) > 0){
+    if (!confirm(`Delete task "${t.name}"? It has ${formatHours(t.totalFocusMin)} logged. Historical minutes stay in your totalFocusMin — only the per-task breakdown is lost.`)) return;
+  } else if (confirmMsg){
+    if (!confirm(`Delete task "${t.name}"?`)) return;
+  }
+  state.tasks = state.tasks.filter(x=>x.id!==id);
+  if (state.activeTaskId === id){
+    const next = state.tasks.find(x=>x.pinned) || state.tasks[0];
+    state.activeTaskId = next ? next.id : null;
+  }
+  if (state.timer.activeTaskId === id) state.timer.activeTaskId = state.activeTaskId;
+  saveState(); renderTasks(); renderActiveTaskRow();
+}
+function pinTask(id){
+  const t = state.tasks.find(x=>x.id===id); if (!t) return;
+  t.pinned = !t.pinned;
+  saveState(); renderTasks();
+}
+function moveTask(id, dir){
+  const i = state.tasks.findIndex(x=>x.id===id); if (i<0) return;
+  const ni = clamp(i + dir, 0, state.tasks.length-1);
+  if (ni === i) return;
+  const [it] = state.tasks.splice(i,1); state.tasks.splice(ni,0,it);
+  saveState(); renderTasks();
+}
+function setActiveTask(id){
+  state.activeTaskId = id;
+  // If running, update the session's active task immediately — minutes still go to
+  // whatever taskId is active when the session COMPLETES (spec).
+  if (state.timer.running && state.timer.mode === "focus"){
+    state.timer.activeTaskId = id;
+  }
+  saveState(); renderTasks(); renderActiveTaskRow();
+}
+function logMinutesToTask(taskId, minutes){
+  if (!taskId || !(minutes>0)) return;
+  const t = state.tasks.find(x=>x.id===taskId); if (!t) return;
+  t.totalFocusMin = (t.totalFocusMin|0) + minutes;
+  t.sessions = (t.sessions|0) + 1;
+  t.lastUsedAt = now();
+}
+function formatHours(minutes){
+  const m = Math.max(0, minutes|0);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m/60); const rem = m % 60;
+  return rem === 0 ? `${h}h` : `${h}h ${rem}m`;
+}
+function formatMsHours(ms){
+  return formatHours(Math.floor((ms||0)/60000));
+}
+
+/* ================================================================
+ * v4: Mid-session rename of active task
+ * ================================================================ */
+let activeTaskRowEditing = false;
+function startActiveTaskRename(){
+  const id = state.timer.activeTaskId || state.activeTaskId;
+  if (!id) return;
+  const t = state.tasks.find(x=>x.id===id); if (!t) return;
+  if (activeTaskRowEditing) return;
+  activeTaskRowEditing = true;
+  const host = $("#active-task-label"); if (!host) return;
+  host.innerHTML = `<span>${t.emoji}</span><input type="text" id="active-task-rename" maxlength="40" value="${escapeHtml(t.name)}" aria-label="Rename task">`;
+  const input = $("#active-task-rename");
+  input.focus(); input.select();
+  const commit = () => {
+    if (!activeTaskRowEditing) return;
+    activeTaskRowEditing = false;
+    const v = input.value;
+    renameTask(id, v);
+  };
+  input.addEventListener("blur", commit);
+  input.addEventListener("keydown", (e)=>{
+    if (e.key === "Enter"){ e.preventDefault(); commit(); }
+    else if (e.key === "Escape"){ e.preventDefault(); activeTaskRowEditing = false; renderActiveTaskRow(); }
+  });
+}
+
+/* ================================================================
+ * v4: Background keepalive + wakelock
+ * Goal: the timer ticks correctly when the tab is backgrounded,
+ * particularly on iOS Safari (which aggressively throttles hidden tabs).
+ *
+ * Strategy:
+ *   1) end-timestamp persistence — already in place; visibilitychange
+ *      recomputes remaining.
+ *   2) silent WebAudio oscillator playing at ~0 gain. iOS keeps tabs
+ *      with audio graphs alive.
+ *   3) optional navigator.wakeLock.request('screen') so the screen
+ *      doesn't dim during focus.
+ *   4) service worker shows completion notification even when closed
+ *      (already wired; permission handled below).
+ * ================================================================ */
+let silentKeepaliveNode = null;
+function startKeepalive(){
+  if (!state.settings.keepalive) return;
+  const ctx = getAudio(); if (!ctx) return;
+  if (ctx.state === "suspended"){ ctx.resume().catch(()=>{}); }
+  if (silentKeepaliveNode) return;
+  try {
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = "sine";
+    o.frequency.value = 20;      // sub-audible
+    g.gain.value = 0.00008;      // effectively silent, still a live node
+    o.connect(g).connect(ctx.destination);
+    o.start();
+    silentKeepaliveNode = { o, g };
+  } catch(e){ console.warn("keepalive start failed", e); }
+}
+function stopKeepalive(){
+  if (!silentKeepaliveNode) return;
+  try { silentKeepaliveNode.o.stop(); } catch(_){}
+  try { silentKeepaliveNode.o.disconnect(); silentKeepaliveNode.g.disconnect(); } catch(_){}
+  silentKeepaliveNode = null;
+}
+let wakeLockSentinel = null;
+async function acquireWakeLock(){
+  if (!state.settings.wakelock) return;
+  if (!("wakeLock" in navigator)) return;
+  if (wakeLockSentinel) return;
+  try {
+    wakeLockSentinel = await navigator.wakeLock.request("screen");
+    wakeLockSentinel.addEventListener?.("release", ()=>{ wakeLockSentinel = null; });
+  } catch(e){ /* user denied or unavailable */ }
+}
+async function releaseWakeLock(){
+  if (!wakeLockSentinel) return;
+  try { await wakeLockSentinel.release(); } catch(_){}
+  wakeLockSentinel = null;
+}
+
+/* ================================================================
+ * v4.2: App-open uptime counter.
+ * Counts every second the app is open, regardless of tab visibility.
+ * Delta is capped at 60s so system sleep / hard-throttled tabs don't
+ * inflate the total — but normal background-tab time is still counted.
+ * ================================================================ */
+let lastTickTs = null;
+let lastSavedAppOpenMs = 0;
+function appOpenTick(){
+  const t = now();
+  if (lastTickTs === null){ lastTickTs = t; return; }
+  const delta = t - lastTickTs;
+  if (delta > 0 && delta < 60_000){
+    state.totalAppOpenMs = (state.totalAppOpenMs|0) + delta;
+  }
+  lastTickTs = t;
+  // Persist at most every ~30s so we don't hammer localStorage every second.
+  if (state.totalAppOpenMs - lastSavedAppOpenMs >= 30_000){
+    lastSavedAppOpenMs = state.totalAppOpenMs;
+    scheduleSave();
+  }
+}
+function bindAppOpenTracking(){
+  lastTickTs = now();
+  lastSavedAppOpenMs = state.totalAppOpenMs|0;
+  document.addEventListener("visibilitychange", ()=>{
+    if (document.visibilityState === "visible"){
+      // Reset baseline so we don't credit suspended/hidden time at huge deltas
+      lastTickTs = now();
+      if (state.timer.running && state.timer.mode === "focus") acquireWakeLock();
+      renderStatStrip();
+    } else {
+      appOpenTick(); // flush whatever has accumulated so far
+    }
+  });
+  // Live counter: tick + render every second.
+  setInterval(()=>{ appOpenTick(); renderStatStrip(); }, 1000);
+  window.addEventListener("beforeunload", ()=>{ appOpenTick(); saveState(); });
+}
+/* H:MM:SS counter format (e.g. 12:04:37) */
+function formatHMS(ms){
+  ms = Math.max(0, ms|0);
+  const t = Math.floor(ms/1000);
+  const h = Math.floor(t/3600);
+  const m = Math.floor((t%3600)/60);
+  const s = t%60;
+  return `${h}:${m.toString().padStart(2,"0")}:${s.toString().padStart(2,"0")}`;
+}
+
+/* ================================================================
+ * v4: XP breakdown overlay at session end
+ * ================================================================ */
+let xpBreakdownTimer = null;
+function showXpBreakdown(xp, meta){
+  meta = meta||{};
+  const slot = $("#xp-breakdown-slot"); if (!slot) return;
+  const rows = [];
+  if (xp.reason === "under_floor"){
+    rows.push(`<div class="row"><span>Session logged</span><span>${xp.minutes}m</span></div>`);
+    rows.push(`<div class="row"><span class="xp-pill floor">below ${xp.floor}m floor</span><span>0 XP</span></div>`);
+    rows.push(`<div class="row"><span>Total this session</span><span>+0 XP</span></div>`);
+  } else {
+    rows.push(`<div class="row"><span>Base (${xp.minutes}m)</span><span>+${xp.base} XP</span></div>`);
+    if (xp.comboBonus > 0) rows.push(`<div class="row"><span class="xp-pill combo">combo ×${xp.comboCount+1} (+${xp.comboPct}%)</span><span>+${xp.comboBonus} XP</span></div>`);
+    if (xp.streakBonus > 0) rows.push(`<div class="row"><span class="xp-pill streak">streak ${xp.streakDays}d (+${xp.streakPct}%)</span><span>+${xp.streakBonus} XP</span></div>`);
+    if (meta.lootItem) rows.push(`<div class="row"><span>${meta.lootItem[0]} ${escapeHtml(meta.lootItem[1])}</span><span class="rar rar-${meta.lootItem[2]}">${meta.lootItem[2]}</span></div>`);
+    rows.push(`<div class="row"><span>Total</span><span>+${xp.total} XP</span></div>`);
+  }
+  slot.innerHTML = `<div class="xp-breakdown"><div class="sub">Session summary</div>${rows.join("")}</div>`;
+  clearTimeout(xpBreakdownTimer);
+  xpBreakdownTimer = setTimeout(()=>{ if (slot.firstChild) slot.firstChild.remove(); }, 10_000);
+}
+function clearXpBreakdown(){
+  const slot = $("#xp-breakdown-slot"); if (!slot) return;
+  slot.innerHTML = "";
+}
+
+/* ================================================================
+ * v4: Monthly auto-backup + manual "Back up all data"
+ * ================================================================ */
+function buildBackupBlob({ labelSuffix="" } = {}){
+  const payload = {
+    appVersion: "focus-hero-v4",
+    exportedAt: new Date().toISOString(),
+    dataVersion: state.dataVersion,
+    state
+  };
+  const blob = new Blob([JSON.stringify(payload,null,2)], {type:"application/json"});
+  const fname = `focus-hero-backup-${todayKey()}${labelSuffix}.json`;
+  return { blob, fname, payload };
+}
+function triggerDownload(blob, fname){
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = fname;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
+}
+function backupNow(){
+  try {
+    const { blob, fname } = buildBackupBlob({ labelSuffix: "-manual" });
+    triggerDownload(blob, fname);
+    state.settings.lastManualBackup = new Date().toISOString();
+    saveState(); renderBackupLast();
+    toast("Backup downloaded — your hours are safe.", "good");
+  } catch(e){
+    toast("Backup failed: " + (e.message||e), "bad");
+  }
+}
+function maybeAutoBackup(){
+  if (!state.settings.monthlyBackup) return;
+  const last = state.settings.lastAutoBackup ? new Date(state.settings.lastAutoBackup) : null;
+  const n = new Date();
+  const needed = !last || (n.getFullYear() !== last.getFullYear()) || (n.getMonth() !== last.getMonth());
+  if (!needed) return;
+  try {
+    const { blob, fname } = buildBackupBlob({ labelSuffix: "-auto" });
+    triggerDownload(blob, fname);
+    state.settings.lastAutoBackup = n.toISOString();
+    saveState(); renderBackupLast();
+    logLine("Auto-backup downloaded");
+  } catch(e){ console.warn("auto backup failed", e); }
+}
+function renderBackupLast(){
+  const el = $("#backup-last"); if (!el) return;
+  const ts = state.settings.lastManualBackup || state.settings.lastAutoBackup;
+  el.textContent = ts ? `Last backup: ${new Date(ts).toLocaleString()}` : "Last backup: never";
+}
+
+/* ================================================================
+ * v4: End-to-end encryption of cloud state
+ * PBKDF2-SHA256(code+secret, salt, 100k iter) -> AES-GCM-256 key
+ * Server sees: { iv, salt, ct, cloud_rev, sync_secret_hash }
+ * ================================================================ */
+function b64(bytes){
+  let s = ""; const v = new Uint8Array(bytes);
+  for (let i=0;i<v.length;i++) s += String.fromCharCode(v[i]);
+  return btoa(s);
+}
+function unb64(str){
+  const s = atob(str); const out = new Uint8Array(s.length);
+  for (let i=0;i<s.length;i++) out[i] = s.charCodeAt(i);
+  return out.buffer;
+}
+async function deriveE2EKey({ code, secret, saltB64 }){
+  const enc = new TextEncoder();
+  const km = await crypto.subtle.importKey("raw", enc.encode(`${code}:${secret}`), { name:"PBKDF2" }, false, ["deriveKey"]);
+  const salt = unb64(saltB64);
+  return crypto.subtle.deriveKey(
+    { name:"PBKDF2", salt, iterations: PBKDF2_ITERATIONS, hash:"SHA-256" },
+    km,
+    { name:"AES-GCM", length: AES_KEY_LENGTH },
+    false, ["encrypt","decrypt"]
+  );
+}
+async function ensureSalt(){
+  if (!state.sync.saltB64){
+    const s = new Uint8Array(SALT_BYTES); crypto.getRandomValues(s);
+    state.sync.saltB64 = b64(s.buffer);
+    saveState({fromPull:true});
+  }
+  return state.sync.saltB64;
+}
+/* v4.2: strip per-device credentials before any blob leaves this device.
+   These fields are how we authenticate to the cloud — they should never
+   travel TO the cloud, even encrypted. Cleaner threat model: a server-side
+   compromise of the encrypted blob can't be used to impersonate the user
+   on a third device. Local sync state is restored from `local.sync` on merge
+   (mergeRemoteState already does `out.sync = deepClone(local.sync)`). */
+function sanitizeForCloud(s){
+  if (!s || typeof s !== "object") return s;
+  const out = Object.assign({}, s);
+  if (out.sync && typeof out.sync === "object"){
+    out.sync = Object.assign({}, out.sync);
+    delete out.sync.syncSecret;
+    delete out.sync.syncSecretHash;
+    delete out.sync.userToken;
+  }
+  return out;
+}
+async function encryptStateBlob(plainObj){
+  const safe = sanitizeForCloud(plainObj);
+  if (!state.settings.e2eEncryption){
+    // E2E intentionally off — sync subtree is still stripped of credentials.
+    return { plain: safe };
+  }
+  if (!state.sync.syncCode || !state.sync.syncSecret){
+    // v4.2: refuse to silently downgrade to plaintext. Caller should set up
+    // a sync code first (Y → Generate code). Previously this fell back to
+    // plaintext, which leaked the (still-stripped) state to the server.
+    throw new Error("E2E encryption is on but no sync code/secret on this device — refusing to push plaintext");
+  }
+  const saltB64 = await ensureSalt();
+  const key = await deriveE2EKey({ code: state.sync.syncCode, secret: state.sync.syncSecret, saltB64 });
+  const iv = new Uint8Array(IV_BYTES); crypto.getRandomValues(iv);
+  const enc = new TextEncoder();
+  const ct = await crypto.subtle.encrypt({ name:"AES-GCM", iv }, key, enc.encode(JSON.stringify(safe)));
+  return { e2e: { v:1, alg:"AES-GCM-256", kdf:"PBKDF2-SHA256", iter: PBKDF2_ITERATIONS, ct: b64(ct), iv: b64(iv.buffer), salt: saltB64 } };
+}
+async function decryptStateBlob(blob){
+  if (!blob || typeof blob !== "object") return blob;
+  if (!blob.e2e) return blob.plain || blob;     // plaintext or legacy (state was top-level data)
+  const e = blob.e2e;
+  if (!state.sync.syncCode || !state.sync.syncSecret){
+    throw new Error("Cannot decrypt — missing sync code/secret on this device");
+  }
+  const key = await deriveE2EKey({ code: state.sync.syncCode, secret: state.sync.syncSecret, saltB64: e.salt });
+  const ct = unb64(e.ct); const iv = unb64(e.iv);
+  const plain = await crypto.subtle.decrypt({ name:"AES-GCM", iv: new Uint8Array(iv) }, key, ct);
+  return JSON.parse(new TextDecoder().decode(plain));
+}
+function renderSecurityPanel(){
+  const panel = $("#sec-panel"); if (!panel) return;
+  const hl = $("#sec-headline"); const sub = $("#sec-sub"); const det = $("#sec-details");
+  const enabled = !!state.sync.enabled;
+  const e2e = !!state.settings.e2eEncryption;
+  const backend = state.sync.backend || (hasSupabase()?"supabase":"jsonstorage");
+  const hasKey = !!(state.sync.syncCode && state.sync.syncSecret);
+  panel.classList.remove("good","warn","bad");
+  const lines = [];
+  if (!enabled){
+    panel.classList.add("warn");
+    hl.textContent = "Local-only (no cloud sync)";
+    sub.textContent = "";
+    lines.push("Your data lives only on this device + monthly backups.");
+    lines.push("Enable sync below to back it up across devices.");
+  } else if (enabled && backend === "jsonstorage" && !e2e){
+    panel.classList.add("bad");
+    hl.textContent = "Unencrypted public backend";
+    sub.textContent = "not recommended";
+    lines.push("jsonstorage.net is a public KV. Without E2E your data is readable.");
+    lines.push("Turn on End-to-end encryption above.");
+  } else if (enabled && !hasKey){
+    panel.classList.add("warn");
+    hl.textContent = "Key not generated yet";
+    sub.textContent = "";
+    lines.push("Click Generate sync code — that generates the encryption key material.");
+  } else if (enabled && e2e && hasKey){
+    panel.classList.add("good");
+    hl.textContent = "Encrypted cloud sync active";
+    sub.textContent = "AES-GCM-256 · PBKDF2-SHA256 · 100k iter";
+    lines.push(`Backend: ${backend}`);
+    lines.push("Server sees only ciphertext + IV + salt + cloud_rev + sync_secret_hash.");
+    lines.push("Your sync code and secret never leave this device (only the derived key and hash do).");
+  } else if (enabled && !e2e){
+    panel.classList.add("warn");
+    hl.textContent = "Plaintext cloud sync";
+    sub.textContent = "consider enabling E2E";
+    lines.push("Your state is stored as plaintext on the backend. Toggle E2E above to encrypt.");
+  }
+  det.innerHTML = lines.map(l=>`<li>${escapeHtml(l)}</li>`).join("");
+}
+
+/* -------- quests -------- */
+function addQuest(title){
+  if (!title.trim()) return;
+  const q = { id: uid(), title: title.trim(), done:false, at: now() };
+  state.quests.unshift(q);
+  if (!state.activeQuestId) state.activeQuestId = q.id;
+  saveState(); renderQuests();
+}
+function toggleQuest(id){
+  const q = state.quests.find(q=>q.id===id); if (!q) return;
+  q.done = !q.done; q.doneAt = q.done ? now() : null;
+  if (q.done){
+    awardXp(30);
+    state.hero.hp = Math.min(100, state.hero.hp+5);
+    updateDailyProgress("quests", 1);
+    toast(`Quest complete: ${q.title}`, "good");
+    logLine(`Quest done: ${q.title} (+30 XP)`);
+    if (state.activeQuestId === id){
+      const next = state.quests.find(x=>!x.done);
+      state.activeQuestId = next ? next.id : null;
+    }
+    checkAchievements();
+  }
+  saveState(); renderQuests();
+}
+function removeQuest(id){
+  state.quests = state.quests.filter(q=>q.id!==id);
+  if (state.activeQuestId === id) state.activeQuestId = state.quests.find(q=>!q.done)?.id || null;
+  saveState(); renderQuests();
+}
+function setActiveQuest(id){
+  state.activeQuestId = id;
+  saveState(); renderQuests();
+}
+function editQuest(id, title){
+  const q = state.quests.find(q=>q.id===id); if (!q) return;
+  q.title = title.slice(0,140);
+  saveState();
+}
+
+/* -------- daily -------- */
+function ensureDailyFresh(){
+  const tk = todayKey();
+  if (state.daily.date === tk && Array.isArray(state.daily.items) && state.daily.items.length>0) return;
+  const pool = [...DAILY_TEMPLATES].sort(()=>Math.random()-0.5);
+  state.daily = { date: tk, items: pool.slice(0,3).map(t => ({...t, progress:0, done:false})) };
+  saveState();
+}
+function updateDailyProgress(kind, amt){
+  ensureDailyFresh();
+  state.daily.items.forEach(d=>{
+    if (d.done) return;
+    if (d.kind === kind){
+      d.progress = (d.progress||0) + amt;
+      if (d.progress >= d.target){
+        d.done = true;
+        awardXp(d.xp);
+        toast(`Daily complete: ${d.text} (+${d.xp} XP)`, "good");
+        logLine(`Daily: ${d.text} (+${d.xp} XP)`);
+      }
+    }
+  });
+  saveState(); renderDaily();
+}
+
+/* -------- achievements -------- */
+function checkAchievements(){
+  const totalSessions = state.completedFocusSessions|0;
+  const totalMin = state.totalFocusMin|0;
+  const questsDone = state.quests.filter(q=>q.done).length;
+  const tk = todayKey(); const dayMin = state.history[tk]||0;
+  const comboCount = (state.combo?.date === tk) ? (state.combo.count|0) : 0;
+  ACHIEVEMENTS.forEach(([id,name,desc,sym,cond])=>{
+    if (state.achievements[id]) return;
+    let ok=false;
+    if (cond.sessions != null) ok = totalSessions >= cond.sessions;
+    else if (cond.totalMin != null) ok = totalMin >= cond.totalMin;
+    else if (cond.streak != null) ok = state.streak >= cond.streak;
+    else if (cond.level != null) ok = state.hero.level >= cond.level;
+    else if (cond.quests != null) ok = questsDone >= cond.quests;
+    else if (cond.dayMin != null) ok = dayMin >= cond.dayMin;
+    else if (cond.combo != null) ok = comboCount >= cond.combo;
+    if (ok){
+      state.achievements[id] = now();
+      toast(`${sym} Achievement: ${name}`, "good");
+      logLine(`Unlocked: ${name}`);
+    }
+  });
+  saveState(); renderAchievements();
+}
+function unlockAchievementsByRarity(r){
+  const map = { rare:"loot_rare", epic:"loot_epic", legendary:"loot_leg", mythic:"loot_myth" };
+  const key = map[r]; if (!key || state.achievements[key]) return;
+  state.achievements[key] = now();
+  const found = ACHIEVEMENTS.find(a=>a[0]===key);
+  if (found) toast(`${found[3]} Achievement: ${found[1]}`, "good");
+  saveState(); renderAchievements();
+}
+
+/* -------- notifications -------- */
+function requestNotifPermIfNeeded(){
+  if (!state.settings.notif) return;
+  if (!("Notification" in window)) return;
+  if (Notification.permission === "default"){
+    Notification.requestPermission().catch(()=>{});
+  }
+}
+function notify(title, body){
+  if (!state.settings.notif) return;
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  try { new Notification(title, { body, icon: "icon-192.png", silent: true }); } catch(e){}
+}
+
+/* -------- rendering -------- */
+function renderAll(){
+  renderTimer(); renderHero(); renderQuests(); renderDaily();
+  renderLoot(); renderAchievements(); renderHeatmap(); renderTopMeta();
+  renderModeTabs(); renderAvatar(); renderTasks(); renderActiveTaskRow();
+  renderStatStrip(); renderBackupLast(); renderSecurityPanel();
+  renderSwLaps();
+}
+function renderModeTabs(){
+  $$(".mode-tabs button").forEach(b=>b.setAttribute("aria-pressed", b.dataset.mode===state.timer.mode ? "true":"false"));
+}
+/* v4.2.1: render the stopwatch laps panel — only visible in stopwatch mode AND when there's at least one lap. */
+function renderSwLaps(){
+  const root = $("#sw-laps"); if (!root) return;
+  const laps = (state.timer && Array.isArray(state.timer.swLaps)) ? state.timer.swLaps : [];
+  if (!isStopwatch() || laps.length === 0){ root.hidden = true; root.innerHTML = ""; return; }
+  root.hidden = false;
+  // best/worst indices for highlight (compare splits)
+  let bestIdx = 0, worstIdx = 0;
+  for (let i=1;i<laps.length;i++){
+    if (laps[i].splitMs < laps[bestIdx].splitMs) bestIdx = i;
+    if (laps[i].splitMs > laps[worstIdx].splitMs) worstIdx = i;
+  }
+  // Render newest first
+  const items = [];
+  for (let i=laps.length-1; i>=0; i--){
+    const l = laps[i];
+    const cls = (laps.length>1 && i===bestIdx) ? "lap-best" : (laps.length>1 && i===worstIdx) ? "lap-worst" : "";
+    items.push(
+      `<li class="${cls}">`+
+        `<span class="lap-n">#${i+1}</span>`+
+        `<span class="lap-split">${fmtTimeLong(l.splitMs)}</span>`+
+        `<span class="lap-total" title="Total elapsed at this lap">${fmtTimeLong(l.elapsedMs)}</span>`+
+      `</li>`
+    );
+  }
+  root.innerHTML =
+    `<div class="sw-laps-head"><span>Laps · last ${laps.length}</span><span>split · total</span></div>`+
+    `<ol>${items.join("")}</ol>`;
+}
+function renderTimer(){
+  if (isStopwatch()){
+    const elapsed = stopwatchElapsedMs(state.timer, now());
+    $("#timer-display").textContent = fmtTimeLong(elapsed);
+    // For stopwatch the progress bar shows progress toward the next "reward minute" (visual cue, capped at 100% loop)
+    const intoMin = (elapsed % 60_000) / 60_000 * 100;
+    $("#progress-bar").style.width = `${intoMin}%`;
+    document.title = `${fmtTimeLong(elapsed)} · Stopwatch — Focus Hero`;
+    $("#btn-start").textContent = state.timer.running ? "Pause" : (elapsed > 0 ? "Resume" : "Start");
+    const stopBtn = $("#btn-stop-log"); if (stopBtn) stopBtn.disabled = elapsed < 1000; // need at least 1s
+    return;
+  }
+  let left;
+  if (state.timer.running){ left = Math.max(0, state.timer.endAt - now()); }
+  else left = state.timer.msLeft;
+  $("#timer-display").textContent = fmtTime(left);
+  const total = modeMinutes(state.timer.mode)*60*1000;
+  const pct = 100 - (left/total*100);
+  $("#progress-bar").style.width = `${clamp(pct,0,100)}%`;
+  // title
+  const modeLbl = state.timer.mode==="focus"?"Focus":state.timer.mode==="short"?"Break":"Long";
+  document.title = `${fmtTime(left)} · ${modeLbl} — Focus Hero`;
+  $("#btn-start").textContent = state.timer.running ? "Pause" : (state.timer.msLeft < modeMinutes(state.timer.mode)*60*1000 && state.timer.msLeft>0 ? "Resume" : "Start");
+}
+function renderTopMeta(){
+  $("#cycle-count").textContent = state.cycleCount % state.settings.cyclesBeforeLong;
+  $("#cycle-target").textContent = state.settings.cyclesBeforeLong;
+  $("#today-focus").textContent = state.history[todayKey()] || 0;
+  $("#streak").textContent = state.streak;
+  const combo = (state.combo?.date === todayKey()) ? (state.combo.count|0) : 0;
+  const ccEl = $("#combo-count"); if (ccEl) ccEl.textContent = combo;
+}
+function renderStatStrip(){
+  const fa = $("#stat-focus-total"); if (fa) fa.textContent = formatHours(state.totalFocusMin);
+  // v4.2: live H:MM:SS counter that includes ms accumulated since the last appOpenTick
+  const oa = $("#stat-open-total");
+  if (oa){
+    const liveDelta = (lastTickTs !== null && document.visibilityState === "visible")
+      ? Math.min(60_000, Math.max(0, now() - lastTickTs))
+      : 0;
+    oa.textContent = formatHMS((state.totalAppOpenMs|0) + liveDelta);
+  }
+  const sa = $("#stat-sessions"); if (sa) sa.textContent = state.completedFocusSessions|0;
+}
+function renderHero(){
+  const cls = CLASSES[state.hero.cls] || CLASSES.mage;
+  $("#hero-name").textContent = state.hero.name || "Hero";
+  const idx = titleIdxFor(state.hero.level);
+  const titleName = cls.titles[idx] || cls.titles[cls.titles.length-1];
+  $("#hero-title").textContent = `${titleName} · ${cls.name}`;
+  $("#hero-class").textContent = cls.name;
+  $("#hero-level").textContent = state.hero.level;
+  const need = xpForLevel(state.hero.level);
+  $("#xp-cur").textContent = state.hero.xp; $("#xp-need").textContent = need;
+  $("#bar-xp").style.width = `${clamp(state.hero.xp/need*100,0,100)}%`;
+  $("#hp-cur").textContent = state.hero.hp; $("#bar-hp").style.width = `${state.hero.hp}%`;
+  $("#en-cur").textContent = state.hero.energy; $("#bar-en").style.width = `${state.hero.energy}%`;
+}
+function renderAvatar(){
+  const cls = CLASSES[state.hero.cls] || CLASSES.mage;
+  const [c1,c2,bg,acc] = cls.palette;
+  const seed = (state.hero.name||"Hero").split("").reduce((a,b)=>a+b.charCodeAt(0),0);
+  const hueShift = (seed%60)-30;
+  const svg = `<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${cls.name} avatar">
+    <defs>
+      <radialGradient id="g" cx="50%" cy="30%" r="70%">
+        <stop offset="0%" stop-color="${c1}"/><stop offset="100%" stop-color="${c2}"/>
+      </radialGradient>
+    </defs>
+    <rect width="80" height="80" rx="16" fill="${bg}"/>
+    <circle cx="40" cy="30" r="14" fill="url(#g)"/>
+    <rect x="22" y="44" width="36" height="26" rx="10" fill="url(#g)"/>
+    <path d="M22 52 Q40 60 58 52" stroke="${acc}" stroke-width="2" fill="none" opacity=".6"/>
+    <circle cx="34" cy="28" r="2" fill="${bg}"/><circle cx="46" cy="28" r="2" fill="${bg}"/>
+    <path d="M34 36 Q40 40 46 36" stroke="${bg}" stroke-width="2" fill="none"/>
+  </svg>`;
+  $("#avatar").innerHTML = svg;
+}
+function renderQuests(){
+  const list = $("#quest-list"); list.innerHTML = "";
+  if (!state.quests.length){
+    const empty = document.createElement("div");
+    empty.className = "muted"; empty.style.fontSize=".9rem";
+    empty.textContent = "No quests yet. Add one — they auto-track XP on completion.";
+    list.appendChild(empty); return;
+  }
+  state.quests.forEach(q=>{
+    const row = document.createElement("div");
+    row.className = "quest" + (q.done?" done":"") + (q.id===state.activeQuestId?" active":"");
+    row.setAttribute("role","listitem");
+    const chk = document.createElement("input");
+    chk.type="checkbox"; chk.checked = !!q.done; chk.setAttribute("aria-label", `Toggle ${q.title}`);
+    chk.onchange = ()=>toggleQuest(q.id);
+    const title = document.createElement("div"); title.className="title";
+    const input = document.createElement("input"); input.type="text"; input.value=q.title;
+    input.setAttribute("aria-label","Edit quest"); input.maxLength=140;
+    input.oninput = e=>editQuest(q.id, e.target.value);
+    input.onfocus = ()=>setActiveQuest(q.id);
+    title.appendChild(input);
+    const chip = document.createElement("span"); chip.className="chip muted";
+    chip.textContent = q.done? "done" : (q.id===state.activeQuestId?"active":"");
+    const del = document.createElement("button"); del.className="icon-btn ghost"; del.textContent="✕"; del.title="Remove";
+    del.onclick = ()=>removeQuest(q.id);
+    row.append(chk, title, chip, del);
+    list.appendChild(row);
+  });
+}
+function renderDaily(){
+  ensureDailyFresh();
+  const wrap = $("#daily-list"); wrap.innerHTML = "";
+  state.daily.items.forEach(d=>{
+    const row = document.createElement("div");
+    row.className = "quest" + (d.done?" done":"");
+    const txt = document.createElement("div"); txt.className="title";
+    const pct = clamp((d.progress||0)/d.target*100, 0, 100);
+    txt.innerHTML = `<div>${escapeHtml(d.text)} <span class="muted" style="font-size:.78rem">(+${d.xp} XP)</span></div>
+      <div class="bar" style="margin-top:4px;height:6px"><div style="width:${pct}%;background:linear-gradient(90deg,var(--accent),var(--accent-2))"></div></div>
+      <div class="muted" style="font-size:.72rem;margin-top:2px">${Math.min(d.progress||0,d.target)} / ${d.target}</div>`;
+    row.appendChild(txt);
+    wrap.appendChild(row);
+  });
+}
+
+/* v4: tasks render */
+function renderTasks(){
+  const list = $("#task-list"); if (!list) return;
+  list.innerHTML = "";
+  if (!state.tasks.length){
+    const empty = document.createElement("div");
+    empty.className = "muted"; empty.style.fontSize=".9rem";
+    empty.innerHTML = `✨ No tasks yet. Add one below — e.g. <b>📚 Study</b>, <b>💻 Coding</b>, <b>🏃 Running</b>.<br><span style="font-size:.8rem">Tasks accumulate focused minutes across every session forever.</span>`;
+    list.appendChild(empty); return;
+  }
+  // sort: pinned first, then by lastUsedAt desc, then createdAt desc
+  const sorted = [...state.tasks].sort((a,b) => {
+    if (!!b.pinned - !!a.pinned !== 0) return (!!b.pinned) - (!!a.pinned);
+    return (b.lastUsedAt||b.createdAt||0) - (a.lastUsedAt||a.createdAt||0);
+  });
+  sorted.forEach((t, idx)=>{
+    const row = document.createElement("div");
+    row.className = "task" + (t.id===state.activeTaskId ? " active" : "") + (t.pinned ? " pinned" : "");
+    row.setAttribute("role","listitem");
+    row.setAttribute("data-task-id", t.id);
+    const emo = document.createElement("span"); emo.className = "emoji"; emo.textContent = t.emoji; emo.title = "Click to change emoji";
+    emo.onclick = (e)=>{ e.stopPropagation(); openEmojiPicker(t.id, emo); };
+    const name = document.createElement("div"); name.className = "name";
+    name.textContent = t.name;
+    name.title = "Click to edit · Double-click to make active";
+    name.onclick = ()=>startInlineRenameTask(t.id, name);
+    name.ondblclick = ()=>setActiveTask(t.id);
+    const total = document.createElement("div"); total.className = "total";
+    total.textContent = `${formatHours(t.totalFocusMin)} · ${t.sessions||0}×`;
+    const actions = document.createElement("div"); actions.className = "actions";
+    actions.innerHTML = `
+      <button title="Make active" aria-label="Make active" data-act="active">●</button>
+      <button title="Pin" aria-label="Pin" data-act="pin">${t.pinned?"📌":"📍"}</button>
+      <button title="Move up" aria-label="Move up" data-act="up">↑</button>
+      <button title="Move down" aria-label="Move down" data-act="down">↓</button>
+      <button title="Delete" aria-label="Delete" data-act="del">✕</button>`;
+    actions.addEventListener("click", (e)=>{
+      const b = e.target.closest("button[data-act]"); if (!b) return;
+      const act = b.dataset.act;
+      if (act==="active") setActiveTask(t.id);
+      else if (act==="pin") pinTask(t.id);
+      else if (act==="up")   moveTask(t.id, -1);
+      else if (act==="down") moveTask(t.id, +1);
+      else if (act==="del")  deleteTask(t.id);
+    });    row.append(emo, name, total, actions);
+    list.appendChild(row);
+  });
+}
+
+function startInlineRenameTask(id, nameEl){
+  const t = state.tasks.find(x=>x.id===id); if (!t) return;
+  const input = document.createElement("input");
+  input.type = "text"; input.value = t.name; input.maxLength = 40;
+  input.style.width = "100%"; input.setAttribute("aria-label","Rename task");
+  nameEl.replaceWith(input);
+  input.focus(); input.select();
+  const commit = ()=>{ renameTask(id, input.value); };
+  input.addEventListener("blur", commit);
+  input.addEventListener("keydown", e=>{
+    if (e.key === "Enter"){ e.preventDefault(); commit(); }
+    else if (e.key === "Escape"){ renderTasks(); }
+  });
+}
+
+/* Emoji picker popover */
+let emojiPopEl = null;
+function closeEmojiPicker(){
+  if (emojiPopEl){ emojiPopEl.remove(); emojiPopEl = null; }
+}
+function openEmojiPicker(taskId, anchor){
+  closeEmojiPicker();
+  const pop = document.createElement("div");
+  pop.className = "emoji-pop";
+  DEFAULT_TASK_EMOJIS.forEach(em=>{
+    const b = document.createElement("button");
+    b.type = "button"; b.textContent = em;
+    b.onclick = ()=>{ setTaskEmoji(taskId, em); closeEmojiPicker(); };
+    pop.appendChild(b);
+  });
+  const custom = document.createElement("div"); custom.className = "emoji-custom";
+  custom.innerHTML = '<input type="text" maxlength="4" aria-label="Custom emoji" placeholder="🎯"><button type="button">Set</button>';
+  const inp = custom.querySelector("input"); const btn = custom.querySelector("button");
+  btn.onclick = ()=>{ const v = inp.value.trim(); if (v){ setTaskEmoji(taskId, v); closeEmojiPicker(); } };
+  inp.addEventListener("keydown", e=>{ if (e.key==="Enter"){ btn.click(); } });
+  pop.appendChild(custom);
+  document.body.appendChild(pop);
+  const r = anchor.getBoundingClientRect();
+  pop.style.top = (window.scrollY + r.bottom + 4) + "px";
+  pop.style.left = Math.max(8, window.scrollX + r.left - 40) + "px";
+  emojiPopEl = pop;
+  setTimeout(()=>{
+    document.addEventListener("mousedown", (e)=>{
+      if (emojiPopEl && !emojiPopEl.contains(e.target) && e.target !== anchor) closeEmojiPicker();
+    }, { once:true });
+  }, 0);
+}
+
+function renderActiveTaskRow(){
+  const row = $("#active-task-row"); if (!row) return;
+  const id = state.timer.activeTaskId || state.activeTaskId;
+  const t = id ? state.tasks.find(x=>x.id===id) : null;
+  // Show whenever there's a focus session running, OR a stopwatch session in flight (running or paused with elapsed > 0)
+  const stopwatchInFlight = isStopwatch() && (state.timer.running || (state.timer.swAccumulatedMs|0) > 0);
+  const showRow = !!t && (state.timer.running || stopwatchInFlight);
+  if (!showRow){
+    row.hidden = true;
+    const host = $("#active-task-label"); if (host) host.innerHTML = "";
+    return;
+  }
+  row.hidden = false;
+  const host = $("#active-task-label");
+  host.innerHTML = `<span>${t.emoji}</span> <b>${escapeHtml(t.name)}</b>`;
+  host.onclick = ()=>startActiveTaskRename();
+}
+
+function renderLoot(){
+  const g = $("#loot-grid"); if (!g) return;
+  g.innerHTML = "";
+  LOOT_TABLE.forEach(item=>{
+    const id = lootId(item); const count = state.lootOwned[id]||0;
+    const el = document.createElement("div");
+    el.className = "loot-item rar-" + item[2] + (count? " owned":" locked");
+    el.title = `${item[1]} — ${item[2]}${count?` · owned ×${count}`:" — not yet"}`;
+    el.innerHTML = `<div class="sym">${item[0]}</div><div class="name">${escapeHtml(item[1])}</div><div class="rar">${item[2]}${count?` · ×${count}`:""}</div>`;
+    g.appendChild(el);
+  });
+}
+function renderAchievements(){
+  const g = $("#ach-grid"); if (!g) return;
+  g.innerHTML = "";
+  ACHIEVEMENTS.forEach(([id,name,desc,sym])=>{
+    const done = !!state.achievements[id];
+    const el = document.createElement("div");
+    el.className = "ach" + (done?" unlocked":" locked");
+    el.title = desc;
+    el.innerHTML = `<div class="sym">${sym}</div><div class="name">${escapeHtml(name)}</div><div class="desc">${escapeHtml(desc)}</div>`;
+    g.appendChild(el);
+  });
+}
+function renderHeatmap(){
+  const host = $("#heatmap"); if (!host) return;
+  host.innerHTML = "";
+  const WEEKS = 14;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const end = today;
+  const start = new Date(end); start.setDate(end.getDate() - (WEEKS*7 - 1));
+  const dowStart = start.getDay();
+  start.setDate(start.getDate() - dowStart);
+  const cells = [];
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate()+1)){
+    const k = todayKey(d);
+    const min = state.history[k]||0;
+    cells.push({ key: k, min });
+  }
+  const weeks = Math.ceil(cells.length/7);
+  const grid = document.createElement("div");
+  grid.style.display = "grid";
+  grid.style.gridTemplateColumns = `repeat(${weeks}, 10px)`;
+  grid.style.gridTemplateRows = `repeat(7, 10px)`;
+  grid.style.gap = "2px";
+  grid.style.gridAutoFlow = "column";
+  cells.forEach(c=>{
+    const s = document.createElement("div");
+    const level = c.min>=120?5: c.min>=90?4: c.min>=60?3: c.min>=30?2: c.min>=10?1:0;
+    s.style.width = "10px"; s.style.height = "10px"; s.style.borderRadius = "2px";
+    const shades = ["#232742","#1f3a3a","#1f5959","#2a8c6f","#45c28a","#9dffa8"];
+    s.style.background = shades[level];
+    s.title = `${c.key} — ${c.min}m`;
+    grid.appendChild(s);
+  });
+  host.appendChild(grid);
+}
+
+function skipTimer(){
+  if (state.timer.running){ pauseTimer(); }
+  const next = state.timer.mode === "focus"
+    ? ((state.cycleCount + 1) % state.settings.cyclesBeforeLong === 0 ? "long" : "short")
+    : "focus";
+  setMode(next);
+  logLine(`Skipped to ${next}`);
+}
+
+/* =====================================================================
+ * v4 Cloud sync
+ * ===================================================================== */
+function hasSupabase(){ return !!(SUPABASE_URL && SUPABASE_ANON_KEY); }
+function currentBackend(){ return state.sync.backend || (hasSupabase() ? "supabase" : "jsonstorage"); }
+
+async function supabaseRequest(path, init){
+  init = init||{};
+  const url = `${SUPABASE_URL}/rest/v1/${path}`;
+  const headers = Object.assign({
+    "apikey": SUPABASE_ANON_KEY,
+    "Authorization": `Bearer ${state.sync.userToken || SUPABASE_ANON_KEY}`,
+    "Content-Type": "application/json",
+    "Prefer": init.prefer || "return=representation"
+  }, init.headers||{});
+  /* v4.2: send the sync_secret_hash as a custom header so RLS policies on
+     the server can authorize the request without trusting the JSON body.
+     Without this header the row's secret-protected RLS policies will reject
+     update/select/delete, even with a valid anon key. */
+  if (state.sync && state.sync.syncSecretHash){
+    headers["x-sync-secret-hash"] = state.sync.syncSecretHash;
+  }
+  return fetch(url, Object.assign({}, init, { headers }));
+}
+
+async function supabaseSignInAnon(){
+  if (!hasSupabase()) return null;
+  if (state.sync.userToken) return state.sync.userToken;
+  try {
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
+      method:"POST", headers:{ "apikey":SUPABASE_ANON_KEY, "Content-Type":"application/json" },
+      body: JSON.stringify({ data:{ app:"focus-hero" } })
+    }).catch(()=>null);
+    let data = r && r.ok ? await r.json() : null;
+    if (data && data.access_token){
+      state.sync.userToken = data.access_token;
+      state.sync.userId = data.user?.id || null;
+      return data.access_token;
+    }
+  } catch(e){ console.warn("supabase signin", e); }
+  return null;
+}
+
+function newSyncCode(){
+  const alpha = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const rand = n => { const b = new Uint8Array(n); crypto.getRandomValues(b); return Array.from(b).map(x=>alpha[x%alpha.length]).join(""); };
+  return { code: rand(8), secret: rand(16) };
+}
+/* v4.2.1 (Codex review fix #1+#2): derive playerId DETERMINISTICALLY from
+   sha256(code+secret) so genSyncCode and claimSyncCode always produce the
+   same row id for the same shared code. Previously gen used a random UUID
+   and claim used `sc_${code}` — different rows for the same code, sync
+   silently broken across devices. The hash also makes the id unpredictable
+   without the secret, which closes the squatting attack: an attacker with
+   only the public anon key can no longer pre-INSERT a row at a guessable
+   `sc_<code>` id and lock the legitimate user out. */
+async function derivePlayerId(code, secret){
+  if (!code || !secret) throw new Error("derivePlayerId requires code and secret");
+  // 32 hex chars (128 bits) — plenty for a per-user namespace.
+  return (await sha256(`fh-player:${String(code).toUpperCase()}:${String(secret).toUpperCase()}`)).slice(0, 32);
+}
+
+async function genSyncCode(){
+  const { code, secret } = newSyncCode();
+  state.sync.syncCode = code;
+  state.sync.syncSecret = secret;
+  state.sync.syncSecretHash = await sha256(`${code}:${secret}`);
+  /* v4.2: a fresh code is a fresh start. Reset cloudRev to 0 (so the first
+     push takes the INSERT path) and clear timestamps. Any pre-existing
+     cloud row protected by the OLD secret is orphaned — it's encrypted
+     gibberish without the old secret, so it stays inert. Use Disconnect
+     BEFORE Generate to clean up the old row if you want a tidy database. */
+  /* v4.2.1: derive playerId from the code+secret pair so a second device
+     claiming this same code lands on the SAME row. */
+  state.sync.playerId = await derivePlayerId(code, secret);
+  state.sync.cloudRev = 0;
+  state.sync.lastPushedAt = 0;
+  state.sync.lastPulledAt = 0;
+  /* Generate a fresh salt as well — different code+secret means a different
+     KDF input, so a different salt is fine and slightly more defense-in-depth
+     (an attacker who somehow learned the old salt can't reuse it). */
+  {
+    const s = new Uint8Array(SALT_BYTES); crypto.getRandomValues(s);
+    state.sync.saltB64 = b64(s.buffer);
+  }
+  saveState({fromPull:true});
+  $("#code-area").hidden = false; $("#enter-area").hidden = true;
+  $("#code-text").textContent = `${code}-${secret}`;
+  drawQr(`${code}-${secret}`);
+  renderSecurityPanel();
+  try { await cloudPush({force:true}); toast("Sync code generated · state pushed","good"); }
+  catch(e){ toast("Code generated, initial push failed: "+(e.message||e),"bad"); }
+}
+
+function drawQr(text){
+  const host = $("#qr"); if (!host) return;
+  host.innerHTML = `<pre style="font-family:var(--mono);font-size:.72rem;line-height:1;white-space:pre-wrap;word-break:break-all;padding:8px;border:1px dashed var(--border);border-radius:6px">${escapeHtml(text)}</pre>`;
+}
+
+async function claimSyncCode(full){
+  const parts = String(full||"").trim().toUpperCase().split(/[-:\s]+/);
+  if (parts.length < 2){ $("#claim-msg").textContent = "Format: CODE-SECRET"; return; }
+  const code = parts[0], secret = parts.slice(1).join("");
+  if (code.length < 4 || secret.length < 8){ $("#claim-msg").textContent = "Code/secret too short"; return; }
+  state.sync.syncCode = code; state.sync.syncSecret = secret;
+  state.sync.syncSecretHash = await sha256(`${code}:${secret}`);
+  /* v4.2.1 (Codex review fix #1+#2): derive playerId from the code+secret
+     pair, exactly the same way genSyncCode does, so this device lands on
+     the row the GENERATING device created. The previous `sc_${code}` form
+     used a different namespace AND was guessable (squatting risk). */
+  state.sync.playerId = await derivePlayerId(code, secret);
+  /* v4.2: reset cloudRev so the first push after claim takes the INSERT
+     path (rev=0 → POST). cloudPull will overwrite it with the remote rev
+     if the row already exists. Without this reset, a device that previously
+     had its own sync (cloudRev>0) would push under the new code with a
+     stale rev, hitting the conflict branch and failing 3x. */
+  state.sync.cloudRev = 0;
+  state.sync.lastPushedAt = 0;
+  state.sync.lastPulledAt = 0;
+  /* Don't touch saltB64 here — when cloudPull fetches the remote blob, the
+     salt is read out of the encrypted envelope and used for the KDF. Local
+     saltB64 only matters when WE encrypt, which happens on the next push. */
+  saveState({fromPull:true});
+  $("#claim-msg").textContent = "Pulling remote state…";
+  try {
+    const ok = await cloudPull({force:true});
+    if (ok){ $("#claim-msg").textContent = "Claimed · state pulled."; toast("Sync claimed — state merged","good"); }
+    else { $("#claim-msg").textContent = "No state on server — pushing local."; await cloudPush({force:true}); }
+    renderSecurityPanel();
+  } catch(e){ $("#claim-msg").textContent = "Claim failed: "+(e.message||e); }
+}
+
+async function cloudPush(opts){
+  opts = opts||{};
+  /* v4.2: opts.force lets genSyncCode/claimSyncCode push BEFORE the user
+     toggles "sync enabled" — otherwise the initial push silently no-ops
+     and the cloud row never gets created. Until v4.2 this flag was passed
+     in but never read; now it gates the early-return below. */
+  if (!state.sync.enabled && !opts.force) return;
+  const backend = currentBackend();
+  state.sync.backend = backend;
+  const rev = (state.sync.cloudRev|0);
+  const blob = await encryptStateBlob(state);
+  const payload = {
+    id: state.sync.playerId,
+    data: blob,
+    cloud_rev: rev + 1,
+    sync_secret_hash: state.sync.syncSecretHash || null,
+    updated_at: new Date().toISOString()
+  };
+  if (backend === "supabase"){
+    if (!hasSupabase()) throw new Error("Supabase not configured");
+    await supabaseSignInAnon();
+    if (state.sync.userId) payload.user_id = state.sync.userId;
+
+    /* v4.2: optimistic-concurrency PATCH guarded by cloud_rev=eq.{rev}.
+       Uses default Prefer: return=representation so we can detect 0-row
+       updates by checking the response array length. (Earlier draft used
+       return=minimal+count=exact to save egress, but Content-Range parsing
+       is fragile across PostgREST versions and a 204 with no header would
+       have been misclassified as a conflict. Reliability beats bandwidth.)
+       Result branches:
+         - rows.length > 0  → success, our PATCH won the race
+         - rows.length === 0 + rev === 0 → row doesn't exist yet, INSERT it
+         - rows.length === 0 + rev  >  0 → another device pushed, pull-merge-retry */
+    const updateBody = {
+      data: payload.data, cloud_rev: payload.cloud_rev,
+      sync_secret_hash: payload.sync_secret_hash, updated_at: payload.updated_at
+    };
+    if (payload.user_id) updateBody.user_id = payload.user_id;
+    const patchResp = await supabaseRequest(
+      `players?id=eq.${encodeURIComponent(payload.id)}&cloud_rev=eq.${rev}`,
+      { method:"PATCH", body: JSON.stringify(updateBody) }
+    );
+    if (!patchResp.ok){
+      const msg = await patchResp.text().catch(()=>patchResp.statusText);
+      throw new Error(`supabase push ${patchResp.status}: ${msg.slice(0,160)}`);
+    }
+    let patchedRows = [];
+    try { patchedRows = await patchResp.json(); } catch(_){ patchedRows = []; }
+    if (Array.isArray(patchedRows) && patchedRows.length > 0){
+      state.sync.cloudRev = payload.cloud_rev; state.sync.lastPushedAt = now();
+      saveState({fromPull:true}); renderSyncStatus(); return;
+    }
+
+    if (rev === 0){
+      // First push for this player_id: try INSERT. Use return=minimal so we
+      // don't pay egress to read back what we just wrote.
+      const insertResp = await supabaseRequest(`players`, {
+        method:"POST", prefer:"return=minimal", body: JSON.stringify(payload)
+      });
+      if (insertResp.ok){
+        state.sync.cloudRev = payload.cloud_rev; state.sync.lastPushedAt = now();
+        saveState({fromPull:true}); renderSyncStatus(); return;
+      }
+      if (insertResp.status === 409){
+        // Row was created by another device between our PATCH and POST — pull and retry.
+        if ((opts._retry|0) < 3){
+          logLine(`First push raced another device; pulling & retrying (attempt ${(opts._retry|0)+1}/3)`);
+          await cloudPull({force:true});
+          if ((state.sync.cloudRev|0) === 0){
+            // Pull found no row — the 409 wasn't from a racing device. Bail rather
+            // than re-attempting INSERT in a tight loop.
+            throw new Error("insert returned 409 but remote row not pullable — refusing to retry");
+          }
+          return cloudPush({_retry:(opts._retry|0)+1, force:true});
+        }
+        throw new Error("first push raced after 3 retries");
+      }
+      const msg = await insertResp.text().catch(()=>insertResp.statusText);
+      throw new Error(`supabase insert ${insertResp.status}: ${msg.slice(0,160)}`);
+    }
+
+    // Real conflict (rev > 0, 0 rows updated): another device's push won.
+    // Pull their state, merge with ours, retry the push at the new cloud_rev.
+    if ((opts._retry|0) < 3){
+      logLine(`Cloud push conflict at rev=${rev}; pulling & retrying (attempt ${(opts._retry|0)+1}/3)`);
+      await cloudPull({force:true});
+      return cloudPush({_retry:(opts._retry|0)+1, force:true});
+    }
+    throw new Error("push conflict after 3 retries — local state preserved, will retry on next save");
+  }
+  const key = state.sync.jsonstorageUrl || `https://api.jsonstorage.net/v1/json`;
+  if (!state.sync.jsonstorageUrl){
+    const resp = await fetch(`${key}?name=fh_${state.sync.syncSecretHash?.slice(0,16)||"anon"}`, {
+      method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(payload)
+    });
+    if (!resp.ok){ const t = await resp.text().catch(()=>resp.statusText); throw new Error(`jsonstorage create ${resp.status}: ${t.slice(0,120)}`); }
+    const d = await resp.json();
+    state.sync.jsonstorageUrl = d.uri || d.url || null;
+  } else {
+    const resp = await fetch(state.sync.jsonstorageUrl, { method:"PUT", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(payload) });
+    if (!resp.ok){ const t = await resp.text().catch(()=>resp.statusText); throw new Error(`jsonstorage put ${resp.status}: ${t.slice(0,120)}`); }
+  }
+  state.sync.cloudRev = payload.cloud_rev; state.sync.lastPushedAt = now();
+  saveState({fromPull:true}); renderSyncStatus();
+}
+
+async function cloudPull(opts){
+  opts = opts||{};
+  /* v4.2: opts.force lets claim/disconnect/manual flows pull regardless of
+     state.sync.enabled — the toggle gates BACKGROUND polling, not user-
+     initiated operations. */
+  if (!state.sync.enabled && !opts.force) return false;
+  const backend = currentBackend();
+  state.sync.backend = backend;
+  let remotePayload = null;
+  if (backend === "supabase"){
+    if (!hasSupabase()) return false;
+    await supabaseSignInAnon();
+    const id = state.sync.playerId;
+    if (!id) return false;
+    const resp = await supabaseRequest(`players?id=eq.${encodeURIComponent(id)}&select=*`, { method:"GET" });
+    if (!resp.ok) return false;
+    const rows = await resp.json();
+    if (!rows || !rows.length) return false;
+    remotePayload = rows[0];
+  } else {
+    if (!state.sync.jsonstorageUrl) return false;
+    const resp = await fetch(state.sync.jsonstorageUrl, { method:"GET" });
+    if (!resp.ok) return false;
+    remotePayload = await resp.json();
+  }
+  if (!remotePayload || !remotePayload.data) return false;
+  if (remotePayload.sync_secret_hash && state.sync.syncSecretHash && remotePayload.sync_secret_hash !== state.sync.syncSecretHash){
+    throw new Error("Remote secret hash mismatch — refusing to merge");
+  }
+  let remoteState;
+  try { remoteState = await decryptStateBlob(remotePayload.data); }
+  catch(e){ throw new Error("Decrypt failed: "+(e.message||e)); }
+  if (!remoteState || typeof remoteState !== "object") return false;
+  const merged = mergeRemoteState(state, remoteState);
+  state = merged;
+  state.sync.cloudRev = remotePayload.cloud_rev|0;
+  state.sync.lastPulledAt = now();
+  saveState({fromPull:true});
+  renderAll(); renderSyncStatus();
+  return true;
+}
+
+function mergeRemoteState(local, remote){
+  const out = deepClone(local);
+  out.totalFocusMin = Math.max(local.totalFocusMin||0, remote.totalFocusMin||0);
+  out.totalAppOpenMs = Math.max(local.totalAppOpenMs||0, remote.totalAppOpenMs||0);
+  out.completedFocusSessions = Math.max(local.completedFocusSessions||0, remote.completedFocusSessions||0);
+  out.streak = Math.max(local.streak||0, remote.streak||0);
+  out.longestStreak = Math.max(local.longestStreak||0, remote.longestStreak||0);
+  const lv = local.hero?.level||1, rv = remote.hero?.level||1;
+  if (rv > lv) out.hero = deepClone(remote.hero);
+  else if (rv === lv && (remote.hero?.xp||0) > (local.hero?.xp||0)) out.hero = deepClone(remote.hero);
+  out.history = Object.assign({}, local.history||{});
+  for (const k of Object.keys(remote.history||{})) out.history[k] = Math.max(out.history[k]||0, remote.history[k]||0);
+  out.lootOwned = Object.assign({}, local.lootOwned||{});
+  for (const k of Object.keys(remote.lootOwned||{})) out.lootOwned[k] = Math.max(out.lootOwned[k]||0, remote.lootOwned[k]||0);
+  // v4.2 (security/reliability): achievements merge — keep the LARGER count/timestamp.
+  // The original used Math.min, which silently regressed achievements when two devices
+  // unlocked or progressed independently. Counts and timestamps must monotonically grow.
+  out.achievements = Object.assign({}, local.achievements||{});
+  for (const k of Object.keys(remote.achievements||{})){
+    if (!(k in out.achievements)) out.achievements[k] = remote.achievements[k];
+    else out.achievements[k] = Math.max(out.achievements[k]|0, remote.achievements[k]|0);
+  }
+  const qmap = new Map();
+  for (const q of (local.quests||[])) qmap.set(q.id, q);
+  for (const q of (remote.quests||[])){
+    const cur = qmap.get(q.id);
+    if (!cur) qmap.set(q.id, q);
+    else if (q.done && !cur.done) qmap.set(q.id, q);
+    else if ((q.doneAt||q.at||0) > (cur.doneAt||cur.at||0)) qmap.set(q.id, q);
+  }
+  out.quests = Array.from(qmap.values());
+  const tmap = new Map();
+  for (const t of (local.tasks||[])) tmap.set(t.id, deepClone(t));
+  for (const t of (remote.tasks||[])){
+    const cur = tmap.get(t.id);
+    if (!cur){ tmap.set(t.id, deepClone(t)); continue; }
+    cur.totalFocusMin = Math.max(cur.totalFocusMin||0, t.totalFocusMin||0);
+    cur.sessions = Math.max(cur.sessions||0, t.sessions||0);
+    cur.lastUsedAt = Math.max(cur.lastUsedAt||0, t.lastUsedAt||0);
+    cur.pinned = cur.pinned || t.pinned;
+    if ((t.lastUsedAt||t.createdAt||0) > (cur.lastUsedAt||cur.createdAt||0)){
+      cur.name = t.name; cur.emoji = t.emoji;
+    }
+  }
+  out.tasks = Array.from(tmap.values());
+  out.settings = Object.assign({}, local.settings, {
+    minRewardMinutes: remote.settings?.minRewardMinutes ?? local.settings.minRewardMinutes,
+    streakBonusCap:   remote.settings?.streakBonusCap   ?? local.settings.streakBonusCap,
+    comboBonusCap:    remote.settings?.comboBonusCap    ?? local.settings.comboBonusCap
+  });
+  out.timer = deepClone(local.timer);
+  const tk = todayKey();
+  if (remote.combo?.date === tk && (remote.combo.count||0) > (local.combo?.count||0)) out.combo = deepClone(remote.combo);
+  const allSess = [...(local.sessionsLog||[]), ...(remote.sessionsLog||[])];
+  const seen = new Set();
+  out.sessionsLog = allSess.filter(s=>{ const k = `${s.at}|${s.type}|${s.minutes}`; if (seen.has(k)) return false; seen.add(k); return true; })
+    .sort((a,b)=>(a.at||0)-(b.at||0)).slice(-60);
+  out.dataVersion = Math.max(local.dataVersion||0, remote.dataVersion||0, DATA_VERSION);
+  out.sync = deepClone(local.sync);
+  return out;
+}
+
+function renderSyncStatus(){
+  const active = $("#sync-active"); const backendEl = $("#sync-backend"); const lastEl = $("#sync-last"); const status = $("#sync-status");
+  if (!active) return;
+  active.hidden = !state.sync.enabled;
+  backendEl.textContent = currentBackend();
+  lastEl.textContent = state.sync.lastPushedAt ? new Date(state.sync.lastPushedAt).toLocaleTimeString() : "never";
+  if (status){
+    if (!state.sync.enabled) status.textContent = "Cloud sync is off. Your data is local-only.";
+    else if (!state.sync.syncCode) status.textContent = "Generate a sync code or claim one from another device.";
+    else status.textContent = `Player id: ${state.sync.playerId?.slice(0,12)||"?"} · cloud_rev ${state.sync.cloudRev|0}`;
+  }
+}
+
+let pullPollTimer = null;
+function startPullPoll(){
+  stopPullPoll();
+  if (!state.sync.enabled) return;
+  pullPollTimer = setInterval(()=>{ cloudPull().catch(e=>console.warn("pull poll",e)); }, 30000);
+}
+function stopPullPoll(){ if (pullPollTimer){ clearInterval(pullPollTimer); pullPollTimer = null; } }
+
+/* -------- Modals -------- */
+function openModal(id){
+  const m = document.getElementById(id); if (!m) return;
+  // Close any modals already open so they don't stack
+  document.querySelectorAll(".modal-backdrop").forEach(x=>{ if (x.id !== id) x.hidden = true; });
+  m.hidden = false;
+  if (id === "settings-modal") fillSettingsForm();
+  if (id === "sync-modal"){ renderSyncStatus(); renderSecurityPanel(); }
+}
+function closeAllModals(){ $$(".modal-backdrop").forEach(m=>m.hidden=true); }
+
+function fillSettingsForm(){
+  const s = state.settings;
+  $("#cfg-focus").value = s.focusMin;
+  $("#cfg-short").value = s.shortMin;
+  $("#cfg-long").value  = s.longMin;
+  $("#cfg-cycles").value = s.cyclesBeforeLong;
+  $("#cfg-name").value = state.hero.name || "";
+  $("#cfg-class").value = state.hero.cls || "mage";
+  $("#cfg-theme").value = s.theme || "dark";
+  $("#cfg-min-reward").value = s.minRewardMinutes;
+  $("#cfg-streak-cap").value = s.streakBonusCap;
+  $("#cfg-combo-cap").value  = s.comboBonusCap;
+  setToggle("#tog-auto", s.autoStart);
+  setToggle("#tog-tick", s.tick);
+  setToggle("#tog-chime", s.chime);
+  setToggle("#tog-notif", s.notif);
+  setToggle("#tog-keepalive", s.keepalive);
+  setToggle("#tog-wakelock", s.wakelock);
+  setToggle("#tog-monthly-backup", s.monthlyBackup);
+}
+function setToggle(sel, val){ const el = typeof sel==="string"? $(sel): sel; if (!el) return; el.setAttribute("aria-checked", val?"true":"false"); }
+function readToggle(sel){ const el=$(sel); return el?.getAttribute("aria-checked")==="true"; }
+
+function bindSettings(){
+  $("#btn-settings").onclick = ()=>openModal("settings-modal");
+  $$("[data-close]").forEach(b=>b.onclick = (e)=>{ const m = e.target.closest(".modal-backdrop"); if (m) m.hidden = true; });
+  $$(".modal-backdrop").forEach(m=>{ m.addEventListener("click",(e)=>{ if (e.target===m) m.hidden=true; }); });
+  const bind = (sel, handler) => { const el=$(sel); if (!el) return; el.addEventListener("change", handler); el.addEventListener("input", handler); };
+  bind("#cfg-focus", e=>{ state.settings.focusMin = clamp(parseInt(e.target.value||"25",10),1,180); saveState(); if (!state.timer.running) setMode(state.timer.mode); });
+  bind("#cfg-short", e=>{ state.settings.shortMin = clamp(parseInt(e.target.value||"5",10),1,60); saveState(); if (!state.timer.running) setMode(state.timer.mode); });
+  bind("#cfg-long",  e=>{ state.settings.longMin  = clamp(parseInt(e.target.value||"15",10),1,120); saveState(); if (!state.timer.running) setMode(state.timer.mode); });
+  bind("#cfg-cycles",e=>{ state.settings.cyclesBeforeLong = clamp(parseInt(e.target.value||"4",10),1,12); saveState(); renderTopMeta(); });
+  bind("#cfg-name",  e=>{ state.hero.name = e.target.value.slice(0,32); saveState(); renderHero(); renderAvatar(); });
+  bind("#cfg-class", e=>{ state.hero.cls = e.target.value; saveState(); renderHero(); renderAvatar(); });
+  bind("#cfg-theme", e=>{ state.settings.theme = e.target.value; saveState(); applyTheme(); });
+  bind("#cfg-min-reward", e=>{ state.settings.minRewardMinutes = clamp(parseInt(e.target.value||"5",10),1,15); saveState(); });
+  bind("#cfg-streak-cap", e=>{ state.settings.streakBonusCap = clamp(parseInt(e.target.value||"30",10),0,200); saveState(); });
+  bind("#cfg-combo-cap",  e=>{ state.settings.comboBonusCap  = clamp(parseInt(e.target.value||"50",10),0,200); saveState(); });
+  const toggle = (sel, key, after)=>{ const el=$(sel); if (!el) return; el.addEventListener("click", ()=>{ const next = !readToggle(sel); setToggle(sel,next); state.settings[key]=next; saveState(); after?.(next); }); };
+  toggle("#tog-auto","autoStart");
+  toggle("#tog-tick","tick");
+  toggle("#tog-chime","chime");
+  toggle("#tog-notif","notif", v=>{ if (v) requestNotifPermIfNeeded(); });
+  toggle("#tog-keepalive","keepalive", v=>{ if (!v) stopKeepalive(); else if (state.timer.running && state.timer.mode==="focus") startKeepalive(); });
+  toggle("#tog-wakelock","wakelock", v=>{ if (!v) releaseWakeLock(); else if (state.timer.running && state.timer.mode==="focus") acquireWakeLock(); });
+  toggle("#tog-monthly-backup","monthlyBackup");
+  $("#btn-backup-now").onclick = ()=>backupNow();
+  $("#btn-export").onclick = ()=>{ const { blob, fname } = buildBackupBlob({ labelSuffix:"-export" }); triggerDownload(blob, fname); };
+  $("#btn-import").onclick = ()=>$("#import-file").click();
+  $("#import-file").onchange = async (e)=>{
+    const f = e.target.files?.[0]; if (!f) return;
+    const text = await f.text();
+    try {
+      const parsed = JSON.parse(text);
+      const candidate = parsed.state || parsed;
+      state = migrate(candidate); saveState(); renderAll();
+      toast("Import complete — migrated to v4","good");
+    } catch(err){ toast("Import failed: "+(err.message||err),"bad"); }
+    e.target.value = "";
+  };
+  $("#btn-reset").onclick = ()=>{
+    if (!confirm("Reset EVERYTHING? Make a backup first — this wipes hours, streaks, loot.")) return;
+    if (!confirm("Really? This is permanent.")) return;
+    /* v4.2: clear the LKG snapshot AND any pre-migration backups. Otherwise
+       the monotonic check in isStateSane() refuses to promote the post-reset
+       state, leaving stale "recoverable" data in localStorage. A reset is
+       explicit user intent; honor it everywhere. */
+    try {
+      const keysToClear = [];
+      for (let i = 0; i < localStorage.length; i++){
+        const k = localStorage.key(i);
+        if (k && k.startsWith(STORAGE_KEY)) keysToClear.push(k);
+      }
+      keysToClear.forEach(k => localStorage.removeItem(k));
+    } catch(_){}
+    state = migrate(deepClone(DEFAULTS)); saveState(); renderAll();
+    toast("Reset. Welcome back to level 1.");
+  };
+}
+
+function bindSync(){
+  $("#btn-sync").onclick = ()=>openModal("sync-modal");
+  const togS = $("#tog-sync");
+  togS.addEventListener("click", ()=>{
+    const next = !readToggle("#tog-sync"); setToggle("#tog-sync",next);
+    state.sync.enabled = next; state.sync.backend = currentBackend();
+    saveState({fromPull:true}); renderSyncStatus(); renderSecurityPanel();
+    if (next){ startPullPoll(); cloudPull().catch(()=>{}); } else { stopPullPoll(); }
+  });
+  setToggle("#tog-sync", !!state.sync.enabled);
+  const togE = $("#tog-e2e");
+  togE.addEventListener("click", ()=>{
+    const next = !readToggle("#tog-e2e"); setToggle("#tog-e2e",next);
+    state.settings.e2eEncryption = next; saveState(); renderSecurityPanel();
+  });
+  setToggle("#tog-e2e", !!state.settings.e2eEncryption);
+  $("#btn-gen-code").onclick = ()=>genSyncCode().catch(e=>toast("Gen failed: "+(e.message||e),"bad"));
+  $("#btn-enter-code").onclick = ()=>{ $("#enter-area").hidden = false; $("#code-area").hidden = true; };
+  $("#btn-claim").onclick = ()=>{ const v = $("#enter-code").value||""; claimSyncCode(v); };
+  $("#btn-sync-now").onclick = async ()=>{
+    try { await cloudPull(); await cloudPush({force:true}); toast("Synced.","good"); }
+    catch(e){ toast("Sync failed: "+(e.message||e),"bad"); }
+  };
+  $("#btn-disconnect").onclick = ()=>{
+    if (!confirm("Disconnect cloud sync on this device? Local data is untouched.")) return;
+    state.sync.enabled = false; stopPullPoll(); saveState();
+    renderSyncStatus(); renderSecurityPanel();
+    toast("Disconnected.");
+  };
+}
+
+function bindHelp(){ $("#btn-help").onclick = ()=>openModal("help-modal"); }
+
+/* v4.2: theme presets — keep VALID_THEMES in sync with the [data-theme="…"] CSS blocks */
+const VALID_THEMES = ["dark","light","auto","forest","ocean","ember","cyber","minimal"];
+const THEME_LABELS = {
+  dark:"Dark Fantasy", light:"Light", auto:"Auto (system)",
+  forest:"Forest", ocean:"Ocean", ember:"Sunset", cyber:"Cyberpunk", minimal:"Minimal"
+};
+function applyTheme(){
+  let t = state.settings.theme;
+  if (!VALID_THEMES.includes(t)) t = "dark";
+  let mode = t;
+  if (t === "auto") mode = (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches) ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", mode);
+  // Update the mobile <meta name="theme-color"> bar so the browser chrome blends in.
+  const bg = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
+  if (bg){ document.querySelectorAll('meta[name="theme-color"]').forEach(m=>m.setAttribute("content", bg)); }
+}
+function toggleTheme(){
+  // Cycle through every preset (Auto sits at the end).
+  const order = ["dark","light","forest","ocean","ember","cyber","minimal","auto"];
+  const cur = state.settings.theme || "dark";
+  const idx = order.indexOf(cur);
+  const next = order[(idx === -1 ? 0 : idx+1) % order.length];
+  state.settings.theme = next; saveState(); applyTheme();
+  toast(`Theme: ${THEME_LABELS[next] || next}`);
+}
+
+function bindTabs(){
+  $$(".tabs button[role='tab']").forEach(b=>{
+    b.addEventListener("click", ()=>{
+      const tab = b.dataset.tab;
+      $$(".tabs button[role='tab']").forEach(x=>x.setAttribute("aria-pressed", x===b?"true":"false"));
+      ["loot","ach","heat"].forEach(k=>{ const p=$(`#tab-${k}`); if (!p) return; p.hidden = k!==tab; });
+    });
+  });
+}
+function bindModeTabs(){
+  $$(".mode-tabs button[role='tab']").forEach(b=>{
+    b.addEventListener("click", ()=>{
+      if (state.timer.running){ if (!confirm("Switch mode mid-session? Progress lost.")) return; }
+      setMode(b.dataset.mode);
+    });
+  });
+}
+function bindTasks(){
+  const submit = ()=>{ const name = $("#new-task-name").value; const t = createTask({ name }); if (t) $("#new-task-name").value = ""; };
+  $("#btn-new-task").onclick = submit;
+  $("#new-task-name").addEventListener("keydown", e=>{ if (e.key==="Enter") submit(); });
+  $("#btn-new-task-emoji").onclick = e=>{ e.currentTarget.textContent = pickRandomEmoji(); };
+}
+function bindQuests(){
+  $("#btn-add-quest").onclick = ()=>{ const inp = $("#quest-input"); addQuest(inp.value); inp.value=""; };
+  $("#quest-input").addEventListener("keydown", e=>{ if (e.key==="Enter"){ e.preventDefault(); $("#btn-add-quest").click(); } });
+}
+function bindTimer(){
+  $("#btn-start").onclick = ()=>{ state.timer.running ? pauseTimer() : startTimer(); };
+  $("#btn-reset-timer").onclick = ()=>resetTimer();
+  $("#btn-skip").onclick = ()=>skipTimer();
+  const stopLog = $("#btn-stop-log"); if (stopLog) stopLog.onclick = ()=>finalizeStopwatch();
+  const lap = $("#btn-lap"); if (lap) lap.onclick = ()=>lapStopwatch();
+  // Initial visibility for stopwatch-only buttons
+  if (stopLog){ stopLog.hidden = !isStopwatch(); }
+  if (lap){ lap.hidden = !isStopwatch(); }
+  const sk = $("#btn-skip"); if (sk) sk.hidden = isStopwatch();
+}
+function bindKeys(){
+  document.addEventListener("keydown", e=>{
+    const tag = (e.target && e.target.tagName) || "";
+    const inEditable = /INPUT|TEXTAREA|SELECT/.test(tag) || e.target?.isContentEditable;
+    if (e.key === "Escape"){ closeAllModals(); closeEmojiPicker(); return; }
+    if (inEditable) return;
+    if (e.key === " "){ e.preventDefault(); state.timer.running ? pauseTimer() : startTimer(); }
+    else if (e.key.toLowerCase() === "r") resetTimer();
+    else if (e.key.toLowerCase() === "n") skipTimer();
+    else if (e.key === "1") setMode("focus");
+    else if (e.key === "2") setMode("short");
+    else if (e.key === "3") setMode("long");
+    else if (e.key === "4" || (e.shiftKey && e.key.toLowerCase() === "s")) setMode("stopwatch");
+    else if (e.shiftKey && e.key.toLowerCase() === "l") finalizeStopwatch();
+    else if (!e.shiftKey && e.key.toLowerCase() === "l" && isStopwatch()) lapStopwatch();
+    else if (e.key.toLowerCase() === "t") toggleTheme();
+    else if (e.key.toLowerCase() === "y") openModal("sync-modal");
+    else if (e.key.toLowerCase() === "a") $("#new-task-name")?.focus();
+    else if (e.key.toLowerCase() === "q") $("#quest-input")?.focus();
+    else if (e.key === "?") openModal("help-modal");
+    else if (e.key === ",") openModal("settings-modal");
+    else if (e.shiftKey && e.key.toLowerCase() === "b") backupNow();
+  });
+}
+function bindMultiTab(){
+  if (bc){ bc.addEventListener("message", e=>{ if (e.data?.type==="state" && e.data.state){ state = migrate(e.data.state); renderAll(); } }); }
+  window.addEventListener("storage", e=>{
+    if (e.key === STORAGE_KEY && e.newValue){
+      try { state = migrate(JSON.parse(e.newValue)); renderAll(); } catch(_){}
+    }
+  });
+}
+function registerSW(){
+  if (!("serviceWorker" in navigator)) return;
+  if (location.protocol === "file:") return;
+  window.addEventListener("load", ()=>{
+    navigator.serviceWorker.register("./sw.js").then(reg=>{
+      reg.addEventListener("updatefound", ()=>{
+        const nw = reg.installing; if (!nw) return;
+        nw.addEventListener("statechange", ()=>{
+          if (nw.state === "installed" && navigator.serviceWorker.controller){
+            toast("Update available · Reload", "", [{ label:"Reload", onClick:()=>location.reload() }]);
+          }
+        });
+      });
+    }).catch(e=>console.warn("SW register failed", e));
+  });
+}
+function maybeWarnAboutFileMode(){
+  if (location.protocol !== "file:") return;
+  toast("Opened locally. Install/offline cache need http(s), like `npx serve`.", "warn");
+}
+function handleUrlActions(){
+  const q = new URLSearchParams(location.search);
+  if (q.get("start") === "focus"){ setMode("focus"); setTimeout(startTimer, 100); }
+  if (q.get("open") === "settings") setTimeout(()=>openModal("settings-modal"), 50);
+  if (q.get("action") === "backup") setTimeout(backupNow, 50);
+}
+
+/* ================================================================ *
+ * v4 smoke tests (?test=1)
+ * ================================================================ */
+const __FocusHero = {
+  computeXpBreakdown, createTask, renameTask, setTaskEmoji, deleteTask,
+  setActiveTask, pinTask, migrate, encryptStateBlob, decryptStateBlob,
+  deriveE2EKey, mergeRemoteState, formatHours, allowedRaritiesForMinutes,
+  ensureSalt, DATA_VERSION, DEFAULTS, stateRef: ()=>state,
+  /* v4.1: stopwatch */
+  stopwatchElapsedMs, stopwatchMinutes, finalizeStopwatch, isStopwatch,
+  /* v4.2.1: stopwatch laps */
+  appendStopwatchLap, lapStopwatch,
+  fmtTimeLong,
+  /* v4.2: emergency recovery — call from DevTools console.
+     listSnapshots() shows {key, savedAt, size} for every saved snapshot;
+     recover() restores from the LKG (last known good) by default, or pass
+     a specific key e.g. recover("focusHero.v4.state.pre-v5") to roll back
+     to a pre-migration backup. */
+  listSnapshots: listRecoverySnapshots,
+  recover: recoverFromSnapshot,
+  isStateSane
+};
+try { window.__FocusHero = __FocusHero; } catch(_){}
+
+async function runSmokeTests(){
+  const results = [];
+  const add = (name, ok, msg) => results.push({ name, ok, msg: msg||"" });
+  {
+    const x = computeXpBreakdown(4, { settings: DEFAULTS.settings });
+    add("XP: below 5-min floor = 0", x.total === 0 && x.reason === "under_floor");
+  }
+  {
+    const x = computeXpBreakdown(5, { settings: DEFAULTS.settings });
+    add("XP: 5m yields 10 base", x.base === 10);
+  }
+  {
+    const x = computeXpBreakdown(60, { settings: DEFAULTS.settings });
+    add("XP: 60m tiered base = 158", x.base === 158);
+  }
+  {
+    const x = computeXpBreakdown(25, { comboCount: 3, settings: DEFAULTS.settings });
+    add("XP: combo ×3 adds 30% at 25m", x.comboPct === 30 && x.comboBonus === 17, `got comboBonus=${x.comboBonus}`);
+  }
+  {
+    const x = computeXpBreakdown(25, { streakDays: 7, settings: DEFAULTS.settings });
+    add("XP: streak 7d adds 7% at 25m", x.streakPct === 7 && x.streakBonus === 4, `got streakBonus=${x.streakBonus}`);
+  }
+  {
+    const snapshot = deepClone(state);
+    const t1 = createTask({ name:"SmokeTestTask", emoji:"🧪" });
+    const created = !!t1 && t1.name === "SmokeTestTask";
+    renameTask(t1.id, "SmokeRenamed");
+    const renamed = state.tasks.find(x=>x.id===t1.id).name === "SmokeRenamed";
+    setTaskEmoji(t1.id, "🔬");
+    const emoji = state.tasks.find(x=>x.id===t1.id).emoji === "🔬";
+    deleteTask(t1.id, { confirmMsg:false });
+    const deleted = !state.tasks.find(x=>x.id===t1.id);
+    add("Task CRUD: create/rename/emoji/delete", created && renamed && emoji && deleted);
+    state = snapshot; saveState(); renderAll();
+  }
+  {
+    const snapshot = deepClone(state);
+    const t = createTask({ name:"MidEditTask", emoji:"📝" });
+    state.timer.running = true; state.timer.mode = "focus"; state.timer.activeTaskId = t.id;
+    renameTask(t.id, "MidEditRenamed");
+    const ok = state.tasks.find(x=>x.id===t.id).name === "MidEditRenamed" && state.timer.running === true;
+    add("Mid-session rename preserved running state", ok);
+    state = snapshot; saveState(); renderAll();
+  }
+  add("App-open tracking: totalAppOpenMs is number", typeof state.totalAppOpenMs === "number");
+  try {
+    const snapshot = deepClone(state);
+    state.sync.syncCode = "TESTCODE"; state.sync.syncSecret = "TESTSECRETTESTSECRET";
+    state.settings.e2eEncryption = true; state.sync.saltB64 = null;
+    const plain = { dataVersion:4, totalFocusMin:42, tasks:[{id:"a",name:"x",totalFocusMin:5}] };
+    const blob = await encryptStateBlob(plain);
+    const round = await decryptStateBlob(blob);
+    add("Encryption: AES-GCM round-trip", !!blob.e2e && round.totalFocusMin === 42);
+    state = snapshot; saveState();
+  } catch(e){ add("Encryption: AES-GCM round-trip", false, e.message||String(e)); }
+  {
+    const v3 = {
+      dataVersion:3,
+      hero:{ name:"Old", cls:"mage", level:7, xp:40, hp:60, energy:80 },
+      settings:{ focusMin:25, shortMin:5, longMin:15, cyclesBeforeLong:4, autoStart:false, tick:false, chime:true, notif:false, theme:"dark" },
+      timer:{ mode:"focus", endAt:0, pausedAt:0, running:false, msLeft:25*60*1000 },
+      cycleCount:3, totalFocusMin:1234, streak:9, lastFocusDate:"2026-04-20",
+      quests:[], activeQuestId:null, daily:{date:null,items:[]},
+      lootOwned:{"copper_coin":2}, achievements:{first_focus:1},
+      history:{"2026-04-20":60}, sessionsLog:[], sync:{enabled:false}
+    };
+    const m = migrate(deepClone(v3));
+    const ok = m.dataVersion === 4
+      && m.totalFocusMin === 1234
+      && m.hero.level === 7
+      && Array.isArray(m.tasks)
+      && typeof m.totalAppOpenMs === "number"
+      && typeof m.combo === "object"
+      && m.settings.minRewardMinutes === 5;
+    add("Migration v3 → v4 preserves cumulative", ok);
+  }
+  {
+    const bad = migrate("this is not json");
+    const ok = bad.dataVersion === 4 && bad.totalFocusMin >= 0 && Array.isArray(bad.tasks);
+    add("Degraded read: malformed state → defaults", ok);
+  }
+  {
+    const local = { totalFocusMin:100, streak:3, history:{}, lootOwned:{}, achievements:{}, quests:[], tasks:[], sessionsLog:[],
+      hero:{level:5,xp:0,hp:100,energy:100,name:"A",cls:"mage"}, settings:{...DEFAULTS.settings}, timer:{...DEFAULTS.timer}, sync:{...DEFAULTS.sync},
+      combo:{count:0,date:null}, totalAppOpenMs:0, longestStreak:3, completedFocusSessions:10 };
+    const remote = { totalFocusMin:250, streak:10, history:{"2026-04-20":60}, lootOwned:{"copper_coin":5}, achievements:{first_focus:100},
+      quests:[], tasks:[], sessionsLog:[],
+      hero:{level:7,xp:40,hp:100,energy:100,name:"A",cls:"mage"}, settings:{...DEFAULTS.settings},
+      combo:{count:0,date:null}, totalAppOpenMs:1000, longestStreak:10, completedFocusSessions:20, dataVersion:4 };
+    const m = mergeRemoteState(local, remote);
+    add("Merge: cumulative max wins", m.totalFocusMin === 250 && m.streak === 10 && m.hero.level === 7 && m.totalAppOpenMs === 1000);
+  }
+  return results;
+}
+
+function renderTestBanner(results){
+  let banner = document.querySelector(".test-banner");
+  if (!banner){ banner = document.createElement("div"); banner.className = "test-banner"; document.body.prepend(banner); }
+  const passed = results.filter(r=>r.ok).length;
+  const total = results.length;
+  const hdr = `<div class="hdr">v4 smoke tests — ${passed}/${total} passing</div>`;
+  const body = results.map(r=>`<div class="${r.ok?"pass":"fail"}">${r.ok?"✓":"✗"} ${escapeHtml(r.name)}${r.ok?"":" — "+escapeHtml(r.msg||"")}</div>`).join("");
+  banner.innerHTML = hdr + body;
+}
+
+/* -------- Boot -------- */
+async function boot(){
+  applyTheme();
+  bindSettings(); bindSync(); bindHelp(); bindTabs(); bindModeTabs();
+  bindTasks(); bindQuests(); bindTimer(); bindKeys(); bindMultiTab();
+  $("#btn-theme").onclick = toggleTheme;
+  renderAll();
+  renderSyncStatus();
+  ensureTickInterval();
+  bindAppOpenTracking();
+  maybeWarnAboutFileMode();
+  if (state.timer.running && state.timer.endAt && state.timer.mode === "focus"){ startKeepalive(); acquireWakeLock(); }
+  try { maybeAutoBackup(); } catch(_){}
+  if (state.sync.enabled){ startPullPoll(); cloudPull().catch(()=>{}); }
+  window.addEventListener("focus", ()=>{ if (state.sync.enabled) cloudPull().catch(()=>{}); });
+  document.addEventListener("visibilitychange", ()=>{ if (!document.hidden && state.sync.enabled) cloudPull().catch(()=>{}); });
+  handleUrlActions();
+  registerSW();
+  const q = new URLSearchParams(location.search);
+  if (q.get("test") === "1"){
+    try { const r = await runSmokeTests(); renderTestBanner(r); }
+    catch(e){ renderTestBanner([{ name:"runSmokeTests threw", ok:false, msg: String(e.message||e) }]); }
+  }
+}
+
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+else boot();
+</script>
+</body>
+</html>
