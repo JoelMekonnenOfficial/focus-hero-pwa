@@ -1,0 +1,13 @@
+.assetsignore
+.gitignore
+.git
+.git/**
+.github
+.github/**
+.wrangler
+.wrangler/**
+.nojekyll
+README.md
+wrangler.toml
+Thumbs.db
+.DS_Store
