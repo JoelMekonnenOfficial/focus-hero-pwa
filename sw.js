@@ -1,8 +1,8 @@
-/* Focus Hero v4 — service worker
+/* Focus Hero v5 — service worker
  * versioned cache + stale-while-revalidate for HTML, skipWaiting + clients.claim.
- * v4 bump: fh-v4-4 — adds analytics modal, per-task daily log, full emoji picker grid.
+ * v5 bump: fh-v5-1 — adds character action animations during focus sessions, periodic auto-save heartbeat.
  */
-const CACHE_VERSION = "fh-v4-4";
+const CACHE_VERSION = "fh-v5-1";
 const CACHE_NAME = `focus-hero-${CACHE_VERSION}`;
 const PRECACHE = [
   "./",
