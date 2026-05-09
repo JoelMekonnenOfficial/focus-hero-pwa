@@ -11,3 +11,7 @@ README.md
 wrangler.toml
 Thumbs.db
 .DS_Store
+node_modules
+node_modules/**
+package.json
+package-lock.json
