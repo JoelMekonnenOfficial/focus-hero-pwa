@@ -8,11 +8,11 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Focus Hero">
-<meta name="description" content="Focus Hero v7 - a private Pomodoro RPG with real 8-bit class avatars, equippable gear tiers, week/month/all-time analytics, mid-session task switch, auto-save, cloud sync, and iron-clad data durability.">
+<meta name="description" content="Focus Hero v7.1 - a private Pomodoro RPG with a full pixel MMO interface, real 8-bit class avatars, equippable gear tiers, week/month/all-time analytics, mid-session task switch, auto-save, cloud sync, and iron-clad data durability.">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="icon" href="icon-192.png">
-<title>Focus Hero v7</title>
+<title>Focus Hero v7.1</title>
 <style>
 /* ================================================================
  * Focus Hero v7 - inline styles (single-file PWA)
@@ -399,6 +399,251 @@ kbd{font-family:var(--mono);font-size:.78em;padding:1px 6px;border-radius:6px;ba
   .hero-card .avatar .fh-mount{animation:none !important;transition:none !important}
 }
 
+/* ---------- v7.1: full pixel RPG MMO interface skin ---------- */
+:root{
+  --bg:#07100b; --bg-2:#111a13; --panel:#162019; --panel-2:#213023;
+  --ink:#fff4cf; --ink-dim:#cdbd8d; --ink-mute:#877d61;
+  --accent:#63d870; --accent-2:#f3c969; --good:#81f07c; --warn:#f0a84d;
+  --bad:#e85d5d; --rare:#62c9ff; --epic:#b88cff; --legend:#ffd86a; --myth:#ff77c8;
+  --border:rgba(243,201,105,.34); --border-strong:rgba(243,201,105,.62);
+  --shadow:0 10px 0 rgba(0,0,0,.34),0 22px 44px rgba(0,0,0,.38);
+  --font:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --radius:4px;
+  --accent-rgb:99,216,112; --accent-2-rgb:243,201,105;
+}
+[data-theme="light"],[data-theme="minimal"]{
+  --bg:#d8c790; --bg-2:#b99b5f; --panel:#f2df9c; --panel-2:#e6c676;
+  --ink:#1d2116; --ink-dim:#4d482e; --ink-mute:#766d46;
+  --accent:#1f8f55; --accent-2:#9b5f2e;
+  --border:rgba(42,35,18,.38); --border-strong:rgba(42,35,18,.72);
+  --shadow:0 8px 0 rgba(54,39,13,.25),0 20px 34px rgba(54,39,13,.18);
+  --accent-rgb:31,143,85; --accent-2-rgb:155,95,46;
+}
+body{
+  font-family:var(--font);
+  color:var(--ink);
+  background-color:var(--bg);
+  background-image:
+    linear-gradient(180deg,rgba(255,255,255,.035) 0 1px,transparent 1px 16px),
+    linear-gradient(90deg,rgba(255,255,255,.025) 0 1px,transparent 1px 16px),
+    linear-gradient(180deg,#07100b 0,#0d1b13 42%,#172916 42%,#172916 58%,#0b130d 58%);
+  background-size:16px 16px,16px 16px,100% 100%;
+  image-rendering:pixelated;
+  letter-spacing:0;
+}
+body::before{
+  content:"";
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  z-index:-1;
+  opacity:.46;
+  background:
+    repeating-linear-gradient(90deg,transparent 0 28px,rgba(99,216,112,.08) 28px 32px),
+    repeating-linear-gradient(0deg,transparent 0 44px,rgba(243,201,105,.08) 44px 48px);
+  mask-image:linear-gradient(180deg,transparent,black 12%,black 88%,transparent);
+}
+.app{
+  max-width:1280px;
+  grid-template-columns:minmax(0,1.08fr) minmax(360px,.92fr);
+  gap:16px;
+  padding:18px 16px 120px;
+}
+header.topbar{
+  position:relative;
+  padding:12px;
+  border:2px solid var(--border-strong);
+  border-radius:var(--radius);
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.06),transparent 28px),
+    repeating-linear-gradient(90deg,rgba(255,255,255,.035) 0 2px,transparent 2px 8px),
+    var(--panel);
+  box-shadow:inset 0 0 0 2px rgba(0,0,0,.44),var(--shadow);
+}
+.brand .logo{
+  width:44px;height:44px;border-radius:var(--radius);
+  border:2px solid #090d08;
+  background:
+    linear-gradient(135deg,var(--accent) 0 48%,#111 48% 54%,var(--accent-2) 54%),
+    var(--panel-2);
+  box-shadow:inset 0 0 0 2px rgba(255,255,255,.08),4px 4px 0 rgba(0,0,0,.42);
+  text-shadow:2px 2px 0 #000;
+}
+.brand h1,.brand .sub,.card h2,.level-badge,.pill,button,input,select,textarea{letter-spacing:0}
+.brand h1{font-size:1.05rem;text-transform:uppercase;color:var(--legend);text-shadow:2px 2px 0 #000}
+.brand .sub{color:var(--ink-dim)}
+.level-badge,.pill{
+  border-radius:var(--radius);
+  border:2px solid var(--border);
+  background:#0b110d;
+  color:var(--accent-2);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);
+}
+.card,.modal,.sw-laps,.battle-log,.task-switch-item{
+  border:2px solid var(--border-strong);
+  border-radius:var(--radius);
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.055),transparent 34px),
+    repeating-linear-gradient(90deg,rgba(255,255,255,.026) 0 2px,transparent 2px 10px),
+    var(--panel);
+  box-shadow:inset 0 0 0 2px rgba(0,0,0,.45),var(--shadow);
+}
+.card{padding:14px}
+.card h2{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  color:var(--accent-2);
+  font-size:.82rem;
+  text-shadow:2px 2px 0 #000;
+}
+.card h2::before{
+  content:"◆";
+  color:var(--accent);
+  font-size:.78rem;
+  text-shadow:2px 2px 0 #000;
+}
+button{
+  border:2px solid var(--border-strong);
+  border-radius:var(--radius);
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.09),rgba(0,0,0,.08)),
+    var(--panel-2);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.05),0 3px 0 rgba(0,0,0,.5);
+  color:var(--ink);
+  text-transform:uppercase;
+  font-size:.82rem;
+}
+button:hover{background:linear-gradient(180deg,rgba(255,255,255,.12),rgba(0,0,0,.08)),#263a2b;border-color:var(--accent-2)}
+button:active{transform:translateY(2px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.05),0 1px 0 rgba(0,0,0,.6)}
+button.primary{
+  color:#07100b;
+  background:
+    linear-gradient(180deg,#fff0a3 0 18%,var(--accent-2) 18% 54%,#b2772f 54%),
+    var(--accent-2);
+  border-color:#ffd86a;
+  text-shadow:none;
+}
+input[type=text],input[type=number],input[type=password],textarea,select{
+  border:2px solid var(--border);
+  border-radius:var(--radius);
+  background:#0b110d;
+  color:var(--ink);
+  box-shadow:inset 3px 3px 0 rgba(0,0,0,.32);
+}
+input:focus,textarea:focus,select:focus{border-color:var(--accent);box-shadow:inset 3px 3px 0 rgba(0,0,0,.32),0 0 0 2px rgba(var(--accent-rgb),.22)}
+.timer-card{
+  min-height:360px;
+  background:
+    linear-gradient(180deg,rgba(98,201,255,.16) 0 20%,transparent 20%),
+    linear-gradient(180deg,transparent 0 50%,rgba(99,216,112,.13) 50%),
+    repeating-linear-gradient(90deg,rgba(243,201,105,.06) 0 6px,transparent 6px 18px),
+    var(--panel);
+}
+.mode-tabs button,.tabs button{border-radius:var(--radius)}
+.mode-tabs button[aria-pressed="true"],.tabs button[aria-pressed="true"]{
+  color:#07100b;
+  background:linear-gradient(180deg,var(--accent),#2d9b55);
+  border-color:#8ff49a;
+}
+.timer-display{
+  letter-spacing:0;
+  color:#fff3b0;
+  text-shadow:4px 4px 0 #050805,0 0 22px rgba(243,201,105,.32);
+}
+.progress,.bar{
+  height:12px;
+  border:2px solid #050805;
+  border-radius:0;
+  background:repeating-linear-gradient(90deg,#0a0f0a 0 8px,#111b12 8px 16px);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.05);
+}
+.progress > div,.bar > div{
+  background:
+    repeating-linear-gradient(90deg,rgba(255,255,255,.22) 0 2px,transparent 2px 8px),
+    linear-gradient(90deg,var(--accent),var(--accent-2));
+}
+.session-meta{color:var(--ink-dim);font-size:.78rem}
+.active-task-row{
+  border:2px solid var(--border);
+  border-radius:var(--radius);
+  background:#0b110d;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.05);
+}
+.battle-log{
+  border-color:rgba(99,216,112,.52);
+  background:
+    repeating-linear-gradient(0deg,rgba(255,255,255,.035) 0 1px,transparent 1px 18px),
+    rgba(4,8,6,.82);
+  color:#c6f0b8;
+  text-shadow:2px 2px 0 #000;
+}
+.battle-log .battle-time{color:#f3c969}
+.hero-card .avatar{
+  width:88px;height:88px;
+  border:3px solid #050805;
+  border-radius:var(--radius);
+  background:
+    linear-gradient(180deg,#234f7a 0 42%,#2a7a4c 42% 58%,#594024 58%),
+    var(--panel-2);
+  box-shadow:inset 0 0 0 2px rgba(255,255,255,.08),5px 5px 0 rgba(0,0,0,.42);
+}
+.hero-card .name{color:var(--legend);text-transform:uppercase;text-shadow:2px 2px 0 #000}
+.hero-card .title{color:var(--ink-dim)}
+.stat-row{color:var(--ink-dim);font-size:.78rem;text-transform:uppercase}
+.quest,.task,.loot-item,.ach,.analytics-card,.analytics-row,.form-row,.task-switch-item{
+  border:2px solid var(--border);
+  border-radius:var(--radius);
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.045),transparent 24px),
+    var(--panel-2);
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.28);
+}
+.quest.active,.task.active{
+  border-color:var(--accent);
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.28),0 0 0 2px rgba(var(--accent-rgb),.25),0 4px 0 rgba(0,0,0,.32);
+}
+.quest.done,.ach.locked,.loot-item.locked{opacity:.48;filter:saturate(.55)}
+.loot-grid,.ach-grid{grid-template-columns:repeat(auto-fill,minmax(116px,1fr));gap:8px}
+.loot-item,.ach{text-align:left}
+.loot-item .sym,.ach .sym{
+  display:inline-grid;
+  place-items:center;
+  width:30px;height:30px;
+  border:2px solid rgba(0,0,0,.5);
+  background:#0b110d;
+  border-radius:var(--radius);
+  image-rendering:pixelated;
+}
+.loot-item.equipped{border-color:var(--legend);box-shadow:inset 0 0 0 1px rgba(0,0,0,.28),0 0 0 2px rgba(255,216,106,.2)}
+.rar-common{color:#d6d0b8}.rar-uncommon{color:var(--good)}.rar-rare{color:var(--rare)}.rar-epic{color:var(--epic)}.rar-legendary{color:var(--legend)}.rar-mythic{color:var(--myth)}
+.heat-cell{border-radius:0;border:1px solid rgba(0,0,0,.32)}
+.toast{
+  border:2px solid var(--border-strong);
+  border-left:8px solid var(--accent);
+  border-radius:var(--radius);
+  background:#0b110d;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.05),0 6px 0 rgba(0,0,0,.45);
+}
+.modal-backdrop{background:rgba(2,5,4,.76);backdrop-filter:none}
+.modal{max-width:640px}
+.analytics-card .big{color:var(--legend);text-shadow:2px 2px 0 #000}
+.analytics-row .bar{height:8px}
+.toggle{border-radius:var(--radius);border:2px solid var(--border);box-shadow:inset 0 0 0 1px rgba(0,0,0,.24)}
+.toggle::after{border-radius:2px}
+.sync-code,.qr-wrap,kbd{
+  border:2px solid var(--border);
+  border-radius:var(--radius);
+  background:#0b110d;
+}
+@media (max-width:860px){
+  .app{grid-template-columns:1fr;padding:12px 10px 136px}
+  header.topbar{position:static}
+  .timer-card{min-height:320px}
+  .topbar .actions button{min-height:42px}
+}
+
 </style>
 </head>
 <body>
@@ -407,7 +652,7 @@ kbd{font-family:var(--mono);font-size:.78em;padding:1px 6px;border-radius:6px;ba
     <div class="brand">
       <div class="logo" aria-hidden="true">FH</div>
       <div>
-        <h1>Focus Hero <span class="level-badge" id="version-badge">v7.0</span></h1>
+      <h1>Focus Hero <span class="level-badge" id="version-badge">v7.1</span></h1>
         <div class="sub" id="tagline">Slay distractions. Level up your life.</div>
       </div>
     </div>
@@ -680,7 +925,7 @@ kbd{font-family:var(--mono);font-size:.78em;padding:1px 6px;border-radius:6px;ba
  * ================================================================ -->
 <script>
 "use strict";
-/* v7.0 build marker - real 8-bit pixel art, gear customization with tier-based equip slots, week/month/all-time analytics including per-task and app uptime, mid-session task switch UI. Built on v6.0 base. */
+/* v7.1 build marker - full pixel RPG interface skin over v7 mechanics: real 8-bit pixel art, gear customization with tier-based equip slots, week/month/all-time analytics including per-task and app uptime, mid-session task switch UI. Built on v6.0 base. */
 
 /* -------- cloud sync config (user edits) -------- */
 // Leave these empty to skip Supabase entirely and use the jsonstorage.net fallback.
@@ -2020,7 +2265,7 @@ function clearXpBreakdown(){
  * ================================================================ */
 function buildBackupBlob({ labelSuffix="" } = {}){
   const payload = {
-    appVersion: "focus-hero-v7",
+    appVersion: "focus-hero-v7.1",
     exportedAt: new Date().toISOString(),
     dataVersion: state.dataVersion,
     state
@@ -3738,7 +3983,7 @@ function handleUrlActions(){
 }
 
 /* ================================================================ *
- * v7 smoke tests (?test=1)
+ * v7.1 smoke tests (?test=1)
  * ================================================================ */
 const __FocusHero = {
   computeXpBreakdown, createTask, renameTask, setTaskEmoji, deleteTask,
@@ -3878,7 +4123,7 @@ function renderTestBanner(results){
   if (!banner){ banner = document.createElement("div"); banner.className = "test-banner"; document.body.prepend(banner); }
   const passed = results.filter(r=>r.ok).length;
   const total = results.length;
-  const hdr = `<div class="hdr">v7 smoke tests — ${passed}/${total} passing</div>`;
+  const hdr = `<div class="hdr">v7.1 smoke tests — ${passed}/${total} passing</div>`;
   const body = results.map(r=>`<div class="${r.ok?"pass":"fail"}">${r.ok?"✓":"✗"} ${escapeHtml(r.name)}${r.ok?"":" — "+escapeHtml(r.msg||"")}</div>`).join("");
   banner.innerHTML = hdr + body;
 }

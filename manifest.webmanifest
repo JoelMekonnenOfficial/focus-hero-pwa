@@ -1,8 +1,8 @@
 {
   "name": "Focus Hero",
   "short_name": "Focus Hero",
-  "description": "Focus Hero v7 - a private Pomodoro RPG with real 8-bit class avatars, equippable gear tiers, week/month/all-time analytics, and encrypted cloud sync.",
-  "version": "7.0.0",
+  "description": "Focus Hero v7.1 - a private Pomodoro RPG with a full pixel MMO interface, real 8-bit class avatars, equippable gear tiers, week/month/all-time analytics, and encrypted cloud sync.",
+  "version": "7.1.0",
   "start_url": "./focus-hero.html",
   "scope": "./",
   "display": "standalone",
