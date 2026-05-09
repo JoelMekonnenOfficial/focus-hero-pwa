@@ -1,8 +1,8 @@
-/* Focus Hero v6 - service worker
+/* Focus Hero v7 - service worker
  * versioned cache + stale-while-revalidate for HTML, skipWaiting + clients.claim.
- * v6 bump: fh-v6-1 - ships the 16-bit pixel avatar redesign.
+ * v7 bump: fh-v7-1 - ships real 8-bit pixel art, equippable gear, and expanded analytics.
  */
-const CACHE_VERSION = "fh-v6-1";
+const CACHE_VERSION = "fh-v7-1";
 const CACHE_NAME = `focus-hero-${CACHE_VERSION}`;
 const PRECACHE = [
   "./",
