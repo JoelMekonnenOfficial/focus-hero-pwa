@@ -1,8 +1,8 @@
-/* Focus Hero v5 — service worker
+/* Focus Hero v6 - service worker
  * versioned cache + stale-while-revalidate for HTML, skipWaiting + clients.claim.
- * v5 bump: fh-v5-1 — adds character action animations during focus sessions, periodic auto-save heartbeat.
+ * v6 bump: fh-v6-1 - ships the 16-bit pixel avatar redesign.
  */
-const CACHE_VERSION = "fh-v5-1";
+const CACHE_VERSION = "fh-v6-1";
 const CACHE_NAME = `focus-hero-${CACHE_VERSION}`;
 const PRECACHE = [
   "./",
