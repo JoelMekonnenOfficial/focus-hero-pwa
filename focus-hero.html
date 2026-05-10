@@ -8,11 +8,11 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Focus Hero">
-<meta name="description" content="Focus Hero v7.1 - a private Pomodoro RPG with a full pixel MMO interface, real 8-bit class avatars, equippable gear tiers, week/month/all-time analytics, mid-session task switch, auto-save, cloud sync, and iron-clad data durability.">
+<meta name="description" content="Focus Hero v7.2 - a private Pomodoro RPG with a full pixel MMO interface, real 8-bit class avatars, equippable gear tiers, week/month/all-time analytics, mid-session task switch, auto-save, cloud sync, and iron-clad data durability.">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="icon" href="icon-192.png">
-<title>Focus Hero v7.1</title>
+<title>Focus Hero v7.2</title>
 <style>
 /* ================================================================
  * Focus Hero v7 - inline styles (single-file PWA)
@@ -644,6 +644,210 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent);box-shadow:in
   .topbar .actions button{min-height:42px}
 }
 
+/* ---------- v7.2: Gemini-guided Deep Weald MMO polish ---------- */
+:root{
+  --bg:#1A1C19; --bg-2:#22261f; --panel:#2A2D28; --panel-2:#343931;
+  --ink:#F4F0DD; --ink-dim:#C9C0A4; --ink-mute:#89816d;
+  --accent:#4ADE80; --accent-2:#A8A29E; --good:#81F07C; --warn:#F59E0B;
+  --bad:#E85D5D; --rare:#3B82F6; --epic:#A855F7; --legend:#F59E0B; --myth:#FF77C8;
+  --border:#4A5245; --border-strong:#6C765F;
+  --shadow:0 8px 0 rgba(0,0,0,.45),0 24px 46px rgba(0,0,0,.32);
+  --radius:0;
+  --accent-rgb:74,222,128; --accent-2-rgb:168,162,158;
+}
+body{
+  background:
+    radial-gradient(circle at 18% -12%,rgba(74,222,128,.12),transparent 32%),
+    linear-gradient(180deg,rgba(0,0,0,.28),rgba(0,0,0,.46)),
+    repeating-linear-gradient(0deg,transparent 0 15px,rgba(255,255,255,.025) 15px 16px),
+    repeating-linear-gradient(90deg,transparent 0 15px,rgba(255,255,255,.02) 15px 16px),
+    #1A1C19;
+}
+.app{
+  max-width:1360px;
+  grid-template-columns:292px minmax(420px,1fr) 360px;
+  gap:14px;
+  align-items:start;
+}
+.app > section.grid{display:contents}
+header.topbar{grid-column:1/-1;grid-row:1}
+.hero-card{grid-column:1;grid-row:2}
+.timer-card{grid-column:2;grid-row:2 / span 2}
+[aria-labelledby="tasks-heading"]{grid-column:3;grid-row:2}
+[aria-labelledby="quest-heading"]{grid-column:3;grid-row:3}
+[aria-labelledby="daily-heading"]{grid-column:1;grid-row:3}
+[aria-labelledby="tabs-heading"]{grid-column:1;grid-row:4}
+[aria-labelledby="log-heading"]{grid-column:2 / span 2;grid-row:4}
+header.topbar,.card,.modal,.sw-laps,.battle-log,.toast,.task-switch-item{
+  border:4px solid #151713;
+  outline:2px solid var(--border-strong);
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.075),transparent 26px),
+    repeating-linear-gradient(90deg,rgba(255,255,255,.026) 0 2px,transparent 2px 12px),
+    var(--panel);
+  box-shadow:
+    inset 4px 4px 0 rgba(255,255,255,.07),
+    inset -4px -4px 0 rgba(0,0,0,.34),
+    var(--shadow);
+}
+.card h2{color:#F59E0B}
+button{
+  border:3px solid #151713;
+  outline:1px solid var(--border-strong);
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.12),rgba(0,0,0,.12)),
+    #343931;
+  box-shadow:0 4px 0 #151713,inset 3px 3px 0 rgba(255,255,255,.06),inset -3px -3px 0 rgba(0,0,0,.28);
+}
+button:hover{filter:brightness(1.08);background:linear-gradient(180deg,rgba(255,255,255,.16),rgba(0,0,0,.10)),#3e453a}
+button:active{transform:translateY(4px);box-shadow:0 0 0 #151713,inset 2px 2px 0 rgba(0,0,0,.32)}
+button.primary{
+  color:#10140f;
+  background:linear-gradient(180deg,#B8F9B9 0 18%,#4ADE80 18% 58%,#259b55 58%);
+  border-color:#0d140d;
+  outline-color:#91f2a2;
+}
+.timer-card{
+  min-height:520px;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  background:
+    linear-gradient(180deg,rgba(59,130,246,.14) 0 26%,transparent 26%),
+    linear-gradient(180deg,transparent 0 56%,rgba(74,222,128,.12) 56%),
+    repeating-linear-gradient(90deg,rgba(255,255,255,.035) 0 2px,transparent 2px 16px),
+    var(--panel);
+}
+.timer-display{
+  font-size:clamp(5.3rem,12vw,9rem);
+  color:#FFF4C2;
+  text-shadow:5px 5px 0 #10140f,0 0 24px rgba(245,158,11,.28);
+}
+.progress,.bar{
+  height:14px;
+  border:3px solid #11140f;
+  background:repeating-linear-gradient(90deg,#10140f 0 8px,#1d231b 8px 16px);
+}
+.hero-card .top{
+  align-items:flex-start;
+  flex-direction:column;
+}
+.hero-card .avatar{
+  width:132px;
+  height:132px;
+  margin:0 auto 10px;
+  overflow:hidden;
+  box-shadow:inset 0 0 0 3px rgba(255,255,255,.06),6px 6px 0 rgba(0,0,0,.5);
+}
+.hero-card .avatar::before{
+  content:"";
+  position:absolute;
+  inset:10px;
+  border-radius:50%;
+  background:radial-gradient(circle,rgba(74,222,128,.36),transparent 62%);
+  animation:fh-hero-aura 2.4s steps(4,end) infinite;
+}
+.hero-card .avatar svg{
+  position:relative;
+  z-index:1;
+  filter:drop-shadow(0 5px 0 rgba(0,0,0,.55));
+}
+@keyframes fh-hero-aura{0%,100%{opacity:.48;transform:scale(.94)}50%{opacity:.86;transform:scale(1.04)}}
+.hero-card .name{text-align:center;font-size:1.1rem}
+.hero-card .title{text-align:center}
+.hero-card .top > div:last-child{width:100%}
+.hero-card .row{justify-content:center}
+.loot-grid{grid-template-columns:repeat(auto-fill,minmax(104px,1fr))}
+.loot-item{
+  min-height:112px;
+  text-align:center;
+  border-width:3px;
+}
+.loot-item .sym,.ach .sym{
+  width:40px;
+  height:40px;
+  margin:0 auto 4px;
+  border:3px solid #121510;
+  box-shadow:inset 2px 2px 0 rgba(255,255,255,.08),inset -2px -2px 0 rgba(0,0,0,.3);
+}
+.loot-item.rar-common{outline:2px solid #D1D5DB}
+.loot-item.rar-rare{outline:2px solid #3B82F6}
+.loot-item.rar-epic{outline:2px solid #A855F7}
+.loot-item.rar-legendary{outline:2px solid #F59E0B}
+.loot-item.rar-mythic{outline:2px solid #FF77C8}
+.analytics-card,.analytics-row,.quest,.task,.ach,.loot-item,.form-row{
+  border-radius:0;
+  box-shadow:inset 3px 3px 0 rgba(255,255,255,.055),inset -3px -3px 0 rgba(0,0,0,.22);
+}
+.analytics-card .big{color:#4ADE80}
+.battle-log{min-height:66px}
+@media (max-width:1120px){
+  .app{grid-template-columns:280px minmax(380px,1fr)}
+  [aria-labelledby="tasks-heading"],[aria-labelledby="quest-heading"]{grid-column:2}
+  [aria-labelledby="tasks-heading"]{grid-row:4}
+  [aria-labelledby="quest-heading"]{grid-row:5}
+  [aria-labelledby="tabs-heading"]{grid-column:1;grid-row:4 / span 2}
+  [aria-labelledby="log-heading"]{grid-column:1 / -1;grid-row:6}
+}
+@media (max-width:860px){
+  html,body{overflow-x:hidden}
+  .app{display:grid;grid-template-columns:1fr;padding:10px 8px 136px}
+  .app > section.grid{display:contents}
+  .app > *,.hero-card,.timer-card,[aria-labelledby="tasks-heading"],[aria-labelledby="quest-heading"],[aria-labelledby="daily-heading"],[aria-labelledby="tabs-heading"],[aria-labelledby="log-heading"]{
+    grid-column:1 !important;
+    grid-row:auto !important;
+    max-width:100%;
+    min-width:0;
+  }
+  .card,header.topbar{padding:10px;overflow:hidden}
+  header.topbar{width:100%}
+  .topbar .actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;width:100%}
+  .topbar .actions button{min-width:0;padding:.55rem .35rem;font-size:.72rem;white-space:normal}
+  .timer-card{min-height:430px}
+  .timer-display{font-size:clamp(4.2rem,21vw,6rem)}
+  .mode-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+  .mode-tabs button{min-width:0;width:100%;padding:.6rem .3rem;font-size:.72rem;white-space:normal}
+  .timer-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .timer-controls button{min-width:0;width:100%;padding:.7rem .35rem;font-size:.72rem;white-space:normal}
+  .timer-controls #btn-reset-timer{grid-column:1/-1}
+  .stat-strip{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 10px;text-align:center;font-size:.68rem}
+  input[type=text],input[type=number],input[type=password],textarea,select{min-width:0}
+  .task-add-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto}
+  .hero-card .top{flex-direction:row;align-items:center}
+  .hero-card .avatar{width:96px;height:96px;margin:0}
+  .hero-card .name,.hero-card .title{text-align:left}
+  .hero-card .row{justify-content:flex-start}
+}
+@media (max-width:520px){
+  .app{max-width:100vw;width:100vw;margin:0;gap:10px;padding:8px 6px 132px;overflow:hidden}
+  header.topbar,.card{
+    width:calc(100vw - 12px);
+    max-width:calc(100vw - 12px);
+    justify-self:start;
+  }
+  header.topbar{
+    display:grid;
+    grid-template-columns:minmax(0,1fr);
+    gap:10px;
+    max-width:100%;
+  }
+  .brand{min-width:0;max-width:100%}
+  .brand .logo{width:38px;height:38px}
+  .brand h1{font-size:.98rem}
+  .brand .sub{font-size:.7rem;white-space:normal}
+  .topbar .actions,.mode-tabs,.timer-controls{grid-template-columns:1fr}
+  .timer-controls #btn-reset-timer{grid-column:auto}
+  .topbar .actions button,.mode-tabs button,.timer-controls button{min-height:42px}
+  .timer-display{font-size:clamp(3.4rem,18vw,4.7rem)}
+  .card,header.topbar{
+    border-width:3px;
+    outline-width:1px;
+    padding:8px;
+  }
+  .battle-log{font-size:.72rem}
+  .stat-strip{font-size:.62rem}
+}
+
 </style>
 </head>
 <body>
@@ -652,7 +856,7 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent);box-shadow:in
     <div class="brand">
       <div class="logo" aria-hidden="true">FH</div>
       <div>
-      <h1>Focus Hero <span class="level-badge" id="version-badge">v7.1</span></h1>
+      <h1>Focus Hero <span class="level-badge" id="version-badge">v7.2</span></h1>
         <div class="sub" id="tagline">Slay distractions. Level up your life.</div>
       </div>
     </div>
@@ -925,7 +1129,7 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent);box-shadow:in
  * ================================================================ -->
 <script>
 "use strict";
-/* v7.1 build marker - full pixel RPG interface skin over v7 mechanics: real 8-bit pixel art, gear customization with tier-based equip slots, week/month/all-time analytics including per-task and app uptime, mid-session task switch UI. Built on v6.0 base. */
+/* v7.2 build marker - Gemini-guided Deep Weald pixel MMO HUD over v7 mechanics: real 8-bit pixel art, gear customization with tier-based equip slots, week/month/all-time analytics including per-task and app uptime, mid-session task switch UI. Built on v6.0 base. */
 
 /* -------- cloud sync config (user edits) -------- */
 // Leave these empty to skip Supabase entirely and use the jsonstorage.net fallback.
@@ -2265,7 +2469,7 @@ function clearXpBreakdown(){
  * ================================================================ */
 function buildBackupBlob({ labelSuffix="" } = {}){
   const payload = {
-    appVersion: "focus-hero-v7.1",
+    appVersion: "focus-hero-v7.2",
     exportedAt: new Date().toISOString(),
     dataVersion: state.dataVersion,
     state
@@ -3983,7 +4187,7 @@ function handleUrlActions(){
 }
 
 /* ================================================================ *
- * v7.1 smoke tests (?test=1)
+ * v7.2 smoke tests (?test=1)
  * ================================================================ */
 const __FocusHero = {
   computeXpBreakdown, createTask, renameTask, setTaskEmoji, deleteTask,
@@ -4123,7 +4327,7 @@ function renderTestBanner(results){
   if (!banner){ banner = document.createElement("div"); banner.className = "test-banner"; document.body.prepend(banner); }
   const passed = results.filter(r=>r.ok).length;
   const total = results.length;
-  const hdr = `<div class="hdr">v7.1 smoke tests — ${passed}/${total} passing</div>`;
+  const hdr = `<div class="hdr">v7.2 smoke tests — ${passed}/${total} passing</div>`;
   const body = results.map(r=>`<div class="${r.ok?"pass":"fail"}">${r.ok?"✓":"✗"} ${escapeHtml(r.name)}${r.ok?"":" — "+escapeHtml(r.msg||"")}</div>`).join("");
   banner.innerHTML = hdr + body;
 }

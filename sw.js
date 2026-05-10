@@ -1,8 +1,8 @@
-/* Focus Hero v7.1 - service worker
+/* Focus Hero v7.2 - service worker
  * versioned cache + stale-while-revalidate for HTML, skipWaiting + clients.claim.
- * v7.1 bump: fh-v7-2 - ships full pixel RPG MMO interface skin while preserving v7 mechanics.
+ * v7.2 bump: fh-v7-3 - ships Gemini-guided Deep Weald pixel MMO polish while preserving v7 mechanics.
  */
-const CACHE_VERSION = "fh-v7-2";
+const CACHE_VERSION = "fh-v7-3";
 const CACHE_NAME = `focus-hero-${CACHE_VERSION}`;
 const PRECACHE = [
   "./",
