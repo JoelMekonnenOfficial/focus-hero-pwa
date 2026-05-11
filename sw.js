@@ -1,9 +1,21 @@
-/* Focus Hero v7.3 - service worker
- * versioned cache + stale-while-revalidate for HTML, skipWaiting + clients.claim.
- * v7.3 bump: fh-v7-4 - adds Cancel Session feature (zero-stat-credit abort path) on top of v7.2.
+/* Focus Hero - service worker.
+ *
+ * Update strategy:
+ *   - HTML: NETWORK-FIRST (always try the network; fall back to cache only when
+ *     offline). This means every launch picks up the latest deployed HTML — no
+ *     more stale cached HTML serving an older version of the app to the user
+ *     after a deploy.
+ *   - Static assets (icons, manifest): cache-first.
+ *   - On install: skipWaiting() so the new SW takes over without ceremony.
+ *   - On activate: clients.claim() + broadcast "SW_UPDATED" to existing tabs;
+ *     the page decides whether to reload now (no active session) or later.
+ *
+ * BUILD_ID is the cache namespace. Bumping it forces a fresh precache. It's
+ * deliberately invisible to users — the only place a version-looking string
+ * lives is in the cache name in DevTools.
  */
-const CACHE_VERSION = "fh-v7-4";
-const CACHE_NAME = `focus-hero-${CACHE_VERSION}`;
+const BUILD_ID    = "fh-2026-05-11-a";
+const CACHE_NAME  = `focus-hero-${BUILD_ID}`;
 const PRECACHE = [
   "./",
   "./focus-hero.html",
@@ -26,6 +38,11 @@ self.addEventListener("activate", event => {
     const keys = await caches.keys();
     await Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)));
     await self.clients.claim();
+    // Tell existing pages a new version is live; they decide whether to reload.
+    const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    for (const c of all) {
+      try { c.postMessage({ type: "SW_UPDATED", buildId: BUILD_ID }); } catch (_) {}
+    }
   })());
 });
 
@@ -38,26 +55,39 @@ self.addEventListener("fetch", event => {
   // Never intercept cloud sync traffic.
   if (/supabase\.co$/i.test(url.hostname) || /api\.jsonstorage\.net$/i.test(url.hostname)) return;
 
-  // Only handle same-origin requests for cache.
+  // Only handle same-origin requests.
   if (url.origin !== self.location.origin) return;
 
   const isHTML = req.mode === "navigate" || (req.headers.get("accept") || "").includes("text/html");
 
-  if (isHTML){
-    // stale-while-revalidate for HTML: return cache fast, update in background.
+  if (isHTML) {
+    // NETWORK-FIRST for HTML. Always try fresh first; only fall back to cache
+    // when the network is unreachable. This is the fix for "app won't open
+    // after an update" — there is no scenario where a stale cached HTML wins.
     event.respondWith((async () => {
       const cache = await caches.open(CACHE_NAME);
-      const cached = await cache.match("./focus-hero.html") || await cache.match("./");
-      const networkPromise = fetch(req).then(resp => {
-        if (resp && resp.ok){ cache.put("./focus-hero.html", resp.clone()); }
-        return resp;
-      }).catch(()=>null);
-      return cached || (await networkPromise) || new Response("Offline", {status:503});
+      try {
+        const fresh = await fetch(req, { cache: "no-store" });
+        if (fresh && fresh.ok) {
+          // Mirror under both keys so the next offline launch works regardless
+          // of whether the request was for "/" or "/focus-hero.html".
+          try { cache.put("./focus-hero.html", fresh.clone()); } catch (_) {}
+          try { cache.put("./", fresh.clone()); } catch (_) {}
+          return fresh;
+        }
+        return fresh; // non-ok response — still return it
+      } catch (_) {
+        // Offline. Fall back to whichever cached HTML we have.
+        const cached = await cache.match(req)
+          || await cache.match("./focus-hero.html")
+          || await cache.match("./");
+        return cached || new Response("Offline", { status: 503 });
+      }
     })());
     return;
   }
 
-  // cache-first for other same-origin assets
+  // Cache-first for static assets (icons, manifest, etc.).
   event.respondWith((async () => {
     const cache = await caches.open(CACHE_NAME);
     const cached = await cache.match(req);
@@ -66,15 +96,15 @@ self.addEventListener("fetch", event => {
       const resp = await fetch(req);
       if (resp && resp.ok && resp.type === "basic") cache.put(req, resp.clone());
       return resp;
-    } catch(e){
-      return new Response("", {status:504});
+    } catch (e) {
+      return new Response("", { status: 504 });
     }
   })());
 });
 
 self.addEventListener("message", event => {
   if (event.data === "SKIP_WAITING") self.skipWaiting();
-  if (event.data && event.data.type === "SHOW_NOTIFICATION"){
+  if (event.data && event.data.type === "SHOW_NOTIFICATION") {
     const { title, body } = event.data;
     self.registration.showNotification(title || "Focus Hero", {
       body: body || "",
@@ -91,11 +121,11 @@ self.addEventListener("message", event => {
 self.addEventListener("notificationclick", event => {
   event.notification.close();
   event.waitUntil((async () => {
-    const all = await self.clients.matchAll({ type:"window", includeUncontrolled:true });
-    for (const c of all){
-      if ("focus" in c){ return c.focus(); }
+    const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    for (const c of all) {
+      if ("focus" in c) { return c.focus(); }
     }
-    if (self.clients.openWindow){
+    if (self.clients.openWindow) {
       return self.clients.openWindow("./focus-hero.html");
     }
   })());

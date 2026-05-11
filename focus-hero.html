@@ -8,11 +8,11 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Focus Hero">
-<meta name="description" content="Focus Hero v7.3 - a private Pomodoro RPG with a full pixel MMO interface, real 8-bit class avatars, equippable gear tiers, week/month/all-time analytics, mid-session task switch, zero-credit Cancel Session abort, auto-save, cloud sync, and iron-clad data durability.">
+<meta name="description" content="Focus Hero - a private Pomodoro RPG with pixel MMO interface, 8-bit class avatars, equippable gear tiers, analytics, mid-session task switch, zero-credit Cancel Session, auto-save, cloud sync, and iron-clad data durability.">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="icon" href="icon-192.png">
-<title>Focus Hero v7.3</title>
+<title>Focus Hero</title>
 <style>
 /* ================================================================
  * Focus Hero v7 - inline styles (single-file PWA)
@@ -866,7 +866,7 @@ button.primary{
     <div class="brand">
       <div class="logo" aria-hidden="true">FH</div>
       <div>
-      <h1>Focus Hero <span class="level-badge" id="version-badge">v7.3</span></h1>
+      <h1>Focus Hero</h1>
         <div class="sub" id="tagline">Slay distractions. Level up your life.</div>
       </div>
     </div>
@@ -1370,11 +1370,48 @@ function deepMerge(target, source){
 }
 
 /* -------- state + persistence -------- */
-let state = loadState();
+let state;
+try {
+  state = loadState();
+} catch (e) {
+  console.error("[Focus Hero] loadState threw — recovering from backup", e);
+  state = safeRecoverState(e);
+}
 let bc = null;
 try { bc = new BroadcastChannel(BC_KEY); } catch { bc = null; }
 let saveTimer = null;
 let cloudDebounce = null;
+
+/* safeRecoverState — last-ditch path used only when loadState() or migrate()
+   throws. Walks every pre-v* backup we've ever written, then the LKG snapshot,
+   then DEFAULTS. Returns a usable state. NEVER throws. The user's raw broken
+   state is preserved (we never overwrite the original key here). */
+function safeRecoverState(){
+  for (let v = DATA_VERSION + 4; v >= 1; v--){
+    const key = `${STORAGE_KEY}.pre-v${v}`;
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      const candidate = parsed && parsed.state ? parsed.state : parsed;
+      if (candidate && typeof candidate === "object"){
+        try { return migrate(candidate); }
+        catch(_){ /* this backup is also bad — keep walking */ }
+      }
+    } catch(_){}
+  }
+  try {
+    const lkg = localStorage.getItem(`${STORAGE_KEY}.lkg`);
+    if (lkg){
+      const parsed = JSON.parse(lkg);
+      if (parsed && typeof parsed === "object"){
+        try { return migrate(parsed.state || parsed); } catch(_){}
+      }
+    }
+  } catch(_){}
+  try { return migrate(deepClone(DEFAULTS)); }
+  catch(_){ return deepClone(DEFAULTS); }
+}
 
 function loadState(){
   let raw=null, foundUnder=null;
@@ -2565,7 +2602,7 @@ function clearXpBreakdown(){
  * ================================================================ */
 function buildBackupBlob({ labelSuffix="" } = {}){
   const payload = {
-    appVersion: "focus-hero-v7.3",
+    appVersion: "focus-hero",
     exportedAt: new Date().toISOString(),
     dataVersion: state.dataVersion,
     state
@@ -4287,13 +4324,57 @@ function bindMultiTab(){
 function registerSW(){
   if (!("serviceWorker" in navigator)) return;
   if (location.protocol === "file:") return;
+
+  // True if there's a focus/stopwatch session in progress — we never auto-reload
+  // mid-session because it would interrupt the user's flow on iOS.
+  const sessionActive = ()=> !!(state && state.timer && state.timer.running && state.timer.endAt);
+
+  // When a new SW takes control, do a quiet reload if it's safe. The SW is
+  // network-first for HTML so this just guarantees the page object matches the
+  // newly-cached code path.
+  let reloadedOnUpdate = false;
+  navigator.serviceWorker.addEventListener("controllerchange", ()=>{
+    if (reloadedOnUpdate) return;
+    if (sessionActive()){
+      toast("Update ready — refresh after your session", "", [{ label:"Refresh now", onClick:()=>location.reload() }]);
+      return;
+    }
+    reloadedOnUpdate = true;
+    location.reload();
+  });
+
+  // New SW activates and posts SW_UPDATED. We surface a non-blocking toast if
+  // controllerchange hasn't fired yet (some browsers delay it).
+  navigator.serviceWorker.addEventListener("message", (ev)=>{
+    if (ev.data && ev.data.type === "SW_UPDATED"){
+      if (sessionActive()){
+        toast("Update ready — refresh after your session", "", [{ label:"Refresh now", onClick:()=>location.reload() }]);
+      }
+    }
+  });
+
   window.addEventListener("load", ()=>{
     navigator.serviceWorker.register("./sw.js").then(reg=>{
+      // Check for an update on every load + roughly every 10 minutes while the
+      // tab is open. Combined with the network-first HTML strategy, this is
+      // what makes future deploys land "in place" without a reinstall.
+      try { reg.update().catch(()=>{}); } catch(_){}
+      setInterval(()=>{ try { reg.update().catch(()=>{}); } catch(_){} }, 10*60*1000);
+
       reg.addEventListener("updatefound", ()=>{
         const nw = reg.installing; if (!nw) return;
         nw.addEventListener("statechange", ()=>{
           if (nw.state === "installed" && navigator.serviceWorker.controller){
-            toast("Update available · Reload", "", [{ label:"Reload", onClick:()=>location.reload() }]);
+            // We have a waiting SW. If safe, let it activate immediately so
+            // the controllerchange handler above can quietly reload us.
+            if (!sessionActive()){
+              try { nw.postMessage("SKIP_WAITING"); } catch(_){}
+            } else {
+              toast("Update available — Refresh after your session", "", [{ label:"Refresh now", onClick:()=>{
+                try { nw.postMessage("SKIP_WAITING"); } catch(_){}
+                location.reload();
+              }}]);
+            }
           }
         });
       });
@@ -4554,35 +4635,91 @@ function renderTestBanner(results){
   if (!banner){ banner = document.createElement("div"); banner.className = "test-banner"; document.body.prepend(banner); }
   const passed = results.filter(r=>r.ok).length;
   const total = results.length;
-  const hdr = `<div class="hdr">v7.3 smoke tests — ${passed}/${total} passing</div>`;
+  const hdr = `<div class="hdr">smoke tests — ${passed}/${total} passing</div>`;
   const body = results.map(r=>`<div class="${r.ok?"pass":"fail"}">${r.ok?"✓":"✗"} ${escapeHtml(r.name)}${r.ok?"":" — "+escapeHtml(r.msg||"")}</div>`).join("");
   banner.innerHTML = hdr + body;
 }
 
 /* -------- Boot -------- */
 async function boot(){
-  applyTheme();
-  bindSettings(); bindSync(); bindHelp(); bindAnalytics(); bindTabs(); bindModeTabs();
-  bindTasks(); bindQuests(); bindTimer(); bindBattleLog(); bindKeys(); bindMultiTab();
-  $("#btn-theme").onclick = toggleTheme;
-  renderAll();
-  renderSyncStatus();
-  ensureTickInterval();
-  bindAppOpenTracking();
-  maybeWarnAboutFileMode();
-  if (state.timer.running && state.timer.endAt && state.timer.mode === "focus"){ startKeepalive(); acquireWakeLock(); }
-  try { maybeAutoBackup(); } catch(_){}
-  if (state.sync.enabled){ startPullPoll(); cloudPull().catch(()=>{}); }
-  window.addEventListener("focus", ()=>{ if (state.sync.enabled) cloudPull().catch(()=>{}); });
-  document.addEventListener("visibilitychange", ()=>{ if (!document.hidden && state.sync.enabled) cloudPull().catch(()=>{}); });
-  handleUrlActions();
-  registerSW();
-  const q = new URLSearchParams(location.search);
-  if (q.get("test") === "1"){
-    try { const r = await runSmokeTests(); renderTestBanner(r); }
-    catch(e){ renderTestBanner([{ name:"runSmokeTests threw", ok:false, msg: String(e.message||e) }]); }
+  try {
+    applyTheme();
+    bindSettings(); bindSync(); bindHelp(); bindAnalytics(); bindTabs(); bindModeTabs();
+    bindTasks(); bindQuests(); bindTimer(); bindBattleLog(); bindKeys(); bindMultiTab();
+    $("#btn-theme").onclick = toggleTheme;
+    renderAll();
+    renderSyncStatus();
+    ensureTickInterval();
+    bindAppOpenTracking();
+    maybeWarnAboutFileMode();
+    if (state.timer.running && state.timer.endAt && state.timer.mode === "focus"){ startKeepalive(); acquireWakeLock(); }
+    try { maybeAutoBackup(); } catch(_){}
+    if (state.sync.enabled){ startPullPoll(); cloudPull().catch(()=>{}); }
+    window.addEventListener("focus", ()=>{ if (state.sync.enabled) cloudPull().catch(()=>{}); });
+    document.addEventListener("visibilitychange", ()=>{ if (!document.hidden && state.sync.enabled) cloudPull().catch(()=>{}); });
+    handleUrlActions();
+    registerSW();
+    const q = new URLSearchParams(location.search);
+    if (q.get("test") === "1"){
+      try { const r = await runSmokeTests(); renderTestBanner(r); }
+      catch(e){ renderTestBanner([{ name:"runSmokeTests threw", ok:false, msg: String(e.message||e) }]); }
+    }
+  } catch (e) {
+    showBootError(e);
   }
 }
+
+/* showBootError — guarantees the user never sees a blank screen after an
+   update. If boot() (or any top-level throw caught by the global handlers
+   below) fails, we paint a recovery panel with Reload / Restore-from-backup /
+   Export-raw-state actions. Reload alone fixes the vast majority of cases
+   because the SW is now network-first, so the next launch fetches fresh HTML. */
+function showBootError(err){
+  console.error("[Focus Hero] boot failed", err);
+  if (document.getElementById("__fh_safe")) return;
+  try {
+    const safe = document.createElement("div");
+    safe.id = "__fh_safe";
+    safe.setAttribute("style", "position:fixed;inset:0;background:#0b0d1a;color:#e8ecff;font:14px -apple-system,Segoe UI,Roboto,sans-serif;padding:24px;overflow:auto;z-index:99999;");
+    const msg = (err && (err.stack||err.message)) ? String(err.stack||err.message) : String(err);
+    safe.innerHTML =
+      '<h2 style="margin:0 0 8px;font-size:18px">Focus Hero hit a snag starting up.</h2>'
+      + '<p style="margin:0 0 12px;color:#9aa3cf">Your saved data is preserved. Reload usually fixes it. If not, restore from the most recent automatic backup.</p>'
+      + '<pre style="margin:0 0 16px;padding:10px;background:#171a30;border:1px solid rgba(255,255,255,.08);border-radius:8px;font:12px ui-monospace,Menlo,monospace;color:#ff7a8a;white-space:pre-wrap;max-height:30vh;overflow:auto;">' + msg.replace(/[&<>]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])) + '</pre>'
+      + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
+      +   '<button id="__fh_reload" style="background:#8b9cff;color:#0b0d1a;border:0;padding:10px 14px;border-radius:8px;font-weight:600;cursor:pointer">Reload</button>'
+      +   '<button id="__fh_restore" style="background:#1f2340;color:#e8ecff;border:1px solid rgba(255,255,255,.16);padding:10px 14px;border-radius:8px;cursor:pointer">Restore from backup</button>'
+      +   '<button id="__fh_export" style="background:#1f2340;color:#e8ecff;border:1px solid rgba(255,255,255,.16);padding:10px 14px;border-radius:8px;cursor:pointer">Export raw state</button>'
+      + '</div>';
+    document.body.appendChild(safe);
+    document.getElementById("__fh_reload").onclick = ()=>{
+      // Hard-reload bypassing SW cache for maximum recovery
+      if ("serviceWorker" in navigator){
+        navigator.serviceWorker.getRegistrations().then(rs=>Promise.all(rs.map(r=>r.update().catch(()=>{}))))
+          .finally(()=>location.reload());
+      } else { location.reload(); }
+    };
+    document.getElementById("__fh_restore").onclick = ()=>{
+      try {
+        const recovered = safeRecoverState();
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(recovered));
+        location.reload();
+      } catch(e2){ alert("Restore failed: "+(e2 && (e2.message||e2))); }
+    };
+    document.getElementById("__fh_export").onclick = ()=>{
+      try {
+        const dump = {};
+        for (let i=0;i<localStorage.length;i++){ const k = localStorage.key(i); dump[k] = localStorage.getItem(k); }
+        const blob = new Blob([JSON.stringify(dump,null,2)], {type:"application/json"});
+        const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+        a.download = `focus-hero-raw-state-${Date.now()}.json`; a.click();
+      } catch(e2){ alert("Export failed: "+(e2 && (e2.message||e2))); }
+    };
+  } catch (_){ /* truly nothing more we can do */ }
+}
+
+window.addEventListener("error", (ev)=>{ if (!document.getElementById("__fh_safe")) showBootError(ev.error || ev.message); });
+window.addEventListener("unhandledrejection", (ev)=>{ if (!document.getElementById("__fh_safe")) showBootError(ev.reason); });
 
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
 else boot();

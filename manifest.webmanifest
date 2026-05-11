@@ -1,8 +1,7 @@
 {
   "name": "Focus Hero",
   "short_name": "Focus Hero",
-  "description": "Focus Hero v7.2 - a private Pomodoro RPG with a Gemini-guided pixel MMO interface, real 8-bit class avatars, equippable gear tiers, week/month/all-time analytics, and encrypted cloud sync.",
-  "version": "7.2.0",
+  "description": "A private Pomodoro RPG with a pixel MMO interface, 8-bit class avatars, equippable gear tiers, week/month/all-time analytics, and encrypted cloud sync.",
   "start_url": "./focus-hero.html",
   "scope": "./",
   "display": "standalone",
@@ -15,8 +14,8 @@
     { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ],
   "shortcuts": [
-    { "name": "Start focus",       "url": "./focus-hero.html?start=focus", "short_name": "Focus" },
-    { "name": "Open settings",     "url": "./focus-hero.html?open=settings", "short_name": "Settings" },
-    { "name": "Back up all data",  "url": "./focus-hero.html?action=backup", "short_name": "Backup" }
+    { "name": "Start focus",      "url": "./focus-hero.html?start=focus",   "short_name": "Focus" },
+    { "name": "Open settings",    "url": "./focus-hero.html?open=settings", "short_name": "Settings" },
+    { "name": "Back up all data", "url": "./focus-hero.html?action=backup", "short_name": "Backup" }
   ]
 }
