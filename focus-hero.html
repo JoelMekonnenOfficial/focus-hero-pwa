@@ -8,11 +8,11 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Focus Hero">
-<meta name="description" content="Focus Hero v7.2 - a private Pomodoro RPG with a full pixel MMO interface, real 8-bit class avatars, equippable gear tiers, week/month/all-time analytics, mid-session task switch, auto-save, cloud sync, and iron-clad data durability.">
+<meta name="description" content="Focus Hero v7.3 - a private Pomodoro RPG with a full pixel MMO interface, real 8-bit class avatars, equippable gear tiers, week/month/all-time analytics, mid-session task switch, zero-credit Cancel Session abort, auto-save, cloud sync, and iron-clad data durability.">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="icon" href="icon-192.png">
-<title>Focus Hero v7.2</title>
+<title>Focus Hero v7.3</title>
 <style>
 /* ================================================================
  * Focus Hero v7 - inline styles (single-file PWA)
@@ -138,6 +138,16 @@ header.topbar{grid-column:1/-1;display:flex;align-items:center;justify-content:s
 .progress > div{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2));transition:width .3s linear}
 .timer-controls{display:flex;gap:10px;justify-content:center;margin-top:14px;flex-wrap:wrap}
 .timer-controls button{min-width:110px}
+/* v7.3: Cancel session — destructive, intentionally lower visual weight than Start/Pause.
+   Hidden unless a session is in progress. Distinct from Reset: this is the explicit
+   "I shouldn't have started this — drop everything, zero credit" action. */
+.timer-controls #btn-cancel-session{
+  min-width:0;padding:.45rem .7rem;font-size:.82rem;
+  color:var(--bad);border-color:var(--bad);
+  background:transparent;letter-spacing:.02em;opacity:.92
+}
+.timer-controls #btn-cancel-session:hover{opacity:1;background:rgba(255,122,138,.08)}
+.timer-controls #btn-cancel-session[hidden]{display:none}
 .session-meta{display:flex;gap:10px;justify-content:center;margin-top:10px;flex-wrap:wrap;color:var(--ink-dim);font-size:.85rem}
 /* v4.2.1: stopwatch laps */
 .sw-laps{margin-top:12px;padding:8px 10px;background:var(--panel-2);border-radius:10px;border:1px solid var(--border)}
@@ -856,7 +866,7 @@ button.primary{
     <div class="brand">
       <div class="logo" aria-hidden="true">FH</div>
       <div>
-      <h1>Focus Hero <span class="level-badge" id="version-badge">v7.2</span></h1>
+      <h1>Focus Hero <span class="level-badge" id="version-badge">v7.3</span></h1>
         <div class="sub" id="tagline">Slay distractions. Level up your life.</div>
       </div>
     </div>
@@ -891,6 +901,7 @@ button.primary{
         <button id="btn-lap" title="Lap (L) — capture current stopwatch time" hidden>Lap</button>
         <button id="btn-skip" title="Skip (N)">Skip</button>
         <button id="btn-reset-timer" title="Reset timer (R)">Reset</button>
+        <button id="btn-cancel-session" title="Cancel session (Esc) — drops elapsed time, no stats credited" hidden aria-label="Cancel current session without crediting stats">✕ Cancel session</button>
       </div>
       <div id="sw-laps" class="sw-laps" hidden aria-label="Stopwatch laps"></div>
       <div class="session-meta" hidden>
@@ -1084,6 +1095,7 @@ button.primary{
       <tbody>
         <tr><td><kbd>Space</kbd></td><td>Start / pause timer</td></tr>
         <tr><td><kbd>R</kbd></td><td>Reset timer</td></tr>
+        <tr><td><kbd>Esc</kbd></td><td>Cancel session (confirms) — zero stats credited</td></tr>
         <tr><td><kbd>N</kbd></td><td>Skip to next session</td></tr>
         <tr><td><kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd>/<kbd>4</kbd></td><td>Focus / short / long / stopwatch</td></tr>
         <tr><td><kbd>Shift</kbd>+<kbd>S</kbd></td><td>Switch to stopwatch</td></tr>
@@ -1129,6 +1141,12 @@ button.primary{
  * ================================================================ -->
 <script>
 "use strict";
+/* v7.3 build marker - v7.2 base + Cancel Session feature (zero-stat-credit abort path).
+   The Cancel button is distinct from Reset: it requires explicit confirm, increments
+   state.canceledSessionCount (awareness-only stat, no penalty), and never routes
+   through completeSession/finalizeStopwatch/awardXp/rollLoot/updateStreak/
+   logMinutesToTask. Esc triggers the cancel when a session is running and no modal
+   is open. DATA_VERSION bumped 5 → 6 to migrate the new field; nothing else changed. */
 /* v7.2 build marker - Gemini-guided Deep Weald pixel MMO HUD over v7 mechanics: real 8-bit pixel art, gear customization with tier-based equip slots, week/month/all-time analytics including per-task and app uptime, mid-session task switch UI. Built on v6.0 base. */
 
 /* -------- cloud sync config (user edits) -------- */
@@ -1140,7 +1158,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const STORAGE_KEY     = "focusHero.v4.state";
 const LEGACY_KEYS     = ["focusHero.v3.state", "focusHero.v2.state", "focusHero.v1.state"];
 const BC_KEY          = "focusHero.v4";
-const DATA_VERSION    = 5;
+const DATA_VERSION    = 6;
 const PBKDF2_ITERATIONS = 100_000;
 const AES_KEY_LENGTH = 256;
 const SALT_BYTES = 16;
@@ -1196,6 +1214,9 @@ const DEFAULTS = {
   totalAppOpenMs: 0,
   uptimeHistory: {},
   completedFocusSessions: 0,
+  /* v7.3: awareness-only stat — counts sessions the user explicitly canceled
+     via the Cancel Session button. Zero stat credit; no XP/loot/streak penalty. */
+  canceledSessionCount: 0,
   streak: 0,
   longestStreak: 0,
   lastFocusDate: null,
@@ -1483,6 +1504,12 @@ function migrate(raw){
     }
     if (!Array.isArray(s.battleLog)) s.battleLog = [];
     s.dataVersion = 5;
+  }
+  if (s.dataVersion < 6){
+    /* v7.3: cancel-session awareness counter. Purely additive — never touches
+       existing cumulative stats. Existing users default to 0 with no penalty. */
+    if (typeof s.canceledSessionCount !== "number" || !(s.canceledSessionCount >= 0)) s.canceledSessionCount = 0;
+    s.dataVersion = 6;
   }
 
   /* Degraded-read resilience: rebuild malformed subtrees, but ONLY the malformed ones.
@@ -1845,6 +1872,75 @@ function resetTimer(){
   $("#btn-start").textContent = "Start";
   stopKeepalive(); releaseWakeLock();
 }
+/* v7.3: Cancel the current focus / stopwatch session WITHOUT crediting anything.
+ * Distinct from resetTimer(): a confirm dialog is required, the cancel is logged
+ * to the battle log + a small awareness counter (canceledSessionCount) so the
+ * user can see "I canceled X this month", but NO XP, NO loot roll, NO streak
+ * update, NO per-task minutes, NO combo bump, NO history/sessionHistory tick,
+ * NO completedFocusSessions tick. The elapsed time + segments are dropped.
+ *
+ * This is the "I shouldn't have started this" path. Hard rule: must never call
+ * completeSession / finalizeStopwatch / awardXp / rollLoot / updateStreak /
+ * logMinutesToTask / updateDailyProgress.
+ */
+function isCancelableSession(){
+  if (!state.timer) return false;
+  // Cancelable when a focus or stopwatch session is active (running OR has
+  // accumulated/elapsed time mid-run). Breaks don't get a Cancel button —
+  // they're already rest. Stopwatch is cancelable any time after start.
+  if (isStopwatch()){
+    return !!(state.timer.running || (state.timer.swAccumulatedMs|0) > 0);
+  }
+  if (state.timer.mode !== "focus") return false;
+  const fullMs = modeMinutes(state.timer.mode) * 60 * 1000;
+  return !!(state.timer.running || (state.timer.msLeft > 0 && state.timer.msLeft < fullMs));
+}
+function cancelSession(opts){
+  opts = opts || {};
+  if (!isCancelableSession()) return false;
+  const skipConfirm = !!opts.skipConfirm; // smoke tests use this
+  if (!skipConfirm){
+    const msg = "Cancel this session? Elapsed time won't count toward hours, XP, loot, or progress. This can't be undone.";
+    if (!confirm(msg)) return false;
+  }
+  const wasStopwatch = isStopwatch();
+  const taskLabel = currentSessionTaskLabel();
+  // Stop the timer immediately. We deliberately do NOT route through completeSession
+  // or finalizeStopwatch — those credit minutes, XP, loot, streak. We want a true no-op.
+  state.timer.running = false;
+  state.timer.endAt = 0;
+  state.timer.pausedAt = 0;
+  if (wasStopwatch){
+    // Drop all stopwatch accumulators and laps so nothing can be picked up later.
+    state.timer.swStartedAt = 0;
+    state.timer.swAccumulatedMs = 0;
+    state.timer.swSessionStartedAt = 0;
+    state.timer.swLaps = [];
+  } else {
+    // Reset countdown to the full mode duration — back to pre-session "ready".
+    state.timer.msLeft = modeMinutes(state.timer.mode) * 60 * 1000;
+  }
+  // Clear the active task pointer so the next start re-snapshots.
+  state.timer.activeTaskId = null;
+  state.timer.activeTaskNameAtStart = null;
+  // Awareness-only stat. Never penalizes; just visible in analytics.
+  state.canceledSessionCount = (state.canceledSessionCount|0) + 1;
+  // Battle-log entry for visibility. Does NOT call pushSessionLog (which is the
+  // analytics-facing sessions feed) — canceled sessions stay out of that feed.
+  try { logBattle(`Hero abandoned ${taskLabel}. Nothing was counted.`, "switch"); } catch(_){}
+  try { logLine("Session canceled — no stats credited."); } catch(_){}
+  stopKeepalive(); releaseWakeLock();
+  saveState();
+  try { renderAll(); } catch(_){
+    // Defensive: even if a sub-renderer errors, the state mutation above must persist.
+    try { renderTimer(); } catch(_){}
+  }
+  // Reset the Start button label since the session is back to ready.
+  try { const sb = $("#btn-start"); if (sb) sb.textContent = "Start"; } catch(_){}
+  try { toast("Session canceled. No stats counted.", "warn"); } catch(_){}
+  return true;
+}
+
 /* v4.2.1: capture a lap on the running stopwatch.
    No-op if not in stopwatch mode or elapsed <1s (avoid empty laps). */
 function lapStopwatch(){
@@ -2469,7 +2565,7 @@ function clearXpBreakdown(){
  * ================================================================ */
 function buildBackupBlob({ labelSuffix="" } = {}){
   const payload = {
-    appVersion: "focus-hero-v7.2",
+    appVersion: "focus-hero-v7.3",
     exportedAt: new Date().toISOString(),
     dataVersion: state.dataVersion,
     state
@@ -2803,6 +2899,7 @@ function renderTimer(){
     $("#btn-start").textContent = state.timer.running ? "Pause" : (elapsed > 0 ? "Resume" : "Start");
     const stopBtn = $("#btn-stop-log"); if (stopBtn) stopBtn.disabled = elapsed < 1000; // need at least 1s
     refreshAvatarRunningState();
+    refreshCancelButtonVisibility();
     return;
   }
   let left;
@@ -2817,6 +2914,14 @@ function renderTimer(){
   document.title = `${fmtTime(left)} · ${modeLbl} — Focus Hero`;
   $("#btn-start").textContent = state.timer.running ? "Pause" : (state.timer.msLeft < modeMinutes(state.timer.mode)*60*1000 && state.timer.msLeft>0 ? "Resume" : "Start");
 refreshAvatarRunningState();
+refreshCancelButtonVisibility();
+}
+/* v7.3: keep the Cancel-session button visible exactly when there's something to cancel.
+   Cheap to call from any render path. */
+function refreshCancelButtonVisibility(){
+  const b = document.getElementById("btn-cancel-session");
+  if (!b) return;
+  b.hidden = !isCancelableSession();
 }
 function renderTopMeta(){
   $("#cycle-count").textContent = state.cycleCount % state.settings.cyclesBeforeLong;
@@ -4032,6 +4137,10 @@ function renderAnalytics(){
       <div class="analytics-card"><div class="big">${monthSessions}</div><div class="lbl">Last 30 days</div></div>
       <div class="analytics-card"><div class="big">${allTimeSessions}</div><div class="lbl">All time</div></div>
     </div>
+    <h4>Canceled sessions <span class="muted" style="font-size:.72rem;text-transform:none">(awareness only — never penalizes XP, streak, or hours)</span></h4>
+    <div class="analytics-totals">
+      <div class="analytics-card"><div class="big">${(state.canceledSessionCount|0)}</div><div class="lbl">All-time canceled</div></div>
+    </div>
     <h4>Most-used tasks — last 7 days</h4>
     ${renderList(weekRanked, "week", maxWeek)}
     <h4>Most-used tasks — last 30 days</h4>
@@ -4121,6 +4230,9 @@ function bindTimer(){
   $("#btn-skip").onclick = ()=>skipTimer();
   const stopLog = $("#btn-stop-log"); if (stopLog) stopLog.onclick = ()=>finalizeStopwatch();
   const lap = $("#btn-lap"); if (lap) lap.onclick = ()=>lapStopwatch();
+  // v7.3: Cancel button is the zero-credit abort path. Distinct from Reset, which
+  // already silently drops elapsed time but has no confirm + no awareness counter.
+  const cancelBtn = $("#btn-cancel-session"); if (cancelBtn) cancelBtn.onclick = ()=>cancelSession();
   // Initial visibility for stopwatch-only buttons
   if (stopLog){ stopLog.hidden = !isStopwatch(); }
   if (lap){ lap.hidden = !isStopwatch(); }
@@ -4130,7 +4242,20 @@ function bindKeys(){
   document.addEventListener("keydown", e=>{
     const tag = (e.target && e.target.tagName) || "";
     const inEditable = /INPUT|TEXTAREA|SELECT/.test(tag) || e.target?.isContentEditable;
-    if (e.key === "Escape"){ closeAllModals(); closeEmojiPicker(); return; }
+    if (e.key === "Escape"){
+      /* v7.3: Esc has two behaviors. If a modal/emoji-picker is open, close it
+         (existing behavior). Otherwise, if a focus or stopwatch session is in
+         progress, fire the Cancel-session confirm. This intentionally doesn't
+         override Esc when modals are open. */
+      const modalOpen = $$(".modal-backdrop").some(m => !m.hidden);
+      const pickerOpen = !!emojiPopEl;
+      if (!modalOpen && !pickerOpen && isCancelableSession() && !inEditable){
+        e.preventDefault();
+        cancelSession();
+        return;
+      }
+      closeAllModals(); closeEmojiPicker(); return;
+    }
     if (inEditable) return;
     if (e.key === " "){ e.preventDefault(); state.timer.running ? pauseTimer() : startTimer(); }
     else if (e.key.toLowerCase() === "r") resetTimer();
@@ -4187,7 +4312,7 @@ function handleUrlActions(){
 }
 
 /* ================================================================ *
- * v7.2 smoke tests (?test=1)
+ * v7.3 smoke tests (?test=1)
  * ================================================================ */
 const __FocusHero = {
   computeXpBreakdown, createTask, renameTask, setTaskEmoji, deleteTask,
@@ -4198,6 +4323,8 @@ const __FocusHero = {
   stopwatchElapsedMs, stopwatchMinutes, finalizeStopwatch, isStopwatch,
   /* v4.2.1: stopwatch laps */
   appendStopwatchLap, lapStopwatch,
+  /* v7.3: cancel-session — exposed so smoke tests can call with skipConfirm */
+  cancelSession, isCancelableSession,
   fmtTimeLong,
   /* v4.2: emergency recovery — call from DevTools console.
      listSnapshots() shows {key, savedAt, size} for every saved snapshot;
@@ -4308,6 +4435,106 @@ async function runSmokeTests(){
     const ok = bad.dataVersion === DATA_VERSION && bad.totalFocusMin >= 0 && Array.isArray(bad.tasks);
     add("Degraded read: malformed state → defaults", ok);
   }
+  /* v7.3: cancelSession must be a true zero-credit no-op. Snapshot every stat
+     that completion would touch, simulate a running focus session, cancel it,
+     and assert that ONLY canceledSessionCount changed. */
+  {
+    const snapshot = deepClone(state);
+    // Build a clean baseline with a task to log against.
+    const t = createTask({ name:"CancelTestTask", emoji:"❌" });
+    state.timer.mode = "focus";
+    state.timer.running = true;
+    state.timer.activeTaskId = t.id;
+    state.timer.endAt = now() + 10*60*1000;
+    state.timer.msLeft = 0;
+    const before = {
+      xp: state.hero.xp,
+      level: state.hero.level,
+      hp: state.hero.hp,
+      energy: state.hero.energy,
+      totalFocusMin: state.totalFocusMin,
+      cycleCount: state.cycleCount,
+      sessions: state.completedFocusSessions,
+      streak: state.streak,
+      longestStreak: state.longestStreak,
+      comboCount: state.combo?.count|0,
+      historyToday: (state.history[todayKey()]|0),
+      sessionHistoryToday: (state.sessionHistory[todayKey()]|0),
+      taskTotal: state.tasks.find(x=>x.id===t.id).totalFocusMin|0,
+      taskSessions: state.tasks.find(x=>x.id===t.id).sessions|0,
+      lootOwned: JSON.stringify(state.lootOwned||{}),
+      sessionsLogLen: (state.sessionsLog||[]).length,
+      canceledCount: state.canceledSessionCount|0
+    };
+    const cancelable = isCancelableSession();
+    const cancelOk = cancelSession({ skipConfirm: true });
+    const after = {
+      xp: state.hero.xp,
+      level: state.hero.level,
+      hp: state.hero.hp,
+      energy: state.hero.energy,
+      totalFocusMin: state.totalFocusMin,
+      cycleCount: state.cycleCount,
+      sessions: state.completedFocusSessions,
+      streak: state.streak,
+      longestStreak: state.longestStreak,
+      comboCount: state.combo?.count|0,
+      historyToday: (state.history[todayKey()]|0),
+      sessionHistoryToday: (state.sessionHistory[todayKey()]|0),
+      taskTotal: state.tasks.find(x=>x.id===t.id).totalFocusMin|0,
+      taskSessions: state.tasks.find(x=>x.id===t.id).sessions|0,
+      lootOwned: JSON.stringify(state.lootOwned||{}),
+      sessionsLogLen: (state.sessionsLog||[]).length,
+      canceledCount: state.canceledSessionCount|0
+    };
+    const everyStatUnchanged =
+      before.xp === after.xp &&
+      before.level === after.level &&
+      before.hp === after.hp &&
+      before.energy === after.energy &&
+      before.totalFocusMin === after.totalFocusMin &&
+      before.cycleCount === after.cycleCount &&
+      before.sessions === after.sessions &&
+      before.streak === after.streak &&
+      before.longestStreak === after.longestStreak &&
+      before.comboCount === after.comboCount &&
+      before.historyToday === after.historyToday &&
+      before.sessionHistoryToday === after.sessionHistoryToday &&
+      before.taskTotal === after.taskTotal &&
+      before.taskSessions === after.taskSessions &&
+      before.lootOwned === after.lootOwned &&
+      before.sessionsLogLen === after.sessionsLogLen;
+    const timerReset = state.timer.running === false && state.timer.endAt === 0;
+    const canceledIncremented = after.canceledCount === before.canceledCount + 1;
+    add("Cancel session: isCancelableSession true mid-run", cancelable === true);
+    add("Cancel session: returns true on confirm", cancelOk === true);
+    add("Cancel session: timer reset to not-running", timerReset);
+    add("Cancel session: canceledSessionCount +1", canceledIncremented, `before=${before.canceledCount} after=${after.canceledCount}`);
+    add("Cancel session: every cumulative stat unchanged", everyStatUnchanged);
+    /* Also assert: cancelSession is a no-op when there's no active session. */
+    const noopOk = cancelSession({ skipConfirm:true }) === false;
+    add("Cancel session: no-op when nothing to cancel", noopOk);
+    state = snapshot; saveState(); renderAll();
+  }
+  /* v7.3: migration carries canceledSessionCount through cleanly. */
+  {
+    const v5 = {
+      dataVersion:5,
+      hero:{name:"X",cls:"mage",level:3,xp:0,hp:100,energy:100,equipped:{weapon:null,helmet:null,armor:null,mount:null}},
+      settings:{...DEFAULTS.settings},
+      timer:{...DEFAULTS.timer},
+      cycleCount:1, totalFocusMin:500, totalAppOpenMs:0, uptimeHistory:{}, completedFocusSessions:8,
+      streak:2, longestStreak:5, lastFocusDate:null, combo:{count:0,date:null}, tasks:[], activeTaskId:null,
+      quests:[], activeQuestId:null, daily:{date:null,items:[]}, lootOwned:{}, achievements:{},
+      history:{}, sessionHistory:{}, sessionsLog:[], battleLog:[], sync:{...DEFAULTS.sync}
+    };
+    const m = migrate(deepClone(v5));
+    const ok = m.dataVersion === DATA_VERSION
+      && m.totalFocusMin === 500
+      && typeof m.canceledSessionCount === "number"
+      && m.canceledSessionCount === 0;
+    add("Migration v5 → v6 seeds canceledSessionCount=0", ok);
+  }
   {
     const local = { totalFocusMin:100, streak:3, history:{}, lootOwned:{}, achievements:{}, quests:[], tasks:[], sessionsLog:[],
       hero:{level:5,xp:0,hp:100,energy:100,name:"A",cls:"mage"}, settings:{...DEFAULTS.settings}, timer:{...DEFAULTS.timer}, sync:{...DEFAULTS.sync},
@@ -4327,7 +4554,7 @@ function renderTestBanner(results){
   if (!banner){ banner = document.createElement("div"); banner.className = "test-banner"; document.body.prepend(banner); }
   const passed = results.filter(r=>r.ok).length;
   const total = results.length;
-  const hdr = `<div class="hdr">v7.2 smoke tests — ${passed}/${total} passing</div>`;
+  const hdr = `<div class="hdr">v7.3 smoke tests — ${passed}/${total} passing</div>`;
   const body = results.map(r=>`<div class="${r.ok?"pass":"fail"}">${r.ok?"✓":"✗"} ${escapeHtml(r.name)}${r.ok?"":" — "+escapeHtml(r.msg||"")}</div>`).join("");
   banner.innerHTML = hdr + body;
 }
