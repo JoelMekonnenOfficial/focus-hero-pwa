@@ -15,7 +15,7 @@
 <title>Focus Hero</title>
 <style>
 /* ================================================================
- * Focus Hero v7 - inline styles (single-file PWA)
+ * Focus Hero v7.4 - inline styles (single-file PWA)
  * ================================================================ */
 :root{
   --bg:#0b0d1a; --bg-2:#111427; --panel:#171a30; --panel-2:#1f2340;
@@ -1137,10 +1137,21 @@ button.primary{
 </div>
 
 <!-- ================================================================
- * Focus Hero v7 - inline script (one file, no deps)
+ * Focus Hero v7.4 - inline script (one file, no deps)
  * ================================================================ -->
 <script>
 "use strict";
+/* v7.4 build marker - v7.3 base + Joel-reported bug fixes (no behavior changes
+   beyond the bugs). Two fixes:
+   1. Task-switch sticks. completeSession() and finalizeStopwatch() used to
+      preserve state.timer.activeTaskId across the break, which made setActiveTask
+      look like it wasn't taking effect — startTimer's `if (!state.timer.activeTaskId)`
+      re-snapshot was always skipped. Now we null it at session finalize so the
+      next startTimer reads state.activeTaskId (the user's latest selection).
+   2. Battle-log copy: "Hero is X" → "Hero focuses on X". The old phrasing
+      read as "Hero is the quest" when no task was selected. The new phrasing
+      works with verbs, nouns, and the fallback equally.
+   DATA_VERSION unchanged. No migration needed. */
 /* v7.3 build marker - v7.2 base + Cancel Session feature (zero-stat-credit abort path).
    The Cancel button is distinct from Reset: it requires explicit confirm, increments
    state.canceledSessionCount (awareness-only stat, no penalty), and never routes
@@ -1827,7 +1838,11 @@ function startTimer(){
     startKeepalive(); acquireWakeLock();
     saveState(); ensureTickInterval();
     logLine("Started stopwatch");
-    logBattle(`Hero is ${currentSessionTaskLabel()} by stopwatch.`, "switch");
+    /* v7.4 copy fix: "Hero is X by stopwatch" read awkwardly (especially with
+       the "the quest" fallback — "Hero is the quest by stopwatch") because the
+       verb "is" doesn't naturally take a task noun. "Hero focuses on X" reads
+       cleanly whether X is a verb, a noun, or the fallback. */
+    logBattle(`Hero focuses on ${currentSessionTaskLabel()} via stopwatch.`, "switch");
     renderActiveTaskRow(); renderTimer();
     $("#btn-start").textContent = "Pause";
     requestNotifPermIfNeeded();
@@ -1851,7 +1866,11 @@ function startTimer(){
   saveState();
   ensureTickInterval();
   logLine(`Started ${state.timer.mode} (${Math.round(base/60000)}m)`);
-  if (state.timer.mode === "focus") logBattle(`Hero is ${currentSessionTaskLabel()}.`, "switch");
+  /* v7.4 copy fix: same as the stopwatch line — "Hero is X" was the phrasing
+     Joel called out as "hero is quest" (it's the fallback-task case rendering
+     literally as "Hero is the quest."). "Hero focuses on X" works for every
+     task name. */
+  if (state.timer.mode === "focus") logBattle(`Hero focuses on ${currentSessionTaskLabel()}.`, "switch");
   renderActiveTaskRow();
   $("#btn-start").textContent = "Pause";
   requestNotifPermIfNeeded();
@@ -2045,6 +2064,11 @@ function finalizeStopwatch(){
   state.timer.swStartedAt = 0;
   state.timer.swSessionStartedAt = 0;
   state.timer.swLaps = []; // v4.2.1: clear laps with the rest of the session state
+  /* v7.4 fix (Joel report: task switch sticks): also clear the in-flight task
+     pointer here so the next stopwatch start re-snapshots from state.activeTaskId
+     (which IS whatever the user last selected). Same root cause as the
+     completeSession fix; both finalization paths used to leave a stale pointer. */
+  state.timer.activeTaskId = null;
   state.timer.activeTaskNameAtStart = null;
   stopKeepalive(); releaseWakeLock();
   checkAchievements();
@@ -2122,10 +2146,21 @@ function completeSession(){
     // pick next mode
     const nextIsLong = state.cycleCount % state.settings.cyclesBeforeLong === 0;
     if (nextIsLong && earnedRewards){ updateDailyProgress("cycle", 1); }
-    // carry the active task forward to the next focus session by default
-    const carriedTask = state.timer.activeTaskId;
+    /* v7.4 bug fix (Joel report: "task switch sticks to original after a session
+       ends"): previously we cached state.timer.activeTaskId across setMode() so
+       the next focus session would auto-credit the same task. That made the
+       pointer "sticky" — if the user picked a different task during the break,
+       setActiveTask() only updated state.activeTaskId (the user-facing
+       selection), not state.timer.activeTaskId (the in-flight session pointer,
+       which we'd just frozen). Then startTimer() saw a non-null
+       state.timer.activeTaskId and skipped its re-snapshot, so the new session
+       silently credited the OLD task.
+       Clearing state.timer.activeTaskId here means the next startTimer() picks
+       it back up from state.activeTaskId — which IS what the user just clicked.
+       Carry-forward still works for "do nothing" because state.activeTaskId
+       persists the previous selection. */
     setMode(nextIsLong ? "long" : "short");
-    state.timer.activeTaskId = carriedTask;
+    state.timer.activeTaskId = null;
     state.timer.activeTaskNameAtStart = null;
   } else {
     state.hero.energy = Math.min(100, state.hero.energy + (wasMode==="long"?40:18));
