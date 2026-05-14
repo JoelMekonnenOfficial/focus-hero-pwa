@@ -16,7 +16,7 @@
  * kill-switch that uninstalls the old worker on stuck devices. Newly-loaded
  * pages register THIS file directly.
  */
-const CACHE_VERSION = "fh-v7-4";
+const CACHE_VERSION = "fh-v7-5";
 const CACHE_NAME = `focus-hero-${CACHE_VERSION}`;
 const PRECACHE = [
   "./",

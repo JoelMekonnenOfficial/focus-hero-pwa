@@ -15,7 +15,7 @@
 <title>Focus Hero</title>
 <style>
 /* ================================================================
- * Focus Hero v7.4 - inline styles (single-file PWA)
+ * Focus Hero v7.5 - inline styles (single-file PWA)
  * ================================================================ */
 :root{
   --bg:#0b0d1a; --bg-2:#111427; --panel:#171a30; --panel-2:#1f2340;
@@ -91,15 +91,16 @@
 }
 *{box-sizing:border-box}
 [hidden]{display:none !important}
-html,body{height:100%}
+html{min-height:100%;overflow-y:auto}
+body{min-height:100%}
 body{
   margin:0; font-family:var(--font); color:var(--ink); background:var(--bg);
   background-image:radial-gradient(1100px 600px at 10% -10%,rgba(var(--accent-rgb),.12),transparent 60%),
     radial-gradient(900px 500px at 110% 0%,rgba(var(--accent-2-rgb),.10),transparent 60%);
-  -webkit-font-smoothing:antialiased; line-height:1.45;
+  -webkit-font-smoothing:antialiased; line-height:1.45; overflow-x:hidden; touch-action:pan-y;
 }
 button,input,select,textarea{font:inherit;color:inherit}
-button{cursor:pointer;background:transparent;border:1px solid var(--border-strong);color:var(--ink);padding:.55rem .9rem;border-radius:10px;transition:transform .08s ease,background .15s ease,border-color .15s ease}
+button{cursor:pointer;background:transparent;border:1px solid var(--border-strong);color:var(--ink);padding:.55rem .9rem;border-radius:10px;transition:transform .08s ease,background .15s ease,border-color .15s ease;touch-action:manipulation}
 button:hover{background:var(--panel-2);border-color:var(--accent)}
 button:active{transform:translateY(1px)}
 button.primary{background:linear-gradient(135deg,var(--accent),var(--accent-2));border-color:transparent;color:white;font-weight:600}
@@ -111,7 +112,7 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent)}
 a{color:var(--accent)}
 hr{border:none;border-top:1px solid var(--border);margin:1rem 0}
 
-.app{max-width:1180px;margin:0 auto;padding:24px 20px 120px;display:grid;gap:20px;grid-template-columns:1.1fr 1fr;align-items:start}
+.app{max-width:1180px;margin:0 auto;padding:24px 20px 120px;display:grid;gap:20px;grid-template-columns:1.1fr 1fr;align-items:start;touch-action:pan-y}
 header.topbar{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .brand{display:flex;align-items:center;gap:12px}
 .brand .logo{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:grid;place-items:center;color:white;font-weight:800;box-shadow:var(--shadow)}
@@ -218,8 +219,8 @@ header.topbar{grid-column:1/-1;display:flex;align-items:center;justify-content:s
 .tabs button[aria-pressed="true"]{background:var(--panel-2);border-color:var(--accent)}
 
 /* --------- toasts --------- */
-.toast-wrap{position:fixed;right:20px;bottom:20px;display:flex;flex-direction:column;gap:8px;z-index:50;max-width:calc(100% - 40px)}
-.toast{background:var(--panel);border:1px solid var(--border-strong);border-left:4px solid var(--accent);padding:.7rem .9rem;border-radius:12px;box-shadow:var(--shadow);font-size:.9rem;display:flex;align-items:center;gap:10px;animation:slide-in .25s ease}
+.toast-wrap{position:fixed;right:20px;bottom:20px;display:flex;flex-direction:column;gap:8px;z-index:50;max-width:calc(100% - 40px);pointer-events:none}
+.toast{background:var(--panel);border:1px solid var(--border-strong);border-left:4px solid var(--accent);padding:.7rem .9rem;border-radius:12px;box-shadow:var(--shadow);font-size:.9rem;display:flex;align-items:center;gap:10px;animation:slide-in .25s ease;pointer-events:auto}
 .toast.good{border-left-color:var(--good)}
 .toast.bad{border-left-color:var(--bad)}
 .toast.warn{border-left-color:var(--warn)}
@@ -280,7 +281,7 @@ kbd{font-family:var(--mono);font-size:.78em;padding:1px 6px;border-radius:6px;ba
 .task-add-row input[type=text]{flex:1;min-width:140px}
 
 /* emoji picker popover — v4.3: scrollable for the expanded grid */
-.emoji-pop{position:absolute;z-index:90;background:var(--panel);border:1px solid var(--border-strong);border-radius:12px;padding:8px;box-shadow:var(--shadow);display:grid;grid-template-columns:repeat(8,1fr);gap:4px;max-width:300px;max-height:340px;overflow-y:auto;overflow-x:hidden}
+.emoji-pop{position:absolute;z-index:90;background:var(--panel);border:1px solid var(--border-strong);border-radius:12px;padding:8px;box-shadow:var(--shadow);display:grid;grid-template-columns:repeat(8,1fr);gap:4px;max-width:300px;max-height:340px;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;touch-action:pan-y}
 .emoji-pop button{padding:6px 6px;font-size:1.2rem;border:1px solid transparent;border-radius:6px;background:transparent;cursor:pointer}
 .emoji-pop button:hover{border-color:var(--accent);background:var(--panel-2)}
 .emoji-pop button:focus{outline:none;border-color:var(--accent)}
@@ -297,7 +298,7 @@ kbd{font-family:var(--mono);font-size:.78em;padding:1px 6px;border-radius:6px;ba
 .active-task-row .active-task-name{cursor:text}
 
 /* v7: battle log replaces the dry session stat strip */
-.battle-log{margin-top:12px;padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:rgba(6,8,18,.62);box-shadow:inset 0 0 0 1px rgba(0,0,0,.18);font-family:var(--mono);font-size:.78rem;color:var(--ink-dim);text-align:left;max-height:8.2rem;overflow:auto;cursor:pointer}
+.battle-log{margin-top:12px;padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:rgba(6,8,18,.62);box-shadow:inset 0 0 0 1px rgba(0,0,0,.18);font-family:var(--mono);font-size:.78rem;color:var(--ink-dim);text-align:left;max-height:8.2rem;overflow:auto;cursor:pointer;-webkit-overflow-scrolling:touch;touch-action:pan-y}
 .battle-log[data-expanded="1"]{max-height:260px}
 .battle-log .battle-line{padding:2px 0;border-bottom:1px dotted rgba(255,255,255,.08)}
 .battle-log .battle-line:last-child{border-bottom:none}
@@ -829,7 +830,7 @@ button.primary{
   .hero-card .row{justify-content:flex-start}
 }
 @media (max-width:520px){
-  .app{max-width:100vw;width:100vw;margin:0;gap:10px;padding:8px 6px 132px;overflow:hidden}
+  .app{max-width:100vw;width:100vw;margin:0;gap:10px;padding:8px 6px 132px;overflow:visible}
   header.topbar,.card{
     width:calc(100vw - 12px);
     max-width:calc(100vw - 12px);
@@ -916,7 +917,7 @@ button.primary{
       <div class="battle-log" id="battle-log" data-expanded="0" role="button" tabindex="0" aria-label="Battle log"></div>
       <div class="stat-strip" id="stat-strip">
         <span>Focused time: <b id="stat-focus-total">0h</b></span>
-        <span title="Total time the app has been open across all sessions (live counter)">App uptime: <b id="stat-open-total">0:00:00</b></span>
+        <span title="Visible time while the app has been open across all sessions (live counter)">App uptime: <b id="stat-open-total">0:00:00</b></span>
         <span>Sessions: <b id="stat-sessions">0</b></span>
       </div>
       <div id="xp-breakdown-slot"></div>
@@ -1137,10 +1138,13 @@ button.primary{
 </div>
 
 <!-- ================================================================
- * Focus Hero v7.4 - inline script (one file, no deps)
+ * Focus Hero v7.5 - inline script (one file, no deps)
  * ================================================================ -->
 <script>
 "use strict";
+/* v7.5 build marker - v7.4 base + mobile touch/scroll reliability, restored
+   visible-document app uptime analytics without 32-bit millisecond truncation,
+   and a daily Supabase heartbeat/backup workflow. DATA_VERSION unchanged. */
 /* v7.4 build marker - v7.3 base + Joel-reported bug fixes (no behavior changes
    beyond the bugs). Two fixes:
    1. Task-switch sticks. completeSession() and finalizeStopwatch() used to
@@ -1338,6 +1342,10 @@ const todayKey = (d=new Date()) => {
   return `${y}-${m}-${dd}`;
 };
 const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const nonNegativeNumber = v => {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+};
 const fmtTime = ms => {
   ms = Math.max(0, ms);
   const t = Math.ceil(ms/1000);
@@ -1583,8 +1591,13 @@ function migrate(raw){
   if (!(s.hero.xp >= 0)) s.hero.xp = 0;
   if (!(s.totalFocusMin >= 0)) s.totalFocusMin = 0;
   if (!(s.completedFocusSessions >= 0)) s.completedFocusSessions = 0;
-  if (!(s.totalAppOpenMs >= 0)) s.totalAppOpenMs = 0;
+  s.totalAppOpenMs = nonNegativeNumber(s.totalAppOpenMs);
   if (!s.uptimeHistory || typeof s.uptimeHistory !== "object" || Array.isArray(s.uptimeHistory)) s.uptimeHistory = {};
+  for (const k of Object.keys(s.uptimeHistory)){
+    const v = nonNegativeNumber(s.uptimeHistory[k]);
+    if (v > 0) s.uptimeHistory[k] = v;
+    else delete s.uptimeHistory[k];
+  }
   if (!s.sessionHistory || typeof s.sessionHistory !== "object" || Array.isArray(s.sessionHistory)) s.sessionHistory = {};
   if (!s.hero.equipped || typeof s.hero.equipped !== "object" || Array.isArray(s.hero.equipped)) s.hero.equipped = { weapon:null, helmet:null, armor:null, mount:null };
   for (const slot of ["weapon","helmet","armor","mount"]) if (!(slot in s.hero.equipped)) s.hero.equipped[slot] = null;
@@ -1614,7 +1627,7 @@ function isStateSane(s){
       const prev = JSON.parse(prevRaw);
       const ps = (prev && prev.state) || {};
       if ((ps.totalFocusMin|0) > (s.totalFocusMin|0)) return false;
-      if ((ps.totalAppOpenMs|0) > (s.totalAppOpenMs|0)) return false;
+      if (nonNegativeNumber(ps.totalAppOpenMs) > nonNegativeNumber(s.totalAppOpenMs)) return false;
       if ((ps.completedFocusSessions|0) > (s.completedFocusSessions|0)) return false;
       if ((ps.longestStreak|0) > (s.longestStreak|0)) return false;
       const psLevel = ps.hero?.level|0, sLevel = s.hero?.level|0;
@@ -1626,15 +1639,31 @@ function isStateSane(s){
   return true;
 }
 const LKG_KEY = `${STORAGE_KEY}.lkg`;
+let lastSaveFailureToastAt = 0;
+function notifySaveFailure(err){
+  console.warn("save failed", err);
+  const t = now();
+  if (t - lastSaveFailureToastAt < 60_000) return;
+  lastSaveFailureToastAt = t;
+  const msg = /quota|exceed|full/i.test(String(err?.name || err?.message || err))
+    ? "Device storage is full. Export a backup before closing Focus Hero."
+    : "Local save failed. Export a backup before closing Focus Hero.";
+  try {
+    toast(msg, "bad", [{ label:"Export", onClick:()=>{
+      const { blob, fname } = buildBackupBlob({ labelSuffix:"-storage-warning" });
+      triggerDownload(blob, fname);
+    }}]);
+  } catch(_){}
+}
 function saveState(opts={}){
   let serialized = null;
   try { serialized = JSON.stringify(state); localStorage.setItem(STORAGE_KEY, serialized); }
-  catch(e){ console.warn("save failed",e); }
+  catch(e){ notifySaveFailure(e); }
   /* v4.2: write a "last known good" mirror only when state passes invariants.
      Throttled to ~once per 10s so we don't double localStorage write volume. */
   try {
     if (serialized && isStateSane(state)){
-      const lastLkg = saveState._lastLkgAt|0;
+      const lastLkg = nonNegativeNumber(saveState._lastLkgAt);
       const t = Date.now();
       if (t - lastLkg > 10_000){
         localStorage.setItem(LKG_KEY, JSON.stringify({ savedAt: new Date().toISOString(), state }));
@@ -2553,24 +2582,26 @@ async function releaseWakeLock(){
 }
 
 /* ================================================================
- * v4.2: App-open uptime counter.
- * Counts every second the app is open, regardless of tab visibility.
- * Delta is capped at 60s so system sleep / hard-throttled tabs don't
- * inflate the total — but normal background-tab time is still counted.
+ * v7.5: App uptime counter.
+ * Counts time while the document is visible, regardless of whether a focus
+ * session is running. Hidden/background time is intentionally not credited.
+ * Delta is capped at 60s so system sleep / hard-throttled visible tabs don't
+ * inflate the total.
  * ================================================================ */
 let lastTickTs = null;
 let lastSavedAppOpenMs = 0;
-function appOpenTick(){
+function appOpenTick(opts={}){
   const t = now();
+  const visible = document.visibilityState === "visible" || opts.forceVisibleFlush === true;
   if (lastTickTs === null){ lastTickTs = t; return; }
   const delta = t - lastTickTs;
-  if (delta > 0 && delta < 60_000){
-    state.totalAppOpenMs = (state.totalAppOpenMs|0) + delta;
+  if (visible && delta > 0 && delta < 60_000){
+    state.totalAppOpenMs = nonNegativeNumber(state.totalAppOpenMs) + delta;
     if (!state.uptimeHistory || typeof state.uptimeHistory !== "object" || Array.isArray(state.uptimeHistory)) state.uptimeHistory = {};
     const tk = todayKey();
-    state.uptimeHistory[tk] = (state.uptimeHistory[tk]|0) + delta;
+    state.uptimeHistory[tk] = nonNegativeNumber(state.uptimeHistory[tk]) + delta;
   }
-  lastTickTs = t;
+  lastTickTs = visible ? t : null;
   // Persist at most every ~30s so we don't hammer localStorage every second.
   if (state.totalAppOpenMs - lastSavedAppOpenMs >= 30_000){
     lastSavedAppOpenMs = state.totalAppOpenMs;
@@ -2579,15 +2610,16 @@ function appOpenTick(){
 }
 function bindAppOpenTracking(){
   lastTickTs = now();
-  lastSavedAppOpenMs = state.totalAppOpenMs|0;
+  lastSavedAppOpenMs = nonNegativeNumber(state.totalAppOpenMs);
   document.addEventListener("visibilitychange", ()=>{
     if (document.visibilityState === "visible"){
-      // Reset baseline so we don't credit suspended/hidden time at huge deltas
+      // Start a fresh visible-session baseline; hidden time is not uptime.
       lastTickTs = now();
       if (state.timer.running && state.timer.mode === "focus") acquireWakeLock();
       renderStatStrip();
     } else {
-      appOpenTick(); // flush whatever has accumulated so far
+      appOpenTick({ forceVisibleFlush:true }); // flush visible time up to hide
+      lastTickTs = null;
     }
   });
   // Live counter: tick + render every second.
@@ -2596,7 +2628,7 @@ function bindAppOpenTracking(){
 }
 /* H:MM:SS counter format (e.g. 12:04:37) */
 function formatHMS(ms){
-  ms = Math.max(0, ms|0);
+  ms = nonNegativeNumber(ms);
   const t = Math.floor(ms/1000);
   const h = Math.floor(t/3600);
   const m = Math.floor((t%3600)/60);
@@ -3011,7 +3043,7 @@ function renderStatStrip(){
     const liveDelta = (lastTickTs !== null && document.visibilityState === "visible")
       ? Math.min(60_000, Math.max(0, now() - lastTickTs))
       : 0;
-    oa.textContent = formatHMS((state.totalAppOpenMs|0) + liveDelta);
+    oa.textContent = formatHMS(nonNegativeNumber(state.totalAppOpenMs) + liveDelta);
   }
   const sa = $("#stat-sessions"); if (sa) sa.textContent = state.completedFocusSessions|0;
 }
@@ -3407,7 +3439,18 @@ function startInlineRenameTask(id, nameEl){
 
 /* Emoji picker popover */
 let emojiPopEl = null;
+let emojiOutsideHandler = null;
+let emojiScrollHandler = null;
 function closeEmojiPicker(){
+  if (emojiOutsideHandler){
+    document.removeEventListener("pointerdown", emojiOutsideHandler, true);
+    emojiOutsideHandler = null;
+  }
+  if (emojiScrollHandler){
+    window.removeEventListener("scroll", emojiScrollHandler, true);
+    window.removeEventListener("resize", emojiScrollHandler, true);
+    emojiScrollHandler = null;
+  }
   if (emojiPopEl){ emojiPopEl.remove(); emojiPopEl = null; }
 }
 /* v4.3: picker accepts either a taskId (existing-task edit) OR an onPick callback
@@ -3439,14 +3482,30 @@ function openEmojiPicker(taskIdOrOpts, anchor){
   inp.addEventListener("keydown", e=>{ if (e.key==="Enter"){ btn.click(); } });
   pop.appendChild(custom);
   document.body.appendChild(pop);
-  const r = anchor.getBoundingClientRect();
-  pop.style.top = (window.scrollY + r.bottom + 4) + "px";
-  pop.style.left = Math.max(8, window.scrollX + r.left - 40) + "px";
+  const place = () => {
+    const r = anchor.getBoundingClientRect();
+    const margin = 8;
+    const maxLeft = window.scrollX + window.innerWidth - pop.offsetWidth - margin;
+    const desiredLeft = window.scrollX + r.left - 40;
+    let top = window.scrollY + r.bottom + 4;
+    const maxTop = window.scrollY + window.innerHeight - pop.offsetHeight - margin;
+    if (top > maxTop) top = Math.max(window.scrollY + margin, maxTop);
+    pop.style.top = top + "px";
+    pop.style.left = clamp(desiredLeft, window.scrollX + margin, Math.max(window.scrollX + margin, maxLeft)) + "px";
+  };
+  place();
   emojiPopEl = pop;
   setTimeout(()=>{
-    document.addEventListener("mousedown", (e)=>{
+    emojiOutsideHandler = (e)=>{
       if (emojiPopEl && !emojiPopEl.contains(e.target) && e.target !== anchor) closeEmojiPicker();
-    }, { once:true });
+    };
+    emojiScrollHandler = (e) => {
+      if (emojiPopEl && e?.target && emojiPopEl.contains(e.target)) return;
+      closeEmojiPicker();
+    };
+    document.addEventListener("pointerdown", emojiOutsideHandler, true);
+    window.addEventListener("scroll", emojiScrollHandler, true);
+    window.addEventListener("resize", emojiScrollHandler, true);
   }, 0);
 }
 
@@ -3833,11 +3892,11 @@ async function cloudPull(opts){
 function mergeRemoteState(local, remote){
   const out = deepClone(local);
   out.totalFocusMin = Math.max(local.totalFocusMin||0, remote.totalFocusMin||0);
-  out.totalAppOpenMs = Math.max(local.totalAppOpenMs||0, remote.totalAppOpenMs||0);
+  out.totalAppOpenMs = Math.max(nonNegativeNumber(local.totalAppOpenMs), nonNegativeNumber(remote.totalAppOpenMs));
   out.uptimeHistory = {};
   const uhKeys = new Set([...Object.keys(local.uptimeHistory||{}), ...Object.keys(remote.uptimeHistory||{})]);
   for (const k of uhKeys){
-    out.uptimeHistory[k] = Math.max((local.uptimeHistory||{})[k]|0, (remote.uptimeHistory||{})[k]|0);
+    out.uptimeHistory[k] = Math.max(nonNegativeNumber((local.uptimeHistory||{})[k]), nonNegativeNumber((remote.uptimeHistory||{})[k]));
   }
   out.completedFocusSessions = Math.max(local.completedFocusSessions||0, remote.completedFocusSessions||0);
   out.streak = Math.max(local.streak||0, remote.streak||0);
@@ -4092,7 +4151,24 @@ function bindAnalytics(){
 }
 function bindBattleLog(){
   const root = $("#battle-log"); if (!root) return;
-  root.onclick = toggleBattleLog;
+  let start = null;
+  let moved = false;
+  root.addEventListener("pointerdown", e=>{
+    start = { x:e.clientX, y:e.clientY };
+    moved = false;
+  }, { passive:true });
+  root.addEventListener("pointermove", e=>{
+    if (!start) return;
+    if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > 8) moved = true;
+  }, { passive:true });
+  root.onclick = (e)=>{
+    if (moved){
+      e.preventDefault();
+      moved = false;
+      return;
+    }
+    toggleBattleLog();
+  };
   root.addEventListener("keydown", e=>{
     if (e.key === "Enter" || e.key === " "){ e.preventDefault(); toggleBattleLog(); }
   });
@@ -4145,11 +4221,11 @@ function renderAnalytics(){
   let weekUptime = 0, monthUptime = 0;
   const uh = state.uptimeHistory || {};
   for (const k of Object.keys(uh)){
-    const v = uh[k]|0;
+    const v = nonNegativeNumber(uh[k]);
     if (weekKeys.has(k)) weekUptime += v;
     if (monthKeys.has(k)) monthUptime += v;
   }
-  const allTimeUptime = state.totalAppOpenMs|0;
+  const allTimeUptime = nonNegativeNumber(state.totalAppOpenMs);
 
   let weekSessions = 0, monthSessions = 0;
   const sh = state.sessionHistory || {};
@@ -4197,7 +4273,7 @@ function renderAnalytics(){
       <div class="analytics-card"><div class="big">${fmtMin(monthFocus)}</div><div class="lbl">Last 30 days</div></div>
       <div class="analytics-card"><div class="big">${fmtMin(allTimeFocus)}</div><div class="lbl">All time</div></div>
     </div>
-    <h4>App uptime <span class="muted" style="font-size:.72rem;text-transform:none">(per-day tracking starts on v7 install)</span></h4>
+    <h4>App uptime <span class="muted" style="font-size:.72rem;text-transform:none">(visible time while the app is open)</span></h4>
     <div class="analytics-totals">
       <div class="analytics-card"><div class="big">${formatHMS(weekUptime)}</div><div class="lbl">Last 7 days</div></div>
       <div class="analytics-card"><div class="big">${formatHMS(monthUptime)}</div><div class="lbl">Last 30 days</div></div>
@@ -4512,6 +4588,7 @@ async function runSmokeTests(){
     add("Avatar: renders 32x32 crisp SVG", ok);
   }
   add("App-open tracking: totalAppOpenMs is number", typeof state.totalAppOpenMs === "number");
+  add("App uptime: >24d formats without truncation", formatHMS(35*24*60*60*1000 + 3*60*60*1000 + 7*60*1000 + 11*1000) === "843:07:11");
   try {
     const snapshot = deepClone(state);
     state.sync.syncCode = "TESTCODE"; state.sync.syncSecret = "TESTSECRETTESTSECRET";
