@@ -15,7 +15,7 @@
 <title>Focus Hero</title>
 <style>
 /* ================================================================
- * Focus Hero v7.5 - inline styles (single-file PWA)
+ * Focus Hero v7.6 - inline styles (single-file PWA)
  * ================================================================ */
 :root{
   --bg:#0b0d1a; --bg-2:#111427; --panel:#171a30; --panel-2:#1f2340;
@@ -859,6 +859,432 @@ button.primary{
   .stat-strip{font-size:.62rem}
 }
 
+
+/* ================================================================
+ * Focus Hero v7.6 — patch CSS
+ * Insert this block in focus-hero.html immediately AFTER the existing
+ * /* ---------- v7.2: Gemini-guided Deep Weald MMO polish ---------- */
+/* (i.e. after line ~860, before </style>).
+ *
+ * Goals:
+ *   - REPLACE the v7 animation amplitudes (1-2 viewBox-units → 4-6 viewBox-units
+ *     = ~16-24 rendered pixels at 132px avatar).
+ *   - Define a distinct, recognisable loop for EACH of the 7 actions:
+ *     travelling / resting / hunting / looting / fighting / crafting / meditating.
+ *   - Add an action-selector strip styled to match the v7.2 HUD.
+ *   - Add unlock-tier framing for achievements (bronze → mythic).
+ *   - Reduced-motion path dims (70%) instead of freezing — so the
+ *     "I never see animations" issue can't recur silently.
+ * ================================================================ */
+
+/* ---- action picker strip ---- */
+.adv-actions{
+  display:flex;flex-wrap:wrap;gap:6px;
+  margin:.7rem 0 .25rem;
+  padding:.4rem;
+  border:3px solid #11140f;
+  outline:1px solid var(--border-strong);
+  background:linear-gradient(180deg,rgba(255,255,255,.06),transparent 24px),var(--panel-2);
+  border-radius:0;
+}
+.adv-actions button{
+  flex:1 1 auto;
+  min-width:88px;
+  padding:.45rem .55rem;
+  font-size:.74rem;
+  letter-spacing:0;
+  white-space:nowrap;
+}
+.adv-actions button[aria-pressed="true"]{
+  color:#10140f;
+  background:linear-gradient(180deg,#FDE68A 0 18%,#FBBF24 18% 58%,#B45309 58%);
+  border-color:#0d140d;
+  outline-color:#FDE68A;
+  text-shadow:none;
+  box-shadow:0 4px 0 #151713,inset 3px 3px 0 rgba(255,255,255,.18);
+}
+.adv-action-pill{
+  display:inline-block;
+  padding:.18rem .55rem;
+  margin-left:.5rem;
+  border:2px solid var(--border);
+  border-radius:0;
+  background:#0b110d;
+  color:var(--accent-2);
+  font-size:.72rem;
+  text-transform:uppercase;
+  letter-spacing:.05em;
+}
+@media (max-width:520px){
+  .adv-actions{gap:4px;padding:.3rem}
+  .adv-actions button{min-width:0;padding:.5rem .25rem;font-size:.66rem}
+}
+
+/* ---- v7.6 character animations ----
+ * Amplitudes in viewBox units. The avatar is rendered 132px / 32 viewBox-units
+ * (≈4.125x) on desktop and 96px / 32 viewBox-units (3x) on mobile, so:
+ *   - 4 viewBox-units → ~16px desktop / 12px mobile  (clearly visible)
+ *   - 6 viewBox-units → ~25px desktop / 18px mobile  (unmistakable)
+ *   - rotations apply in viewBox space, so degrees are 1:1.
+ */
+
+/* OVERRIDES of the v7 micro-animations — same data-scene names so existing
+ * code keeps working; just bigger and more legible. */
+.hero-card .avatar[data-scene="resting"] .fh-sprite{
+  animation:fh76-rest-breathe 2.6s ease-in-out infinite;
+}
+.hero-card .avatar[data-scene="travelling"] .fh-mount{
+  opacity:1;
+  animation:fh76-trot 0.7s steps(2,end) infinite;
+}
+.hero-card .avatar[data-scene="travelling"] .fh-horizon{
+  animation:fh76-scroll-bg 4s linear infinite;
+}
+.hero-card .avatar[data-scene="travelling"] .fh-sprite{
+  animation:fh76-trot 0.7s ease-in-out infinite;
+}
+.hero-card .avatar[data-scene="fighting"] .fh-sprite{
+  animation:fh76-lunge 0.6s ease-in-out infinite;
+}
+.hero-card .avatar[data-scene="fighting"] .fh-weapon{
+  animation:fh76-swing 0.6s ease-in-out infinite;
+  transform-origin:25px 18px;
+}
+.hero-card .avatar[data-scene="fighting"] .fh-enemy{
+  opacity:1;
+  animation:fh76-enemy-recoil 0.6s ease-in-out infinite;
+}
+.hero-card .avatar[data-scene="hunting"] .fh-sprite{
+  animation:fh76-creep 2.2s ease-in-out infinite;
+}
+.hero-card .avatar[data-scene="hunting"] .fh-horizon{
+  animation:fh76-grass-sway 2.2s ease-in-out infinite;
+}
+.hero-card .avatar[data-scene="hunting"] .fh-enemy{
+  opacity:0;
+  animation:fh76-monster-peek 11s ease-in-out infinite;
+}
+.hero-card .avatar[data-scene="looting"] .fh-sprite{
+  animation:fh76-bend 0.8s ease-in-out infinite;
+}
+.hero-card .avatar[data-scene="looting"] .fh-weapon{
+  animation:none;opacity:0;
+}
+.hero-card .avatar[data-scene="looting"] .fh-aura{
+  animation:fh76-coin-drift 1.4s linear infinite;
+}
+.hero-card .avatar[data-scene="crafting"] .fh-sprite{
+  animation:fh76-hammer-body 0.5s ease-in-out infinite;
+}
+.hero-card .avatar[data-scene="crafting"] .fh-weapon{
+  animation:fh76-hammer-arm 0.5s ease-in-out infinite;
+  transform-origin:24px 16px;
+}
+.hero-card .avatar[data-scene="crafting"] .fh-aura{
+  animation:fh76-sparks 0.5s ease-out infinite;
+}
+.hero-card .avatar[data-scene="meditating"] .fh-sprite{
+  animation:fh76-meditate-breath 2.8s ease-in-out infinite;
+}
+.hero-card .avatar[data-scene="meditating"]::after{
+  content:"";
+  position:absolute;
+  inset:18%;
+  border-radius:50%;
+  pointer-events:none;
+  background:radial-gradient(circle,rgba(125,211,252,.45),transparent 65%);
+  animation:fh76-halo 2.8s ease-in-out infinite;
+  z-index:0;
+}
+
+/* Hero-aura (the v7.2 background pulse around the avatar) — kept but
+ * given a more visible amplitude. */
+.hero-card .avatar::before{
+  animation:fh76-hero-aura 2.4s ease-in-out infinite !important;
+}
+
+/* Keyframes — every one of these MUST move more than 4 viewBox-units OR
+ * rotate more than 25 degrees, OR pulse opacity ≥ 0.3 amplitude. */
+@keyframes fh76-rest-breathe{
+  0%,100%{transform:translateY(0) scale(1)}
+  50%   {transform:translateY(-4px) scale(1.025)}
+}
+@keyframes fh76-trot{
+  0%,100%{transform:translateY(0)}
+  25%    {transform:translateY(-4px) rotate(-2deg)}
+  50%    {transform:translateY(0)}
+  75%    {transform:translateY(-3px) rotate(2deg)}
+}
+@keyframes fh76-scroll-bg{
+  from{transform:translateX(0)}
+  to  {transform:translateX(-16px)}
+}
+@keyframes fh76-lunge{
+  0%,100%{transform:translateX(0) translateY(0)}
+  40%    {transform:translateX(6px) translateY(-4px)}
+  55%    {transform:translateX(6px) translateY(-4px)}
+  75%    {transform:translateX(0) translateY(0)}
+}
+@keyframes fh76-swing{
+  0%,100%{transform:rotate(-35deg)}
+  40%    {transform:rotate(75deg)}
+  55%    {transform:rotate(75deg)}
+}
+@keyframes fh76-enemy-recoil{
+  0%,100%{transform:translateX(0) translateY(0);opacity:1}
+  40%    {transform:translateX(4px) translateY(0);opacity:.25}
+  55%    {transform:translateX(4px) translateY(-1px);opacity:.4}
+  75%    {transform:translateX(0) translateY(0);opacity:.95}
+}
+@keyframes fh76-creep{
+  0%,100%{transform:translateX(0) translateY(0)}
+  35%    {transform:translateX(4px) translateY(2px)}
+  65%    {transform:translateX(4px) translateY(0)}
+}
+@keyframes fh76-grass-sway{
+  0%,100%{transform:translateX(0)}
+  50%    {transform:translateX(-4px)}
+}
+@keyframes fh76-monster-peek{
+  0%,72%,100%{opacity:0;transform:translateX(8px) scaleX(0.85)}
+  75%,82%   {opacity:1;transform:translateX(0) scaleX(1)}
+  90%       {opacity:.5;transform:translateX(4px) scaleX(0.95)}
+}
+@keyframes fh76-bend{
+  0%,100%{transform:translateY(0) rotate(0)}
+  50%    {transform:translateY(4px) rotate(-8deg)}
+}
+@keyframes fh76-coin-drift{
+  0%  {opacity:0;transform:translateY(0)}
+  20% {opacity:1}
+  80% {opacity:1}
+  100%{opacity:0;transform:translateY(-10px)}
+}
+@keyframes fh76-hammer-body{
+  0%,100%{transform:translateY(0)}
+  45%    {transform:translateY(-4px)}
+  60%    {transform:translateY(0)}
+}
+@keyframes fh76-hammer-arm{
+  0%,100%{transform:rotate(-45deg)}
+  45%    {transform:rotate(35deg)}
+  60%    {transform:rotate(35deg)}
+}
+@keyframes fh76-sparks{
+  0%  {opacity:0;transform:translateY(0) scale(1)}
+  35% {opacity:1}
+  100%{opacity:0;transform:translateY(-8px) scale(1.45)}
+}
+@keyframes fh76-meditate-breath{
+  0%,100%{transform:translateY(0) scale(1)}
+  50%    {transform:translateY(-4px) scale(1.04)}
+}
+@keyframes fh76-halo{
+  0%,100%{opacity:.35;transform:scale(.9)}
+  50%    {opacity:.8;transform:scale(1.12)}
+}
+@keyframes fh76-hero-aura{
+  0%,100%{opacity:.45;transform:scale(.92)}
+  50%    {opacity:.92;transform:scale(1.08)}
+}
+
+/* Burst overlay — a 220ms element injected by triggerBurst() on encounter,
+ * drop, spark, glyph events. */
+.fh76-burst{
+  position:absolute;
+  pointer-events:none;
+  inset:8%;
+  z-index:2;
+  animation:fh76-burst-pop 220ms ease-out forwards;
+}
+@keyframes fh76-burst-pop{
+  0%  {opacity:0;transform:scale(.4)}
+  50% {opacity:1;transform:scale(1.05)}
+  100%{opacity:0;transform:scale(1.2)}
+}
+
+/* Action change "ripple" — when Joel taps a different action, a 600ms
+ * visual confirmation on the avatar so the change is obvious. */
+.hero-card .avatar.fh76-action-changed{
+  animation:fh76-action-change 600ms ease-out;
+}
+@keyframes fh76-action-change{
+  0%  {filter:brightness(1) saturate(1)}
+  35% {filter:brightness(1.6) saturate(1.6) drop-shadow(0 0 6px var(--accent-2))}
+  100%{filter:brightness(1) saturate(1)}
+}
+
+/* ---- ACHIEVEMENT TIER FRAMING ---- */
+.ach{position:relative}
+.ach.tier-bronze   {border-color:#B45309;box-shadow:inset 0 0 0 1px rgba(0,0,0,.28),0 0 0 2px rgba(180,83,9,.22)}
+.ach.tier-silver   {border-color:#9CA3AF;box-shadow:inset 0 0 0 1px rgba(0,0,0,.28),0 0 0 2px rgba(156,163,175,.32)}
+.ach.tier-gold     {border-color:#FBBF24;box-shadow:inset 0 0 0 1px rgba(0,0,0,.28),0 0 0 2px rgba(251,191,36,.40)}
+.ach.tier-platinum {border-color:#22D3EE;box-shadow:inset 0 0 0 1px rgba(0,0,0,.28),0 0 0 2px rgba(34,211,238,.45)}
+.ach.tier-mythic   {border-color:#FF77C8;box-shadow:inset 0 0 0 1px rgba(0,0,0,.28),0 0 0 2px rgba(255,119,200,.55)}
+.ach .tier-pill{
+  position:absolute;top:4px;right:4px;
+  font-size:.6rem;letter-spacing:.06em;text-transform:uppercase;
+  padding:.1rem .35rem;
+  border:2px solid #000;background:#0b110d;
+}
+.ach.tier-bronze   .tier-pill{color:#FCD34D}
+.ach.tier-silver   .tier-pill{color:#E5E7EB}
+.ach.tier-gold     .tier-pill{color:#FDE68A}
+.ach.tier-platinum .tier-pill{color:#CFFAFE}
+.ach.tier-mythic   .tier-pill{color:#FBCFE8}
+.ach .progress-mini{
+  height:5px;margin-top:5px;
+  border:2px solid #050805;
+  background:repeating-linear-gradient(90deg,#0a0f0a 0 4px,#111b12 4px 8px);
+}
+.ach .progress-mini > div{
+  height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2));
+}
+.ach.locked.hidden-ach .sym{filter:blur(2px) grayscale(1);opacity:.5}
+.ach.locked.hidden-ach .name{color:var(--ink-mute)}
+.ach.locked.hidden-ach .desc::after{content:" — undiscovered"}
+.ach.unlocked.tier-gold     {animation:fh76-gold-flash 1.2s ease-out 1}
+.ach.unlocked.tier-platinum {animation:fh76-platinum-flash 1.6s ease-out 1}
+.ach.unlocked.tier-mythic   {animation:fh76-mythic-flash 2.4s ease-out 1}
+@keyframes fh76-gold-flash{
+  0%  {transform:scale(1);box-shadow:inset 0 0 0 1px rgba(0,0,0,.28),0 0 0 2px rgba(251,191,36,.40)}
+  35% {transform:scale(1.08);box-shadow:inset 0 0 0 1px rgba(0,0,0,.28),0 0 22px rgba(251,191,36,.95)}
+  100%{transform:scale(1);box-shadow:inset 0 0 0 1px rgba(0,0,0,.28),0 0 0 2px rgba(251,191,36,.40)}
+}
+@keyframes fh76-platinum-flash{
+  0%  {transform:scale(1);filter:hue-rotate(0deg)}
+  35% {transform:scale(1.10);filter:hue-rotate(20deg) brightness(1.4)}
+  100%{transform:scale(1);filter:hue-rotate(0deg)}
+}
+@keyframes fh76-mythic-flash{
+  0%  {transform:scale(1) rotate(0);filter:hue-rotate(0deg)}
+  25% {transform:scale(1.18) rotate(-2deg);filter:hue-rotate(40deg) brightness(1.6)}
+  50% {transform:scale(1.05) rotate(1deg);filter:hue-rotate(-30deg) brightness(1.3)}
+  100%{transform:scale(1) rotate(0);filter:hue-rotate(0deg)}
+}
+
+/* Achievement unlock banner — appears top-of-screen for gold+ */
+.fh76-ach-banner{
+  position:fixed;left:50%;top:24px;transform:translateX(-50%);
+  z-index:1200;
+  padding:.6rem 1.2rem;
+  border:3px solid #000;outline:2px solid #FBBF24;
+  background:linear-gradient(180deg,#FDE68A,#B45309);
+  color:#10140f;
+  font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  box-shadow:0 8px 0 rgba(0,0,0,.5);
+  animation:fh76-banner-in .4s ease-out, fh76-banner-out .4s ease-in 2.6s forwards;
+}
+.fh76-ach-banner.tier-platinum{background:linear-gradient(180deg,#CFFAFE,#22D3EE);outline-color:#22D3EE}
+.fh76-ach-banner.tier-mythic{background:linear-gradient(180deg,#FBCFE8,#FF77C8);outline-color:#FF77C8;animation:fh76-banner-in .4s ease-out, fh76-banner-out .4s ease-in 3.6s forwards}
+@keyframes fh76-banner-in{from{opacity:0;transform:translateX(-50%) translateY(-30px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+@keyframes fh76-banner-out{to{opacity:0;transform:translateX(-50%) translateY(-30px)}}
+
+/* ---- Bestiary tab ---- */
+.bestiary-grid{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:8px;
+}
+.bestiary-cell{
+  border:3px solid var(--border);
+  background:linear-gradient(180deg,rgba(255,255,255,.04),transparent 22px),var(--panel-2);
+  padding:8px;text-align:center;
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.28);
+}
+.bestiary-cell .sym{font-size:1.8rem;line-height:1}
+.bestiary-cell.locked .sym{filter:blur(4px) grayscale(1);opacity:.55}
+.bestiary-cell.locked .name{color:var(--ink-mute)}
+.bestiary-cell.locked .name::after{content:" ???"}
+.bestiary-cell .kills{font-size:.7rem;color:var(--ink-dim);margin-top:3px}
+.bestiary-cell.tier-t1 {border-color:#9CA3AF}
+.bestiary-cell.tier-t2 {border-color:#22D3EE}
+.bestiary-cell.tier-t3 {border-color:#C084FC}
+.bestiary-cell.tier-t4 {border-color:#FBBF24}
+.bestiary-cell.tier-t5 {border-color:#FF77C8}
+
+/* ---- Session row edit affordance (Analytics modal) ---- */
+.session-row{display:flex;align-items:center;gap:.5rem;padding:.25rem .35rem;border-bottom:1px solid rgba(255,255,255,.05)}
+.session-row .ttl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.session-row .min{color:var(--accent-2);font-variant-numeric:tabular-nums}
+.session-row.edited .min::after{content:" ✎";font-size:.7rem;color:var(--ink-dim)}
+.session-row .edit-btn{
+  border:2px solid var(--border);
+  background:#0b110d;color:var(--ink-dim);
+  padding:.1rem .35rem;font-size:.7rem;
+}
+.session-row .edit-btn:hover{color:var(--accent-2);border-color:var(--accent-2)}
+.session-edit-popover{
+  margin-top:.4rem;padding:.5rem .6rem;
+  border:3px solid var(--border-strong);background:#0b110d;
+}
+.session-edit-popover label{font-size:.74rem;color:var(--ink-dim);display:block;margin-bottom:.25rem}
+.session-edit-popover input{width:96px;font-size:1rem;padding:.3rem .5rem}
+.session-edit-popover .hint{font-size:.7rem;color:var(--ink-dim);margin:.25rem 0}
+.session-edit-popover .row{display:flex;gap:.5rem;margin-top:.5rem;justify-content:flex-end}
+
+/* ---- Reduced-motion: dim, don't freeze ---- */
+@media (prefers-reduced-motion: reduce){
+  .hero-card .avatar .fh-sprite,
+  .hero-card .avatar .fh-horizon,
+  .hero-card .avatar .fh-weapon,
+  .hero-card .avatar .fh-enemy,
+  .hero-card .avatar .fh-mount,
+  .hero-card .avatar .fh-aura,
+  .hero-card .avatar::before,
+  .hero-card .avatar[data-scene] *{
+    animation:none !important;
+    transition:none !important;
+  }
+  .hero-card .avatar[data-running="1"]{
+    filter:saturate(.6) brightness(.85);
+  }
+  .hero-card .avatar[data-running="1"]::after{
+    content:"animation paused (reduced-motion)";
+    position:absolute;bottom:-22px;left:0;right:0;
+    font-size:.62rem;color:var(--ink-mute);text-align:center;
+    pointer-events:none;
+  }
+}
+
+/* ---- Live status pill that confirms the current scene at a glance —
+ * helps Joel verify the action selector is wired up without inspecting
+ * the DOM. Anchor: shown only when state.timer.running is true. */
+.adv-status-pill{
+  display:inline-flex;align-items:center;gap:.4rem;
+  margin-left:.5rem;
+  padding:.18rem .55rem;
+  border:2px solid var(--accent-2);
+  background:rgba(251,191,36,.10);
+  color:var(--accent-2);
+  font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;
+}
+.adv-status-pill .dot{
+  width:8px;height:8px;border-radius:50%;
+  background:var(--accent);
+  animation:fh76-blink 1s steps(2,end) infinite;
+}
+@keyframes fh76-blink{0%,49%{opacity:1}50%,100%{opacity:.25}}
+
+/* v7.6 reduced-motion correction: dim the active avatar, but keep the selected action legible instead of silently freezing all motion. */
+@media (prefers-reduced-motion: reduce){
+  .hero-card .avatar[data-running="1"]{filter:saturate(.58) brightness(.86);opacity:.72}
+  .hero-card .avatar[data-running="1"]::after{content:"";display:none}
+  .hero-card .avatar[data-scene="resting"] .fh-sprite{animation:fh76-rest-breathe 4.5s ease-in-out infinite !important}
+  .hero-card .avatar[data-scene="travelling"] .fh-mount{animation:fh76-trot 1.35s steps(2,end) infinite !important}
+  .hero-card .avatar[data-scene="travelling"] .fh-horizon{animation:fh76-scroll-bg 7s linear infinite !important}
+  .hero-card .avatar[data-scene="travelling"] .fh-sprite{animation:fh76-trot 1.35s ease-in-out infinite !important}
+  .hero-card .avatar[data-scene="fighting"] .fh-sprite{animation:fh76-lunge 1.15s ease-in-out infinite !important}
+  .hero-card .avatar[data-scene="fighting"] .fh-weapon{animation:fh76-swing 1.15s ease-in-out infinite !important}
+  .hero-card .avatar[data-scene="fighting"] .fh-enemy{animation:fh76-enemy-recoil 1.15s ease-in-out infinite !important}
+  .hero-card .avatar[data-scene="hunting"] .fh-sprite{animation:fh76-creep 3.8s ease-in-out infinite !important}
+  .hero-card .avatar[data-scene="hunting"] .fh-horizon{animation:fh76-grass-sway 3.8s ease-in-out infinite !important}
+  .hero-card .avatar[data-scene="hunting"] .fh-enemy{animation:fh76-monster-peek 16s ease-in-out infinite !important}
+  .hero-card .avatar[data-scene="looting"] .fh-sprite{animation:fh76-bend 1.4s ease-in-out infinite !important}
+  .hero-card .avatar[data-scene="looting"] .fh-aura{animation:fh76-coin-drift 2.4s linear infinite !important}
+  .hero-card .avatar[data-scene="crafting"] .fh-sprite{animation:fh76-hammer-body 1s ease-in-out infinite !important}
+  .hero-card .avatar[data-scene="crafting"] .fh-weapon{animation:fh76-hammer-arm 1s ease-in-out infinite !important}
+  .hero-card .avatar[data-scene="crafting"] .fh-aura{animation:fh76-sparks 1s ease-out infinite !important}
+  .hero-card .avatar[data-scene="meditating"] .fh-sprite{animation:fh76-meditate-breath 4.8s ease-in-out infinite !important}
+}
 </style>
 </head>
 <body>
@@ -1138,10 +1564,13 @@ button.primary{
 </div>
 
 <!-- ================================================================
- * Focus Hero v7.5 - inline script (one file, no deps)
+ * Focus Hero v7.6 - inline script (one file, no deps)
  * ================================================================ -->
 <script>
 "use strict";
+/* v7.6 build marker - v7.5 base + editable down-only session corrections,
+   42-tier achievement registry, visible seven-action avatar animations,
+   XP-gated 15-monster bestiary, and additive dataVersion 7 migration. */
 /* v7.5 build marker - v7.4 base + mobile touch/scroll reliability, restored
    visible-document app uptime analytics without 32-bit millisecond truncation,
    and a daily Supabase heartbeat/backup workflow. DATA_VERSION unchanged. */
@@ -1173,7 +1602,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const STORAGE_KEY     = "focusHero.v4.state";
 const LEGACY_KEYS     = ["focusHero.v3.state", "focusHero.v2.state", "focusHero.v1.state"];
 const BC_KEY          = "focusHero.v4";
-const DATA_VERSION    = 6;
+const DATA_VERSION    = 7;
 const PBKDF2_ITERATIONS = 100_000;
 const AES_KEY_LENGTH = 256;
 const SALT_BYTES = 16;
@@ -1247,6 +1676,9 @@ const DEFAULTS = {
   sessionHistory: {},
   sessionsLog: [],
   battleLog: [],
+  adventure: { action:"Travel", actionMin:{ Travel:0, Rest:0, Hunt:0, Loot:0, Fight:0, Craft:0, Meditate:0 }, actionsTriedSinceV76:{} },
+  bestiary: {},
+  achievementProgress: {},
   sync: {
     enabled: false, backend: null,
     playerId: null, cloudRev: 0, lastPushedAt: 0, lastPulledAt: 0,
@@ -1322,6 +1754,135 @@ const ACHIEVEMENTS = [
   ["combo_3","Hot Streak","3-session combo in one day","🔥",{combo:3}],
   ["combo_6","Unstoppable Combo","6-session combo cap","⚡",{combo:6}]
 ];
+
+/* ----------------------------------------------------------------
+ * v7.6 registry: actions, achievements, and XP-gated bestiary.
+ * Legacy ACHIEVEMENTS stays in place so old state ids remain preserved;
+ * v7.6 render/check paths use this 42-achievement tiered registry.
+ * ---------------------------------------------------------------- */
+const ACTION_LIST = [
+  { id:"Travel", label:"Travel", sym:"🐎", scene:"travelling", burstMs:12000 },
+  { id:"Rest", label:"Rest", sym:"💤", scene:"resting", burstMs:15000 },
+  { id:"Hunt", label:"Hunt", sym:"🏹", scene:"hunting", burstMs:11000 },
+  { id:"Loot", label:"Loot", sym:"🪙", scene:"looting", burstMs:15000 },
+  { id:"Fight", label:"Fight", sym:"⚔️", scene:"fighting", burstMs:11000 },
+  { id:"Craft", label:"Craft", sym:"🔨", scene:"crafting", burstMs:14000 },
+  { id:"Meditate", label:"Meditate", sym:"🧘", scene:"meditating", burstMs:18000 }
+];
+const ACTION_BY_ID = Object.fromEntries(ACTION_LIST.map(a => [a.id, a]));
+const ACTION_LEGACY_ID = { travelling:"Travel", resting:"Rest", hunting:"Hunt", looting:"Loot", fighting:"Fight", crafting:"Craft", meditating:"Meditate" };
+const ACHIEVEMENT_TIERS = {
+  bronze:{xp:50,name:"Bronze"}, silver:{xp:150,name:"Silver"}, gold:{xp:400,name:"Gold"},
+  platinum:{xp:1000,name:"Platinum"}, mythic:{xp:2500,name:"Mythic"}
+};
+const ACHIEVEMENTS_V76 = [
+  ["first_focus","First Focus","bronze","🥇","Complete your first focus session.",{sessions:1}],
+  ["first_task","Naming Things","bronze","📝","Create your first task.",{tasksCreated:1}],
+  ["first_quest","Quest Begins","bronze","📜","Add your first quest.",{questsCreated:1}],
+  ["first_loot","Spoils of War","bronze","🎁","Find your first loot.",{lootCount:1}],
+  ["first_levelup","Level Up!","bronze","✨","Reach hero level 2.",{level:2}],
+  ["first_combo","Two in a Row","bronze","🔗","Complete two focus sessions back-to-back.",{combo:2}],
+  ["sessions_10","Getting Started","bronze","🎖️","10 focus sessions completed.",{sessions:10}],
+  ["sessions_50","Regular","silver","✋","50 focus sessions completed.",{sessions:50}],
+  ["sessions_100","Centurion","gold","💯","100 focus sessions completed.",{sessions:100}],
+  ["sessions_500","Devoted","platinum","🛡️","500 focus sessions completed.",{sessions:500}],
+  ["sessions_1000","Lifer","mythic","♾️","1,000 focus sessions completed.",{sessions:1000}],
+  ["hours_1","First Hour","bronze","⏳","1 cumulative focused hour.",{totalMin:60}],
+  ["hours_10","In The Zone","silver","🕙","10 cumulative focused hours.",{totalMin:600}],
+  ["hours_50","Deep Practitioner","silver","🕰️","50 cumulative focused hours.",{totalMin:3000}],
+  ["hours_100","Master of Time","gold","🗿","100 cumulative focused hours.",{totalMin:6000}],
+  ["hours_500","Time Sovereign","platinum","🏛️","500 cumulative focused hours.",{totalMin:30000}],
+  ["hours_1000","Beyond Measure","mythic","🌌","1,000 cumulative focused hours.",{totalMin:60000}],
+  ["level_5","Apprentice's Rite","bronze","🌱","Reach hero level 5.",{level:5}],
+  ["level_10","Journeyman","silver","🌳","Reach hero level 10.",{level:10}],
+  ["level_25","Adept","silver","🌟","Reach hero level 25.",{level:25}],
+  ["level_50","Master","gold","💠","Reach hero level 50.",{level:50}],
+  ["level_100","Grandmaster","mythic","👑","Reach hero level 100.",{level:100}],
+  ["streak_3","On A Roll","bronze","🎳","3-day focus streak.",{streak:3}],
+  ["streak_7","Week Warrior","silver","⚡","7-day focus streak.",{streak:7}],
+  ["streak_30","Unstoppable","gold","🔱","30-day focus streak.",{streak:30}],
+  ["streak_100","Centenarian","platinum","🪐","100-day focus streak.",{streak:100}],
+  ["every_action","Renaissance Hero","silver","🎭","Complete focus time with every action type.",{everyAction:true}],
+  ["early_riser","Dawnbringer","silver","🌅","Start a focus session between 04:00 and 07:00 local.",{hourStart:4,hourEnd:7}],
+  ["night_owl","Moonlit","silver","🌙","Start a focus session between 00:00 and 04:00 local.",{hourStart:0,hourEnd:4}],
+  ["deep_diver","Deep Diver","silver","🌊","Complete a single session of 120+ minutes.",{maxSessionMin:120}],
+  ["marathon","Marathon","gold","🏃","Complete 5 focus sessions in one day.",{dayCount:5}],
+  ["perfect_week","Perfect Week","gold","📆","At least one focus session every day for 7 consecutive days.",{perfectWeek:7}],
+  ["iron_will","Iron Will","gold","🛡️","30 completed focus sessions with no canceled session recorded.",{ironWill:30}],
+  ["rarity_full","Treasure Hunter","gold","💎","Find at least one of every rarity.",{rarityFull:true}],
+  ["set_complete","Full Kit","silver","🪖","Equip all four slots simultaneously.",{slotSet:true}],
+  ["bestiary_half","Naturalist","gold","🌿","Encounter half the bestiary.",{bestiaryPct:50}],
+  ["bestiary_full","World-Walker","platinum","🦅","Encounter every monster in the bestiary.",{bestiaryPct:100}],
+  ["secret_konami","↑↑↓↓←→←→BA","silver","🎮","Some keys, in the right order.",{hidden:true,secretKey:"konami"}],
+  ["secret_palindrome","Looking Glass","silver","🪞","A task that reads the same both ways.",{hidden:true,secretKey:"palindrome"}],
+  ["secret_pi","Slice of π","gold","🥧","Complete a session at exactly 3:14.",{hidden:true,secretKey:"pi"}],
+  ["secret_silentnight","Silent Night","gold","❄️","Focus on the longest nights of the year.",{hidden:true,secretKey:"silentnight"}],
+  ["secret_meta","Recursion","mythic","♾️","Sometimes the achievement is the seeker.",{hidden:true,secretKey:"meta"}]
+];
+const MONSTERS = [
+  ["t1","slime","🟢","Verdant Slime",1,1,["common"]],
+  ["t1","rat","🐀","Cellar Rat",1,1,["common"]],
+  ["t1","scrub_raider","🪓","Scrub Raider",2,2,["common","uncommon"]],
+  ["t2","wolf","🐺","Grey Wolf",5,3,["uncommon"]],
+  ["t2","bandit","🗡️","Road Bandit",6,4,["uncommon","rare"]],
+  ["t2","wraith","👻","Pale Wraith",8,5,["uncommon","rare"]],
+  ["t3","bog_brute","👹","Bog Brute",12,8,["rare","epic"]],
+  ["t3","hag","🧙‍♀️","Marsh Hag",14,9,["rare","epic"]],
+  ["t3","drake","🐲","Young Drake",16,12,["epic"]],
+  ["t4","minotaur","🐃","Cavern Minotaur",22,18,["epic","legendary"]],
+  ["t4","revenant","💀","Cold Revenant",25,22,["epic","legendary"]],
+  ["t4","griffin","🦅","Sky Griffin",30,26,["legendary"]],
+  ["t5","dragon","🐉","Ancient Dragon",40,50,["legendary","mythic"]],
+  ["t5","lich","☠️","Bone Lich",50,65,["legendary","mythic"]],
+  ["t5","voidhorror","🌌","Void Horror",75,120,["mythic"]]
+];
+const BESTIARY_TIER_COLOR = { t1:"#9CA3AF", t2:"#22D3EE", t3:"#C084FC", t4:"#FBBF24", t5:"#FF77C8" };
+function defaultActionMin(){ return ACTION_LIST.reduce((o,a)=>(o[a.id]=0,o),{}); }
+function defaultAdventure(){ return { action:"Travel", actionMin:defaultActionMin(), actionsTriedSinceV76:{} }; }
+function defaultBestiary(){ return MONSTERS.reduce((o,m)=>(o[m[1]]={unlocked:false,firstSeenAt:null,kills:0},o),{}); }
+function defaultAchievementProgress(){ return ACHIEVEMENTS_V76.reduce((o,a)=>(o[a[0]]=0,o),{}); }
+function normalizeAdventureAction(value){
+  if (ACTION_BY_ID[value]) return value;
+  const lower = String(value||"").trim().toLowerCase();
+  if (ACTION_LEGACY_ID[lower]) return ACTION_LEGACY_ID[lower];
+  const found = ACTION_LIST.find(a => a.id.toLowerCase() === lower || a.label.toLowerCase() === lower || a.scene === lower);
+  return found ? found.id : "Travel";
+}
+function ensureV76StateShape(s){
+  if (!s || typeof s !== "object") return s;
+  if (!s.adventure || typeof s.adventure !== "object" || Array.isArray(s.adventure)) s.adventure = defaultAdventure();
+  s.adventure.action = normalizeAdventureAction(s.adventure.action);
+  if (!s.adventure.actionMin || typeof s.adventure.actionMin !== "object" || Array.isArray(s.adventure.actionMin)) s.adventure.actionMin = {};
+  for (const [legacy, canonical] of Object.entries(ACTION_LEGACY_ID)){
+    if (legacy in s.adventure.actionMin && !(canonical in s.adventure.actionMin)) s.adventure.actionMin[canonical] = s.adventure.actionMin[legacy];
+  }
+  const mins = defaultActionMin();
+  for (const a of ACTION_LIST){
+    const n = Number(s.adventure.actionMin[a.id]);
+    mins[a.id] = Number.isFinite(n) && n > 0 ? n : 0;
+  }
+  s.adventure.actionMin = mins;
+  if (!s.adventure.actionsTriedSinceV76 || typeof s.adventure.actionsTriedSinceV76 !== "object" || Array.isArray(s.adventure.actionsTriedSinceV76)) s.adventure.actionsTriedSinceV76 = {};
+  if (!s.bestiary || typeof s.bestiary !== "object" || Array.isArray(s.bestiary)) s.bestiary = {};
+  const bestiary = defaultBestiary();
+  for (const m of MONSTERS){
+    const ent = s.bestiary[m[1]];
+    if (ent && typeof ent === "object" && !Array.isArray(ent)){
+      const kills = Math.max(0, Number(ent.kills)||0);
+      const unlocked = !!ent.unlocked || !!ent.firstSeenAt || kills > 0;
+      bestiary[m[1]] = { unlocked, firstSeenAt:unlocked ? (ent.firstSeenAt || now()) : null, kills };
+    }
+  }
+  s.bestiary = bestiary;
+  if (!s.achievementProgress || typeof s.achievementProgress !== "object" || Array.isArray(s.achievementProgress)) s.achievementProgress = {};
+  const progress = defaultAchievementProgress();
+  for (const a of ACHIEVEMENTS_V76){
+    const n = Number(s.achievementProgress[a[0]]);
+    progress[a[0]] = Number.isFinite(n) && n > 0 ? n : 0;
+  }
+  s.achievementProgress = progress;
+  return s;
+}
 const DAILY_TEMPLATES = [
   { id: "d_focus2", text: "Complete 2 focus sessions", target: 2, kind:"focus", xp: 40 },
   { id: "d_focus4", text: "Complete 4 focus sessions", target: 4, kind:"focus", xp: 80 },
@@ -1567,6 +2128,20 @@ function migrate(raw){
     if (typeof s.canceledSessionCount !== "number" || !(s.canceledSessionCount >= 0)) s.canceledSessionCount = 0;
     s.dataVersion = 6;
   }
+  if (s.dataVersion < 7){
+    /* v7.6: adventure, bestiary, achievement progress, and session edit shadows.
+       Purely additive: every existing counter/log/loot/achievement value survives. */
+    ensureV76StateShape(s);
+    if (Array.isArray(s.sessionsLog)){
+      for (const r of s.sessionsLog){
+        if (r && typeof r === "object"){
+          if (!r.id) r.id = uid();
+          if (typeof r.originalMinutes !== "number") r.originalMinutes = r.minutes|0;
+        }
+      }
+    }
+    s.dataVersion = 7;
+  }
 
   /* Degraded-read resilience: rebuild malformed subtrees, but ONLY the malformed ones.
    * We never touch subtrees that parse cleanly. */
@@ -1602,6 +2177,7 @@ function migrate(raw){
   if (!s.hero.equipped || typeof s.hero.equipped !== "object" || Array.isArray(s.hero.equipped)) s.hero.equipped = { weapon:null, helmet:null, armor:null, mount:null };
   for (const slot of ["weapon","helmet","armor","mount"]) if (!(slot in s.hero.equipped)) s.hero.equipped[slot] = null;
   if (!Array.isArray(s.battleLog)) s.battleLog = [];
+  ensureV76StateShape(s);
   if (s.longestStreak < s.streak) s.longestStreak = s.streak;
   return s;
 }
@@ -1873,6 +2449,7 @@ function startTimer(){
        cleanly whether X is a verb, a noun, or the fallback. */
     logBattle(`Hero focuses on ${currentSessionTaskLabel()} via stopwatch.`, "switch");
     renderActiveTaskRow(); renderTimer();
+    renderActionPicker(); renderAvatar(); ensureBurstInterval(true);
     $("#btn-start").textContent = "Pause";
     requestNotifPermIfNeeded();
     return;
@@ -1901,6 +2478,7 @@ function startTimer(){
      task name. */
   if (state.timer.mode === "focus") logBattle(`Hero focuses on ${currentSessionTaskLabel()}.`, "switch");
   renderActiveTaskRow();
+  renderActionPicker(); renderAvatar(); ensureBurstInterval(true);
   $("#btn-start").textContent = "Pause";
   requestNotifPermIfNeeded();
 }
@@ -2012,6 +2590,7 @@ function cancelSession(opts){
   state.canceledSessionCount = (state.canceledSessionCount|0) + 1;
   // Battle-log entry for visibility. Does NOT call pushSessionLog (which is the
   // analytics-facing sessions feed) — canceled sessions stay out of that feed.
+  try { state.__ironWillSince = 0; } catch(_){}
   try { logBattle(`Hero abandoned ${taskLabel}. Nothing was counted.`, "switch"); } catch(_){}
   try { logLine("Session canceled — no stats credited."); } catch(_){}
   stopKeepalive(); releaseWakeLock();
@@ -2047,6 +2626,10 @@ function finalizeStopwatch(){
   // Codex review (v4.1): floor for fairness — no half-minute freebies.
   const minutes = Math.floor((state.timer.swAccumulatedMs||0) / 60000);
   const taskLabel = currentSessionTaskLabel();
+  let lootItem = null;
+  let achievementsUnlockedHere = [];
+  const streakBefore = state.streak|0;
+  const lastFocusDateBefore = state.lastFocusDate || null;
   if (minutes <= 0){
     toast("Nothing to log — stopwatch under 1 minute.", "warn");
     return;
@@ -2073,7 +2656,7 @@ function finalizeStopwatch(){
     // Note: state.combo.count is intentionally not incremented for stopwatch sessions.
     state.hero.energy = Math.max(0, state.hero.energy - 8);
     state.hero.hp = Math.min(100, state.hero.hp + 2);
-    const lootItem = rollLoot(minutes);
+    lootItem = rollLoot(minutes);
     updateDailyProgress("focus", 1);
     updateDailyProgress("minutes", minutes);
     showXpBreakdown(xp, { lootItem });
@@ -2086,7 +2669,15 @@ function finalizeStopwatch(){
     logBattle(`Hero logged ${taskLabel} for ${minutes}m. No rewards below ${floor}m.`, "switch");
     notify("Stopwatch logged", `${minutes}m added to your totals (below ${floor}m reward floor)`);
   }
-  pushSessionLog({ at: now(), type:"focus", source:"stopwatch", minutes, taskId: state.timer.activeTaskId||null, xp: earnedRewards ? xp.total : 0, rewarded: earnedRewards });
+  recordAdventureMinutes(minutes);
+  if (earnedRewards) maybeRecordActionEncounter("stopwatchComplete");
+  if (typeof checkAchievementsV76 === "function") achievementsUnlockedHere = checkAchievementsV76("stopwatchComplete") || [];
+  pushSessionLog(buildSessionLogRecordV76({
+    type:"focus", source:"stopwatch", minutes, taskId: state.timer.activeTaskId||null,
+    xpBreakdown: xp, rewarded: earnedRewards, comboPriorCount:0, streakBefore,
+    extendedStreak: lastFocusDateBefore !== state.lastFocusDate, lootItem, achievementsUnlockedHere,
+    action: currentAdventureActionId()
+  }));
   playChime(false);
   // reset stopwatch counter, stay in stopwatch mode for another session
   state.timer.swAccumulatedMs = 0;
@@ -2125,6 +2716,8 @@ function completeSession(){
   const wasMode = state.timer.mode;
   const minutes = modeMinutes(wasMode);
   const taskLabel = currentSessionTaskLabel();
+  let lootItem = null;
+  let achievementsUnlockedHere = [];
   state.timer.running = false;
   state.timer.endAt = 0;
   state.timer.msLeft = 0;
@@ -2135,6 +2728,8 @@ function completeSession(){
     // Reset combo if a new day has dawned since last focus.
     if (state.combo.date !== tk) state.combo = { count: 0, date: tk };
     const comboPriorCount = state.combo.count;
+    const streakBefore = state.streak|0;
+    const lastFocusDateBefore = state.lastFocusDate || null;
     // Update streak FIRST so streak day includes today
     updateStreak(tk);
     const xp = computeXpBreakdown(minutes, { comboCount: comboPriorCount, streakDays: state.streak, settings: state.settings });
@@ -2155,7 +2750,7 @@ function completeSession(){
       state.combo.count = comboPriorCount + 1;
       state.hero.energy = Math.max(0, state.hero.energy - 8);
       state.hero.hp = Math.min(100, state.hero.hp + 2);
-      const lootItem = rollLoot(minutes);
+      lootItem = rollLoot(minutes);
       updateDailyProgress("focus", 1);
       updateDailyProgress("minutes", minutes);
       showXpBreakdown(xp, { lootItem });
@@ -2170,7 +2765,15 @@ function completeSession(){
       logBattle(`Hero completed ${taskLabel} for ${minutes}m. No rewards below ${floor}m.`, "switch");
       notify("Focus session logged", `${minutes}m added to your totals (below ${floor}m reward floor)`);
     }
-    pushSessionLog({ at: now(), type:"focus", minutes, taskId: state.timer.activeTaskId||null, xp: earnedRewards ? xp.total : 0, rewarded: earnedRewards });
+    recordAdventureMinutes(minutes);
+    if (earnedRewards) maybeRecordActionEncounter("sessionComplete");
+    if (typeof checkAchievementsV76 === "function") achievementsUnlockedHere = checkAchievementsV76("sessionComplete") || [];
+    pushSessionLog(buildSessionLogRecordV76({
+      type:"focus", source:"timer", minutes, taskId: state.timer.activeTaskId||null,
+      xpBreakdown: xp, rewarded: earnedRewards, comboPriorCount, streakBefore,
+      extendedStreak: lastFocusDateBefore !== state.lastFocusDate, lootItem, achievementsUnlockedHere,
+      action: currentAdventureActionId()
+    }));
     playChime(false);
     // pick next mode
     const nextIsLong = state.cycleCount % state.settings.cyclesBeforeLong === 0;
@@ -2193,7 +2796,7 @@ function completeSession(){
     state.timer.activeTaskNameAtStart = null;
   } else {
     state.hero.energy = Math.min(100, state.hero.energy + (wasMode==="long"?40:18));
-    pushSessionLog({ at: now(), type: wasMode, minutes });
+    pushSessionLog(buildSessionLogRecordV76({ type: wasMode, minutes, rewarded:false, xpBreakdown:{total:0}, taskId:null }));
     logLine(`${wasMode==="long"?"Long":"Short"} break done (+energy)`);
     logBattle(`${wasMode==="long"?"Long":"Short"} break restored energy.`, "good");
     playChime(true);
@@ -2958,7 +3561,7 @@ function renderAll(){
   renderLoot(); renderAchievements(); renderHeatmap(); renderTopMeta();
   renderModeTabs(); renderAvatar(); renderTasks(); renderActiveTaskRow();
   renderStatStrip(); renderBattleLog(); renderBackupLast(); renderSecurityPanel();
-  renderSwLaps();
+  renderSwLaps(); renderActionPicker(); renderBestiary();
 }
 function renderModeTabs(){
   $$(".mode-tabs button").forEach(b=>b.setAttribute("aria-pressed", b.dataset.mode===state.timer.mode ? "true":"false"));
@@ -4295,7 +4898,437 @@ function renderAnalytics(){
     ${renderList(monthRanked, "month", maxMonth)}
     <h4>Most-used tasks — all time</h4>
     ${renderList(allTimeRanked, "total", maxAllTime)}
+    <h4>Recent sessions</h4>
+    ${renderEditableSessionRows()}
   `;
+  bindSessionEditButtons(host);
+}
+
+/* ----------------------------------------------------------------
+ * v7.6 runtime: editable sessions, action picker, bestiary, tiered achievements.
+ * ---------------------------------------------------------------- */
+let burstInterval = null;
+function currentAdventureActionId(){ ensureV76StateShape(state); return normalizeAdventureAction(state.adventure?.action); }
+function currentAdventureSpec(){ return ACTION_BY_ID[currentAdventureActionId()] || ACTION_BY_ID.Travel; }
+function buildSessionLogRecordV76(meta){
+  meta = meta || {};
+  const xpTotal = meta.rewarded && meta.xpBreakdown ? (meta.xpBreakdown.total|0) : (meta.xp|0);
+  return {
+    at: meta.at || now(), id: meta.id || uid(), type: meta.type, source: meta.source || null,
+    minutes: meta.minutes|0, originalMinutes: meta.minutes|0, taskId: meta.taskId || null,
+    action: meta.action || currentAdventureActionId(),
+    xp: meta.rewarded ? xpTotal : 0, originalXp: meta.rewarded ? xpTotal : 0,
+    rewarded: !!meta.rewarded, originalRewarded: !!meta.rewarded,
+    loot: meta.lootItem ? { id: lootId(meta.lootItem), rarity: meta.lootItem[2] } : null,
+    edited: false, editedAt: null,
+    comboPriorCount: meta.comboPriorCount|0, streakBefore: meta.streakBefore|0,
+    extendedStreak: !!meta.extendedStreak,
+    achievementsUnlockedHere: Array.isArray(meta.achievementsUnlockedHere) ? meta.achievementsUnlockedHere.slice() : []
+  };
+}
+function recordAdventureMinutes(minutes){
+  minutes = Math.max(0, minutes|0); if (!minutes) return;
+  ensureV76StateShape(state);
+  const a = currentAdventureActionId();
+  state.adventure.actionMin[a] = (state.adventure.actionMin[a]||0) + minutes;
+}
+function setAdventureAction(actionId){
+  ensureV76StateShape(state);
+  const next = normalizeAdventureAction(actionId);
+  if (!ACTION_BY_ID[next] || state.adventure.action === next) return;
+  state.adventure.action = next;
+  state.adventure.actionsTriedSinceV76[next] = (state.adventure.actionsTriedSinceV76[next]||0) + 1;
+  const av = document.getElementById("avatar");
+  if (av){ av.classList.remove("fh76-action-changed"); void av.offsetWidth; av.classList.add("fh76-action-changed"); }
+  logBattle(`Hero is now ${ACTION_BY_ID[next].label.toLowerCase()}.`, "switch");
+  saveState(); renderAvatar(); renderActionPicker(); ensureBurstInterval(true); checkAchievementsV76("actionChanged");
+}
+function renderActionPicker(){
+  const host = document.getElementById("adv-actions"); if (!host || !state) return;
+  ensureV76StateShape(state);
+  const cur = currentAdventureActionId();
+  host.innerHTML = "";
+  for (const a of ACTION_LIST){
+    const b = document.createElement("button");
+    b.type = "button"; b.dataset.action = a.id;
+    b.setAttribute("aria-pressed", a.id === cur ? "true" : "false");
+    b.textContent = `${a.sym} ${a.label}`;
+    b.title = `Switch hero action to ${a.label}`;
+    b.onclick = () => setAdventureAction(a.id);
+    host.appendChild(b);
+  }
+  const slot = document.getElementById("adv-status-slot");
+  if (slot){
+    const a = ACTION_BY_ID[cur] || ACTION_BY_ID.Travel;
+    slot.innerHTML = state.timer?.running ? `<span class="adv-status-pill"><span class="dot"></span>${a.sym} ${a.label}</span>` : "";
+  }
+}
+function renderAvatar(){
+  const clsKey = state.hero.cls || "mage";
+  const cls = CLASSES[clsKey] || CLASSES.mage;
+  const taskName = currentAvatarTaskName();
+  const taskAction = actionFromTaskName(taskName);
+  const adv = currentAdventureSpec();
+  const running = !!(state.timer && state.timer.running);
+  const scene = adv ? adv.scene : currentAvatarScene(taskAction, taskName);
+  const svg = pixelAvatarSvg(cls.name, taskAction, scene, avatarClassSpec(clsKey, cls.palette), avatarEquipment());
+  const av = $("#avatar");
+  if (av){
+    av.innerHTML = svg;
+    av.setAttribute("data-action", adv ? adv.id.toLowerCase() : taskAction);
+    av.setAttribute("data-running", running ? "1" : "0");
+    av.setAttribute("data-scene", scene);
+  }
+}
+function refreshAvatarRunningState(){
+  const av = document.getElementById("avatar"); if (!av) return;
+  const adv = currentAdventureSpec();
+  av.setAttribute("data-running", state.timer && state.timer.running ? "1" : "0");
+  av.setAttribute("data-action", adv.id.toLowerCase());
+  av.setAttribute("data-scene", adv.scene);
+}
+function pickMonster(level){
+  const lv = Math.max(1, level|0);
+  const candidates = MONSTERS.filter(m => m[4] <= lv + 5 && m[4] >= lv - 30);
+  const pool = candidates.length ? candidates : MONSTERS.slice(0,3);
+  let total = 0;
+  const weights = pool.map(m => {
+    const dist = Math.abs(m[4] - lv);
+    let w = 1 / (1 + dist * 0.4);
+    if (m[4] > lv) w *= 0.5;
+    if (m[0] === "t5" && lv < m[4]) w *= 0.25;
+    total += w;
+    return w;
+  });
+  let roll = Math.random() * total;
+  for (let i=0; i<pool.length; i++){ roll -= weights[i]; if (roll <= 0) return pool[i]; }
+  return pool[0];
+}
+function recordEncounter(monsterId, {silent=false} = {}){
+  ensureV76StateShape(state);
+  const m = MONSTERS.find(x => x[1] === monsterId);
+  if (!m) return null;
+  const ent = state.bestiary[m[1]] || { unlocked:false, firstSeenAt:null, kills:0 };
+  const first = !ent.unlocked;
+  ent.unlocked = true; ent.firstSeenAt = ent.firstSeenAt || now(); ent.kills = (ent.kills|0) + 1;
+  state.bestiary[m[1]] = ent;
+  if (!silent){
+    if (first) toast(`${m[2]} Bestiary: ${m[3]}`, "good");
+    saveState(); renderBestiary(); checkAchievementsV76("encounter");
+  }
+  return m;
+}
+function maybeRecordActionEncounter(){
+  const a = currentAdventureActionId();
+  if (a !== "Fight" && a !== "Hunt") return null;
+  const m = pickMonster(state.hero.level);
+  if (!m) return null;
+  recordEncounter(m[1], {silent:true});
+  logBattle(`${ACTION_BY_ID[a].sym} Encountered ${m[3]}.`, a === "Hunt" ? "loot" : "good");
+  return m;
+}
+function renderBestiary(){
+  const g = document.getElementById("bestiary-grid"); if (!g || !state) return;
+  ensureV76StateShape(state);
+  g.innerHTML = "";
+  for (const m of MONSTERS){
+    const ent = state.bestiary[m[1]];
+    const seen = !!ent?.unlocked;
+    const el = document.createElement("div");
+    el.className = `bestiary-cell tier-${m[0]} ${seen ? "" : "locked"}`;
+    el.style.borderColor = BESTIARY_TIER_COLOR[m[0]] || "";
+    el.innerHTML = `<div class="sym">${m[2]}</div><div class="name">${escapeHtml(seen ? m[3] : "Unknown")}</div><div class="kills">${seen ? `kills ×${ent.kills|0}` : `level ${m[4]}+`}</div>`;
+    g.appendChild(el);
+  }
+}
+function ensureBurstInterval(restart){
+  const av = document.getElementById("avatar"); if (!av) return;
+  if (burstInterval && restart){ clearInterval(burstInterval); burstInterval = null; }
+  if (burstInterval) return;
+  burstInterval = setInterval(()=>{
+    if (!state.timer || !state.timer.running) return;
+    triggerBurst(currentAdventureActionId());
+  }, Math.max(7000, currentAdventureSpec().burstMs));
+}
+function triggerBurst(actionId){
+  const av = document.getElementById("avatar"); if (!av) return;
+  const overlay = document.createElement("div");
+  overlay.className = "fh76-burst";
+  overlay.textContent = ({Fight:"💥",Hunt:"❗",Loot:"🪙",Craft:"✨",Meditate:"☸",Travel:"📍",Rest:"💤"})[normalizeAdventureAction(actionId)] || "✨";
+  overlay.style.fontSize = "1.6rem";
+  overlay.style.display = "grid";
+  overlay.style.placeItems = "center";
+  av.appendChild(overlay);
+  setTimeout(()=>overlay.remove(), 240);
+}
+function bestiaryPercent(){
+  ensureV76StateShape(state);
+  return Math.round((Object.values(state.bestiary||{}).filter(x => x && x.unlocked).length / Math.max(1, MONSTERS.length)) * 100);
+}
+function computePerfectStreakDays(){
+  let n = 0; const d = new Date();
+  for (let i=0; i<400; i++){
+    const k = todayKey(d);
+    if ((state.history[k]||0) > 0) n++; else break;
+    d.setDate(d.getDate()-1);
+  }
+  return n;
+}
+function computeIronWillStreak(){
+  const completed = state.completedFocusSessions|0, canceled = state.canceledSessionCount|0;
+  return canceled > 0 ? Math.max(0, completed - canceled) : completed;
+}
+function _achCtx(){
+  ensureV76StateShape(state);
+  const tk = todayKey();
+  const records = (state.sessionsLog||[]).filter(r => r && r.type === "focus");
+  const maxSession = records.reduce((m,r)=>Math.max(m, r.minutes|0), 0);
+  const dayCount = records.filter(r => todayKey(new Date(r.at)) === tk).length;
+  const actionMin = state.adventure?.actionMin || {};
+  const everyAction = ACTION_LIST.every(a => (actionMin[a.id]|0) > 0);
+  const slotSet = EQUIP_SLOTS.every(s => state.hero.equipped?.[s]?.lootId);
+  const raritiesOwned = new Set(Object.keys(state.lootOwned||{}).filter(id => (state.lootOwned[id]|0) > 0).map(id => { const it = lootById(id); return it ? it[2] : null; }).filter(Boolean));
+  const rarityFull = ["common","uncommon","rare","epic","legendary","mythic"].every(r => raritiesOwned.has(r));
+  return {
+    totalSessions: state.completedFocusSessions|0,
+    totalMin: state.totalFocusMin|0,
+    streak: state.streak|0,
+    level: state.hero.level|0,
+    quests: state.quests.filter(q=>q.done).length,
+    dayMin: state.history[tk]||0,
+    combo: state.combo?.date === tk ? (state.combo.count|0) : 0,
+    tasksCreated: (state.tasks||[]).length,
+    questsCreated: (state.quests||[]).length,
+    lootCount: Object.values(state.lootOwned||{}).reduce((a,b)=>a+(b|0),0),
+    maxSessionMin: maxSession,
+    dayCount, everyAction, slotSet, rarityFull,
+    bestiaryPct: bestiaryPercent(),
+    perfectWeek: computePerfectStreakDays(),
+    ironWill: computeIronWillStreak()
+  };
+}
+function _condMet(cond,c){
+  if(cond.sessions!=null)return c.totalSessions>=cond.sessions;
+  if(cond.totalMin!=null)return c.totalMin>=cond.totalMin;
+  if(cond.streak!=null)return c.streak>=cond.streak;
+  if(cond.level!=null)return c.level>=cond.level;
+  if(cond.quests!=null)return c.quests>=cond.quests;
+  if(cond.dayMin!=null)return c.dayMin>=cond.dayMin;
+  if(cond.combo!=null)return c.combo>=cond.combo;
+  if(cond.tasksCreated!=null)return c.tasksCreated>=cond.tasksCreated;
+  if(cond.questsCreated!=null)return c.questsCreated>=cond.questsCreated;
+  if(cond.lootCount!=null)return c.lootCount>=cond.lootCount;
+  if(cond.maxSessionMin!=null)return c.maxSessionMin>=cond.maxSessionMin;
+  if(cond.dayCount!=null)return c.dayCount>=cond.dayCount;
+  if(cond.everyAction)return !!c.everyAction;
+  if(cond.slotSet)return !!c.slotSet;
+  if(cond.rarityFull)return !!c.rarityFull;
+  if(cond.bestiaryPct!=null)return c.bestiaryPct>=cond.bestiaryPct;
+  if(cond.perfectWeek!=null)return c.perfectWeek>=cond.perfectWeek;
+  if(cond.ironWill!=null)return c.ironWill>=cond.ironWill;
+  return false;
+}
+function _condProgress(cond,c){
+  if(cond.sessions!=null)return[c.totalSessions,cond.sessions];
+  if(cond.totalMin!=null)return[c.totalMin,cond.totalMin];
+  if(cond.streak!=null)return[c.streak,cond.streak];
+  if(cond.level!=null)return[c.level,cond.level];
+  if(cond.quests!=null)return[c.quests,cond.quests];
+  if(cond.dayMin!=null)return[c.dayMin,cond.dayMin];
+  if(cond.combo!=null)return[c.combo,cond.combo];
+  if(cond.tasksCreated!=null)return[c.tasksCreated,cond.tasksCreated];
+  if(cond.questsCreated!=null)return[c.questsCreated,cond.questsCreated];
+  if(cond.lootCount!=null)return[c.lootCount,cond.lootCount];
+  if(cond.maxSessionMin!=null)return[c.maxSessionMin,cond.maxSessionMin];
+  if(cond.dayCount!=null)return[c.dayCount,cond.dayCount];
+  if(cond.bestiaryPct!=null)return[c.bestiaryPct,cond.bestiaryPct];
+  if(cond.perfectWeek!=null)return[c.perfectWeek,cond.perfectWeek];
+  if(cond.ironWill!=null)return[c.ironWill,cond.ironWill];
+  return null;
+}
+function _achUnlock(id){
+  if(state.achievements[id])return false;
+  const meta = ACHIEVEMENTS_V76.find(a=>a[0]===id); if(!meta)return false;
+  state.achievements[id]=now();
+  const tier=ACHIEVEMENT_TIERS[meta[2]]||ACHIEVEMENT_TIERS.bronze;
+  if(tier.xp>0)awardXp(tier.xp);
+  if(["gold","platinum","mythic"].includes(meta[2]))showAchievementBanner(meta[1],meta[2]);
+  else toast(`${meta[3]} Achievement: ${meta[1]}`,"good");
+  logLine(`Unlocked: ${meta[1]} (${meta[2]} · +${tier.xp} XP)`);
+  return true;
+}
+function showAchievementBanner(name,tier){
+  const b=document.createElement("div");
+  b.className=`fh76-ach-banner tier-${tier}`;
+  b.textContent=`${String(tier||"").toUpperCase()} · ${name}`;
+  document.body.appendChild(b);
+  setTimeout(()=>{try{b.remove();}catch(_){}},tier==="mythic"?4000:3000);
+}
+function checkAchievementsV76(){
+  ensureV76StateShape(state);
+  const c=_achCtx(), unlocked=[];
+  for(const meta of ACHIEVEMENTS_V76){
+    const [id,,,,,cond]=meta;
+    if(state.achievements[id]||cond.hidden)continue;
+    if(_condMet(cond,c)){ if(_achUnlock(id))unlocked.push(id); }
+    else {
+      const p=_condProgress(cond,c);
+      if(p)state.achievementProgress[id]=p[0];
+    }
+  }
+  saveState(); renderAchievements();
+  return unlocked;
+}
+function checkAchievements(){ return checkAchievementsV76(); }
+function unlockSecretAchievement(secretKey){
+  const meta=ACHIEVEMENTS_V76.find(a=>a[5].hidden&&a[5].secretKey===secretKey);
+  if(!meta)return false;
+  const ok=_achUnlock(meta[0]);
+  if(ok){saveState(); renderAchievements();}
+  return ok;
+}
+function renderAchievements(){
+  const g=$("#ach-grid"); if(!g||!state)return;
+  ensureV76StateShape(state);
+  g.innerHTML="";
+  const c=_achCtx();
+  const order={mythic:0,platinum:1,gold:2,silver:3,bronze:4};
+  for(const meta of ACHIEVEMENTS_V76.slice().sort((a,b)=>{
+    const ua=!!state.achievements[a[0]], ub=!!state.achievements[b[0]];
+    if(ua!==ub)return ua?-1:1;
+    return (order[a[2]]??9)-(order[b[2]]??9);
+  })){
+    const [id,name,tier,sym,desc,cond]=meta;
+    const done=!!state.achievements[id], hidden=!!cond.hidden&&!done;
+    const el=document.createElement("div");
+    el.className=`ach tier-${tier} ${done?"unlocked":"locked"} ${hidden?"hidden-ach":""}`;
+    el.title=done?desc:(hidden?"Undiscovered":desc);
+    el.innerHTML=`<span class="tier-pill">${tier}</span><div class="sym">${sym}</div><div class="name">${escapeHtml(hidden?"???":name)}</div><div class="desc">${escapeHtml(hidden?"Find me.":desc)}</div>`;
+    if(!done&&!hidden){
+      const p=_condProgress(cond,c);
+      if(p){
+        const pct=Math.max(0,Math.min(100,Math.round((p[0]/Math.max(1,p[1]))*100)));
+        const bar=document.createElement("div");
+        bar.className="progress-mini";
+        bar.innerHTML=`<div style="width:${pct}%"></div>`;
+        bar.title=`${p[0]} / ${p[1]}`;
+        el.appendChild(bar);
+      }
+    }
+    g.appendChild(el);
+  }
+}
+function canEditSessionRecord(rec){
+  return !!(rec&&rec.type==="focus"&&!rec.edited&&typeof rec.id==="string"&&typeof rec.originalMinutes==="number"&&typeof rec.originalXp==="number");
+}
+function applySessionEdit(sessionId,newMinutes){
+  const rec=(state.sessionsLog||[]).find(r=>r&&r.id===sessionId);
+  if(!rec)return{ok:false,reason:"not_found"};
+  if(!canEditSessionRecord(rec))return{ok:false,reason:"not_editable"};
+  const nm=Math.max(0,Math.min(rec.minutes|0,Number(newMinutes)|0));
+  if(nm===(rec.minutes|0))return{ok:false,reason:"no_change"};
+  if(nm>(rec.minutes|0))return{ok:false,reason:"edits_must_decrease"};
+  const oldMinutes=rec.minutes|0, delta=oldMinutes-nm, day=todayKey(new Date(rec.at||now()));
+  state.totalFocusMin=Math.max(0,(state.totalFocusMin|0)-delta);
+  if(state.history&&typeof state.history==="object")state.history[day]=Math.max(0,(state.history[day]||0)-delta);
+  const task=rec.taskId?state.tasks.find(t=>t.id===rec.taskId):null;
+  if(task){
+    task.totalFocusMin=Math.max(0,(task.totalFocusMin|0)-delta);
+    if(task.dailyMin&&typeof task.dailyMin==="object")task.dailyMin[day]=Math.max(0,(task.dailyMin[day]||0)-delta);
+  }
+  ensureV76StateShape(state);
+  const action=normalizeAdventureAction(rec.action||state.adventure.action);
+  state.adventure.actionMin[action]=Math.max(0,(state.adventure.actionMin[action]||0)-delta);
+  const xpInfo=computeXpBreakdown(nm,{comboCount:rec.comboPriorCount|0,streakDays:rec.streakBefore|0,settings:state.settings});
+  const floor=Math.max(1,state.settings.minRewardMinutes|0||5);
+  const newRewarded=nm>=floor, newXp=newRewarded?xpInfo.total:0, xpDelta=(rec.xp|0)-newXp;
+  if(xpDelta>0){
+    const lv=levelFromTotalXp(Math.max(0,totalXpForLevel(state.hero.level)+state.hero.xp-xpDelta));
+    state.hero.level=Math.max(1,lv.lv); state.hero.xp=Math.max(0,lv.xp);
+  }
+  rec.minutes=nm; rec.xp=newXp; rec.rewarded=newRewarded; rec.edited=true; rec.editedAt=now();
+  saveState(); renderAll();
+  return{ok:true,sessionId,oldMinutes,newMinutes:nm,minutesDelta:-delta,xpDelta:-xpDelta,rewardedAfter:newRewarded};
+}
+function renderEditableSessionRows(){
+  const rows=(state.sessionsLog||[]).filter(r=>r&&r.type==="focus").slice(-8).reverse();
+  if(!rows.length)return`<div class="analytics-empty">No editable focus sessions yet.</div>`;
+  return`<div class="analytics-list session-edit-list">${rows.map(r=>{
+    const task=r.taskId?state.tasks.find(t=>t.id===r.taskId):null;
+    const dt=r.at?new Date(r.at).toLocaleString():"unknown time";
+    const editable=canEditSessionRecord(r);
+    return`<div class="session-row ${r.edited?"edited":""}"><div class="ttl">${escapeHtml(task?.emoji||"⏱️")} ${escapeHtml(task?.name||r.action||"Focus")} <span class="muted">${escapeHtml(dt)}</span></div><div class="min">${r.minutes|0}m</div>${editable?`<button class="edit-btn" data-edit-session="${escapeHtml(r.id)}">Edit</button>`:`<span class="muted" style="font-size:.7rem">locked</span>`}</div>`;
+  }).join("")}</div>`;
+}
+function bindSessionEditButtons(host){
+  if(!host)return;
+  host.querySelectorAll("[data-edit-session]").forEach(btn=>{
+    btn.onclick=()=>{
+      const rec=(state.sessionsLog||[]).find(r=>r&&r.id===btn.dataset.editSession);
+      if(!rec)return;
+      const ans=prompt(`Correct minutes for this session (0-${rec.minutes|0}). You can only decrease it.`,String(rec.minutes|0));
+      if(ans==null)return;
+      const result=applySessionEdit(rec.id,Number(ans));
+      if(!result.ok)toast(`Edit not applied: ${result.reason}`,"warn");
+      else toast(`Session corrected to ${result.newMinutes}m`,"good");
+      renderAnalytics();
+    };
+  });
+}
+function bindSecretAchievementListeners(){
+  if(bindSecretAchievementListeners._bound)return;
+  bindSecretAchievementListeners._bound=true;
+  const seq=["ArrowUp","ArrowUp","ArrowDown","ArrowDown","ArrowLeft","ArrowRight","ArrowLeft","ArrowRight","b","a"];
+  let pos=0;
+  document.addEventListener("keydown",e=>{
+    const k=e.key.length===1?e.key.toLowerCase():e.key;
+    if(k===seq[pos]){pos++; if(pos===seq.length){unlockSecretAchievement("konami"); pos=0;}}
+    else pos=(k===seq[0]?1:0);
+  });
+  document.addEventListener("mouseover",e=>{
+    const cell=e.target.closest?.(".ach.locked.hidden-ach");
+    if(!cell)return;
+    const start=Date.now();
+    const id=setInterval(()=>{
+      if(!cell.matches(":hover")){clearInterval(id);return;}
+      if(Date.now()-start>=10000){clearInterval(id);unlockSecretAchievement("meta");}
+    },250);
+  });
+}
+function isPalindrome(s){
+  s=(s||"").toLowerCase().replace(/[^a-z0-9]+/g,"");
+  return s.length>=4&&s===s.split("").reverse().join("");
+}
+function injectV76DomScaffolding(){
+  const td=document.getElementById("timer-display");
+  if(td&&!document.getElementById("adv-actions")){
+    const strip=document.createElement("div");
+    strip.id="adv-actions"; strip.className="adv-actions";
+    strip.setAttribute("role","tablist"); strip.setAttribute("aria-label","Adventure action");
+    td.insertAdjacentElement("afterend",strip);
+  }
+  const atRow=document.getElementById("active-task-row");
+  if(atRow&&!document.getElementById("adv-status-slot")){
+    const slot=document.createElement("span");
+    slot.id="adv-status-slot";
+    atRow.appendChild(slot);
+  }
+  const tabsHost=document.querySelector(`[aria-labelledby="tabs-heading"] .tabs`);
+  if(tabsHost&&!tabsHost.querySelector(`[data-tab="bestiary"]`)){
+    const btn=document.createElement("button");
+    btn.setAttribute("role","tab"); btn.dataset.tab="bestiary";
+    btn.setAttribute("aria-pressed","false"); btn.textContent="Bestiary";
+    const heatBtn=tabsHost.querySelector('[data-tab="heat"]');
+    if(heatBtn)tabsHost.insertBefore(btn,heatBtn); else tabsHost.appendChild(btn);
+  }
+  const panels=document.querySelector(`[aria-labelledby="tabs-heading"]`);
+  if(panels&&!document.getElementById("tab-bestiary")){
+    const panel=document.createElement("div");
+    panel.id="tab-bestiary"; panel.className="tab-panel"; panel.hidden=true;
+    panel.innerHTML=`<div class="muted" style="font-size:.8rem;margin-bottom:6px">Encounters fill in as you fight or hunt.</div><div id="bestiary-grid" class="bestiary-grid"></div>`;
+    const heatPanel=document.getElementById("tab-heat");
+    if(heatPanel&&heatPanel.parentNode)heatPanel.parentNode.insertBefore(panel,heatPanel); else panels.appendChild(panel);
+  }
 }
 
 /* v4.2: theme presets — keep VALID_THEMES in sync with the [data-theme="…"] CSS blocks */
@@ -4329,7 +5362,7 @@ function bindTabs(){
     b.addEventListener("click", ()=>{
       const tab = b.dataset.tab;
       $$(".tabs button[role='tab']").forEach(x=>x.setAttribute("aria-pressed", x===b?"true":"false"));
-      ["loot","ach","heat"].forEach(k=>{ const p=$(`#tab-${k}`); if (!p) return; p.hidden = k!==tab; });
+      ["loot","ach","bestiary","heat"].forEach(k=>{ const p=$(`#tab-${k}`); if (!p) return; p.hidden = k!==tab; });
     });
   });
 }
@@ -4527,6 +5560,12 @@ const __FocusHero = {
   recover: recoverFromSnapshot,
   isStateSane
 };
+Object.assign(__FocusHero, {
+  applySessionEdit, setAdventureAction, currentAdventureActionId,
+  ACHIEVEMENTS_V76, MONSTERS, ACTION_LIST, pickMonster, recordEncounter,
+  checkAchievementsV76, unlockSecretAchievement, isPalindrome, _achCtx, _condMet,
+  defaultAdventure, defaultBestiary, defaultAchievementProgress
+});
 try { window.__FocusHero = __FocusHero; } catch(_){}
 
 async function runSmokeTests(){
@@ -4756,8 +5795,9 @@ function renderTestBanner(results){
 async function boot(){
   try {
     applyTheme();
+    injectV76DomScaffolding();
     bindSettings(); bindSync(); bindHelp(); bindAnalytics(); bindTabs(); bindModeTabs();
-    bindTasks(); bindQuests(); bindTimer(); bindBattleLog(); bindKeys(); bindMultiTab();
+    bindTasks(); bindQuests(); bindTimer(); bindBattleLog(); bindKeys(); bindMultiTab(); bindSecretAchievementListeners();
     $("#btn-theme").onclick = toggleTheme;
     renderAll();
     renderSyncStatus();

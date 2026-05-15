@@ -8,14 +8,41 @@
   "orientation": "any",
   "background_color": "#0b0d1a",
   "theme_color": "#0b0d1a",
-  "categories": ["productivity","lifestyle","games"],
+  "categories": [
+    "productivity",
+    "lifestyle",
+    "games"
+  ],
   "icons": [
-    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
   ],
   "shortcuts": [
-    { "name": "Start focus",      "url": "./focus-hero.html?start=focus",   "short_name": "Focus" },
-    { "name": "Open settings",    "url": "./focus-hero.html?open=settings", "short_name": "Settings" },
-    { "name": "Back up all data", "url": "./focus-hero.html?action=backup", "short_name": "Backup" }
-  ]
+    {
+      "name": "Start focus",
+      "url": "./focus-hero.html?start=focus",
+      "short_name": "Focus"
+    },
+    {
+      "name": "Open settings",
+      "url": "./focus-hero.html?open=settings",
+      "short_name": "Settings"
+    },
+    {
+      "name": "Back up all data",
+      "url": "./focus-hero.html?action=backup",
+      "short_name": "Backup"
+    }
+  ],
+  "version": "7.6.0"
 }
