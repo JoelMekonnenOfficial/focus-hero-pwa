@@ -1408,6 +1408,30 @@ button.primary{
   font-size:.78rem;
   text-transform:uppercase;
 }
+.appearance-controls{
+  display:grid;
+  gap:9px;
+  padding:10px;
+  border:2px solid var(--border);
+  background:#0b110d;
+}
+.appearance-group{display:grid;gap:5px}
+.appearance-label{font-size:.62rem;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.06em}
+.appearance-options{display:flex;gap:6px;flex-wrap:wrap}
+.appearance-options button{
+  min-height:30px;
+  padding:.28rem .48rem;
+  font-size:.66rem;
+}
+.appearance-options button[aria-pressed="true"]{border-color:var(--accent);color:var(--accent-2);background:rgba(var(--accent-rgb),.12)}
+.appearance-options .swatch{
+  display:inline-block;
+  width:12px;
+  height:12px;
+  margin-right:5px;
+  border:2px solid #050805;
+  vertical-align:-2px;
+}
 .equipment-slots{
   display:grid;
   grid-template-columns:repeat(2,minmax(0,1fr));
@@ -1741,7 +1765,7 @@ html[data-variant="terminal"] .timer-display{color:#C7FF45;text-shadow:0 0 16px 
     <div class="form-row"><label>Cycles before long break</label><div class="val"><input type="number" id="cfg-cycles" min="1" max="12" step="1"></div></div>
     <div class="form-row"><label>Hero name</label><div class="val"><input type="text" id="cfg-name" maxlength="32" style="width:180px"></div></div>
     <div class="form-row"><label>Class</label><div class="val"><select id="cfg-class">
-      <option value="mage">Mage</option><option value="rogue">Rogue</option><option value="warrior">Warrior</option>
+      <option value="knight">Knight</option><option value="mage">Mage</option><option value="rogue">Rogue</option><option value="warrior">Warrior</option>
       <option value="druid">Druid</option><option value="bard">Bard</option></select></div></div>
     <hr>
     <div class="form-row"><label>Auto-start next session</label><div class="val"><button class="toggle" id="tog-auto" aria-checked="false" aria-label="Auto-start next session"></button></div></div>
@@ -1902,9 +1926,10 @@ html[data-variant="terminal"] .timer-display{color:#C7FF45;text-shadow:0 0 16px 
       <div class="character-controls">
         <label>Hero name<input type="text" id="character-name" maxlength="32" aria-label="Hero name"></label>
         <label>Class<select id="character-class" aria-label="Hero class">
-          <option value="mage">Mage</option><option value="rogue">Rogue</option><option value="warrior">Warrior</option>
+          <option value="knight">Knight</option><option value="mage">Mage</option><option value="rogue">Rogue</option><option value="warrior">Warrior</option>
           <option value="druid">Druid</option><option value="bard">Bard</option>
         </select></label>
+        <div id="appearance-controls" class="appearance-controls" aria-label="Appearance controls"></div>
         <div id="equipment-slots" class="equipment-slots"></div>
       </div>
     </div>
@@ -1949,6 +1974,8 @@ html[data-variant="terminal"] .timer-display{color:#C7FF45;text-shadow:0 0 16px 
  * ================================================================ -->
 <script>
 "use strict";
+/* v7.7.1 build marker - Knight-first character customization hotfix with
+   appearance controls, default Mage-to-Knight migration, and no stat resets. */
 /* v7.7 build marker - Codex/Gemini hybrid design shell with quick navigation,
    global task sheet, post-focus logged-minute claim step, character workbench,
    pets/mounts progression, selectable design prototypes, and revised motion. */
@@ -1986,7 +2013,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const STORAGE_KEY     = "focusHero.v4.state";
 const LEGACY_KEYS     = ["focusHero.v3.state", "focusHero.v2.state", "focusHero.v1.state"];
 const BC_KEY          = "focusHero.v4";
-const DATA_VERSION    = 7;
+const DATA_VERSION    = 8;
 const PBKDF2_ITERATIONS = 100_000;
 const AES_KEY_LENGTH = 256;
 const SALT_BYTES = 16;
@@ -2015,7 +2042,8 @@ const DEFAULT_TASK_EMOJIS = [
 
 const DEFAULTS = {
   dataVersion: DATA_VERSION,
-  hero: { name: "Hero", cls: "mage", level: 1, xp: 0, hp: 100, energy: 100,
+  hero: { name: "Hero", cls: "knight", level: 1, xp: 0, hp: 100, energy: 100,
+          appearance: { armor:"steel", accent:"gold", helm:"closed", cloak:"royal" },
           equipped: { weapon:null, helmet:null, armor:null, mount:null, pet:null } },
   settings: {
     focusMin: 25, shortMin: 5, longMin: 15, cyclesBeforeLong: 4,
@@ -2030,6 +2058,7 @@ const DEFAULTS = {
     lastAutoBackup: null,
     lastManualBackup: null,
     designVariant: "command",
+    characterPatchVersion: 1,
     e2eEncryption: true
   },
   timer: { mode: "focus", endAt: 0, pausedAt: 0, running: false, msLeft: 25*60*1000,
@@ -2075,6 +2104,8 @@ const DEFAULTS = {
 
 /* -------- classes, titles, loot, achievements, daily templates -------- */
 const CLASSES = {
+  knight:  { name: "Knight",  palette: ["#64748B","#CBD5E1","#111827","#FBBF24"],
+             titles: ["Squire","Knight","Banneret","Champion","Paladin","Iron Warden"] },
   mage:    { name: "Mage",    palette: ["#b48dff","#6cd1ff","#170c33","#e7d8ff"],
              titles: ["Apprentice","Adept","Mage","Archmage","Luminary","Stellar Sage"] },
   rogue:   { name: "Rogue",   palette: ["#6ee7a3","#2aa890","#0d2018","#d7f7e8"],
@@ -2123,6 +2154,32 @@ const LOOT_TABLE = [
 ];
 const EQUIP_SLOTS = ["weapon","helmet","armor","mount","pet"];
 const TIER_RANK = { common:1, uncommon:2, rare:3, epic:4, legendary:5, mythic:6 };
+const HERO_APPEARANCE_VERSION = 1;
+const APPEARANCE_OPTIONS = {
+  armor: [
+    { id:"steel", label:"Steel", mid:"#64748B", high:"#CBD5E1", dark:"#1F2937" },
+    { id:"onyx", label:"Onyx", mid:"#334155", high:"#94A3B8", dark:"#020617" },
+    { id:"crimson", label:"Crimson", mid:"#B91C1C", high:"#FCA5A5", dark:"#450A0A" },
+    { id:"royal", label:"Royal", mid:"#2563EB", high:"#93C5FD", dark:"#1E3A8A" }
+  ],
+  accent: [
+    { id:"gold", label:"Gold", color:"#FBBF24" },
+    { id:"silver", label:"Silver", color:"#E5E7EB" },
+    { id:"emerald", label:"Emerald", color:"#34D399" },
+    { id:"violet", label:"Violet", color:"#C084FC" }
+  ],
+  helm: [
+    { id:"closed", label:"Closed helm" },
+    { id:"open", label:"Open helm" },
+    { id:"crest", label:"Crest" }
+  ],
+  cloak: [
+    { id:"royal", label:"Blue cloak", color:"#2563EB" },
+    { id:"crimson", label:"Red cloak", color:"#B91C1C" },
+    { id:"forest", label:"Green cloak", color:"#166534" },
+    { id:"none", label:"No cloak", color:"#64748B" }
+  ]
+};
 const ACHIEVEMENTS = [
   ["first_focus","First Focus","Complete 1 focus session","🥇",{sessions:1}],
   ["five_focus","High Five","Complete 5 focus sessions","✋",{sessions:5}],
@@ -2301,6 +2358,20 @@ const todayKey = (d=new Date()) => {
   return `${y}-${m}-${dd}`;
 };
 const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+function appearanceOption(group, id){
+  const opts = APPEARANCE_OPTIONS[group] || [];
+  return opts.find(o=>o.id === id) || opts[0] || null;
+}
+function ensureHeroAppearanceShape(hero=state?.hero){
+  if (!hero || typeof hero !== "object") return deepClone(DEFAULTS.hero.appearance);
+  if (!hero.appearance || typeof hero.appearance !== "object" || Array.isArray(hero.appearance)){
+    hero.appearance = deepClone(DEFAULTS.hero.appearance);
+  }
+  for (const [group, opts] of Object.entries(APPEARANCE_OPTIONS)){
+    if (!opts.some(o=>o.id === hero.appearance[group])) hero.appearance[group] = DEFAULTS.hero.appearance[group];
+  }
+  return hero.appearance;
+}
 const nonNegativeNumber = v => {
   const n = Number(v);
   return Number.isFinite(n) && n > 0 ? n : 0;
@@ -2541,6 +2612,20 @@ function migrate(raw){
     }
     s.dataVersion = 7;
   }
+  if (s.dataVersion < 8){
+    /* v7.7.1: character pass. Add a real Knight default and appearance controls.
+       Purely additive: no task/session/history/loot fields are reset. Existing
+       default Mage avatars are moved to Knight once so Joel's saved hero stops
+       looking like the old placeholder. */
+    if (!s.settings || typeof s.settings !== "object") s.settings = {};
+    if (!s.hero || typeof s.hero !== "object") s.hero = deepClone(DEFAULTS.hero);
+    const needsCharacterPatch = !("characterPatchVersion" in s.settings)
+      || (s.settings.characterPatchVersion|0) < HERO_APPEARANCE_VERSION;
+    if (needsCharacterPatch && (!s.hero.cls || s.hero.cls === "mage")) s.hero.cls = "knight";
+    ensureHeroAppearanceShape(s.hero);
+    s.settings.characterPatchVersion = HERO_APPEARANCE_VERSION;
+    s.dataVersion = 8;
+  }
 
   /* Degraded-read resilience: rebuild malformed subtrees, but ONLY the malformed ones.
    * We never touch subtrees that parse cleanly. */
@@ -2575,6 +2660,7 @@ function migrate(raw){
   if (!s.sessionHistory || typeof s.sessionHistory !== "object" || Array.isArray(s.sessionHistory)) s.sessionHistory = {};
   if (!s.hero.equipped || typeof s.hero.equipped !== "object" || Array.isArray(s.hero.equipped)) s.hero.equipped = { weapon:null, helmet:null, armor:null, mount:null, pet:null };
   for (const slot of EQUIP_SLOTS) if (!(slot in s.hero.equipped)) s.hero.equipped[slot] = null;
+  ensureHeroAppearanceShape(s.hero);
   if (!Array.isArray(s.battleLog)) s.battleLog = [];
   ensureV76StateShape(s);
   if (s.longestStreak < s.streak) s.longestStreak = s.streak;
@@ -3336,7 +3422,7 @@ function awardXp(amount){
   const info = levelFromTotalXp(cur);
   if (info.lv > state.hero.level){
     state.hero.level = info.lv;
-    toast(`Level up! Lv ${info.lv} (${CLASSES[state.hero.cls].titles[titleIdxFor(info.lv)]})`, "good");
+    toast(`Level up! Lv ${info.lv} (${(CLASSES[state.hero.cls]||CLASSES.knight).titles[titleIdxFor(info.lv)]})`, "good");
   }
   state.hero.level = info.lv;
   state.hero.xp = info.xp;
@@ -4111,7 +4197,7 @@ function renderStatStrip(){
   const sa = $("#stat-sessions"); if (sa) sa.textContent = state.completedFocusSessions|0;
 }
 function renderHero(){
-  const cls = CLASSES[state.hero.cls] || CLASSES.mage;
+  const cls = CLASSES[state.hero.cls] || CLASSES.knight;
   $("#hero-name").textContent = state.hero.name || "Hero";
   const idx = titleIdxFor(state.hero.level);
   const titleName = cls.titles[idx] || cls.titles[cls.titles.length-1];
@@ -4139,6 +4225,7 @@ function renderGearSummary(){
   }).join("");
 }
 const AVATAR_CLASS_ART = {
+  knight:  { kind:"knight",  outline:"#111827", mid:"#64748B", high:"#CBD5E1", dark:"#1F2937", trim:"#FBBF24", bg:"#0C1325", detail:"plates" },
   mage:    { kind:"mage",    outline:"#1A1A1A", mid:"#7C3AED", high:"#A78BFA", dark:"#4C1D95", trim:"#FBBF24", bg:"#101022", detail:"gem" },
   rogue:   { kind:"rogue",   outline:"#1A1A1A", mid:"#059669", high:"#34D399", dark:"#064E3B", trim:"#A7F3D0", bg:"#0B1713", detail:"hood" },
   warrior: { kind:"warrior", outline:"#1A1A1A", mid:"#2563EB", high:"#60A5FA", dark:"#1E3A8A", trim:"#CBD5E1", bg:"#0C1325", detail:"plates" },
@@ -4154,8 +4241,8 @@ const AVATAR_TIER_ART = {
   mythic:    { trim:"#F472B6", gem:"#E0F2FE", metal:"#FFFFFF", aura:"#67E8F9", glow:5 }
 };
 function renderAvatar(){
-  const clsKey = state.hero.cls || "mage";
-  const cls = CLASSES[clsKey] || CLASSES.mage;
+  const clsKey = state.hero.cls || "knight";
+  const cls = CLASSES[clsKey] || CLASSES.knight;
   const taskName = currentAvatarTaskName();
   const action = actionFromTaskName(taskName);
   const scene = currentAvatarScene(action, taskName);
@@ -4172,9 +4259,20 @@ function renderAvatar(){
   }
 }
 function avatarClassSpec(clsKey, fallback){
-  if (AVATAR_CLASS_ART[clsKey]) return AVATAR_CLASS_ART[clsKey];
+  if (AVATAR_CLASS_ART[clsKey]) return applyHeroAppearanceSpec({ ...AVATAR_CLASS_ART[clsKey] });
   const [mid, high, outline, trim] = fallback || ["#7C3AED","#A78BFA","#1A1A1A","#FBBF24"];
-  return { kind:"mage", outline, mid, high, dark:outline, trim, bg:"#101022", detail:"gem" };
+  return applyHeroAppearanceSpec({ kind:"knight", outline, mid, high, dark:outline, trim, bg:"#0C1325", detail:"plates" });
+}
+function applyHeroAppearanceSpec(spec){
+  ensureHeroAppearanceShape();
+  const appearance = state.hero.appearance || DEFAULTS.hero.appearance;
+  const armor = appearanceOption("armor", appearance.armor);
+  const accent = appearanceOption("accent", appearance.accent);
+  const cloak = appearanceOption("cloak", appearance.cloak);
+  if (armor){ spec.mid = armor.mid; spec.high = armor.high; spec.dark = armor.dark; }
+  if (accent) spec.trim = accent.color;
+  spec.appearance = { ...appearance, cloakColor: cloak?.color || "#2563EB" };
+  return spec;
 }
 function avatarEquipment(){
   ensureEquippedShape();
@@ -4230,13 +4328,17 @@ function drawHorizon(p){
 }
 function drawBody(p){
   // Base layout follows Gemini's Adept Mage SVG reference; palettes/silhouettes vary per class.
-  let out = [
+  const cloak = p.appearance?.cloak !== "none"
+    ? fhPath("M9 10h14v15h-2v2h-3v-7h-4v7h-3v-2H9V10z", p.appearance?.cloakColor || "#2563EB", ".78")
+    : "";
+  let out = cloak + [
     fhPath("M12 4h8v2h2v4h2v10h-2v4h-2v2H12v-2h-2v-4H8V10h2V6h2V4z", p.outline),
     fhPath("M12 6h8v4h2v10h-2v4h-8v-4H10V10h2V6z", p.mid),
     fhPath("M13 7h1v3h1V7h1v3h1V7h1v7h-5V7z", p.high),
     fhRect(12,24,3,2,p.dark),
     fhRect(17,24,3,2,p.dark)
   ].join("");
+  if (p.detail === "plates" || p.kind === "knight") out += fhRect(13,12,6,2,p.trim) + fhRect(12,15,8,1,p.dark) + fhRect(15,17,2,2,p.trim);
   if (p.detail === "gem") out += fhRect(15,15,2,2,p.trim) + fhRect(16,16,1,1,"#FFF7AD");
   if (p.detail === "hood") out += fhRect(10,8,12,3,p.outline) + fhRect(12,10,8,2,p.dark) + fhRect(14,11,1,1,p.high) + fhRect(18,11,1,1,p.high);
   if (p.detail === "plates") out += fhRect(8,11,4,3,p.trim) + fhRect(20,11,4,3,p.trim) + fhRect(13,17,6,2,p.dark);
@@ -4262,6 +4364,14 @@ function drawHelmet(p, helmetGear){
   if (itemId === "crown_of_flow"){
     return fhRect(11,3,10,2,style.trim) + fhRect(12,1,2,2,style.gem) + fhRect(15,0,2,3,style.metal) + fhRect(19,1,2,2,style.gem);
   }
+  if (p.kind === "knight"){
+    const helm = p.appearance?.helm || "closed";
+    let out = fhRect(11,3,10,3,style.metal) + fhRect(10,6,12,2,p.outline) + fhRect(12,8,8,1,style.trim);
+    if (helm === "closed") out += fhRect(13,7,6,2,p.dark) + fhRect(14,7,1,1,p.high) + fhRect(18,7,1,1,p.high);
+    if (helm === "open") out += fhRect(13,6,6,2,"#F2C9A0") + fhRect(14,7,1,1,p.outline) + fhRect(18,7,1,1,p.outline);
+    if (helm === "crest") out += fhRect(15,0,2,4,style.trim) + fhRect(14,1,4,1,style.gem) + fhRect(13,7,6,2,p.dark);
+    return out;
+  }
   if (p.kind === "warrior") return fhRect(11,3,10,2,style.metal) + fhRect(12,5,8,1,p.outline) + fhRect(15,1,2,3,style.trim);
   if (p.kind === "druid") return fhRect(11,4,10,1,style.trim) + fhRect(10,2,1,2,style.trim) + fhRect(21,2,1,2,style.trim);
   if (p.kind === "bard") return fhRect(11,4,9,2,p.outline) + fhRect(20,2,1,4,style.trim) + fhRect(21,1,2,1,style.gem);
@@ -4278,7 +4388,7 @@ function drawWeapon(p, weaponGear, action){
     if (rank >= 4) out += fhRect(5,13,1,1,style.trim) + fhRect(26,13,1,1,style.trim);
     return out;
   }
-  if (itemId === "whetstone_blade" || p.kind === "warrior"){
+  if (itemId === "whetstone_blade" || p.kind === "warrior" || p.kind === "knight"){
     let out = fhRect(24,9,1,13,style.metal) + fhRect(23,8,3,2,style.gem) + fhRect(22,17,5,1,style.trim);
     if (rank >= 5) out += fhRect(25,6,1,2,style.metal) + fhRect(24,5,3,1,style.gem);
     return out;
@@ -5199,7 +5309,7 @@ function fillSettingsForm(){
   $("#cfg-long").value  = s.longMin;
   $("#cfg-cycles").value = s.cyclesBeforeLong;
   $("#cfg-name").value = state.hero.name || "";
-  $("#cfg-class").value = state.hero.cls || "mage";
+  $("#cfg-class").value = state.hero.cls || "knight";
   $("#cfg-theme").value = s.theme || "dark";
   $("#cfg-min-reward").value = s.minRewardMinutes;
   $("#cfg-streak-cap").value = s.streakBonusCap;
@@ -5524,8 +5634,8 @@ function renderActionPicker(){
   }
 }
 function renderAvatar(){
-  const clsKey = state.hero.cls || "mage";
-  const cls = CLASSES[clsKey] || CLASSES.mage;
+  const clsKey = state.hero.cls || "knight";
+  const cls = CLASSES[clsKey] || CLASSES.knight;
   const taskName = currentAvatarTaskName();
   const taskAction = actionFromTaskName(taskName);
   const adv = currentAdventureSpec();
@@ -6004,14 +6114,14 @@ function openCharacterPanel(){
   openModal("character-modal");
 }
 function renderCharacterPanel(){
-  const modal = $("#character-modal"); if (!modal || modal.hidden) return;
+  const modal = $("#character-modal"); if (!modal) return;
   ensureEquippedShape();
   const name = $("#character-name");
   const cls = $("#character-class");
   if (name && document.activeElement !== name) name.value = state.hero.name || "Hero";
-  if (cls) cls.value = state.hero.cls || "mage";
+  if (cls) cls.value = state.hero.cls || "knight";
   const preview = $("#character-avatar-preview");
-  if (preview) preview.innerHTML = pixelAvatarSvg((CLASSES[state.hero.cls]||CLASSES.mage).name, currentAvatarAction(), currentAdventureSpec().scene, avatarClassSpec(state.hero.cls, null), avatarEquipment());
+  if (preview) preview.innerHTML = pixelAvatarSvg((CLASSES[state.hero.cls]||CLASSES.knight).name, currentAvatarAction(), currentAdventureSpec().scene, avatarClassSpec(state.hero.cls, null), avatarEquipment());
   const slots = $("#equipment-slots");
   if (slots){
     const labels = { weapon:"Main hand", helmet:"Head", armor:"Body", mount:"Mount", pet:"Pet" };
@@ -6028,7 +6138,35 @@ function renderCharacterPanel(){
       slots.appendChild(b);
     });
   }
+  renderAppearanceControls();
   renderEquipmentPicker();
+}
+function renderAppearanceControls(){
+  const host = $("#appearance-controls"); if (!host) return;
+  const appearance = ensureHeroAppearanceShape();
+  const labels = { armor:"Armor color", accent:"Trim", helm:"Helmet", cloak:"Cloak" };
+  host.innerHTML = Object.entries(APPEARANCE_OPTIONS).map(([group, opts])=>`
+    <div class="appearance-group">
+      <div class="appearance-label">${labels[group] || group}</div>
+      <div class="appearance-options">
+        ${opts.map(opt=>{
+          const swatch = opt.color || opt.mid || "";
+          return `<button type="button" data-appearance-group="${group}" data-appearance-value="${opt.id}" aria-pressed="${appearance[group] === opt.id ? "true" : "false"}">${swatch ? `<span class="swatch" style="background:${swatch}"></span>` : ""}${escapeHtml(opt.label)}</button>`;
+        }).join("")}
+      </div>
+    </div>`).join("");
+  $$("[data-appearance-group]", host).forEach(b=>{
+    b.addEventListener("click", ()=>{
+      setHeroAppearance(b.dataset.appearanceGroup, b.dataset.appearanceValue);
+    });
+  });
+}
+function setHeroAppearance(group, value){
+  if (!APPEARANCE_OPTIONS[group]?.some(o=>o.id === value)) return;
+  ensureHeroAppearanceShape();
+  state.hero.appearance[group] = value;
+  saveState();
+  renderHero(); renderAvatar(); renderCharacterPanel();
 }
 function renderEquipmentPicker(){
   const host = $("#equipment-picker"); if (!host) return;
@@ -6282,7 +6420,7 @@ const __FocusHero = {
   cancelSession, isCancelableSession,
   /* v7.7: post-session claim and customization */
   startFocusClaim, confirmSessionClaim, commitFocusTimerSession,
-  setEquipped, clearEquipped,
+  setEquipped, clearEquipped, setHeroAppearance, ensureHeroAppearanceShape,
   fmtTimeLong,
   /* v4.2: emergency recovery — call from DevTools console.
      listSnapshots() shows {key, savedAt, size} for every saved snapshot;
@@ -6522,14 +6660,18 @@ async function runSmokeTests(){
       history:{}, sessionHistory:{}, sessionsLog:[], battleLog:[], sync:{...DEFAULTS.sync}
     };
     delete v5.settings.designVariant;
+    delete v5.settings.characterPatchVersion;
     const m = migrate(deepClone(v5));
     const ok = m.dataVersion === DATA_VERSION
       && m.totalFocusMin === 500
       && typeof m.canceledSessionCount === "number"
       && m.canceledSessionCount === 0
       && "pet" in m.hero.equipped
-      && m.settings.designVariant === "command";
-    add("Migration v5 → current seeds cancel, pet, and prototype defaults", ok);
+      && m.settings.designVariant === "command"
+      && m.hero.cls === "knight"
+      && m.hero.appearance?.armor === "steel"
+      && m.settings.characterPatchVersion === HERO_APPEARANCE_VERSION;
+    add("Migration v5 → current seeds cancel, pet, knight, appearance defaults", ok);
   }
   {
     const local = { totalFocusMin:100, streak:3, history:{}, lootOwned:{}, achievements:{}, quests:[], tasks:[], sessionsLog:[],
