@@ -1,7 +1,7 @@
 {
   "name": "Focus Hero",
   "short_name": "Focus Hero",
-  "description": "A private Pomodoro RPG with a pixel MMO interface, 8-bit class avatars, equippable gear tiers, week/month/all-time analytics, and encrypted cloud sync.",
+  "description": "A private Pomodoro RPG with quick navigation, character customization, pets, mounts, equippable gear, analytics, and encrypted cloud sync.",
   "start_url": "./focus-hero.html",
   "scope": "./",
   "display": "standalone",
@@ -44,5 +44,5 @@
       "short_name": "Backup"
     }
   ],
-  "version": "7.6.0-hotfix1"
+  "version": "7.7.0"
 }

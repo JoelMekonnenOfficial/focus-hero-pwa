@@ -1228,6 +1228,7 @@ button.primary{
   .hero-card .avatar .fh-weapon,
   .hero-card .avatar .fh-enemy,
   .hero-card .avatar .fh-mount,
+  .hero-card .avatar .fh-pet,
   .hero-card .avatar .fh-aura,
   .hero-card .avatar::before,
   .hero-card .avatar[data-scene] *{
@@ -1285,6 +1286,292 @@ button.primary{
   .hero-card .avatar[data-scene="crafting"] .fh-aura{animation:fh76-sparks 1s ease-out infinite !important}
   .hero-card .avatar[data-scene="meditating"] .fh-sprite{animation:fh76-meditate-breath 4.8s ease-in-out infinite !important}
 }
+
+/* ================================================================
+ * v7.7 Codex/Gemini hybrid shell: quick navigation, task sheet,
+ * character workbench, claim flow, pets, and selectable prototypes.
+ * ================================================================ */
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.card-head h2{margin:0}
+.mini-command{
+  padding:.35rem .55rem;
+  min-height:34px;
+  font-size:.68rem;
+  white-space:nowrap;
+}
+.gear-summary{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:6px;
+  margin-top:12px;
+  font-size:.7rem;
+}
+.gear-chip{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  min-width:0;
+  padding:.32rem .42rem;
+  border:2px solid var(--border);
+  background:#0b110d;
+  color:var(--ink-dim);
+}
+.gear-chip b{color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.app-nav{
+  position:fixed;
+  left:50%;
+  bottom:calc(env(safe-area-inset-bottom,0px) + 12px);
+  transform:translateX(-50%);
+  z-index:70;
+  display:flex;
+  gap:6px;
+  padding:6px;
+  border:3px solid #11140f;
+  outline:1px solid var(--border-strong);
+  background:rgba(11,17,13,.94);
+  box-shadow:0 10px 0 rgba(0,0,0,.42),0 22px 42px rgba(0,0,0,.34);
+  max-width:calc(100vw - 16px);
+}
+.app-nav button{
+  display:grid;
+  place-items:center;
+  gap:1px;
+  min-width:58px;
+  padding:.42rem .52rem;
+  font-size:.65rem;
+  text-transform:uppercase;
+}
+.app-nav button span{font-size:1rem;line-height:1}
+.app-nav button b{font-size:.62rem;line-height:1.1}
+.app-nav button[aria-current="page"]{
+  background:linear-gradient(180deg,rgba(var(--accent-rgb),.22),rgba(var(--accent-2-rgb),.10));
+  border-color:var(--accent);
+  color:var(--accent-2);
+  transform:translateY(-1px);
+}
+#section-focus,#section-tasks,#section-hero,#section-progress,#section-log{scroll-margin-top:20px}
+.sheet-modal .modal{max-width:760px}
+.sheet-title{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px}
+.sheet-title h3{margin-bottom:2px}
+.all-tasks-body{
+  display:grid;
+  gap:8px;
+  margin-top:10px;
+  max-height:min(62vh,560px);
+  overflow:auto;
+}
+.all-task-row{
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr) auto auto;
+  gap:10px;
+  align-items:center;
+  padding:8px;
+  border:2px solid var(--border);
+  background:linear-gradient(180deg,rgba(255,255,255,.045),transparent 24px),var(--panel-2);
+  animation:task-sheet-in .28s cubic-bezier(.2,.8,.2,1) both;
+  animation-delay:calc(var(--i,0) * 28ms);
+}
+.all-task-row .task-main{min-width:0}
+.all-task-row .task-main b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.all-task-row .task-meta{font-size:.72rem;color:var(--ink-dim)}
+.all-task-row.active{border-color:var(--accent);box-shadow:0 0 0 2px rgba(var(--accent-rgb),.24)}
+@keyframes task-sheet-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.character-modal{max-width:820px}
+.character-workbench{
+  display:grid;
+  grid-template-columns:220px minmax(0,1fr);
+  gap:16px;
+  align-items:start;
+}
+.paper-doll{
+  display:grid;
+  justify-items:center;
+  gap:8px;
+  padding:12px;
+  border:3px solid #11140f;
+  background:linear-gradient(180deg,rgba(59,130,246,.12),rgba(74,222,128,.08)),#0b110d;
+}
+.avatar-preview{
+  width:180px;
+  height:180px;
+  border:3px solid #050805;
+  background:var(--panel-2);
+}
+.character-controls{
+  display:grid;
+  gap:10px;
+}
+.character-controls label{
+  display:grid;
+  gap:4px;
+  color:var(--ink-dim);
+  font-size:.78rem;
+  text-transform:uppercase;
+}
+.equipment-slots{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:8px;
+}
+.equipment-slot{
+  text-align:left;
+  min-height:58px;
+}
+.equipment-slot[aria-pressed="true"]{border-color:var(--accent);color:var(--accent-2)}
+.equipment-slot .slot-label{display:block;font-size:.62rem;color:var(--ink-dim)}
+.equipment-slot .slot-name{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.equipment-picker{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(138px,1fr));
+  gap:8px;
+  margin-top:14px;
+}
+.equipment-card{
+  min-height:86px;
+  text-align:left;
+  padding:8px;
+}
+.equipment-card.locked{opacity:.46;filter:saturate(.55)}
+.equipment-card.equipped{border-color:var(--legend);box-shadow:0 0 0 2px rgba(251,191,36,.25)}
+.equipment-card .sym{font-size:1.3rem}
+.equipment-card .name{display:block;margin-top:3px;font-weight:700}
+.equipment-card .meta{display:block;font-size:.68rem;color:var(--ink-dim)}
+.companion-grid .loot-item .role{
+  font-size:.66rem;
+  color:var(--ink-dim);
+  text-transform:uppercase;
+  margin-top:2px;
+}
+.variant-grid{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:10px;
+}
+.variant-grid button{
+  text-align:left;
+  min-height:122px;
+  padding:12px;
+}
+.variant-grid b{display:block;color:var(--legend);margin-bottom:6px}
+.variant-grid span{display:block;font-size:.78rem;color:var(--ink-dim);text-transform:none}
+.claim-modal .modal{max-width:520px}
+.claim-stepper{
+  display:grid;
+  grid-template-columns:auto auto minmax(92px,1fr) auto auto;
+  gap:6px;
+  align-items:center;
+  margin:12px 0;
+}
+.claim-stepper input{text-align:center;font-size:1.35rem;font-family:var(--mono)}
+#claim-range{width:100%;accent-color:var(--accent)}
+.claim-preview{
+  display:grid;
+  gap:6px;
+  margin-top:10px;
+  padding:10px;
+  border:2px solid var(--border);
+  background:#0b110d;
+}
+.claim-preview .row{justify-content:space-between;border-bottom:1px dashed var(--border);padding-bottom:4px}
+.claim-preview .row:last-child{border-bottom:none;padding-bottom:0;color:var(--accent-2);font-weight:700}
+.hero-card .avatar .fh-pet{transform-box:fill-box;transform-origin:12px 24px;opacity:1}
+.hero-card .avatar[data-running="1"] .fh-pet{animation:fh77-pet-forage 3.8s ease-in-out infinite}
+.hero-card .avatar[data-scene="travelling"] .fh-pet{animation:fh77-pet-hop 1.1s ease-in-out infinite}
+.timer-display.critical{animation:fh77-heartbeat 1s ease-in-out infinite}
+.modal-backdrop:not([hidden]){animation:fh77-backdrop-in .18s ease-out both}
+.modal-backdrop:not([hidden]) .modal{animation:fh77-modal-rise .28s cubic-bezier(.2,.8,.2,1) both}
+.card{transition:transform .22s cubic-bezier(.2,.8,.2,1),border-color .22s ease,box-shadow .22s ease}
+.card:focus-within{border-color:rgba(var(--accent-rgb),.42);box-shadow:0 12px 0 rgba(0,0,0,.25),0 26px 52px rgba(var(--accent-rgb),.12)}
+.hero-card .avatar .fh-sprite,
+.hero-card .avatar .fh-mount,
+.hero-card .avatar .fh-weapon,
+.hero-card .avatar .fh-enemy,
+.hero-card .avatar .fh-horizon,
+.hero-card .avatar .fh-aura,
+.hero-card .avatar .fh-pet{will-change:transform,opacity}
+.hero-card .avatar[data-scene="resting"] .fh-sprite{animation:fh77-rest-breathe 4.8s cubic-bezier(.45,0,.25,1) infinite}
+.hero-card .avatar[data-scene="travelling"] .fh-mount{opacity:1;animation:fh77-travel-mount 1.22s cubic-bezier(.34,.04,.2,1) infinite}
+.hero-card .avatar[data-scene="travelling"] .fh-horizon{animation:fh77-travel-bg 7.2s linear infinite}
+.hero-card .avatar[data-scene="travelling"] .fh-sprite{animation:fh77-travel-rider 1.22s cubic-bezier(.34,.04,.2,1) infinite}
+.hero-card .avatar[data-scene="fighting"] .fh-sprite{animation:fh77-fight-stance 1.05s cubic-bezier(.24,.72,.22,1) infinite}
+.hero-card .avatar[data-scene="fighting"] .fh-weapon{animation:fh77-fight-arc 1.05s cubic-bezier(.2,.8,.2,1) infinite}
+.hero-card .avatar[data-scene="fighting"] .fh-enemy{opacity:1;animation:fh77-enemy-hit 1.05s cubic-bezier(.2,.8,.2,1) infinite}
+.hero-card .avatar[data-scene="hunting"] .fh-sprite{animation:fh77-hunt-step 4.2s cubic-bezier(.45,0,.25,1) infinite}
+.hero-card .avatar[data-scene="hunting"] .fh-horizon{animation:fh77-hunt-grass 4.2s ease-in-out infinite}
+.hero-card .avatar[data-scene="hunting"] .fh-enemy{animation:fh77-hunt-peek 14s ease-in-out infinite}
+.hero-card .avatar[data-scene="looting"] .fh-sprite{animation:fh77-loot-reach 1.7s cubic-bezier(.4,0,.2,1) infinite}
+.hero-card .avatar[data-scene="looting"] .fh-aura{animation:fh77-loot-spark 2.1s ease-out infinite}
+.hero-card .avatar[data-scene="crafting"] .fh-sprite{animation:fh77-craft-body 1.28s cubic-bezier(.2,.8,.2,1) infinite}
+.hero-card .avatar[data-scene="crafting"] .fh-weapon{animation:fh77-craft-tool 1.28s cubic-bezier(.2,.8,.2,1) infinite}
+.hero-card .avatar[data-scene="crafting"] .fh-aura{animation:fh77-craft-sparks 1.28s ease-out infinite}
+.hero-card .avatar[data-scene="meditating"] .fh-sprite{animation:fh77-meditate-float 5.4s cubic-bezier(.45,0,.25,1) infinite}
+@keyframes fh77-backdrop-in{from{opacity:0}to{opacity:1}}
+@keyframes fh77-modal-rise{from{opacity:0;transform:translateY(14px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes fh77-rest-breathe{0%,100%{transform:translateY(0) scale(1)}38%{transform:translateY(-3px) scale(1.018)}62%{transform:translateY(-2px) scale(1.01)}}
+@keyframes fh77-travel-mount{0%,100%{transform:translateY(0) rotate(0)}24%{transform:translateY(-4px) rotate(-1deg)}52%{transform:translateY(0)}78%{transform:translateY(-3px) rotate(1deg)}}
+@keyframes fh77-travel-rider{0%,100%{transform:translateY(0)}28%{transform:translateY(-3px)}54%{transform:translateY(-1px)}80%{transform:translateY(-2px)}}
+@keyframes fh77-travel-bg{from{transform:translateX(0)}to{transform:translateX(-16px)}}
+@keyframes fh77-fight-stance{0%,100%{transform:translateX(0) translateY(0)}30%{transform:translateX(2px) translateY(-2px)}46%{transform:translateX(7px) translateY(-4px)}64%{transform:translateX(4px) translateY(-1px)}}
+@keyframes fh77-fight-arc{0%,100%{transform:rotate(-28deg)}38%{transform:rotate(82deg)}54%{transform:rotate(74deg)}72%{transform:rotate(-12deg)}}
+@keyframes fh77-enemy-hit{0%,100%{transform:translateX(0);opacity:1}42%{transform:translateX(5px);opacity:.28}62%{transform:translateX(2px) translateY(-1px);opacity:.55}}
+@keyframes fh77-hunt-step{0%,100%{transform:translateX(0) translateY(0)}34%{transform:translateX(4px) translateY(1px)}68%{transform:translateX(2px) translateY(-1px)}}
+@keyframes fh77-hunt-grass{0%,100%{transform:translateX(0)}48%{transform:translateX(-4px)}}
+@keyframes fh77-hunt-peek{0%,70%,100%{opacity:0;transform:translateX(7px) scaleX(.88)}75%,84%{opacity:1;transform:translateX(0) scaleX(1)}90%{opacity:.35;transform:translateX(3px) scaleX(.96)}}
+@keyframes fh77-loot-reach{0%,100%{transform:translateY(0) rotate(0)}44%{transform:translateY(4px) rotate(-7deg)}66%{transform:translateY(2px) rotate(-2deg)}}
+@keyframes fh77-loot-spark{0%{opacity:0;transform:translateY(2px) scale(.92)}18%{opacity:.9}76%{opacity:.7}100%{opacity:0;transform:translateY(-10px) scale(1.32)}}
+@keyframes fh77-craft-body{0%,100%{transform:translateY(0)}42%{transform:translateY(-3px)}58%{transform:translateY(1px)}}
+@keyframes fh77-craft-tool{0%,100%{transform:rotate(-42deg)}42%{transform:rotate(36deg)}58%{transform:rotate(30deg)}}
+@keyframes fh77-craft-sparks{0%{opacity:0;transform:translateY(0) scale(.8)}36%{opacity:1}100%{opacity:0;transform:translateY(-8px) scale(1.5)}}
+@keyframes fh77-meditate-float{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-5px) scale(1.035)}}
+@keyframes fh77-pet-forage{0%,100%{transform:translateX(0) translateY(0)}40%{transform:translateX(-4px) translateY(2px)}70%{transform:translateX(2px) translateY(0)}}
+@keyframes fh77-pet-hop{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+@keyframes fh77-heartbeat{0%,100%{filter:drop-shadow(0 0 2px rgba(232,93,93,.45));transform:scale(1)}50%{filter:drop-shadow(0 0 10px rgba(232,93,93,.82));transform:scale(1.012)}}
+html[data-variant="canvas"] body{
+  background:
+    radial-gradient(circle at 20% 0%,rgba(245,158,11,.12),transparent 28%),
+    radial-gradient(circle at 90% 12%,rgba(74,222,128,.14),transparent 26%),
+    linear-gradient(180deg,#1b2118,#11140f);
+}
+html[data-variant="canvas"] .timer-card{
+  background:
+    linear-gradient(180deg,rgba(98,201,255,.18) 0 38%,rgba(74,222,128,.13) 38% 62%,rgba(96,64,32,.18) 62%),
+    var(--panel);
+}
+html[data-variant="terminal"]{
+  --bg:#050807; --bg-2:#07100c; --panel:#09110d; --panel-2:#0e1b14;
+  --ink:#E8FFF0; --ink-dim:#8DE6B3; --accent:#39FF88; --accent-2:#C7FF45;
+  --border:#23583a; --border-strong:#39ff88; --shadow:0 8px 0 rgba(0,0,0,.55),0 24px 46px rgba(0,0,0,.42);
+  --accent-rgb:57,255,136; --accent-2-rgb:199,255,69;
+}
+html[data-variant="terminal"] .card,
+html[data-variant="terminal"] header.topbar,
+html[data-variant="terminal"] .modal{
+  background:linear-gradient(180deg,rgba(57,255,136,.06),transparent 28px),var(--panel);
+}
+html[data-variant="terminal"] .timer-display{color:#C7FF45;text-shadow:0 0 16px rgba(199,255,69,.38)}
+@media (min-width:1180px){
+  .app{padding-left:100px}
+  .app-nav{
+    left:18px;
+    top:50%;
+    bottom:auto;
+    transform:translateY(-50%);
+    flex-direction:column;
+    max-width:74px;
+  }
+  .app-nav button{min-width:54px}
+}
+@media (max-width:720px){
+  .gear-summary,.equipment-slots,.variant-grid{grid-template-columns:1fr}
+  .character-workbench{grid-template-columns:1fr}
+  .paper-doll{padding:10px}
+  .avatar-preview{width:144px;height:144px}
+  .sheet-title{display:grid}
+  .all-task-row{grid-template-columns:auto minmax(0,1fr);gap:8px}
+  .all-task-row .task-actions{grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+  .claim-stepper{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .claim-stepper input{grid-column:1/-1;grid-row:1}
+}
 </style>
 </head>
 <body>
@@ -1299,6 +1586,9 @@ button.primary{
     </div>
     <div class="actions" role="toolbar" aria-label="Top actions">
       <button id="btn-settings" title="Settings (,)" aria-label="Settings">Settings</button>
+      <button id="btn-all-tasks" title="Show all tasks (G)" aria-label="Show all tasks">All tasks</button>
+      <button id="btn-character" title="Customize hero" aria-label="Customize hero">Customize</button>
+      <button id="btn-variants" title="Design prototypes" aria-label="Design prototypes">Variants</button>
       <button id="btn-sync" title="Cloud sync (Y)" aria-label="Cloud sync">Sync</button>
       <button id="btn-analytics" title="Analytics — week, month, lifetime (S)" aria-label="Analytics">Stats</button>
       <button id="btn-theme" title="Toggle theme (T)" aria-label="Toggle theme">Theme</button>
@@ -1308,7 +1598,7 @@ button.primary{
 
   <!-- LEFT COLUMN -->
   <section class="grid">
-    <div class="card timer-card" aria-labelledby="timer-heading">
+    <div class="card timer-card" id="section-focus" aria-labelledby="timer-heading">
       <h2 id="timer-heading">Session</h2>
       <div class="mode-tabs" role="tablist" aria-label="Timer mode">
         <button role="tab" data-mode="focus" aria-pressed="true">Focus</button>
@@ -1349,8 +1639,11 @@ button.primary{
       <div id="xp-breakdown-slot"></div>
     </div>
 
-    <div class="card hero-card" aria-labelledby="hero-heading">
-      <h2 id="hero-heading">Hero</h2>
+    <div class="card hero-card" id="section-hero" aria-labelledby="hero-heading">
+      <div class="card-head">
+        <h2 id="hero-heading">Hero</h2>
+        <button class="mini-command" id="btn-hero-customize" type="button">Customize</button>
+      </div>
       <div class="top">
         <div class="avatar" id="avatar" aria-hidden="true"></div>
         <div style="flex:1;min-width:0">
@@ -1368,10 +1661,14 @@ button.primary{
       <div class="bar hp"><div id="bar-hp" style="width:100%"></div></div>
       <div class="stat-row"><span>Energy</span><span><b id="en-cur">100</b> / 100</span></div>
       <div class="bar energy"><div id="bar-en" style="width:100%"></div></div>
+      <div id="gear-summary" class="gear-summary" aria-label="Equipped gear summary"></div>
     </div>
 
-    <div class="card" aria-labelledby="tasks-heading">
-      <h2 id="tasks-heading">Tasks <span class="muted" style="font-size:.72rem;text-transform:none;margin-left:6px">(categories — minutes per task accumulate forever)</span></h2>
+    <div class="card" id="section-tasks" aria-labelledby="tasks-heading">
+      <div class="card-head">
+        <h2 id="tasks-heading">Tasks <span class="muted" style="font-size:.72rem;text-transform:none;margin-left:6px">(categories — minutes per task accumulate forever)</span></h2>
+        <button class="mini-command" id="btn-show-all-tasks" type="button">Show all</button>
+      </div>
       <div id="task-list" role="list"></div>
       <div class="task-add-row">
         <button class="emoji-btn ghost" id="btn-new-task-emoji" title="Pick emoji" aria-label="Pick emoji">✨</button>
@@ -1397,14 +1694,18 @@ button.primary{
 
   <!-- RIGHT COLUMN -->
   <section class="grid">
-    <div class="card" aria-labelledby="tabs-heading">
+    <div class="card" id="section-progress" aria-labelledby="tabs-heading">
       <h2 id="tabs-heading" class="sr-only">Progression</h2>
       <div class="tabs" role="tablist" aria-label="Progression">
         <button role="tab" data-tab="loot" aria-pressed="true">Loot</button>
+        <button role="tab" data-tab="mounts" aria-pressed="false">Mounts</button>
+        <button role="tab" data-tab="pets" aria-pressed="false">Pets</button>
         <button role="tab" data-tab="ach" aria-pressed="false">Achievements</button>
         <button role="tab" data-tab="heat" aria-pressed="false">Heatmap</button>
       </div>
       <div id="tab-loot" class="tab-panel"><div id="loot-grid" class="loot-grid"></div></div>
+      <div id="tab-mounts" class="tab-panel" hidden><div id="mount-grid" class="loot-grid companion-grid"></div></div>
+      <div id="tab-pets" class="tab-panel" hidden><div id="pet-grid" class="loot-grid companion-grid"></div></div>
       <div id="tab-ach" class="tab-panel" hidden><div id="ach-grid" class="ach-grid"></div></div>
       <div id="tab-heat" class="tab-panel" hidden>
         <div class="muted" style="font-size:.8rem;margin-bottom:6px">Last 14 weeks · darker = more focus minutes</div>
@@ -1412,12 +1713,20 @@ button.primary{
       </div>
     </div>
 
-    <div class="card" aria-labelledby="log-heading">
+    <div class="card" id="section-log" aria-labelledby="log-heading">
       <h2 id="log-heading">Log</h2>
       <div id="log" style="max-height:260px;overflow:auto;font-size:.85rem;color:var(--ink-dim)"></div>
     </div>
   </section>
 </div>
+
+<nav class="app-nav" aria-label="Quick navigation">
+  <button type="button" data-nav-target="section-focus"><span>⌁</span><b>Focus</b></button>
+  <button type="button" data-nav-target="section-tasks"><span>☑</span><b>Tasks</b></button>
+  <button type="button" data-nav-target="section-hero"><span>◇</span><b>Hero</b></button>
+  <button type="button" data-nav-target="section-progress"><span>✦</span><b>Loot</b></button>
+  <button type="button" data-nav-action="all-tasks"><span>☰</span><b>All</b></button>
+</nav>
 
 <div class="toast-wrap" id="toasts" aria-live="polite" aria-atomic="false"></div>
 
@@ -1528,6 +1837,9 @@ button.primary{
         <tr><td><kbd>Shift</kbd>+<kbd>S</kbd></td><td>Switch to stopwatch</td></tr>
         <tr><td><kbd>Shift</kbd>+<kbd>L</kbd></td><td>Stop &amp; log stopwatch session</td></tr>
         <tr><td><kbd>L</kbd></td><td>Lap (in stopwatch mode) — captures last 10 splits</td></tr>
+        <tr><td><kbd>G</kbd></td><td>Show all tasks</td></tr>
+        <tr><td><kbd>C</kbd></td><td>Customize hero</td></tr>
+        <tr><td><kbd>V</kbd></td><td>Switch design prototype</td></tr>
         <tr><td><kbd>A</kbd></td><td>Add a new task</td></tr>
         <tr><td><kbd>Q</kbd></td><td>Focus quest input</td></tr>
         <tr><td><kbd>Shift</kbd>+<kbd>B</kbd></td><td>Back up all data now</td></tr>
@@ -1563,11 +1875,83 @@ button.primary{
   </div>
 </div>
 
+<div class="modal-backdrop sheet-modal" id="all-tasks-modal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="all-tasks-title">
+    <button class="close" data-close="all-tasks-modal" aria-label="Close">✕</button>
+    <div class="sheet-title">
+      <div>
+        <h3 id="all-tasks-title">All tasks</h3>
+        <p class="muted">Jump, edit, pin, or switch task without hunting through the page.</p>
+      </div>
+      <button class="primary" id="btn-all-tasks-add" type="button">New task</button>
+    </div>
+    <input id="all-tasks-search" type="text" placeholder="Search tasks..." aria-label="Search all tasks">
+    <div id="all-tasks-body" class="all-tasks-body"></div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="character-modal" hidden>
+  <div class="modal character-modal" role="dialog" aria-modal="true" aria-labelledby="character-title">
+    <button class="close" data-close="character-modal" aria-label="Close">✕</button>
+    <h3 id="character-title">Customize hero</h3>
+    <div class="character-workbench">
+      <div class="paper-doll">
+        <div class="avatar avatar-preview" id="character-avatar-preview" aria-hidden="true"></div>
+        <div class="muted">Live paper doll</div>
+      </div>
+      <div class="character-controls">
+        <label>Hero name<input type="text" id="character-name" maxlength="32" aria-label="Hero name"></label>
+        <label>Class<select id="character-class" aria-label="Hero class">
+          <option value="mage">Mage</option><option value="rogue">Rogue</option><option value="warrior">Warrior</option>
+          <option value="druid">Druid</option><option value="bard">Bard</option>
+        </select></label>
+        <div id="equipment-slots" class="equipment-slots"></div>
+      </div>
+    </div>
+    <div id="equipment-picker" class="equipment-picker"></div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="variants-modal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="variants-title">
+    <button class="close" data-close="variants-modal" aria-label="Close">✕</button>
+    <h3 id="variants-title">Design prototypes</h3>
+    <div class="variant-grid">
+      <button type="button" data-variant-choice="command"><b>Command Center</b><span>Dense dashboard, persistent task rail, sharp controls.</span></button>
+      <button type="button" data-variant-choice="canvas"><b>Living Canvas</b><span>Warmer RPG panels, softer rhythm, more world texture.</span></button>
+      <button type="button" data-variant-choice="terminal"><b>Zen Terminal</b><span>High-contrast, fast, minimal, precision-first.</span></button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop claim-modal" id="claim-modal" hidden data-locked="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="claim-title">
+    <h3 id="claim-title">Claim your focus</h3>
+    <p class="muted">If part of the session was logged off-task, reduce the active minutes before anything is saved.</p>
+    <div class="claim-stepper">
+      <button type="button" data-claim-delta="-5">-5</button>
+      <button type="button" data-claim-delta="-1">-1</button>
+      <input type="number" id="claim-minutes" min="0" step="1" aria-label="Minutes to log">
+      <button type="button" data-claim-delta="1">+1</button>
+      <button type="button" data-claim-delta="5">+5</button>
+    </div>
+    <input type="range" id="claim-range" min="0" max="25" value="25" aria-label="Adjust logged focus minutes">
+    <div id="claim-preview" class="claim-preview"></div>
+    <div class="row" style="justify-content:flex-end;margin-top:14px">
+      <button type="button" id="btn-claim-full">Log full time</button>
+      <button type="button" class="primary" id="btn-confirm-claim">Confirm</button>
+    </div>
+  </div>
+</div>
+
 <!-- ================================================================
  * Focus Hero v7.6 - inline script (one file, no deps)
  * ================================================================ -->
 <script>
 "use strict";
+/* v7.7 build marker - Codex/Gemini hybrid design shell with quick navigation,
+   global task sheet, post-focus logged-minute claim step, character workbench,
+   pets/mounts progression, selectable design prototypes, and revised motion. */
 /* v7.6 build marker - v7.5 base + editable down-only session corrections,
    42-tier achievement registry, visible seven-action avatar animations,
    XP-gated 15-monster bestiary, and additive dataVersion 7 migration. */
@@ -1632,7 +2016,7 @@ const DEFAULT_TASK_EMOJIS = [
 const DEFAULTS = {
   dataVersion: DATA_VERSION,
   hero: { name: "Hero", cls: "mage", level: 1, xp: 0, hp: 100, energy: 100,
-          equipped: { weapon:null, helmet:null, armor:null, mount:null } },
+          equipped: { weapon:null, helmet:null, armor:null, mount:null, pet:null } },
   settings: {
     focusMin: 25, shortMin: 5, longMin: 15, cyclesBeforeLong: 4,
     autoStart: false, tick: false, chime: true, notif: false, theme: "dark",
@@ -1645,6 +2029,7 @@ const DEFAULTS = {
     monthlyBackup: true,
     lastAutoBackup: null,
     lastManualBackup: null,
+    designVariant: "command",
     e2eEncryption: true
   },
   timer: { mode: "focus", endAt: 0, pausedAt: 0, running: false, msLeft: 25*60*1000,
@@ -1714,16 +2099,29 @@ const LOOT_TABLE = [
   ["🔮","Seer's Orb","rare",10,"none"],
   ["🗡️","Whetstone Blade","rare",8,"weapon"],
   ["📘","Tome of Tomorrow","rare",7,"helmet"],
+  ["🥾","Trail Boots","rare",6,"armor"],
   ["🎯","Targeter's Ring","epic",5,"accessory"],
   ["⚔️","Dualblade","epic",4,"weapon"],
   ["🧿","Amulet of Drive","epic",3,"accessory"],
+  ["🛡️","Moonplate Vest","epic",3,"armor"],
+  ["🐺","Wolf Reins","epic",2,"mount"],
+  ["🦉","Study Owl","epic",2,"pet"],
+  ["🦊","Clockwork Fox","epic",2,"pet"],
   ["👑","Crown of Flow","legendary",2,"helmet"],
   ["🦄","Unicorn Sigil","legendary",1,"mount"],
+  ["🦅","Griffin Saddle","legendary",1,"mount"],
+  ["🦌","Astral Stag Tack","legendary",1,"mount"],
+  ["🐉","Ember Wyrmling","legendary",1,"pet"],
+  ["🪶","Wind Familiar","legendary",1,"pet"],
   ["🗝️","Key of Worlds","legendary",1,"accessory"],
   ["🌌","Cosmic Fragment","mythic",1,"none"],
+  ["🛸","Void Skiff","mythic",1,"mount"],
+  ["🐆","Phase Panther Reins","mythic",1,"mount"],
+  ["💫","Star Mote","mythic",1,"pet"],
+  ["🪐","Orbit Sprite","mythic",1,"pet"],
   ["✨","Timekeeper's Spark","mythic",1,"none"]
 ];
-const EQUIP_SLOTS = ["weapon","helmet","armor","mount"];
+const EQUIP_SLOTS = ["weapon","helmet","armor","mount","pet"];
 const TIER_RANK = { common:1, uncommon:2, rare:3, epic:4, legendary:5, mythic:6 };
 const ACHIEVEMENTS = [
   ["first_focus","First Focus","Complete 1 focus session","🥇",{sessions:1}],
@@ -2083,6 +2481,7 @@ function migrate(raw){
     addIfMissing("monthlyBackup", sd.monthlyBackup);
     if (!("lastAutoBackup" in s.settings)) s.settings.lastAutoBackup = null;
     if (!("lastManualBackup" in s.settings)) s.settings.lastManualBackup = null;
+    addIfMissing("designVariant", sd.designVariant);
     addIfMissing("e2eEncryption", sd.e2eEncryption);
     if (!s.timer || typeof s.timer !== "object") s.timer = deepClone(DEFAULTS.timer);
     if (!("activeTaskId" in s.timer)) s.timer.activeTaskId = null;
@@ -2110,9 +2509,9 @@ function migrate(raw){
     }
     if (!s.hero || typeof s.hero !== "object") s.hero = deepClone(DEFAULTS.hero);
     if (!s.hero.equipped || typeof s.hero.equipped !== "object" || Array.isArray(s.hero.equipped)){
-      s.hero.equipped = { weapon:null, helmet:null, armor:null, mount:null };
+      s.hero.equipped = { weapon:null, helmet:null, armor:null, mount:null, pet:null };
     } else {
-      for (const slot of ["weapon","helmet","armor","mount"]){
+      for (const slot of EQUIP_SLOTS){
         if (!(slot in s.hero.equipped)) s.hero.equipped[slot] = null;
       }
     }
@@ -2174,8 +2573,8 @@ function migrate(raw){
     else delete s.uptimeHistory[k];
   }
   if (!s.sessionHistory || typeof s.sessionHistory !== "object" || Array.isArray(s.sessionHistory)) s.sessionHistory = {};
-  if (!s.hero.equipped || typeof s.hero.equipped !== "object" || Array.isArray(s.hero.equipped)) s.hero.equipped = { weapon:null, helmet:null, armor:null, mount:null };
-  for (const slot of ["weapon","helmet","armor","mount"]) if (!(slot in s.hero.equipped)) s.hero.equipped[slot] = null;
+  if (!s.hero.equipped || typeof s.hero.equipped !== "object" || Array.isArray(s.hero.equipped)) s.hero.equipped = { weapon:null, helmet:null, armor:null, mount:null, pet:null };
+  for (const slot of EQUIP_SLOTS) if (!(slot in s.hero.equipped)) s.hero.equipped[slot] = null;
   if (!Array.isArray(s.battleLog)) s.battleLog = [];
   ensureV76StateShape(s);
   if (s.longestStreak < s.streak) s.longestStreak = s.streak;
@@ -2712,88 +3111,137 @@ function tick(){
     renderTimer();
   }
 }
+let pendingClaim = null;
+function startFocusClaim(wasMode, plannedMinutes){
+  stopKeepalive(); releaseWakeLock();
+  pendingClaim = {
+    wasMode,
+    plannedMinutes: Math.max(0, plannedMinutes|0),
+    taskId: state.timer.activeTaskId || null,
+    taskLabel: currentSessionTaskLabel(),
+    action: currentAdventureActionId()
+  };
+  state.timer.running = false;
+  state.timer.endAt = 0;
+  state.timer.msLeft = 0;
+  saveState();
+  renderTimer(); renderActiveTaskRow(); refreshCancelButtonVisibility();
+  openClaimModal();
+}
+function openClaimModal(){
+  if (!pendingClaim) return;
+  const max = Math.max(0, pendingClaim.plannedMinutes|0);
+  const input = $("#claim-minutes");
+  const range = $("#claim-range");
+  if (input){ input.max = String(max); input.value = String(max); }
+  if (range){ range.max = String(max); range.value = String(max); }
+  updateClaimPreview();
+  openModal("claim-modal");
+}
+function claimMinutesValue(){
+  const max = pendingClaim ? Math.max(0, pendingClaim.plannedMinutes|0) : 0;
+  return clamp(parseInt($("#claim-minutes")?.value || String(max), 10) || 0, 0, max);
+}
+function setClaimMinutes(v){
+  if (!pendingClaim) return;
+  const max = Math.max(0, pendingClaim.plannedMinutes|0);
+  const next = clamp(parseInt(v,10) || 0, 0, max);
+  const input = $("#claim-minutes");
+  const range = $("#claim-range");
+  if (input) input.value = String(next);
+  if (range) range.value = String(next);
+  updateClaimPreview();
+}
+function updateClaimPreview(){
+  if (!pendingClaim) return;
+  const minutes = claimMinutesValue();
+  const tk = todayKey();
+  const comboPriorCount = state.combo?.date === tk ? (state.combo.count|0) : 0;
+  const streakPreview = state.lastFocusDate === tk ? (state.streak|0) : Math.max(1, state.streak|0);
+  const xp = computeXpBreakdown(minutes, { comboCount: comboPriorCount, streakDays: streakPreview, settings: state.settings });
+  const host = $("#claim-preview"); if (!host) return;
+  const reduced = Math.max(0, (pendingClaim.plannedMinutes|0) - minutes);
+  host.innerHTML = `
+    <div class="row"><span>Planned session</span><span>${pendingClaim.plannedMinutes|0}m</span></div>
+    <div class="row"><span>Reduce logged time</span><span>-${reduced}m</span></div>
+    <div class="row"><span>Task</span><span>${escapeHtml(pendingClaim.taskLabel)}</span></div>
+    <div class="row"><span>Rewards preview</span><span>${xp.total ? `+${xp.total} XP` : `0 XP${xp.floor ? ` · below ${xp.floor}m floor` : ""}`}</span></div>`;
+}
+function confirmSessionClaim(useFull=false){
+  if (!pendingClaim) return;
+  const claim = pendingClaim;
+  const minutes = useFull ? (claim.plannedMinutes|0) : claimMinutesValue();
+  pendingClaim = null;
+  closeModal("claim-modal");
+  commitFocusTimerSession(claim, minutes);
+}
+function commitFocusTimerSession(claim, minutes){
+  const taskLabel = claim.taskLabel || "the quest";
+  let lootItem = null;
+  let achievementsUnlockedHere = [];
+  const tk = todayKey();
+  if (state.combo.date !== tk) state.combo = { count: 0, date: tk };
+  const comboPriorCount = state.combo.count;
+  const streakBefore = state.streak|0;
+  const lastFocusDateBefore = state.lastFocusDate || null;
+  updateStreak(tk);
+  const xp = computeXpBreakdown(minutes, { comboCount: comboPriorCount, streakDays: state.streak, settings: state.settings });
+  state.cycleCount += 1;
+  state.totalFocusMin += minutes;
+  state.history[tk] = (state.history[tk]||0) + minutes;
+  if (!state.sessionHistory || typeof state.sessionHistory !== "object" || Array.isArray(state.sessionHistory)) state.sessionHistory = {};
+  state.sessionHistory[tk] = (state.sessionHistory[tk]||0) + 1;
+  state.completedFocusSessions = (state.completedFocusSessions|0) + 1;
+  logMinutesToTask(claim.taskId, minutes);
+  const floor = Math.max(1, state.settings.minRewardMinutes|0 || 5);
+  const earnedRewards = minutes >= floor;
+  if (earnedRewards){
+    awardXp(xp.total);
+    state.combo.count = comboPriorCount + 1;
+    state.hero.energy = Math.max(0, state.hero.energy - 8);
+    state.hero.hp = Math.min(100, state.hero.hp + 2);
+    lootItem = rollLoot(minutes);
+    updateDailyProgress("focus", 1);
+    updateDailyProgress("minutes", minutes);
+    showXpBreakdown(xp, { lootItem });
+    logLine(`Focus complete: ${minutes}m · +${xp.total} XP (base ${xp.base}${xp.comboBonus?` +${xp.comboBonus} combo`:""}${xp.streakBonus?` +${xp.streakBonus} streak`:""})`);
+    logBattle(`Hero completed ${taskLabel}. +${xp.total} XP${lootItem ? `, Loot: ${lootItem[1]} (${lootItem[2]})` : ""}.`, lootItem ? "loot" : "good");
+    notify("Focus complete!", `+${xp.total} XP · time for a break`);
+  } else {
+    state.combo.count = comboPriorCount;
+    showXpBreakdown(xp, { reasonShort: true });
+    logLine(`Focus complete: ${minutes}m logged (no rewards — below ${floor}m floor)`);
+    logBattle(`Hero completed ${taskLabel} for ${minutes}m. No rewards below ${floor}m.`, "switch");
+    notify("Focus session logged", `${minutes}m added to your totals (below ${floor}m reward floor)`);
+  }
+  recordAdventureMinutes(minutes);
+  if (earnedRewards) maybeRecordActionEncounter("sessionComplete");
+  if (typeof checkAchievementsV76 === "function") achievementsUnlockedHere = checkAchievementsV76("sessionComplete") || [];
+  pushSessionLog(buildSessionLogRecordV76({
+    type:"focus", source:"timer", minutes, taskId: claim.taskId||null,
+    xpBreakdown: xp, rewarded: earnedRewards, comboPriorCount, streakBefore,
+    extendedStreak: lastFocusDateBefore !== state.lastFocusDate, lootItem, achievementsUnlockedHere,
+    action: claim.action || currentAdventureActionId()
+  }));
+  playChime(false);
+  const nextIsLong = state.cycleCount % state.settings.cyclesBeforeLong === 0;
+  if (nextIsLong && earnedRewards){ updateDailyProgress("cycle", 1); }
+  setMode(nextIsLong ? "long" : "short");
+  state.timer.activeTaskId = null;
+  state.timer.activeTaskNameAtStart = null;
+  checkAchievements();
+  renderAll();
+  if (state.settings.autoStart){ setTimeout(startTimer, 900); }
+}
 function completeSession(){
   const wasMode = state.timer.mode;
   const minutes = modeMinutes(wasMode);
-  const taskLabel = currentSessionTaskLabel();
-  let lootItem = null;
-  let achievementsUnlockedHere = [];
   state.timer.running = false;
   state.timer.endAt = 0;
   state.timer.msLeft = 0;
   if (wasMode === "focus"){
-    stopKeepalive(); releaseWakeLock();
-    const tk = todayKey();
-    // Bump combo BEFORE computing bonus so the combo count represents "prior sessions today".
-    // Reset combo if a new day has dawned since last focus.
-    if (state.combo.date !== tk) state.combo = { count: 0, date: tk };
-    const comboPriorCount = state.combo.count;
-    const streakBefore = state.streak|0;
-    const lastFocusDateBefore = state.lastFocusDate || null;
-    // Update streak FIRST so streak day includes today
-    updateStreak(tk);
-    const xp = computeXpBreakdown(minutes, { comboCount: comboPriorCount, streakDays: state.streak, settings: state.settings });
-    // Commit cumulative counters whether or not we granted XP (hours are sacred)
-    state.cycleCount += 1;
-    state.totalFocusMin += minutes;
-    state.history[tk] = (state.history[tk]||0) + minutes;
-    if (!state.sessionHistory || typeof state.sessionHistory !== "object" || Array.isArray(state.sessionHistory)) state.sessionHistory = {};
-    state.sessionHistory[tk] = (state.sessionHistory[tk]||0) + 1;
-    state.completedFocusSessions = (state.completedFocusSessions|0) + 1;
-    // Log minutes to the active task, if any
-    logMinutesToTask(state.timer.activeTaskId, minutes);
-    // Decide whether rewards apply
-    const floor = Math.max(1, state.settings.minRewardMinutes|0 || 5);
-    const earnedRewards = minutes >= floor;
-    if (earnedRewards){
-      awardXp(xp.total);
-      state.combo.count = comboPriorCount + 1;
-      state.hero.energy = Math.max(0, state.hero.energy - 8);
-      state.hero.hp = Math.min(100, state.hero.hp + 2);
-      lootItem = rollLoot(minutes);
-      updateDailyProgress("focus", 1);
-      updateDailyProgress("minutes", minutes);
-      showXpBreakdown(xp, { lootItem });
-      logLine(`Focus complete: ${minutes}m · +${xp.total} XP (base ${xp.base}${xp.comboBonus?` +${xp.comboBonus} combo`:""}${xp.streakBonus?` +${xp.streakBonus} streak`:""})`);
-      logBattle(`Hero completed ${taskLabel}. +${xp.total} XP${lootItem ? `, Loot: ${lootItem[1]} (${lootItem[2]})` : ""}.`, lootItem ? "loot" : "good");
-      notify("Focus complete!", `+${xp.total} XP · time for a break`);
-    } else {
-      // Minutes still log, hours still accumulate. No XP, no loot, no achievements.
-      state.combo.count = comboPriorCount; // too short to extend combo
-      showXpBreakdown(xp, { reasonShort: true });
-      logLine(`Focus complete: ${minutes}m logged (no rewards — below ${floor}m floor)`);
-      logBattle(`Hero completed ${taskLabel} for ${minutes}m. No rewards below ${floor}m.`, "switch");
-      notify("Focus session logged", `${minutes}m added to your totals (below ${floor}m reward floor)`);
-    }
-    recordAdventureMinutes(minutes);
-    if (earnedRewards) maybeRecordActionEncounter("sessionComplete");
-    if (typeof checkAchievementsV76 === "function") achievementsUnlockedHere = checkAchievementsV76("sessionComplete") || [];
-    pushSessionLog(buildSessionLogRecordV76({
-      type:"focus", source:"timer", minutes, taskId: state.timer.activeTaskId||null,
-      xpBreakdown: xp, rewarded: earnedRewards, comboPriorCount, streakBefore,
-      extendedStreak: lastFocusDateBefore !== state.lastFocusDate, lootItem, achievementsUnlockedHere,
-      action: currentAdventureActionId()
-    }));
-    playChime(false);
-    // pick next mode
-    const nextIsLong = state.cycleCount % state.settings.cyclesBeforeLong === 0;
-    if (nextIsLong && earnedRewards){ updateDailyProgress("cycle", 1); }
-    /* v7.4 bug fix (Joel report: "task switch sticks to original after a session
-       ends"): previously we cached state.timer.activeTaskId across setMode() so
-       the next focus session would auto-credit the same task. That made the
-       pointer "sticky" — if the user picked a different task during the break,
-       setActiveTask() only updated state.activeTaskId (the user-facing
-       selection), not state.timer.activeTaskId (the in-flight session pointer,
-       which we'd just frozen). Then startTimer() saw a non-null
-       state.timer.activeTaskId and skipped its re-snapshot, so the new session
-       silently credited the OLD task.
-       Clearing state.timer.activeTaskId here means the next startTimer() picks
-       it back up from state.activeTaskId — which IS what the user just clicked.
-       Carry-forward still works for "do nothing" because state.activeTaskId
-       persists the previous selection. */
-    setMode(nextIsLong ? "long" : "short");
-    state.timer.activeTaskId = null;
-    state.timer.activeTaskNameAtStart = null;
+    startFocusClaim(wasMode, minutes);
+    return;
   } else {
     state.hero.energy = Math.min(100, state.hero.energy + (wasMode==="long"?40:18));
     pushSessionLog(buildSessionLogRecordV76({ type: wasMode, minutes, rewarded:false, xpBreakdown:{total:0}, taskId:null }));
@@ -2939,7 +3387,7 @@ function rarityRank(r){ return TIER_RANK[String(r||"").toLowerCase()] || 0; }
 function isEquippableSlot(slot){ return EQUIP_SLOTS.includes(slot); }
 function ensureEquippedShape(){
   if (!state.hero.equipped || typeof state.hero.equipped !== "object" || Array.isArray(state.hero.equipped)){
-    state.hero.equipped = { weapon:null, helmet:null, armor:null, mount:null };
+    state.hero.equipped = { weapon:null, helmet:null, armor:null, mount:null, pet:null };
   }
   for (const slot of EQUIP_SLOTS) if (!(slot in state.hero.equipped)) state.hero.equipped[slot] = null;
 }
@@ -2972,8 +3420,17 @@ function setEquipped(slot, lootIdValue, tier){
   state.hero.equipped[slot] = { lootId: lootIdValue, tier: tier || item[2] };
   logBattle(`Equipped ${item[1]} (${tier || item[2]} ${slot}).`, "loot");
   saveState();
-  renderHero(); renderAvatar(); renderLoot();
+  renderHero(); renderAvatar(); renderLoot(); renderCompanions(); renderCharacterPanel();
   toast(`Equipped ${item[1]}`, "good");
+}
+function clearEquipped(slot){
+  if (!isEquippableSlot(slot)) return;
+  ensureEquippedShape();
+  const oldName = equippedName(slot);
+  state.hero.equipped[slot] = null;
+  saveState();
+  renderHero(); renderAvatar(); renderLoot(); renderCompanions(); renderCharacterPanel();
+  if (oldName) toast(`${oldName} unequipped`);
 }
 
 /* ================================================================
@@ -3558,10 +4015,10 @@ function notify(title, body){
 /* -------- rendering -------- */
 function renderAll(){
   renderTimer(); renderHero(); renderQuests(); renderDaily();
-  renderLoot(); renderAchievements(); renderHeatmap(); renderTopMeta();
+  renderLoot(); renderCompanions(); renderAchievements(); renderHeatmap(); renderTopMeta();
   renderModeTabs(); renderAvatar(); renderTasks(); renderActiveTaskRow();
   renderStatStrip(); renderBattleLog(); renderBackupLast(); renderSecurityPanel();
-  renderSwLaps(); renderActionPicker(); renderBestiary();
+  renderSwLaps(); renderActionPicker(); renderBestiary(); renderAllTasksSheet(); renderCharacterPanel();
 }
 function renderModeTabs(){
   $$(".mode-tabs button").forEach(b=>b.setAttribute("aria-pressed", b.dataset.mode===state.timer.mode ? "true":"false"));
@@ -3596,9 +4053,11 @@ function renderSwLaps(){
     `<ol>${items.join("")}</ol>`;
 }
 function renderTimer(){
+  const display = $("#timer-display");
   if (isStopwatch()){
     const elapsed = stopwatchElapsedMs(state.timer, now());
-    $("#timer-display").textContent = fmtTimeLong(elapsed);
+    display.textContent = fmtTimeLong(elapsed);
+    display.classList.remove("critical");
     // For stopwatch the progress bar shows progress toward the next "reward minute" (visual cue, capped at 100% loop)
     const intoMin = (elapsed % 60_000) / 60_000 * 100;
     $("#progress-bar").style.width = `${intoMin}%`;
@@ -3612,7 +4071,8 @@ function renderTimer(){
   let left;
   if (state.timer.running){ left = Math.max(0, state.timer.endAt - now()); }
   else left = state.timer.msLeft;
-  $("#timer-display").textContent = fmtTime(left);
+  display.textContent = fmtTime(left);
+  display.classList.toggle("critical", state.timer.running && state.timer.mode === "focus" && left > 0 && left <= 60_000);
   const total = modeMinutes(state.timer.mode)*60*1000;
   const pct = 100 - (left/total*100);
   $("#progress-bar").style.width = `${clamp(pct,0,100)}%`;
@@ -3663,6 +4123,20 @@ function renderHero(){
   $("#bar-xp").style.width = `${clamp(state.hero.xp/need*100,0,100)}%`;
   $("#hp-cur").textContent = state.hero.hp; $("#bar-hp").style.width = `${state.hero.hp}%`;
   $("#en-cur").textContent = state.hero.energy; $("#bar-en").style.width = `${state.hero.energy}%`;
+  renderGearSummary();
+}
+function renderGearSummary(){
+  const host = $("#gear-summary"); if (!host) return;
+  ensureEquippedShape();
+  const labels = { weapon:"Weapon", helmet:"Head", armor:"Armor", mount:"Mount", pet:"Pet" };
+  host.innerHTML = EQUIP_SLOTS.map(slot=>{
+    const eq = state.hero.equipped[slot];
+    const item = eq?.lootId ? lootById(eq.lootId) : null;
+    const sym = item ? item[0] : "◇";
+    const name = item ? item[1] : "Empty";
+    const tier = item ? item[2] : "common";
+    return `<div class="gear-chip rar-${tier}" title="${labels[slot]}: ${escapeHtml(name)}"><span>${sym}</span><b>${escapeHtml(labels[slot])}</b><span>${escapeHtml(name)}</span></div>`;
+  }).join("");
 }
 const AVATAR_CLASS_ART = {
   mage:    { kind:"mage",    outline:"#1A1A1A", mid:"#7C3AED", high:"#A78BFA", dark:"#4C1D95", trim:"#FBBF24", bg:"#101022", detail:"gem" },
@@ -3733,6 +4207,7 @@ function pixelAvatarSvg(clsName, action, scene, p, eq){
     <g class="fh-horizon">${drawHorizon(p)}</g>
     <g class="fh-enemy">${drawEnemy(enemyKindForLevel(state.hero.level), p)}</g>
     <g class="fh-mount">${drawMount(eq.mount, p)}</g>
+    <g class="fh-pet">${drawPet(eq.pet, p)}</g>
     <g class="fh-sprite">
       <g class="fh-hero">${drawBody(p)}${drawArmor(p, eq.armor, tier)}${drawHelmet(p, eq.helmet)}</g>
       <g class="fh-weapon">${drawWeapon(p, eq.weapon, action)}</g>
@@ -3848,6 +4323,51 @@ function drawMount(mountGear, p){
   return [
     fhRect(4,23,15,4,"#8B5A2B"), fhRect(8,21,10,2,"#A16207"), fhRect(18,20,5,4,"#8B5A2B"),
     fhRect(21,18,2,2,"#D6B08A"), fhRect(6,26,2,4,p.outline), fhRect(15,26,2,4,p.outline), fhRect(10,20,5,1,p.trim)
+  ].join("");
+}
+function drawPet(petGear, p){
+  const itemId = petGear?.id || "";
+  const tier = avatarTier(petGear, "common");
+  const style = tierStyle(tier);
+  if (itemId === "ember_wyrmling"){
+    return [
+      fhRect(2,21,5,3,"#B45309"), fhRect(6,19,4,4,"#F97316"), fhRect(8,17,2,2,"#FDBA74"),
+      fhRect(4,24,2,2,p.outline), fhRect(8,20,1,1,"#FEF3C7"), fhRect(1,20,2,1,style.trim)
+    ].join("");
+  }
+  if (itemId === "star_mote"){
+    return [
+      fhRect(3,19,2,2,style.gem), fhRect(2,21,4,2,style.aura), fhRect(3,23,2,2,style.gem),
+      fhRect(1,21,1,1,"#E0F2FE"), fhRect(6,21,1,1,"#E0F2FE")
+    ].join("");
+  }
+  if (itemId === "orbit_sprite"){
+    return [
+      fhRect(2,20,2,2,style.gem), fhRect(6,20,2,2,style.aura), fhRect(4,22,3,2,style.trim),
+      fhRect(1,23,1,1,"#E0F2FE"), fhRect(8,19,1,1,"#FEF3C7"), fhRect(5,18,1,1,style.gem)
+    ].join("");
+  }
+  if (itemId === "clockwork_fox"){
+    return [
+      fhRect(2,21,5,3,"#B45309"), fhRect(6,19,3,4,"#F59E0B"), fhRect(8,18,1,1,"#FEF3C7"),
+      fhRect(1,20,2,1,style.metal), fhRect(3,24,1,2,p.outline), fhRect(7,23,1,2,p.outline), fhRect(5,20,1,1,"#111827")
+    ].join("");
+  }
+  if (itemId === "wind_familiar"){
+    return [
+      fhRect(2,21,5,2,"#BAE6FD"), fhRect(5,19,4,3,"#E0F2FE"), fhRect(8,18,1,1,style.trim),
+      fhRect(1,20,2,2,"#7DD3FC"), fhRect(3,23,1,1,style.gem), fhRect(7,22,1,1,style.gem)
+    ].join("");
+  }
+  if (itemId === "study_owl"){
+    return [
+      fhRect(2,20,5,5,"#92400E"), fhRect(3,18,3,3,"#FDE68A"), fhRect(1,21,2,2,"#78350F"),
+      fhRect(7,21,2,2,"#78350F"), fhRect(3,21,1,1,p.bg), fhRect(5,21,1,1,p.bg), fhRect(4,23,1,1,style.trim)
+    ].join("");
+  }
+  return [
+    fhRect(2,22,5,3,style.trim), fhRect(6,20,3,3,style.gem), fhRect(7,19,1,1,"#FEF3C7"),
+    fhRect(3,25,1,2,p.outline), fhRect(6,25,1,2,p.outline)
   ].join("");
 }
 function enemyKindForLevel(level){
@@ -4154,6 +4674,36 @@ function renderLoot(){
       b.onclick = ()=>setEquipped(slot, id, item[2]);
       el.appendChild(b);
     }
+    g.appendChild(el);
+  });
+}
+function renderCompanions(){
+  renderCompanionGrid("mount", "#mount-grid");
+  renderCompanionGrid("pet", "#pet-grid");
+}
+function renderCompanionGrid(slot, selector){
+  const g = $(selector); if (!g) return;
+  ensureEquippedShape();
+  const items = LOOT_TABLE.filter(item=>lootSlot(item) === slot);
+  g.innerHTML = "";
+  if (!items.length){
+    g.innerHTML = `<div class="muted">No ${slot}s configured yet.</div>`;
+    return;
+  }
+  items.forEach(item=>{
+    const id = lootId(item);
+    const count = state.lootOwned[id]||0;
+    const equipped = state.hero.equipped[slot]?.lootId === id;
+    const el = document.createElement("div");
+    el.className = "loot-item rar-" + item[2] + (count? " owned":" locked") + (equipped ? " equipped" : "");
+    el.innerHTML = `<div class="sym">${item[0]}</div><div class="name">${escapeHtml(item[1])}</div><div class="rar">${item[2]}${count?` · ×${count}`:""}</div><div class="role">${slot === "pet" ? "companion" : "travel"}</div>`;
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "equip-btn";
+    b.textContent = count ? (equipped ? "Equipped" : "Equip") : "Locked";
+    b.disabled = !count || equipped;
+    b.onclick = ()=>setEquipped(slot, id, item[2]);
+    el.appendChild(b);
     g.appendChild(el);
   });
 }
@@ -4621,16 +5171,26 @@ function stopPullPoll(){ if (pullPollTimer){ clearInterval(pullPollTimer); pullP
 
 /* -------- Modals -------- */
 function openModal(id){
+  if (pendingClaim && id !== "claim-modal"){
+    toast("Confirm the focus minutes first.", "warn");
+    return;
+  }
   const m = document.getElementById(id); if (!m) return;
   // Close any modals already open so they don't stack
-  document.querySelectorAll(".modal-backdrop").forEach(x=>{ if (x.id !== id) x.hidden = true; });
+  document.querySelectorAll(".modal-backdrop").forEach(x=>{ if (x.id !== id && x.id !== "claim-modal"){ blurIfFocusInside(x); x.hidden = true; } });
   m.hidden = false;
   if (id === "settings-modal") fillSettingsForm();
   if (id === "sync-modal"){ renderSyncStatus(); renderSecurityPanel(); }
   if (id === "analytics-modal") renderAnalytics(); // v4.3
 }
-function closeModal(id){ const m = document.getElementById(id); if (m) m.hidden = true; }
-function closeAllModals(){ $$(".modal-backdrop").forEach(m=>m.hidden=true); }
+function blurIfFocusInside(el){
+  if (el && document.activeElement && el.contains(document.activeElement)) document.activeElement.blur();
+}
+function closeModal(id){
+  const m = document.getElementById(id);
+  if (m && !(id === "claim-modal" && pendingClaim)){ blurIfFocusInside(m); m.hidden = true; }
+}
+function closeAllModals(){ $$(".modal-backdrop").forEach(m=>{ if (!(m.id === "claim-modal" && pendingClaim)){ blurIfFocusInside(m); m.hidden=true; } }); }
 
 function fillSettingsForm(){
   const s = state.settings;
@@ -4657,8 +5217,8 @@ function readToggle(sel){ const el=$(sel); return el?.getAttribute("aria-checked
 
 function bindSettings(){
   $("#btn-settings").onclick = ()=>openModal("settings-modal");
-  $$("[data-close]").forEach(b=>b.onclick = (e)=>{ const m = e.target.closest(".modal-backdrop"); if (m) m.hidden = true; });
-  $$(".modal-backdrop").forEach(m=>{ m.addEventListener("click",(e)=>{ if (e.target===m) m.hidden=true; }); });
+  $$("[data-close]").forEach(b=>b.onclick = (e)=>{ const m = e.target.closest(".modal-backdrop"); if (m) closeModal(m.id); });
+  $$(".modal-backdrop").forEach(m=>{ m.addEventListener("click",(e)=>{ if (e.target===m && !(m.id === "claim-modal" && pendingClaim)) closeModal(m.id); }); });
   const bind = (sel, handler) => { const el=$(sel); if (!el) return; el.addEventListener("change", handler); el.addEventListener("input", handler); };
   bind("#cfg-focus", e=>{ state.settings.focusMin = clamp(parseInt(e.target.value||"25",10),1,180); saveState(); if (!state.timer.running) setMode(state.timer.mode); });
   bind("#cfg-short", e=>{ state.settings.shortMin = clamp(parseInt(e.target.value||"5",10),1,60); saveState(); if (!state.timer.running) setMode(state.timer.mode); });
@@ -5362,9 +5922,176 @@ function bindTabs(){
     b.addEventListener("click", ()=>{
       const tab = b.dataset.tab;
       $$(".tabs button[role='tab']").forEach(x=>x.setAttribute("aria-pressed", x===b?"true":"false"));
-      ["loot","ach","bestiary","heat"].forEach(k=>{ const p=$(`#tab-${k}`); if (!p) return; p.hidden = k!==tab; });
+      ["loot","mounts","pets","ach","bestiary","heat"].forEach(k=>{ const p=$(`#tab-${k}`); if (!p) return; p.hidden = k!==tab; });
     });
   });
+}
+function scrollToSection(id){
+  const el = document.getElementById(id);
+  if (!el) return;
+  setActiveNavTarget(id);
+  el.scrollIntoView({ behavior:"smooth", block:"start" });
+}
+function setActiveNavTarget(id){
+  $$(".app-nav [data-nav-target]").forEach(b=>{
+    if (b.dataset.navTarget === id) b.setAttribute("aria-current", "page");
+    else b.removeAttribute("aria-current");
+  });
+}
+let navSpyRaf = 0;
+function updateNavCurrent(){
+  navSpyRaf = 0;
+  const ids = ["section-focus","section-tasks","section-hero","section-progress"];
+  let best = ids[0], bestDist = Infinity;
+  ids.forEach(id=>{
+    const el = document.getElementById(id);
+    if (!el) return;
+    const dist = Math.abs(el.getBoundingClientRect().top - 96);
+    if (dist < bestDist){ best = id; bestDist = dist; }
+  });
+  setActiveNavTarget(best);
+}
+function bindSectionSpy(){
+  window.addEventListener("scroll", ()=>{
+    if (!navSpyRaf) navSpyRaf = requestAnimationFrame(updateNavCurrent);
+  }, { passive:true });
+  window.addEventListener("resize", updateNavCurrent, { passive:true });
+  setTimeout(updateNavCurrent, 60);
+}
+function openAllTasksSheet(){
+  renderAllTasksSheet();
+  openModal("all-tasks-modal");
+  setTimeout(()=>$("#all-tasks-search")?.focus(), 30);
+}
+function taskSortForSheet(){
+  return [...(state.tasks||[])].sort((a,b)=>{
+    if (!!b.pinned - !!a.pinned !== 0) return (!!b.pinned) - (!!a.pinned);
+    return (b.lastUsedAt||b.createdAt||0) - (a.lastUsedAt||a.createdAt||0);
+  });
+}
+function renderAllTasksSheet(){
+  const host = $("#all-tasks-body"); if (!host) return;
+  const q = ($("#all-tasks-search")?.value || "").trim().toLowerCase();
+  const rows = taskSortForSheet().filter(t=>!q || `${t.emoji||""} ${t.name||""}`.toLowerCase().includes(q));
+  if (!rows.length){
+    host.innerHTML = `<div class="muted" style="padding:10px">No tasks match that search.</div>`;
+    return;
+  }
+  host.innerHTML = "";
+  rows.forEach((t, i)=>{
+    const row = document.createElement("div");
+    row.className = "all-task-row" + (t.id === state.activeTaskId ? " active" : "");
+    row.style.setProperty("--i", i);
+    row.innerHTML = `
+      <div class="emoji">${escapeHtml(t.emoji||"•")}</div>
+      <div class="task-main"><b>${escapeHtml(t.name||"Untitled")}</b><span class="task-meta">${formatHours(t.totalFocusMin|0)} · ${t.sessions||0} sessions${t.pinned ? " · pinned" : ""}</span></div>
+      <div class="task-meta">${t.id === state.activeTaskId ? "active" : ""}</div>
+      <div class="task-actions">
+        <button type="button" data-act="active">Use</button>
+        <button type="button" data-act="pin">${t.pinned ? "Unpin" : "Pin"}</button>
+        <button type="button" data-act="edit">Edit</button>
+      </div>`;
+    row.querySelector("[data-act='active']").onclick = ()=>{ setActiveTask(t.id); renderAllTasksSheet(); };
+    row.querySelector("[data-act='pin']").onclick = ()=>{ pinTask(t.id); renderAllTasksSheet(); };
+    row.querySelector("[data-act='edit']").onclick = ()=>{ closeModal("all-tasks-modal"); scrollToSection("section-tasks"); setTimeout(()=>{ const esc = window.CSS?.escape ? CSS.escape(t.id) : t.id.replace(/"/g,""); const el = document.querySelector(`[data-task-id="${esc}"] .name`); if (el) startInlineRenameTask(t.id, el); }, 250); };
+    host.appendChild(row);
+  });
+}
+let selectedEquipSlot = "weapon";
+function openCharacterPanel(){
+  selectedEquipSlot = selectedEquipSlot || "weapon";
+  renderCharacterPanel();
+  openModal("character-modal");
+}
+function renderCharacterPanel(){
+  const modal = $("#character-modal"); if (!modal || modal.hidden) return;
+  ensureEquippedShape();
+  const name = $("#character-name");
+  const cls = $("#character-class");
+  if (name && document.activeElement !== name) name.value = state.hero.name || "Hero";
+  if (cls) cls.value = state.hero.cls || "mage";
+  const preview = $("#character-avatar-preview");
+  if (preview) preview.innerHTML = pixelAvatarSvg((CLASSES[state.hero.cls]||CLASSES.mage).name, currentAvatarAction(), currentAdventureSpec().scene, avatarClassSpec(state.hero.cls, null), avatarEquipment());
+  const slots = $("#equipment-slots");
+  if (slots){
+    const labels = { weapon:"Main hand", helmet:"Head", armor:"Body", mount:"Mount", pet:"Pet" };
+    slots.innerHTML = "";
+    EQUIP_SLOTS.forEach(slot=>{
+      const eq = state.hero.equipped[slot];
+      const item = eq?.lootId ? lootById(eq.lootId) : null;
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "equipment-slot";
+      b.setAttribute("aria-pressed", selectedEquipSlot === slot ? "true" : "false");
+      b.innerHTML = `<span class="slot-label">${labels[slot]||slot}</span><span class="slot-name">${item ? `${item[0]} ${escapeHtml(item[1])}` : "Empty"}</span>`;
+      b.onclick = ()=>{ selectedEquipSlot = slot; renderCharacterPanel(); };
+      slots.appendChild(b);
+    });
+  }
+  renderEquipmentPicker();
+}
+function renderEquipmentPicker(){
+  const host = $("#equipment-picker"); if (!host) return;
+  ensureEquippedShape();
+  const slot = selectedEquipSlot || "weapon";
+  const items = LOOT_TABLE.filter(item=>lootSlot(item) === slot);
+  host.innerHTML = "";
+  if (state.hero.equipped[slot]?.lootId){
+    const clear = document.createElement("button");
+    clear.type = "button";
+    clear.className = "equipment-card";
+    clear.innerHTML = `<span class="sym">◇</span><span class="name">Empty ${escapeHtml(slot)}</span><span class="meta">remove current choice</span>`;
+    clear.onclick = ()=>clearEquipped(slot);
+    host.appendChild(clear);
+  }
+  if (!items.length){
+    host.innerHTML = `<div class="muted">No ${slot} gear exists yet.</div>`;
+    return;
+  }
+  items.forEach(item=>{
+    const id = lootId(item);
+    const owned = (state.lootOwned[id]||0) > 0;
+    const equipped = state.hero.equipped[slot]?.lootId === id;
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = `equipment-card rar-${item[2]} ${owned ? "" : "locked"} ${equipped ? "equipped" : ""}`;
+    b.disabled = !owned || equipped;
+    b.innerHTML = `<span class="sym">${item[0]}</span><span class="name">${escapeHtml(item[1])}</span><span class="meta">${item[2]} · ${owned ? "owned" : "locked"}</span>`;
+    b.onclick = ()=>setEquipped(slot, id, item[2]);
+    host.appendChild(b);
+  });
+}
+function applyDesignVariant(){
+  const v = state.settings.designVariant || "command";
+  document.documentElement.setAttribute("data-variant", ["command","canvas","terminal"].includes(v) ? v : "command");
+}
+function setDesignVariant(v){
+  state.settings.designVariant = ["command","canvas","terminal"].includes(v) ? v : "command";
+  saveState();
+  applyDesignVariant();
+  toast(`Prototype: ${state.settings.designVariant}`);
+}
+function bindDesignShell(){
+  $("#btn-all-tasks")?.addEventListener("click", openAllTasksSheet);
+  $("#btn-show-all-tasks")?.addEventListener("click", openAllTasksSheet);
+  $("#btn-all-tasks-add")?.addEventListener("click", ()=>{ closeModal("all-tasks-modal"); scrollToSection("section-tasks"); setTimeout(()=>$("#new-task-name")?.focus(), 250); });
+  $("#all-tasks-search")?.addEventListener("input", renderAllTasksSheet);
+  $("#btn-character")?.addEventListener("click", openCharacterPanel);
+  $("#btn-hero-customize")?.addEventListener("click", openCharacterPanel);
+  $("#btn-variants")?.addEventListener("click", ()=>openModal("variants-modal"));
+  $("#character-name")?.addEventListener("input", e=>{ state.hero.name = e.target.value.trim() || "Hero"; saveState(); renderHero(); renderCharacterPanel(); });
+  $("#character-class")?.addEventListener("change", e=>{ state.hero.cls = e.target.value; saveState(); renderHero(); renderAvatar(); renderCharacterPanel(); });
+  $$("[data-variant-choice]").forEach(b=>b.addEventListener("click", ()=>{ setDesignVariant(b.dataset.variantChoice); closeModal("variants-modal"); }));
+  $$(".app-nav [data-nav-target]").forEach(b=>b.addEventListener("click", ()=>scrollToSection(b.dataset.navTarget)));
+  $$(".app-nav [data-nav-action='all-tasks']").forEach(b=>b.addEventListener("click", openAllTasksSheet));
+  const claimSync = e=>setClaimMinutes(e.target.value);
+  $("#claim-minutes")?.addEventListener("input", claimSync);
+  $("#claim-range")?.addEventListener("input", claimSync);
+  $$("[data-claim-delta]").forEach(b=>b.addEventListener("click", ()=>setClaimMinutes(claimMinutesValue() + (parseInt(b.dataset.claimDelta, 10)||0))));
+  $("#btn-confirm-claim")?.addEventListener("click", ()=>confirmSessionClaim(false));
+  $("#btn-claim-full")?.addEventListener("click", ()=>confirmSessionClaim(true));
+  bindSectionSpy();
+  applyDesignVariant();
 }
 function bindModeTabs(){
   $$(".mode-tabs button[role='tab']").forEach(b=>{
@@ -5450,6 +6177,9 @@ function bindKeys(){
     else if (e.key.toLowerCase() === "t") toggleTheme();
     else if (e.key.toLowerCase() === "y") openModal("sync-modal");
     else if (!e.shiftKey && e.key.toLowerCase() === "s") openModal("analytics-modal"); // v4.3: analytics
+    else if (e.key.toLowerCase() === "g") openAllTasksSheet();
+    else if (e.key.toLowerCase() === "c") openCharacterPanel();
+    else if (e.key.toLowerCase() === "v") openModal("variants-modal");
     else if (e.key.toLowerCase() === "a") $("#new-task-name")?.focus();
     else if (e.key.toLowerCase() === "q") $("#quest-input")?.focus();
     else if (e.key === "?") openModal("help-modal");
@@ -5550,6 +6280,9 @@ const __FocusHero = {
   appendStopwatchLap, lapStopwatch,
   /* v7.3: cancel-session — exposed so smoke tests can call with skipConfirm */
   cancelSession, isCancelableSession,
+  /* v7.7: post-session claim and customization */
+  startFocusClaim, confirmSessionClaim, commitFocusTimerSession,
+  setEquipped, clearEquipped,
   fmtTimeLong,
   /* v4.2: emergency recovery — call from DevTools console.
      listSnapshots() shows {key, savedAt, size} for every saved snapshot;
@@ -5622,6 +6355,16 @@ async function runSmokeTests(){
     state = snapshot; saveState(); renderAll();
   }
   {
+    const snapshot = deepClone(state);
+    state.lootOwned.study_owl = 1;
+    setEquipped("pet", "study_owl", "epic");
+    const equipped = state.hero.equipped.pet?.lootId === "study_owl";
+    clearEquipped("pet");
+    const cleared = state.hero.equipped.pet === null;
+    add("Customization: pet slot equips and clears", equipped && cleared);
+    state = snapshot; saveState(); renderAll();
+  }
+  {
     renderAvatar();
     const ok = !!document.querySelector("#avatar svg[viewBox='0 0 32 32']");
     add("Avatar: renders 32x32 crisp SVG", ok);
@@ -5666,6 +6409,24 @@ async function runSmokeTests(){
     const bad = migrate("this is not json");
     const ok = bad.dataVersion === DATA_VERSION && bad.totalFocusMin >= 0 && Array.isArray(bad.tasks);
     add("Degraded read: malformed state → defaults", ok);
+  }
+  {
+    const snapshot = deepClone(state);
+    const t = createTask({ name:"ClaimTestTask", emoji:"⏱️" });
+    const before = {
+      totalFocusMin: state.totalFocusMin|0,
+      completedFocusSessions: state.completedFocusSessions|0,
+      taskMin: state.tasks.find(x=>x.id===t.id).totalFocusMin|0
+    };
+    state.settings.autoStart = false;
+    commitFocusTimerSession({ wasMode:"focus", plannedMinutes:25, taskId:t.id, taskLabel:"ClaimTestTask", action:"Travel" }, 12);
+    const task = state.tasks.find(x=>x.id===t.id);
+    const ok = (state.totalFocusMin|0) === before.totalFocusMin + 12
+      && (state.completedFocusSessions|0) === before.completedFocusSessions + 1
+      && (task?.totalFocusMin|0) === before.taskMin + 12
+      && (state.history[todayKey()]|0) >= 12;
+    add("Focus claim: reduced minutes are the saved minutes", ok);
+    state = snapshot; saveState(); renderAll();
   }
   /* v7.3: cancelSession must be a true zero-credit no-op. Snapshot every stat
      that completion would touch, simulate a running focus session, cancel it,
@@ -5760,12 +6521,15 @@ async function runSmokeTests(){
       quests:[], activeQuestId:null, daily:{date:null,items:[]}, lootOwned:{}, achievements:{},
       history:{}, sessionHistory:{}, sessionsLog:[], battleLog:[], sync:{...DEFAULTS.sync}
     };
+    delete v5.settings.designVariant;
     const m = migrate(deepClone(v5));
     const ok = m.dataVersion === DATA_VERSION
       && m.totalFocusMin === 500
       && typeof m.canceledSessionCount === "number"
-      && m.canceledSessionCount === 0;
-    add("Migration v5 → v6 seeds canceledSessionCount=0", ok);
+      && m.canceledSessionCount === 0
+      && "pet" in m.hero.equipped
+      && m.settings.designVariant === "command";
+    add("Migration v5 → current seeds cancel, pet, and prototype defaults", ok);
   }
   {
     const local = { totalFocusMin:100, streak:3, history:{}, lootOwned:{}, achievements:{}, quests:[], tasks:[], sessionsLog:[],
@@ -5796,7 +6560,7 @@ async function boot(){
   try {
     applyTheme();
     injectV76DomScaffolding();
-    bindSettings(); bindSync(); bindHelp(); bindAnalytics(); bindTabs(); bindModeTabs();
+    bindSettings(); bindSync(); bindHelp(); bindAnalytics(); bindTabs(); bindDesignShell(); bindModeTabs();
     bindTasks(); bindQuests(); bindTimer(); bindBattleLog(); bindKeys(); bindMultiTab(); bindSecretAchievementListeners();
     $("#btn-theme").onclick = toggleTheme;
     renderAll();
