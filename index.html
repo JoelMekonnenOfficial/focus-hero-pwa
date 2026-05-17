@@ -15,7 +15,7 @@
 <title>Focus Hero</title>
 <style>
 /* ================================================================
- * Focus Hero v7.6 - inline styles (single-file PWA)
+ * Focus Hero v7.8 - inline styles (single-file PWA)
  * ================================================================ */
 :root{
   --bg:#0b0d1a; --bg-2:#111427; --panel:#171a30; --panel-2:#1f2340;
@@ -317,6 +317,16 @@ kbd{font-family:var(--mono);font-size:.78em;padding:1px 6px;border-radius:6px;ba
 .xp-breakdown .row{justify-content:space-between;padding:3px 0;border-bottom:1px dashed var(--border);font-size:.88rem}
 .xp-breakdown .row:last-child{border-bottom:none;font-weight:700;color:var(--good);padding-top:8px;font-size:1rem}
 .xp-breakdown .sub{color:var(--ink-dim);font-size:.75rem;margin-bottom:6px;text-align:center}
+.xp-breakdown .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap}
+.xp-breakdown .actions button{padding:.38rem .65rem;font-size:.78rem;border-radius:8px}
+.xp-breakdown .editor{margin-top:10px;padding-top:10px;border-top:1px dashed var(--border)}
+.xp-breakdown .editor .label{font-size:.78rem;color:var(--ink-dim);margin-bottom:7px}
+.xp-breakdown .editor input{width:96px;text-align:right}
+.xp-breakdown .editor .max{font-size:.78rem;color:var(--ink-dim)}
+.xp-breakdown .editor .quick{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.xp-breakdown .editor .quick button{padding:.28rem .5rem;font-size:.74rem}
+.xp-breakdown .editor .preview{margin-top:8px;font-size:.8rem;color:var(--ink-dim)}
+.xp-breakdown .editor .err{margin-top:8px;font-size:.78rem;color:var(--bad)}
 @keyframes pop-in{from{opacity:0;transform:translateY(-6px) scale(.98)}to{opacity:1;transform:none}}
 .xp-pill{display:inline-flex;align-items:center;gap:4px;font-size:.72rem;padding:2px 8px;border-radius:999px;background:var(--panel-2);border:1px solid var(--border-strong);color:var(--ink-dim)}
 .xp-pill.combo{color:var(--warn);border-color:var(--warn)}
@@ -861,7 +871,7 @@ button.primary{
 
 
 /* ================================================================
- * Focus Hero v7.6 — patch CSS
+ * Focus Hero v7.8 - patch CSS
  * Insert this block in focus-hero.html immediately AFTER the existing
  * /* ---------- v7.2: Gemini-guided Deep Weald MMO polish ---------- */
 /* (i.e. after line ~860, before the closing style tag).
@@ -1970,10 +1980,12 @@ html[data-variant="terminal"] .timer-display{color:#C7FF45;text-shadow:0 0 16px 
 </div>
 
 <!-- ================================================================
- * Focus Hero v7.6 - inline script (one file, no deps)
+ * Focus Hero v7.8 - inline script (one file, no deps)
  * ================================================================ -->
 <script>
 "use strict";
+/* v7.8 build marker - session-end edit-time card for reduce-only corrections,
+   with XP, task, daily, combo, and analytics rollback on save. */
 /* v7.7.1 build marker - Knight-first character customization hotfix with
    appearance controls, default Mage-to-Knight migration, and no stat resets. */
 /* v7.7 build marker - Codex/Gemini hybrid design shell with quick navigation,
@@ -3136,6 +3148,7 @@ function finalizeStopwatch(){
   logMinutesToTask(state.timer.activeTaskId, minutes);
   const floor = Math.max(1, state.settings.minRewardMinutes|0 || 5);
   const earnedRewards = minutes >= floor;
+  let breakdownMeta = null;
   if (earnedRewards){
     awardXp(xp.total);
     // Note: state.combo.count is intentionally not incremented for stopwatch sessions.
@@ -3144,12 +3157,12 @@ function finalizeStopwatch(){
     lootItem = rollLoot(minutes);
     updateDailyProgress("focus", 1);
     updateDailyProgress("minutes", minutes);
-    showXpBreakdown(xp, { lootItem });
+    breakdownMeta = { lootItem };
     logLine(`Stopwatch logged: ${minutes}m · +${xp.total} XP (base ${xp.base}${xp.streakBonus?` +${xp.streakBonus} streak`:""})`);
     logBattle(`Hero completed ${taskLabel}. +${xp.total} XP${lootItem ? `, Loot: ${lootItem[1]} (${lootItem[2]})` : ""}.`, lootItem ? "loot" : "good");
     notify("Stopwatch logged!", `+${xp.total} XP · ${minutes}m saved`);
   } else {
-    showXpBreakdown(xp, { reasonShort: true });
+    breakdownMeta = { reasonShort: true };
     logLine(`Stopwatch logged: ${minutes}m (no rewards — below ${floor}m floor)`);
     logBattle(`Hero logged ${taskLabel} for ${minutes}m. No rewards below ${floor}m.`, "switch");
     notify("Stopwatch logged", `${minutes}m added to your totals (below ${floor}m reward floor)`);
@@ -3157,12 +3170,17 @@ function finalizeStopwatch(){
   recordAdventureMinutes(minutes);
   if (earnedRewards) maybeRecordActionEncounter("stopwatchComplete");
   if (typeof checkAchievementsV76 === "function") achievementsUnlockedHere = checkAchievementsV76("stopwatchComplete") || [];
-  pushSessionLog(buildSessionLogRecordV76({
+  const sessionRecord = buildSessionLogRecordV76({
     type:"focus", source:"stopwatch", minutes, taskId: state.timer.activeTaskId||null,
     xpBreakdown: xp, rewarded: earnedRewards, comboPriorCount:0, streakBefore,
+    streakForCalc: state.streak, comboApplied:0,
+    dailyFocusApplied: earnedRewards ? 1 : 0,
+    dailyMinApplied: earnedRewards ? minutes : 0,
     extendedStreak: lastFocusDateBefore !== state.lastFocusDate, lootItem, achievementsUnlockedHere,
     action: currentAdventureActionId()
-  }));
+  });
+  pushSessionLog(sessionRecord);
+  showXpBreakdown(xp, Object.assign({}, breakdownMeta, { sessionId: sessionRecord.id }));
   playChime(false);
   // reset stopwatch counter, stay in stopwatch mode for another session
   state.timer.swAccumulatedMs = 0;
@@ -3281,6 +3299,7 @@ function commitFocusTimerSession(claim, minutes){
   logMinutesToTask(claim.taskId, minutes);
   const floor = Math.max(1, state.settings.minRewardMinutes|0 || 5);
   const earnedRewards = minutes >= floor;
+  let breakdownMeta = null;
   if (earnedRewards){
     awardXp(xp.total);
     state.combo.count = comboPriorCount + 1;
@@ -3289,13 +3308,13 @@ function commitFocusTimerSession(claim, minutes){
     lootItem = rollLoot(minutes);
     updateDailyProgress("focus", 1);
     updateDailyProgress("minutes", minutes);
-    showXpBreakdown(xp, { lootItem });
+    breakdownMeta = { lootItem };
     logLine(`Focus complete: ${minutes}m · +${xp.total} XP (base ${xp.base}${xp.comboBonus?` +${xp.comboBonus} combo`:""}${xp.streakBonus?` +${xp.streakBonus} streak`:""})`);
     logBattle(`Hero completed ${taskLabel}. +${xp.total} XP${lootItem ? `, Loot: ${lootItem[1]} (${lootItem[2]})` : ""}.`, lootItem ? "loot" : "good");
     notify("Focus complete!", `+${xp.total} XP · time for a break`);
   } else {
     state.combo.count = comboPriorCount;
-    showXpBreakdown(xp, { reasonShort: true });
+    breakdownMeta = { reasonShort: true };
     logLine(`Focus complete: ${minutes}m logged (no rewards — below ${floor}m floor)`);
     logBattle(`Hero completed ${taskLabel} for ${minutes}m. No rewards below ${floor}m.`, "switch");
     notify("Focus session logged", `${minutes}m added to your totals (below ${floor}m reward floor)`);
@@ -3303,12 +3322,18 @@ function commitFocusTimerSession(claim, minutes){
   recordAdventureMinutes(minutes);
   if (earnedRewards) maybeRecordActionEncounter("sessionComplete");
   if (typeof checkAchievementsV76 === "function") achievementsUnlockedHere = checkAchievementsV76("sessionComplete") || [];
-  pushSessionLog(buildSessionLogRecordV76({
+  const sessionRecord = buildSessionLogRecordV76({
     type:"focus", source:"timer", minutes, taskId: claim.taskId||null,
     xpBreakdown: xp, rewarded: earnedRewards, comboPriorCount, streakBefore,
+    streakForCalc: state.streak,
+    comboApplied: earnedRewards ? 1 : 0,
+    dailyFocusApplied: earnedRewards ? 1 : 0,
+    dailyMinApplied: earnedRewards ? minutes : 0,
     extendedStreak: lastFocusDateBefore !== state.lastFocusDate, lootItem, achievementsUnlockedHere,
     action: claim.action || currentAdventureActionId()
-  }));
+  });
+  pushSessionLog(sessionRecord);
+  showXpBreakdown(xp, Object.assign({}, breakdownMeta, { sessionId: sessionRecord.id }));
   playChime(false);
   const nextIsLong = state.cycleCount % state.settings.cyclesBeforeLong === 0;
   if (nextIsLong && earnedRewards){ updateDailyProgress("cycle", 1); }
@@ -3786,9 +3811,12 @@ function formatHMS(ms){
  * v4: XP breakdown overlay at session end
  * ================================================================ */
 let xpBreakdownTimer = null;
-function showXpBreakdown(xp, meta){
+let xpBreakdownEditing = false;
+function renderXpBreakdown(xp, meta){
   meta = meta||{};
   const slot = $("#xp-breakdown-slot"); if (!slot) return;
+  const rec = meta.sessionId ? sessionRecordById(meta.sessionId) : null;
+  const adjusted = !!(rec && (rec.adjustedFrom || rec.edited));
   const rows = [];
   if (xp.reason === "under_floor"){
     rows.push(`<div class="row"><span>Session logged</span><span>${xp.minutes}m</span></div>`);
@@ -3801,13 +3829,123 @@ function showXpBreakdown(xp, meta){
     if (meta.lootItem) rows.push(`<div class="row"><span>${meta.lootItem[0]} ${escapeHtml(meta.lootItem[1])}</span><span class="rar rar-${meta.lootItem[2]}">${meta.lootItem[2]}</span></div>`);
     rows.push(`<div class="row"><span>Total</span><span>+${xp.total} XP</span></div>`);
   }
-  slot.innerHTML = `<div class="xp-breakdown"><div class="sub">Session summary</div>${rows.join("")}</div>`;
+  const canEdit = !!(rec && canEditSessionRecord(rec));
+  const actionsHtml = canEdit ? `<div class="actions"><button type="button" id="xp-edit-time-btn" title="Reduce logged minutes for this session">Edit time</button></div>` : "";
+  slot.innerHTML = `<div class="xp-breakdown"><div class="sub">Session summary${adjusted ? " · adjusted" : ""}</div>${rows.join("")}${actionsHtml}</div>`;
+  const btn = document.getElementById("xp-edit-time-btn");
+  if (btn) btn.onclick = () => openSessionEndEditTime(meta.sessionId);
+}
+function showXpBreakdown(xp, meta){
+  showXpBreakdown._last = { xp, meta: meta||{} };
+  xpBreakdownEditing = false;
+  renderXpBreakdown(xp, meta);
+  const slot = $("#xp-breakdown-slot"); if (!slot) return;
   clearTimeout(xpBreakdownTimer);
-  xpBreakdownTimer = setTimeout(()=>{ if (slot.firstChild) slot.firstChild.remove(); }, 10_000);
+  xpBreakdownTimer = setTimeout(()=>{ if (slot.firstChild && !xpBreakdownEditing) slot.firstChild.remove(); }, 10_000);
 }
 function clearXpBreakdown(){
   const slot = $("#xp-breakdown-slot"); if (!slot) return;
   slot.innerHTML = "";
+  xpBreakdownEditing = false;
+  clearTimeout(xpBreakdownTimer);
+}
+function openSessionEndEditTime(sessionId){
+  const rec = sessionRecordById(sessionId);
+  if (!canEditSessionRecord(rec)) return;
+  xpBreakdownEditing = true;
+  clearTimeout(xpBreakdownTimer);
+  const slot = $("#xp-breakdown-slot"); if (!slot) return;
+  const container = slot.querySelector(".xp-breakdown"); if (!container) return;
+  const existingActions = container.querySelector(".actions");
+  if (existingActions) existingActions.remove();
+  const max = Math.max(0, rec.minutes|0);
+  const suggested = Math.max(0, max - Math.min(20, max));
+  const editor = document.createElement("div");
+  editor.className = "editor";
+  editor.innerHTML = `
+    <div class="label">Set what this session should actually count as:</div>
+    <div class="row">
+      <input type="number" id="xp-edit-input" min="0" max="${max}" step="1" value="${suggested}" inputmode="numeric" aria-label="New session length in minutes">
+      <span class="max">/ ${max}m current</span>
+    </div>
+    <div class="quick">
+      <button type="button" data-sub="5">-5m</button>
+      <button type="button" data-sub="10">-10m</button>
+      <button type="button" data-sub="15">-15m</button>
+      <button type="button" data-sub="20">-20m</button>
+      <button type="button" data-zero="1">Zero out</button>
+    </div>
+    <div class="preview" id="xp-edit-preview"></div>
+    <div class="err" id="xp-edit-err" hidden></div>
+    <div class="actions">
+      <button type="button" id="xp-edit-cancel">Cancel</button>
+      <button type="button" id="xp-edit-save" class="primary">Save</button>
+    </div>
+  `;
+  container.appendChild(editor);
+  const input = editor.querySelector("#xp-edit-input");
+  const preview = editor.querySelector("#xp-edit-preview");
+  const err = editor.querySelector("#xp-edit-err");
+  const save = editor.querySelector("#xp-edit-save");
+  function clampInput(){
+    let v = Math.floor(Number(input.value||0));
+    if (!isFinite(v) || v < 0) v = 0;
+    if (v > max) v = max;
+    input.value = v;
+    return v;
+  }
+  function refreshPreview(){
+    const n = clampInput();
+    const delta = max - n;
+    const info = sessionEditXpPreview(rec, n);
+    const xpLost = Math.max(0, (rec.xp|0) - info.xpAfter);
+    if (delta === 0){
+      preview.innerHTML = "No change.";
+    } else {
+      let html = `Will subtract <b>-${delta}m</b> · session counts as <b>${n}m</b> · XP <b>+${info.xpAfter}</b>`;
+      if (xpLost > 0) html += ` <span class="xp-pill">-${xpLost} XP</span>`;
+      if (!info.willReward && rec.rewarded) html += ` <span class="xp-pill floor">drops below ${info.floor}m floor</span>`;
+      preview.innerHTML = html;
+    }
+    save.disabled = (delta <= 0);
+  }
+  input.addEventListener("input", ()=>{ err.hidden = true; refreshPreview(); });
+  editor.querySelectorAll(".quick button").forEach(b=>{
+    b.onclick = ()=>{
+      if (b.getAttribute("data-zero") === "1") input.value = 0;
+      else input.value = Math.max(0, max - Number(b.getAttribute("data-sub")||0));
+      err.hidden = true; refreshPreview();
+    };
+  });
+  editor.querySelector("#xp-edit-cancel").onclick = ()=>{
+    xpBreakdownEditing = false;
+    const cached = showXpBreakdown._last;
+    if (cached) showXpBreakdown(cached.xp, cached.meta);
+  };
+  save.onclick = ()=>{
+    const n = clampInput();
+    if (n >= max){
+      err.textContent = "Enter a smaller number; this control only reduces logged time.";
+      err.hidden = false;
+      return;
+    }
+    const res = applySessionEdit(rec.id, n);
+    if (!res.ok){
+      err.textContent = "Could not adjust this session (" + res.reason + ").";
+      err.hidden = false;
+      return;
+    }
+    xpBreakdownEditing = false;
+    const updated = sessionRecordById(rec.id);
+    const info = sessionEditXpPreview(updated, updated ? updated.minutes : n);
+    const cachedMeta = (showXpBreakdown._last && showXpBreakdown._last.meta) ? showXpBreakdown._last.meta : {};
+    const meta = Object.assign({}, cachedMeta, { sessionId: rec.id });
+    if (updated && !updated.rewarded) meta.lootItem = null;
+    showXpBreakdown(info.xp, meta);
+    toast(`Session adjusted: ${res.oldMinutes}m -> ${res.newMinutes}m`, "good");
+  };
+  refreshPreview();
+  try { input.focus(); input.select(); } catch(_){}
 }
 
 /* ================================================================
@@ -5590,8 +5728,12 @@ function buildSessionLogRecordV76(meta){
     xp: meta.rewarded ? xpTotal : 0, originalXp: meta.rewarded ? xpTotal : 0,
     rewarded: !!meta.rewarded, originalRewarded: !!meta.rewarded,
     loot: meta.lootItem ? { id: lootId(meta.lootItem), rarity: meta.lootItem[2] } : null,
-    edited: false, editedAt: null,
+    edited: false, editedAt: null, adjustedFrom: null,
     comboPriorCount: meta.comboPriorCount|0, streakBefore: meta.streakBefore|0,
+    streakForCalc: (typeof meta.streakForCalc === "number") ? (meta.streakForCalc|0) : (meta.streakBefore|0),
+    comboApplied: meta.comboApplied|0,
+    dailyFocusApplied: meta.dailyFocusApplied|0,
+    dailyMinApplied: meta.dailyMinApplied|0,
     extendedStreak: !!meta.extendedStreak,
     achievementsUnlockedHere: Array.isArray(meta.achievementsUnlockedHere) ? meta.achievementsUnlockedHere.slice() : []
   };
@@ -5889,15 +6031,51 @@ function renderAchievements(){
   }
 }
 function canEditSessionRecord(rec){
-  return !!(rec&&rec.type==="focus"&&!rec.edited&&typeof rec.id==="string"&&typeof rec.originalMinutes==="number"&&typeof rec.originalXp==="number");
+  return !!(rec&&rec.type==="focus"&&typeof rec.id==="string"&&typeof rec.originalMinutes==="number"&&(rec.minutes|0)>0);
+}
+function sessionRecordById(sessionId){
+  return (state.sessionsLog||[]).find(r=>r&&r.id===sessionId) || null;
+}
+function sessionEditXpPreview(rec, minutes){
+  rec = rec || {};
+  const comboCount = rec.source === "stopwatch" ? 0 : (rec.comboPriorCount|0);
+  const streakDays = Math.max(0, (typeof rec.streakForCalc === "number" ? rec.streakForCalc : rec.streakBefore)|0);
+  const xp = computeXpBreakdown(minutes, { comboCount, streakDays, settings: state.settings });
+  const floor = Math.max(1, state.settings.minRewardMinutes|0 || 5);
+  const willReward = minutes >= floor;
+  return { xp, floor, willReward, xpAfter: willReward ? xp.total : 0 };
+}
+function removeXpQuiet(amount){
+  if (!(amount > 0)) return;
+  const curTotal = totalXpForLevel(state.hero.level) + state.hero.xp;
+  const next = levelFromTotalXp(Math.max(0, curTotal - amount));
+  if (next.lv < state.hero.level && typeof logLine === "function") logLine(`Adjusted: hero is now Lv ${next.lv}`);
+  state.hero.level = Math.max(1, next.lv);
+  state.hero.xp = Math.max(0, next.xp);
+}
+function rollbackDailyProgressForSession(day, kind, amount){
+  if (!(amount > 0)) return 0;
+  if (!state.daily || state.daily.date !== day || !Array.isArray(state.daily.items)) return 0;
+  let remaining = amount;
+  state.daily.items.forEach(d=>{
+    if (remaining <= 0 || d.kind !== kind || d.done) return;
+    const used = Math.min(remaining, Math.max(0, d.progress||0));
+    d.progress = Math.max(0, (d.progress||0) - used);
+    remaining -= used;
+  });
+  return amount - remaining;
 }
 function applySessionEdit(sessionId,newMinutes){
-  const rec=(state.sessionsLog||[]).find(r=>r&&r.id===sessionId);
+  const rec=sessionRecordById(sessionId);
   if(!rec)return{ok:false,reason:"not_found"};
   if(!canEditSessionRecord(rec))return{ok:false,reason:"not_editable"};
-  const nm=Math.max(0,Math.min(rec.minutes|0,Number(newMinutes)|0));
-  if(nm===(rec.minutes|0))return{ok:false,reason:"no_change"};
-  if(nm>(rec.minutes|0))return{ok:false,reason:"edits_must_decrease"};
+  const current=rec.minutes|0;
+  const original=Math.max(current, rec.originalMinutes|0);
+  rec.originalMinutes = original;
+  const raw=Math.floor(Number(newMinutes)||0);
+  if(raw>current)return{ok:false,reason:"edits_must_decrease"};
+  const nm=Math.max(0,Math.min(current,original,raw));
+  if(nm===current)return{ok:false,reason:"no_change"};
   const oldMinutes=rec.minutes|0, delta=oldMinutes-nm, day=todayKey(new Date(rec.at||now()));
   state.totalFocusMin=Math.max(0,(state.totalFocusMin|0)-delta);
   if(state.history&&typeof state.history==="object")state.history[day]=Math.max(0,(state.history[day]||0)-delta);
@@ -5909,16 +6087,27 @@ function applySessionEdit(sessionId,newMinutes){
   ensureV76StateShape(state);
   const action=normalizeAdventureAction(rec.action||state.adventure.action);
   state.adventure.actionMin[action]=Math.max(0,(state.adventure.actionMin[action]||0)-delta);
-  const xpInfo=computeXpBreakdown(nm,{comboCount:rec.comboPriorCount|0,streakDays:rec.streakBefore|0,settings:state.settings});
-  const floor=Math.max(1,state.settings.minRewardMinutes|0||5);
-  const newRewarded=nm>=floor, newXp=newRewarded?xpInfo.total:0, xpDelta=(rec.xp|0)-newXp;
-  if(xpDelta>0){
-    const lv=levelFromTotalXp(Math.max(0,totalXpForLevel(state.hero.level)+state.hero.xp-xpDelta));
-    state.hero.level=Math.max(1,lv.lv); state.hero.xp=Math.max(0,lv.xp);
+  const xpInfo=sessionEditXpPreview(rec,nm);
+  const xpDelta=(rec.xp|0)-xpInfo.xpAfter;
+  if(xpDelta>0) removeXpQuiet(xpDelta);
+  const dailyMinRollback = Math.min(delta, Math.max(0, rec.dailyMinApplied|0));
+  if(dailyMinRollback>0){
+    rollbackDailyProgressForSession(day, "minutes", dailyMinRollback);
+    rec.dailyMinApplied=Math.max(0,(rec.dailyMinApplied|0)-dailyMinRollback);
   }
-  rec.minutes=nm; rec.xp=newXp; rec.rewarded=newRewarded; rec.edited=true; rec.editedAt=now();
+  if(rec.rewarded&&!xpInfo.willReward){
+    if((rec.comboApplied|0)>0&&state.combo&&state.combo.date===day){
+      state.combo.count=Math.max(0,(state.combo.count|0)-(rec.comboApplied|0));
+    }
+    if((rec.dailyFocusApplied|0)>0){
+      rollbackDailyProgressForSession(day, "focus", rec.dailyFocusApplied|0);
+    }
+    rec.comboApplied=0;
+    rec.dailyFocusApplied=0;
+  }
+  rec.minutes=nm; rec.xp=xpInfo.xpAfter; rec.rewarded=xpInfo.willReward; rec.edited=true; rec.editedAt=now(); rec.adjustedFrom=rec.adjustedFrom||original;
   saveState(); renderAll();
-  return{ok:true,sessionId,oldMinutes,newMinutes:nm,minutesDelta:-delta,xpDelta:-xpDelta,rewardedAfter:newRewarded};
+  return{ok:true,sessionId,oldMinutes,newMinutes:nm,minutesDelta:-delta,xpDelta:-xpDelta,rewardedAfter:xpInfo.willReward};
 }
 function renderEditableSessionRows(){
   const rows=(state.sessionsLog||[]).filter(r=>r&&r.type==="focus").slice(-8).reverse();
