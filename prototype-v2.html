@@ -1,0 +1,687 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0c1020">
+<title>Focus Hero — World prototype (v2)</title>
+<style>
+:root{
+  --bg:#0c1020;--bg2:#141a30;--panel:#1b2238;--panel2:#232c48;--ink:#e8ecf8;--dim:#9aa6c8;
+  --gold:#f0b942;--goldhi:#ffe08a;--ember:#ff7a4d;--steel:#7f8db0;--good:#5fd6a4;--line:#2d3760;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --sans:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);overflow:hidden;
+  -webkit-tap-highlight-color:transparent;user-select:none}
+button{font-family:inherit;color:inherit;cursor:pointer;border:0;background:none}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+/* ---- the world: full-bleed stage the hero lives in ---- */
+#app{position:relative;height:100%;width:100%;display:flex;flex-direction:column}
+#world{position:relative;flex:1;overflow:hidden;
+  background:
+    radial-gradient(120% 80% at 50% 12%, #2a3360 0%, #161c34 45%, #0b0f1e 100%);}
+#world::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(70% 55% at 50% 92%, rgba(0,0,0,.55), transparent 70%)}
+.starfield{position:absolute;inset:0;opacity:.5;
+  background-image:radial-gradient(1.4px 1.4px at 18% 22%,#fff,transparent),
+   radial-gradient(1.4px 1.4px at 64% 14%,#cfe,transparent),
+   radial-gradient(1.2px 1.2px at 82% 30%,#fff,transparent),
+   radial-gradient(1.2px 1.2px at 38% 9%,#fff,transparent),
+   radial-gradient(1.6px 1.6px at 8% 40%,#dde,transparent)}
+#worldStage{position:absolute;left:50%;bottom:7%;transform:translateX(-50%);
+  width:min(58vh,360px);aspect-ratio:1;filter:drop-shadow(0 18px 26px rgba(0,0,0,.55))}
+#worldStage svg{width:100%;height:100%;display:block}
+.scene-tag{position:absolute;left:50%;bottom:3%;transform:translateX(-50%);
+  font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+
+/* ---- top HUD: not a header, a game overlay ---- */
+.hud-top{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;
+  align-items:flex-start;padding:14px 16px;gap:10px;pointer-events:none}
+.hud-top>*{pointer-events:auto}
+.crest{display:flex;align-items:center;gap:10px;background:rgba(20,26,48,.82);
+  border:1px solid var(--line);border-radius:14px;padding:8px 12px;backdrop-filter:blur(6px)}
+.lvl-ring{width:42px;height:42px;display:grid;place-items:center;border-radius:50%;
+  background:conic-gradient(var(--gold) var(--lvlpct,40%),#2c355c 0);position:relative}
+.lvl-ring span{width:34px;height:34px;border-radius:50%;background:var(--panel);
+  display:grid;place-items:center;font-weight:700;font-size:15px;color:var(--goldhi)}
+.crest .who small{display:block;color:var(--dim);font-size:11px;letter-spacing:.08em;text-transform:uppercase}
+.crest .who b{font-size:14px;font-weight:600}
+.streak{display:flex;align-items:center;gap:7px;background:rgba(20,26,48,.82);
+  border:1px solid var(--line);border-radius:14px;padding:9px 13px;font-weight:600;font-size:14px;
+  backdrop-filter:blur(6px)}
+.streak .fire{font-size:18px;filter:drop-shadow(0 0 6px var(--ember))}
+
+/* ---- the timer: a HUD dial, the centrepiece ---- */
+.timer-hud{position:absolute;top:74px;left:50%;transform:translateX(-50%);
+  display:flex;flex-direction:column;align-items:center;pointer-events:none}
+.dial{position:relative;width:182px;height:182px;pointer-events:auto}
+.dial svg{width:100%;height:100%;transform:rotate(-90deg)}
+.dial .track{fill:none;stroke:#222a48;stroke-width:9}
+.dial .prog{fill:none;stroke:url(#tg);stroke-width:9;stroke-linecap:round;
+  transition:stroke-dashoffset .4s linear}
+.dial-face{position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center}
+.clock{font-family:var(--mono);font-size:40px;font-weight:700;letter-spacing:-.02em}
+.dial-sub{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim);margin-top:2px}
+.xp-wrap{margin-top:10px;width:206px;pointer-events:auto}
+.xp-bar{height:7px;border-radius:99px;background:#222a48;overflow:hidden;border:1px solid var(--line)}
+.xp-fill{height:100%;background:linear-gradient(90deg,#7c5cff,#56a8ff);width:0%;transition:width .5s}
+.xp-label{display:flex;justify-content:space-between;font-size:11px;color:var(--dim);margin-top:4px}
+
+/* ---- bottom hotbar: MMO action bar, replaces tab nav ---- */
+.hotbar{position:relative;z-index:5;display:flex;align-items:center;gap:8px;
+  padding:10px 12px calc(10px + env(safe-area-inset-bottom));
+  background:linear-gradient(180deg,rgba(12,16,32,0),#0c1020 38%);}
+.actions{display:flex;gap:6px;flex:1;overflow-x:auto;scrollbar-width:none}
+.actions::-webkit-scrollbar{display:none}
+.slot{flex:0 0 auto;width:46px;height:46px;border-radius:12px;background:var(--panel);
+  border:1px solid var(--line);display:grid;place-items:center;font-size:20px;
+  transition:transform .12s,border-color .15s,background .15s}
+.slot:active{transform:scale(.92)}
+.slot[aria-pressed="true"]{border-color:var(--gold);background:var(--panel2);
+  box-shadow:0 0 0 1px var(--gold),0 0 14px rgba(240,185,66,.35)}
+.go{flex:0 0 auto;width:64px;height:64px;border-radius:50%;font-weight:700;font-size:13px;
+  letter-spacing:.04em;background:radial-gradient(circle at 38% 32%,#ffd06b,#e8932a);
+  color:#3a2406;border:2px solid var(--goldhi);box-shadow:0 6px 18px rgba(232,147,42,.5);
+  display:grid;place-items:center;transition:transform .12s}
+.go:active{transform:scale(.93)}
+.go.running{background:radial-gradient(circle at 38% 32%,#ff9d7a,#d8462e);
+  border-color:#ffd0bf;color:#fff;box-shadow:0 6px 18px rgba(216,70,46,.55)}
+.tabs{display:flex;gap:6px}
+.navbtn{width:46px;height:46px;border-radius:12px;background:var(--panel);
+  border:1px solid var(--line);display:grid;place-items:center;font-size:18px}
+.navbtn:active{transform:scale(.92)}
+
+/* ---- slide-in panels: overlay the world, not tabbed pages ---- */
+.scrim{position:absolute;inset:0;background:rgba(6,9,18,.6);opacity:0;
+  pointer-events:none;transition:opacity .25s;z-index:8}
+.scrim.on{opacity:1;pointer-events:auto}
+.panel{position:absolute;top:0;right:0;bottom:0;width:min(86vw,380px);z-index:9;
+  background:var(--bg2);border-left:1px solid var(--line);
+  transform:translateX(102%);transition:transform .3s cubic-bezier(.4,0,.2,1);
+  display:flex;flex-direction:column;box-shadow:-20px 0 40px rgba(0,0,0,.5)}
+.panel.on{transform:translateX(0)}
+.panel-h{display:flex;align-items:center;justify-content:space-between;
+  padding:16px 16px 12px;border-bottom:1px solid var(--line)}
+.panel-h h2{font-size:17px;font-weight:600;letter-spacing:.01em}
+.panel-h button{font-size:22px;color:var(--dim);width:34px;height:34px;border-radius:9px}
+.panel-h button:active{background:var(--panel)}
+.panel-body{flex:1;overflow-y:auto;padding:14px 16px 22px}
+
+.quest{display:flex;align-items:center;gap:11px;padding:11px;border-radius:12px;
+  background:var(--panel);border:1px solid var(--line);margin-bottom:9px}
+.quest.active{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold)}
+.quest .emj{font-size:22px;width:30px;text-align:center}
+.quest .qd{flex:1;min-width:0}
+.quest .qd b{font-size:14px;font-weight:600;display:block;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.quest .qd small{color:var(--dim);font-size:12px}
+.quest .pick{font-size:11px;font-weight:600;padding:6px 10px;border-radius:8px;
+  background:var(--panel2);border:1px solid var(--line);color:var(--dim)}
+.quest.active .pick{background:var(--gold);color:#3a2406;border-color:var(--gold)}
+.addrow{display:flex;gap:8px;margin-top:6px}
+.addrow input{flex:1;background:var(--panel);border:1px solid var(--line);color:var(--ink);
+  border-radius:10px;padding:11px 12px;font-size:14px;font-family:inherit}
+.addrow input:focus{outline:none;border-color:var(--gold)}
+.addrow button{background:var(--gold);color:#3a2406;font-weight:700;border-radius:10px;
+  padding:0 16px;font-size:14px}
+
+.troph{display:flex;align-items:center;gap:11px;padding:11px;border-radius:12px;
+  background:var(--panel);border:1px solid var(--line);margin-bottom:9px;opacity:.5}
+.troph.got{opacity:1;border-color:var(--good)}
+.troph .tg{font-size:24px;width:34px;text-align:center;filter:grayscale(1)}
+.troph.got .tg{filter:none}
+.troph .td b{font-size:14px;font-weight:600;display:block}
+.troph .td small{color:var(--dim);font-size:12px}
+.troph .chk{margin-left:auto;color:var(--good);font-size:18px;opacity:0}
+.troph.got .chk{opacity:1}
+
+.statgrid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:14px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px}
+.stat small{color:var(--dim);font-size:11px;letter-spacing:.08em;text-transform:uppercase}
+.stat b{display:block;font-size:22px;font-weight:700;margin-top:3px}
+.hero-port{height:188px;border-radius:14px;background:
+  radial-gradient(90% 70% at 50% 30%,#2a3360,#11162c);border:1px solid var(--line);
+  margin-bottom:14px;display:grid;place-items:center;overflow:hidden}
+.hero-port svg{width:74%;height:92%}
+.classrow{display:flex;gap:6px;flex-wrap:wrap}
+.classrow button{flex:1;min-width:64px;padding:9px 4px;border-radius:10px;background:var(--panel);
+  border:1px solid var(--line);font-size:12px;font-weight:600;color:var(--dim)}
+.classrow button[aria-pressed="true"]{border-color:var(--gold);color:var(--goldhi);background:var(--panel2)}
+
+/* ---- session-complete flourish ---- */
+.flourish{position:absolute;inset:0;z-index:20;display:grid;place-items:center;
+  background:rgba(6,9,18,.78);opacity:0;pointer-events:none;transition:opacity .3s}
+.flourish.on{opacity:1;pointer-events:auto}
+.fcard{background:var(--panel);border:1px solid var(--gold);border-radius:18px;
+  padding:26px 30px;text-align:center;max-width:300px;
+  box-shadow:0 0 50px rgba(240,185,66,.3);transform:scale(.85);transition:transform .3s}
+.flourish.on .fcard{transform:scale(1)}
+.fcard .burst{font-size:42px}
+.fcard h3{font-size:20px;margin:8px 0 4px}
+.fcard p{color:var(--dim);font-size:14px;line-height:1.5}
+.fcard .xpgain{color:var(--goldhi);font-weight:700;font-size:26px;margin:10px 0}
+.fcard button{margin-top:14px;background:var(--gold);color:#3a2406;font-weight:700;
+  border-radius:11px;padding:11px 26px;font-size:14px}
+.toast{position:absolute;left:50%;bottom:96px;transform:translate(-50%,16px);
+  background:var(--panel2);border:1px solid var(--gold);color:var(--goldhi);
+  padding:9px 16px;border-radius:11px;font-size:13px;font-weight:600;z-index:15;
+  opacity:0;transition:.25s;pointer-events:none}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+.proto-flag{position:absolute;top:50%;left:8px;transform:translateY(-50%) rotate(180deg);
+  writing-mode:vertical-rl;font-size:9px;letter-spacing:.22em;color:var(--line);
+  text-transform:uppercase;pointer-events:none}
+
+/* v79 character animation system (shared with the main app's new avatar) */
+.v79-part{transform-box:view-box}
+.v79-cloak{transform-origin:60px 56px}.v79-head{transform-origin:60px 52px}
+.v79-arm-front{transform-origin:74px 60px}.v79-arm-back{transform-origin:46px 60px}
+.v79-hero-inner{transform-origin:60px 104px}.v79-torso{transform-origin:60px 78px}
+.v79-eye{transform-origin:60px 41px}
+.v79-mount,.v79-enemy,.v79-anvil,.v79-tool,.v79-fx-spark,.v79-fx-coin,.v79-fx-halo,.v79-prey{opacity:0}
+@keyframes v79Breathe{0%,100%{transform:translateY(0) scaleY(1)}50%{transform:translateY(-1.2px) scaleY(1.025)}}
+@keyframes v79HeadBob{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-1.4px) rotate(-1.5deg)}}
+@keyframes v79CloakSway{0%,100%{transform:rotate(-1.4deg)}50%{transform:rotate(1.8deg)}}
+@keyframes v79ArmIdle{0%,100%{transform:rotate(0)}50%{transform:rotate(3deg)}}
+@keyframes v79Blink{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(.12)}}
+@keyframes v79Gait{0%,100%{transform:translateY(0) rotate(-1deg)}25%{transform:translateY(-3.4px)}50%{transform:translateY(0) rotate(1deg)}75%{transform:translateY(-2px)}}
+@keyframes v79Scroll{from{transform:translateX(0)}to{transform:translateX(-30px)}}
+@keyframes v79CloakFlag{0%,100%{transform:rotate(7deg) skewX(5deg)}50%{transform:rotate(13deg) skewX(11deg)}}
+@keyframes v79MountRun{0%,100%{transform:translateY(0)}25%{transform:translateY(-3px)}50%{transform:translateY(.5px)}75%{transform:translateY(-2px)}}
+@keyframes v79Lunge{0%,100%{transform:translateX(0) translateY(0)}18%{transform:translateX(-4px) translateY(2px)}42%{transform:translateX(9px) translateY(-2px)}60%{transform:translateX(6px) translateY(0)}}
+@keyframes v79Swing{0%,100%{transform:rotate(-46deg)}18%{transform:rotate(-66deg)}40%{transform:rotate(96deg)}54%{transform:rotate(86deg)}74%{transform:rotate(-30deg)}}
+@keyframes v79EnemyHit{0%,30%,100%{transform:translateX(0);opacity:1}40%{transform:translateX(9px) translateY(-2px);opacity:.35}55%{transform:translateX(4px);opacity:.7}}
+@keyframes v79Spark{0%,32%{opacity:0;transform:scale(.3)}42%{opacity:1;transform:scale(1.25)}70%,100%{opacity:0;transform:scale(.6)}}
+@keyframes v79Creep{0%,100%{transform:translateY(4px) scale(.93) translateX(0)}50%{transform:translateY(3px) scale(.93) translateX(5px)}}
+@keyframes v79Grass{0%,100%{transform:skewX(-7deg)}50%{transform:skewX(7deg)}}
+@keyframes v79Peek{0%,62%,100%{opacity:0;transform:translateX(6px) scale(.85)}72%,90%{opacity:1;transform:translateX(0) scale(1)}}
+@keyframes v79Bend{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(5px) rotate(11deg)}}
+@keyframes v79Reach{0%,100%{transform:rotate(2deg)}50%{transform:rotate(54deg)}}
+@keyframes v79Coin{0%{opacity:0;transform:translateY(4px) scale(.5)}25%{opacity:1}100%{opacity:0;transform:translateY(-26px) scale(1.1)}}
+@keyframes v79Hammer{0%,100%{transform:rotate(-58deg)}40%{transform:rotate(-78deg)}60%{transform:rotate(24deg)}74%{transform:rotate(14deg)}}
+@keyframes v79CraftBob{0%,100%{transform:translateY(0)}60%{transform:translateY(1.6px)}}
+@keyframes v79Float{0%,100%{transform:translateY(2px)}50%{transform:translateY(-5px)}}
+@keyframes v79Halo{0%,100%{opacity:.4;transform:scale(.9)}50%{opacity:.95;transform:scale(1.12)}}
+[data-scene="resting"] .v79-torso{animation:v79Breathe 3.8s ease-in-out infinite}
+[data-scene="resting"] .v79-head{animation:v79HeadBob 3.8s ease-in-out infinite}
+[data-scene="resting"] .v79-cloak{animation:v79CloakSway 4.6s ease-in-out infinite}
+[data-scene="resting"] .v79-arm-back{animation:v79ArmIdle 4s ease-in-out infinite}
+[data-scene="resting"] .v79-eye{animation:v79Blink 5.2s ease-in-out infinite}
+[data-scene="travelling"] .v79-mount{opacity:1;animation:v79MountRun .62s ease-in-out infinite}
+[data-scene="travelling"] .v79-hero-inner{animation:v79Gait .62s ease-in-out infinite}
+[data-scene="travelling"] .v79-cloak{animation:v79CloakFlag .7s ease-in-out infinite}
+[data-scene="travelling"] .v79-horizon{animation:v79Scroll 1.9s linear infinite}
+[data-scene="travelling"] .v79-leg-back,[data-scene="travelling"] .v79-leg-front{opacity:0}
+[data-scene="fighting"] .v79-enemy{opacity:1;animation:v79EnemyHit 1.5s ease-in-out infinite}
+[data-scene="fighting"] .v79-hero-inner{animation:v79Lunge 1.5s cubic-bezier(.5,0,.3,1) infinite}
+[data-scene="fighting"] .v79-arm-front{animation:v79Swing 1.5s cubic-bezier(.45,0,.25,1) infinite}
+[data-scene="fighting"] .v79-fx-spark{animation:v79Spark 1.5s ease-out infinite}
+[data-scene="fighting"] .v79-cloak{animation:v79CloakSway 1.5s ease-in-out infinite}
+[data-scene="hunting"] .v79-enemy{opacity:1}
+[data-scene="hunting"] .v79-prey{animation:v79Peek 3.4s ease-in-out infinite}
+[data-scene="hunting"] .v79-hero-inner{animation:v79Creep 2.4s ease-in-out infinite}
+[data-scene="hunting"] .v79-horizon{animation:v79Grass 2.6s ease-in-out infinite;transform-origin:60px 104px}
+[data-scene="hunting"] .v79-arm-front{transform:rotate(-24deg)}
+[data-scene="looting"] .v79-torso{animation:v79Bend 2.4s ease-in-out infinite}
+[data-scene="looting"] .v79-head{animation:v79Bend 2.4s ease-in-out infinite}
+[data-scene="looting"] .v79-arm-front{animation:v79Reach 2.4s ease-in-out infinite}
+[data-scene="looting"] .v79-fx-coin{animation:v79Coin 1.6s ease-out infinite}
+[data-scene="crafting"] .v79-anvil{opacity:1}
+[data-scene="crafting"] .v79-tool{opacity:1}
+[data-scene="crafting"] .v79-weapon{opacity:0}
+[data-scene="crafting"] .v79-arm-front{animation:v79Hammer 1.1s cubic-bezier(.5,0,.3,1) infinite}
+[data-scene="crafting"] .v79-torso{animation:v79CraftBob 1.1s ease-in-out infinite}
+[data-scene="crafting"] .v79-fx-spark{animation:v79Spark 1.1s ease-out infinite}
+[data-scene="meditating"] .v79-hero-inner{animation:v79Float 4.4s ease-in-out infinite}
+[data-scene="meditating"] .v79-fx-halo{opacity:1;animation:v79Halo 4.4s ease-in-out infinite;transform-origin:60px 30px}
+[data-scene="meditating"] .v79-weapon{opacity:.25}
+[data-scene="meditating"] .v79-cloak{animation:v79CloakSway 5s ease-in-out infinite}
+@media (prefers-reduced-motion:reduce){.v79-part{animation:none!important}}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="proto-flag">prototype v2</div>
+  <div id="world" data-scene="resting">
+    <div class="starfield"></div>
+    <div id="worldStage"><!-- character injected --></div>
+    <div class="scene-tag" id="sceneTag">At rest</div>
+
+    <div class="hud-top">
+      <div class="crest">
+        <div class="lvl-ring" id="lvlRing"><span id="lvlNum">1</span></div>
+        <div class="who"><small>Hero</small><b id="className">Knight</b></div>
+      </div>
+      <div class="streak"><span class="fire">&#128293;</span><span id="streakNum">1</span>&nbsp;day</div>
+    </div>
+
+    <div class="timer-hud">
+      <div class="dial">
+        <svg viewBox="0 0 100 100" aria-hidden="true">
+          <defs><linearGradient id="tg" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#ffd06b"/><stop offset="1" stop-color="#ff7a4d"/>
+          </linearGradient></defs>
+          <circle class="track" cx="50" cy="50" r="44"/>
+          <circle class="prog" id="dialProg" cx="50" cy="50" r="44"
+            stroke-dasharray="276.46" stroke-dashoffset="0"/>
+        </svg>
+        <div class="dial-face">
+          <div class="clock" id="clock">25:00</div>
+          <div class="dial-sub" id="dialSub">Focus session</div>
+        </div>
+      </div>
+      <div class="xp-wrap">
+        <div class="xp-bar"><div class="xp-fill" id="xpFill"></div></div>
+        <div class="xp-label"><span id="xpNow">0 XP</span><span id="xpNeed">100 to next</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="hotbar">
+    <div class="actions" id="actions"><!-- action slots injected --></div>
+    <button class="go" id="goBtn">Start</button>
+    <div class="tabs">
+      <button class="navbtn" id="navQuests" aria-label="Quest log">&#128220;</button>
+      <button class="navbtn" id="navTrophies" aria-label="Trophies">&#127942;</button>
+      <button class="navbtn" id="navHero" aria-label="Hero">&#128100;</button>
+    </div>
+  </div>
+
+  <div class="scrim" id="scrim"></div>
+
+  <aside class="panel" id="panelQuests" aria-hidden="true">
+    <div class="panel-h"><h2>Quest log</h2><button data-close aria-label="Close">&times;</button></div>
+    <div class="panel-body">
+      <div id="questList"></div>
+      <div class="addrow">
+        <input id="questInput" placeholder="New quest&hellip;" maxlength="40">
+        <button id="questAdd">Add</button>
+      </div>
+    </div>
+  </aside>
+
+  <aside class="panel" id="panelTrophies" aria-hidden="true">
+    <div class="panel-h"><h2>Trophies</h2><button data-close aria-label="Close">&times;</button></div>
+    <div class="panel-body" id="trophyList"></div>
+  </aside>
+
+  <aside class="panel" id="panelHero" aria-hidden="true">
+    <div class="panel-h"><h2>Hero</h2><button data-close aria-label="Close">&times;</button></div>
+    <div class="panel-body">
+      <div class="hero-port" id="heroPort" data-scene="resting"></div>
+      <div class="statgrid">
+        <div class="stat"><small>Level</small><b id="sLvl">1</b></div>
+        <div class="stat"><small>Total XP</small><b id="sXp">0</b></div>
+        <div class="stat"><small>Focus time</small><b id="sMin">0m</b></div>
+        <div class="stat"><small>Streak</small><b id="sStreak">1d</b></div>
+      </div>
+      <div class="classrow" id="classRow"></div>
+    </div>
+  </aside>
+
+  <div class="flourish" id="flourish">
+    <div class="fcard">
+      <div class="burst">&#9876;&#65039;</div>
+      <h3 id="fTitle">Session complete</h3>
+      <div class="xpgain" id="fXp">+0 XP</div>
+      <p id="fBody">Your hero grows stronger.</p>
+      <button id="fClose">Continue</button>
+    </div>
+  </div>
+  <div class="toast" id="toast"></div>
+</div>
+<script>
+"use strict";
+/* Focus Hero - World prototype v2. A ground-up alternate layout: a full-bleed
+   world the hero lives in, a HUD timer dial, an MMO hotbar, and slide-in
+   panels instead of a scrolling tabbed dashboard. Standalone - uses its own
+   localStorage namespace (fhProtoV2) and never touches the main app data. */
+var LS="fhProtoV2.state";
+var ACTIONS=[
+  {id:"fighting",emj:"⚔️",label:"Battle"},
+  {id:"travelling",emj:"🐎",label:"Travel"},
+  {id:"hunting",emj:"🏹",label:"Hunt"},
+  {id:"looting",emj:"🪙",label:"Loot"},
+  {id:"crafting",emj:"🔨",label:"Craft"},
+  {id:"meditating",emj:"🧘",label:"Meditate"},
+  {id:"resting",emj:"💤",label:"Rest"}
+];
+var CLASSES={
+  knight:{name:"Knight",mid:"#2f5fc4",high:"#4f86e6",dark:"#1d3c86",trim:"#c2384a"},
+  mage:{name:"Mage",mid:"#7c4dd6",high:"#b48dff",dark:"#3a1c6b",trim:"#6cd1ff"},
+  ranger:{name:"Ranger",mid:"#2f9d63",high:"#6ee7a3",dark:"#15512f",trim:"#f2b94b"},
+  warlord:{name:"Warlord",mid:"#c23a3a",high:"#ff9a6b",dark:"#5a1414",trim:"#ffd76b"}
+};
+var TROPHIES=[
+  {id:"first",emj:"🌱",t:"First steps",d:"Finish one session",test:function(s){return s.sessions>=1;}},
+  {id:"hour",emj:"⏱️",t:"An hour deep",d:"Reach 60 focus minutes",test:function(s){return s.totalMin>=60;}},
+  {id:"lvl3",emj:"⭐",t:"Seasoned",d:"Reach level 3",test:function(s){return levelFromXp(s.totalXp).lv>=3;}},
+  {id:"streak3",emj:"🔥",t:"Kindling",d:"Hold a 3-day streak",test:function(s){return s.streak>=3;}},
+  {id:"five",emj:"🏅",t:"Committed",d:"Finish five sessions",test:function(s){return s.sessions>=5;}},
+  {id:"quests",emj:"📜",t:"Questmaster",d:"Keep three quests",test:function(s){return s.quests.length>=3;}}
+];
+function xpForLevel(lv){return Math.floor(100*Math.pow(lv,1.35));}
+function levelFromXp(t){var lv=1,acc=0;while(true){var n=xpForLevel(lv);if(acc+n>t)return{lv:lv,xp:t-acc,need:n};acc+=n;lv++;if(lv>999)return{lv:lv,xp:0,need:xpForLevel(lv)};}}
+
+var S=load();
+function fresh(){
+  return {totalXp:0,streak:1,totalMin:0,sessions:0,cls:"knight",
+    quests:[{id:qid(),name:"Deep work",emj:"📚",min:0}],
+    activeId:null,action:"fighting",dur:25,lastDay:todayKey()};
+}
+function qid(){return "q"+Math.random().toString(36).slice(2,8);}
+function todayKey(){var d=new Date();return d.getFullYear()+"-"+(d.getMonth()+1)+"-"+d.getDate();}
+function load(){
+  try{var raw=localStorage.getItem(LS);if(!raw)return seed(fresh());
+    var s=JSON.parse(raw);if(!s||!s.quests)return seed(fresh());
+    if(!s.activeId)s.activeId=s.quests[0]&&s.quests[0].id;return s;
+  }catch(e){return seed(fresh());}
+}
+function seed(s){s.activeId=s.quests[0].id;return s;}
+function save(){try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){}}
+
+/* ---- character SVG (the approved v7.9 MMO knight) ---- */
+function heroSvg(clsKey,scene){
+  var p=CLASSES[clsKey]||CLASSES.knight;
+  var cloak=p.mid,cloakHi=p.high,cloakSh=p.dark,plume=p.trim;
+  var gold="#f0b942",goldHi="#ffe08a",goldSh="#b07d1c",gem="#ff5d6c";
+  return '<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="'+p.name+' hero, '+scene+'">'
+  +'<rect width="120" height="120" fill="#16193a"/>'
+  +'<circle cx="90" cy="30" r="13" fill="#3a4570" opacity=".5"/>'
+  +'<g class="v79-part v79-horizon">'
+  +'<path d="M-40 104 Q-10 80 24 100 Q54 78 88 100 Q120 82 160 104 V120 H-40 Z" fill="#1c2142"/>'
+  +'<path d="M-40 110 Q4 96 40 110 Q78 96 116 110 Q150 100 170 112 V120 H-40 Z" fill="#262c52"/>'
+  +'<path d="M14 104 l4 -12 l4 12 Z M44 102 l5 -14 l5 14 Z M82 104 l4 -11 l4 11 Z" fill="#161a36"/></g>'
+  +'<rect x="0" y="106" width="120" height="14" fill="#0d0f22"/>'
+  +'<g class="v79-part v79-mount" transform="translate(0,2)">'
+  +'<ellipse cx="60" cy="98" rx="30" ry="13" fill="#3a2a44"/>'
+  +'<path d="M82 92 q10 -4 13 -14 q5 2 3 9 q-3 9 -12 12 Z" fill="#4a3656"/>'
+  +'<circle cx="95" cy="80" r="6" fill="#4a3656"/><circle cx="97" cy="79" r="1.4" fill="#ffd36b"/>'
+  +'<path d="M88 76 l5 -8 l3 7 Z" fill="#2c2036"/>'
+  +'<rect x="38" y="100" width="4" height="14" rx="2" fill="#2c2036"/>'
+  +'<rect x="50" y="102" width="4" height="13" rx="2" fill="#3a2a44"/>'
+  +'<rect x="70" y="102" width="4" height="13" rx="2" fill="#3a2a44"/>'
+  +'<rect x="80" y="100" width="4" height="14" rx="2" fill="#2c2036"/></g>'
+  +'<g class="v79-part v79-anvil">'
+  +'<rect x="78" y="98" width="22" height="6" rx="1.5" fill="#2a2e3c"/>'
+  +'<path d="M82 88 h18 q3 0 3 4 v4 H75 v-4 q0 -4 7 -4 Z" fill="#3d4250"/>'
+  +'<rect x="84" y="104" width="12" height="8" fill="#241d16"/></g>'
+  +'<g class="v79-part v79-enemy"><g class="v79-part v79-prey">'
+  +'<ellipse cx="100" cy="96" rx="11" ry="9.5" fill="#3f7d3a"/>'
+  +'<path d="M92 89 l-2 -7 l6 4 Z M108 89 l2 -7 l-6 4 Z" fill="#2f5e2c"/>'
+  +'<ellipse cx="96" cy="94" rx="2.4" ry="2.8" fill="#fff3c4"/><circle cx="96.6" cy="95" r="1.2" fill="#1a1208"/>'
+  +'<ellipse cx="104" cy="94" rx="2.4" ry="2.8" fill="#fff3c4"/><circle cx="104.6" cy="95" r="1.2" fill="#1a1208"/>'
+  +'<path d="M95 100 h10 l-2 3 l-3 -2 l-3 2 Z" fill="#23401f"/></g></g>'
+  +'<ellipse class="v79-part v79-shadow" cx="60" cy="106" rx="22" ry="4.6" fill="#000" opacity=".4"/>'
+  +'<g class="v79-part v79-hero-inner">'
+  +'<g class="v79-part v79-cloak">'
+  +'<path d="M47 55 C36 70 33 92 37 109 L83 109 C87 92 84 70 73 55 Z" fill="'+cloakSh+'"/>'
+  +'<path d="M50 57 C42 71 40 90 43 106 L77 106 C80 90 78 71 70 57 Z" fill="'+cloak+'"/>'
+  +'<path d="M50 58 C46 72 45 88 46 103 L49 103 C49 86 50 71 53 59 Z" fill="'+cloakHi+'" opacity=".75"/></g>'
+  +'<g class="v79-part v79-arm-back">'
+  +'<path d="M40 58 q-6 3 -7 13 q-1 9 2 16 l8 -1 q-2 -10 -1 -16 q1 -7 5 -10 Z" fill="#14161f"/>'
+  +'<path d="M41 60 q-4 3 -5 12 q-1 8 1 13 l5 -0.5 q-1 -9 0 -14 q1 -6 4 -8 Z" fill="#5a6477"/>'
+  +'<ellipse cx="38" cy="89" rx="6" ry="5.5" fill="#14161f"/>'
+  +'<ellipse cx="38.5" cy="88" rx="4.4" ry="4" fill="#6b7689"/></g>'
+  +'<g class="v79-legs">'
+  +'<g class="v79-leg-back"><path d="M55 82 q-3 8 -2 17 l7 0 q0 -9 1 -17 Z" fill="#14161f"/>'
+  +'<path d="M56 84 q-2 7 -1.5 14 l4.5 0 q0 -8 0.6 -14 Z" fill="#5a6477"/>'
+  +'<path d="M53 99 h9 v6 q0 2 -2 2 h-9 q-1 -4 2 -8 Z" fill="#14161f"/>'
+  +'<path d="M53 100 h7.5 v4.4 h-9 q0 -2.6 1.5 -4.4 Z" fill="#6b7689"/></g>'
+  +'<g class="v79-leg-front"><path d="M62 82 q3 8 3 18 l8 -0.5 q0 -10 -2 -18 Z" fill="#14161f"/>'
+  +'<path d="M63 84 q2 7 2.4 15 l5 -0.3 q0 -9 -1.4 -15 Z" fill="#6b7689"/>'
+  +'<path d="M71 99 h-9 v6 q0 2 2 2 h10 q1 -4 -3 -8 Z" fill="#14161f"/>'
+  +'<path d="M70.5 100 h-8 v4.4 h10 q0 -2.6 -2 -4.4 Z" fill="#8a96ab"/></g></g>'
+  +'<g class="v79-part v79-torso">'
+  +'<path d="M40 56 q4 -8 20 -8 q16 0 20 8 q3 14 0 26 q-20 7 -40 0 q-3 -12 0 -26 Z" fill="#14161f"/>'
+  +'<path d="M44 57 q3 -6 16 -6 q13 0 16 6 q2 12 0 22 q-16 6 -32 0 q-2 -10 0 -22 Z" fill="#8a96ab"/>'
+  +'<path d="M44 57 q3 -6 16 -6 q3 0 5 0.4 q-9 2 -11 27.5 q-7 -1 -10 -0.4 q-2 -10 0 -21.5 Z" fill="#aab3c2"/>'
+  +'<path d="M76 58 q2 11 0 21 q-5 2 -10 2.6 q3 -13 3 -25 q4 0.6 7 1.4 Z" fill="#5a6477"/>'
+  +'<path d="M58 52 h4 q2 14 0 30 h-4 q-2 -16 0 -30 Z" fill="#c3ccda"/>'
+  +'<ellipse cx="60" cy="60" rx="4" ry="3.4" fill="'+gold+'"/>'
+  +'<ellipse cx="60" cy="60" rx="2.2" ry="1.9" fill="'+gem+'"/>'
+  +'<path d="M34 56 q5 -9 16 -9 q5 7 3 17 q-11 4 -19 -1 q-2 -4 0 -7 Z" fill="#14161f"/>'
+  +'<path d="M36 56 q4 -7 13 -7.5 q4 6 2.5 13 q-9 3 -15 -0.6 q-1.5 -3 -0.5 -4.9 Z" fill="#6b7689"/>'
+  +'<path d="M35 60 q8 3 16 1" stroke="'+gold+'" stroke-width="2" fill="none"/>'
+  +'<path d="M86 56 q-5 -9 -16 -9 q-5 7 -3 17 q11 4 19 -1 q2 -4 0 -7 Z" fill="#14161f"/>'
+  +'<path d="M84 56 q-4 -7 -13 -7.5 q-4 6 -2.5 13 q9 3 15 -0.6 q1.5 -3 0.5 -4.9 Z" fill="#5a6477"/>'
+  +'<path d="M85 60 q-8 3 -16 1" stroke="'+gold+'" stroke-width="2" fill="none"/>'
+  +'<path d="M46 80 h28 l-1 7 q-13 4 -26 0 Z" fill="#4a3220"/>'
+  +'<rect x="55" y="80.5" width="10" height="6" rx="1.5" fill="#14161f"/>'
+  +'<rect x="56.4" y="81.6" width="7.2" height="3.8" rx="1" fill="'+gold+'"/>'
+  +'<path d="M48 86 q5 8 4 16 l-7 0 q-2 -9 -1 -16 Z" fill="#14161f"/>'
+  +'<path d="M49.4 87 q4 7 3.4 13 l-4.4 0 q-1.4 -7 -0.6 -13 Z" fill="#5a6477"/>'
+  +'<path d="M72 86 q-5 8 -4 16 l7 0 q2 -9 1 -16 Z" fill="#14161f"/>'
+  +'<path d="M70.6 87 q-4 7 -3.4 13 l4.4 0 q1.4 -7 0.6 -13 Z" fill="#6b7689"/></g>'
+  +'<g class="v79-part v79-head">'
+  +'<path d="M60 19 q-9 0.6 -13 9 q7 -3 13 -2.4 q6 -0.6 13 2.4 q-4 -8.4 -13 -9 Z" fill="'+plume+'"/>'
+  +'<path d="M48 30 q1 -10 12 -11 q11 1 12 11 q1 5 -1 9 l-22 0 q-2 -4 -1 -9 Z" fill="#14161f"/>'
+  +'<path d="M50 31 q1 -8 10 -9 q9 1 10 9 q0.6 4 -0.6 7 l-18.8 0 q-1.2 -3 -0.6 -7 Z" fill="#8a96ab"/>'
+  +'<path d="M50 31 q1 -8 10 -9 q2 0 3.4 0.5 q-7 2 -8.4 16.5 l-4.4 0 q-1.2 -3 -0.6 -8 Z" fill="#aab3c2"/>'
+  +'<path d="M49 38 q11 4 22 0 l0 6 q-11 5 -22 0 Z" fill="#14161f"/>'
+  +'<path d="M51 40 q9 3 18 0 l0 3 q-9 3 -18 0 Z" fill="#5a6477"/>'
+  +'<g class="v79-part v79-eye">'
+  +'<ellipse cx="55" cy="41.4" rx="2.4" ry="1.5" fill="#7fe9ff"/>'
+  +'<ellipse cx="65" cy="41.4" rx="2.4" ry="1.5" fill="#7fe9ff"/></g>'
+  +'<path d="M51 31 q9 -4 18 0" stroke="'+gold+'" stroke-width="1.8" fill="none"/></g>'
+  +'<g class="v79-part v79-arm-front">'
+  +'<path d="M76 56 q9 1 12 13 q2 9 -1 18 l-9 -1 q3 -10 1 -17 q-2 -8 -7 -11 Z" fill="#14161f"/>'
+  +'<path d="M77 58 q7 1 10 12 q2 8 -0.4 15 l-5.6 -0.6 q2 -9 0.4 -15 q-2 -7 -6 -9 Z" fill="#6b7689"/>'
+  +'<ellipse cx="83" cy="88" rx="6.5" ry="6" fill="#14161f"/>'
+  +'<ellipse cx="83.4" cy="87" rx="4.8" ry="4.4" fill="#8a96ab"/>'
+  +'<g class="v79-part v79-weapon">'
+  +'<path d="M82 90 L86 22 L90 22 L94 90 Z" fill="#14161f"/>'
+  +'<path d="M84 88 L87 26 L91 88 Z" fill="#cdd6e4"/>'
+  +'<path d="M87 26 L87 88 L91 88 Z" fill="#8893a6"/>'
+  +'<rect x="74" y="86" width="26" height="5" rx="2" fill="'+goldSh+'"/>'
+  +'<rect x="75" y="86.6" width="24" height="2.2" rx="1" fill="'+goldHi+'"/>'
+  +'<rect x="83.5" y="90" width="7" height="9" rx="1.5" fill="#4a3220"/>'
+  +'<circle cx="87" cy="101" r="4" fill="'+gold+'"/>'
+  +'<circle cx="87" cy="101" r="2.4" fill="'+gem+'"/></g>'
+  +'<g class="v79-tool">'
+  +'<rect x="84" y="88" width="3.4" height="20" rx="1.5" fill="#4a3220" transform="rotate(8 86 96)"/>'
+  +'<rect x="80" y="84" width="14" height="8" rx="2" fill="#3d4250" transform="rotate(8 86 96)"/></g></g></g>'
+  +'<g class="v79-fx">'
+  +'<g class="v79-part v79-fx-spark">'
+  +'<path d="M92 56 l2 -6 l2 6 l6 2 l-6 2 l-2 6 l-2 -6 l-6 -2 Z" fill="'+goldHi+'"/>'
+  +'<circle cx="98" cy="64" r="2" fill="#ffd36b"/></g>'
+  +'<g class="v79-part v79-fx-coin">'
+  +'<ellipse cx="50" cy="92" rx="3.4" ry="4.2" fill="'+gold+'"/>'
+  +'<ellipse cx="66" cy="96" rx="2.8" ry="3.4" fill="'+gold+'"/></g>'
+  +'<g class="v79-part v79-fx-halo">'
+  +'<ellipse cx="60" cy="26" rx="16" ry="5" fill="none" stroke="#7fe9ff" stroke-width="2.4" opacity=".85"/>'
+  +'<ellipse cx="60" cy="26" rx="22" ry="7.5" fill="none" stroke="#7fe9ff" stroke-width="1.2" opacity=".45"/></g></g>'
+  +'</svg>';
+}
+
+/* ---- timer ---- */
+var dur=S.dur*60, left=dur, running=false, ticker=null;
+var DASH=2*Math.PI*44;
+function fmt(s){var m=Math.floor(s/60),x=s%60;return (m<10?"0":"")+m+":"+(x<10?"0":"")+x;}
+function setScene(sc){
+  document.getElementById("world").setAttribute("data-scene",sc);
+  var a=ACTIONS.filter(function(x){return x.id===sc;})[0];
+  document.getElementById("sceneTag").textContent=running?(a?a.label:sc):"At rest";
+}
+function startStop(){
+  if(running){ pause(); return; }
+  running=true;
+  document.getElementById("goBtn").textContent="Pause";
+  document.getElementById("goBtn").classList.add("running");
+  setScene(S.action);
+  ticker=setInterval(function(){
+    left--; if(left<=0){ complete(); return; } paint();
+  },1000);
+}
+function pause(){
+  running=false; clearInterval(ticker);
+  document.getElementById("goBtn").textContent= left<dur?"Resume":"Start";
+  document.getElementById("goBtn").classList.remove("running");
+  setScene("resting");
+}
+function complete(){
+  clearInterval(ticker); running=false;
+  var mins=Math.round(dur/60);
+  var before=levelFromXp(S.totalXp).lv;
+  var gain=mins*5 + (mins>=50?30:mins>=25?12:0);
+  S.totalXp+=gain; S.totalMin+=mins; S.sessions++;
+  var q=S.quests.filter(function(x){return x.id===S.activeId;})[0];
+  if(q)q.min+=mins;
+  var tk=todayKey();
+  if(S.lastDay!==tk){ S.streak=(S.streak||0)+1; S.lastDay=tk; }
+  save();
+  var after=levelFromXp(S.totalXp).lv;
+  document.getElementById("fXp").textContent="+"+gain+" XP";
+  document.getElementById("fTitle").textContent= after>before? "Level up - Lv "+after+"!" : "Session complete";
+  document.getElementById("fBody").textContent= after>before
+    ? "The hero ascends to level "+after+"."
+    : mins+" focused minutes added to your legend.";
+  document.getElementById("flourish").classList.add("on");
+  left=dur;
+  document.getElementById("goBtn").textContent="Start";
+  document.getElementById("goBtn").classList.remove("running");
+  setScene("resting"); paint();
+  checkTrophies(true);
+}
+function paint(){
+  document.getElementById("clock").textContent=fmt(left);
+  var frac=1-(left/dur);
+  document.getElementById("dialProg").setAttribute("stroke-dashoffset", (DASH*(1-frac)).toFixed(2));
+  document.getElementById("dialProg").setAttribute("stroke-dasharray", DASH.toFixed(2));
+  var L=levelFromXp(S.totalXp);
+  document.getElementById("lvlNum").textContent=L.lv;
+  document.getElementById("className").textContent=(CLASSES[S.cls]||CLASSES.knight).name;
+  document.getElementById("streakNum").textContent=S.streak||1;
+  document.getElementById("lvlRing").style.setProperty("--lvlpct",Math.round(L.xp/L.need*100)+"%");
+  document.getElementById("xpFill").style.width=Math.round(L.xp/L.need*100)+"%";
+  document.getElementById("xpNow").textContent=L.xp+" XP";
+  document.getElementById("xpNeed").textContent=(L.need-L.xp)+" to next";
+}
+
+/* ---- panels ---- */
+function openPanel(id){
+  ["panelQuests","panelTrophies","panelHero"].forEach(function(p){
+    document.getElementById(p).classList.toggle("on",p===id);
+    document.getElementById(p).setAttribute("aria-hidden",p===id?"false":"true");
+  });
+  document.getElementById("scrim").classList.add("on");
+  if(id==="panelQuests")renderQuests();
+  if(id==="panelTrophies")renderTrophies();
+  if(id==="panelHero")renderHero();
+}
+function closePanels(){
+  ["panelQuests","panelTrophies","panelHero"].forEach(function(p){
+    document.getElementById(p).classList.remove("on");
+    document.getElementById(p).setAttribute("aria-hidden","true");
+  });
+  document.getElementById("scrim").classList.remove("on");
+}
+function renderQuests(){
+  var html="";
+  S.quests.forEach(function(q){
+    var act=q.id===S.activeId;
+    html+='<div class="quest'+(act?' active':'')+'">'
+      +'<span class="emj">'+q.emj+'</span>'
+      +'<span class="qd"><b>'+esc(q.name)+'</b><small>'+q.min+' min focused</small></span>'
+      +'<button class="pick" data-q="'+q.id+'">'+(act?'Active':'Select')+'</button></div>';
+  });
+  document.getElementById("questList").innerHTML=html;
+}
+function renderTrophies(){
+  var html="";
+  TROPHIES.forEach(function(t){
+    var got=t.test(S);
+    html+='<div class="troph'+(got?' got':'')+'">'
+      +'<span class="tg">'+t.emj+'</span>'
+      +'<span class="td"><b>'+t.t+'</b><small>'+t.d+'</small></span>'
+      +'<span class="chk">&#10003;</span></div>';
+  });
+  document.getElementById("trophyList").innerHTML=html;
+}
+function renderHero(){
+  document.getElementById("heroPort").innerHTML=heroSvg(S.cls,"resting");
+  var L=levelFromXp(S.totalXp);
+  document.getElementById("sLvl").textContent=L.lv;
+  document.getElementById("sXp").textContent=S.totalXp;
+  document.getElementById("sMin").textContent=S.totalMin+"m";
+  document.getElementById("sStreak").textContent=(S.streak||1)+"d";
+  var cr="";
+  Object.keys(CLASSES).forEach(function(k){
+    cr+='<button data-cls="'+k+'" aria-pressed="'+(S.cls===k)+'">'+CLASSES[k].name+'</button>';
+  });
+  document.getElementById("classRow").innerHTML=cr;
+}
+function esc(s){return String(s).replace(/[<>&]/g,function(c){return{"<":"&lt;",">":"&gt;","&":"&amp;"}[c];});}
+function toast(msg){
+  var t=document.getElementById("toast");
+  t.textContent=msg; t.classList.add("on");
+  clearTimeout(toast._t); toast._t=setTimeout(function(){t.classList.remove("on");},1900);
+}
+function checkTrophies(announce){
+  TROPHIES.forEach(function(t){
+    var got=t.test(S);
+    if(got && !S["tr_"+t.id]){ S["tr_"+t.id]=1; if(announce)toast("Trophy unlocked: "+t.t); }
+  });
+  save();
+}
+
+/* ---- wire up ---- */
+function buildActions(){
+  var html="";
+  ACTIONS.forEach(function(a){
+    html+='<button class="slot" data-act="'+a.id+'" aria-pressed="'+(S.action===a.id)+'" '
+      +'title="'+a.label+'" aria-label="'+a.label+'">'+a.emj+'</button>';
+  });
+  document.getElementById("actions").innerHTML=html;
+}
+function pickAction(id){
+  S.action=id; save(); buildActions();
+  if(!running) setScene("resting"); else setScene(id);
+  var a=ACTIONS.filter(function(x){return x.id===id;})[0];
+  document.getElementById("dialSub").textContent=(a?a.label:"Focus")+" session";
+  if(!running) document.getElementById("world").setAttribute("data-scene","resting");
+  document.getElementById("worldStage").innerHTML=heroSvg(S.cls,"resting");
+}
+document.addEventListener("click",function(e){
+  var t=e.target.closest?e.target.closest("[data-act],[data-q],[data-cls],[data-close]"):null;
+  if(!t)return;
+  if(t.hasAttribute("data-act"))pickAction(t.getAttribute("data-act"));
+  else if(t.hasAttribute("data-q")){ S.activeId=t.getAttribute("data-q"); save(); renderQuests(); }
+  else if(t.hasAttribute("data-cls")){ S.cls=t.getAttribute("data-cls"); save();
+    document.getElementById("worldStage").innerHTML=heroSvg(S.cls,"resting"); renderHero(); paint(); }
+  else if(t.hasAttribute("data-close"))closePanels();
+});
+document.getElementById("goBtn").addEventListener("click",startStop);
+document.getElementById("navQuests").addEventListener("click",function(){openPanel("panelQuests");});
+document.getElementById("navTrophies").addEventListener("click",function(){openPanel("panelTrophies");});
+document.getElementById("navHero").addEventListener("click",function(){openPanel("panelHero");});
+document.getElementById("scrim").addEventListener("click",closePanels);
+document.getElementById("fClose").addEventListener("click",function(){
+  document.getElementById("flourish").classList.remove("on");
+});
+document.getElementById("questAdd").addEventListener("click",function(){
+  var i=document.getElementById("questInput");
+  var v=(i.value||"").trim(); if(!v)return;
+  var emj=["📚","💻","✏️","🎯","🔬","🎨"];
+  S.quests.push({id:qid(),name:v,emj:emj[S.quests.length%emj.length],min:0});
+  i.value=""; save(); renderQuests(); checkTrophies(true);
+});
+document.getElementById("questInput").addEventListener("keydown",function(e){
+  if(e.key==="Enter")document.getElementById("questAdd").click();
+});
+
+/* ---- boot ---- */
+document.getElementById("worldStage").innerHTML=heroSvg(S.cls,"resting");
+buildActions();
+left=dur;
+var a0=ACTIONS.filter(function(x){return x.id===S.action;})[0];
+document.getElementById("dialSub").textContent=(a0?a0.label:"Focus")+" session";
+paint();
+checkTrophies(false);
+</script>
+</body>
+</html>
