@@ -5,7 +5,8 @@
 - Works in the post-session XP summary bubble and retroactively in session history. Additive only - no schema change, no data migration; pre-v7.6 records stay non-editable as before.
 - Job 2: the v7 32x32 pixel avatar is replaced by a detailed, cel-shaded MMO-style armored knight - layered plate, pauldrons, plumed great-helm, detailed longsword, flowing cloak - rigged with separate limbs for smooth seven-state animation (rest, travel, fight, hunt, loot, craft, meditate). Namespaced `.v79-*` / `.fh79`; respects `prefers-reduced-motion`.
 - Job 3: new standalone `prototype-v2.html` - a ground-up alternate layout (full-bleed world, HUD timer dial, MMO hotbar, slide-in panels). Separate file; uses its own `fhProtoV2` localStorage namespace and never touches main-app data.
-- `sw.js` BUILD_ID bumped to `fh-2026-05-20-v7-9`.
+- Zoom-lock: the app and prototype are now viewport-locked - pinch-zoom, double-tap zoom and iOS gesture zoom are blocked (single-finger scrolling still works) so the layout cannot be accidentally zoomed.
+- `sw.js` BUILD_ID bumped to `fh-2026-05-21-v7-9`.
 
 ## v7.8 - session-end edit time
 

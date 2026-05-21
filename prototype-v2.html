@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#0c1020">
 <title>Focus Hero — World prototype (v2)</title>
 <style>
@@ -13,7 +13,7 @@
   --sans:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%}
+html,body{height:100%;touch-action:manipulation;-ms-touch-action:manipulation}
 body{background:var(--bg);color:var(--ink);font-family:var(--sans);overflow:hidden;
   -webkit-tap-highlight-color:transparent;user-select:none}
 button{font-family:inherit;color:inherit;cursor:pointer;border:0;background:none}
@@ -244,6 +244,24 @@ button{font-family:inherit;color:inherit;cursor:pointer;border:0;background:none
 </style>
 </head>
 <body>
+<script>
+/* v7.9: zoom-lock - block pinch + double-tap zoom; single-finger scroll stays. */
+(function(){
+  function pd(e){ if (e.cancelable) e.preventDefault(); }
+  document.addEventListener("gesturestart", pd, { passive:false });
+  document.addEventListener("gesturechange", pd, { passive:false });
+  document.addEventListener("gestureend", pd, { passive:false });
+  document.addEventListener("touchmove", function(e){
+    if (e.touches && e.touches.length > 1 && e.cancelable) e.preventDefault();
+  }, { passive:false });
+  var lastTap = 0;
+  document.addEventListener("touchend", function(e){
+    var now = Date.now();
+    if (now - lastTap <= 300 && e.cancelable) e.preventDefault();
+    lastTap = now;
+  }, { passive:false });
+})();
+</script>
 <div id="app">
   <div class="proto-flag">prototype v2</div>
   <div id="world" data-scene="resting">
