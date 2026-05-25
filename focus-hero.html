@@ -15,7 +15,7 @@
 <title>Focus Hero</title>
 <style>
 /* ================================================================
- * Focus Hero v8.0 - inline styles (single-file PWA)
+ * Focus Hero v8.1 - inline styles (single-file PWA)
  * ================================================================ */
 :root{
   --bg:#0b0d1a; --bg-2:#111427; --panel:#171a30; --panel-2:#1f2340;
@@ -1424,6 +1424,8 @@ button.primary{
   padding:10px;
   border:2px solid var(--border);
   background:#0b110d;
+  max-height:min(46vh,430px);
+  overflow:auto;
 }
 .appearance-group{display:grid;gap:5px}
 .appearance-label{font-size:.62rem;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.06em}
@@ -1442,6 +1444,16 @@ button.primary{
   border:2px solid #050805;
   vertical-align:-2px;
 }
+.gear-bonuses{
+  grid-column:1/-1;display:flex;flex-wrap:wrap;gap:5px;margin-top:4px;
+  padding-top:7px;border-top:1px dashed var(--border);
+}
+.gear-bonus{
+  font-size:.68rem;color:var(--accent-2);border:1px solid var(--border-strong);
+  border-radius:999px;padding:3px 7px;background:rgba(var(--accent-rgb),.08);
+}
+.equipment-card .effect{display:block;font-size:.67rem;color:var(--accent-2);margin-top:3px}
+.v81-trait{pointer-events:none}
 .equipment-slots{
   display:grid;
   grid-template-columns:repeat(2,minmax(0,1fr));
@@ -1656,6 +1668,7 @@ html[data-variant="terminal"] .timer-display{color:#C7FF45;text-shadow:0 0 16px 
 [data-scene="travelling"] .fh79 .v79-cloak{animation:v79CloakFlag .7s ease-in-out infinite}
 [data-scene="travelling"] .fh79 .v79-horizon{animation:v79Scroll 1.9s linear infinite}
 [data-scene="travelling"] .fh79 .v79-leg-back,[data-scene="travelling"] .fh79 .v79-leg-front{opacity:0}
+[data-scene="travelling"] .fh79.on-foot .v79-leg-back,[data-scene="travelling"] .fh79.on-foot .v79-leg-front{opacity:1}
 [data-scene="fighting"] .fh79 .v79-enemy{opacity:1;animation:v79EnemyHit 1.5s ease-in-out infinite}
 [data-scene="fighting"] .fh79 .v79-hero-inner{animation:v79Lunge 1.5s cubic-bezier(.5,0,.3,1) infinite}
 [data-scene="fighting"] .fh79 .v79-arm-front{animation:v79Swing 1.5s cubic-bezier(.45,0,.25,1) infinite}
@@ -2168,7 +2181,7 @@ html,body{touch-action:manipulation;-ms-touch-action:manipulation}
 </div>
 
 <!-- ================================================================
- * Focus Hero v8.0 - inline script (one file, no deps)
+ * Focus Hero v8.1 - inline script (one file, no deps)
  * ================================================================ -->
 <script>
 "use strict";
@@ -2220,7 +2233,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const STORAGE_KEY     = "focusHero.v4.state";
 const LEGACY_KEYS     = ["focusHero.v3.state", "focusHero.v2.state", "focusHero.v1.state"];
 const BC_KEY          = "focusHero.v4";
-const DATA_VERSION    = 9;
+const DATA_VERSION    = 10;
 const PBKDF2_ITERATIONS = 100_000;
 const AES_KEY_LENGTH = 256;
 const SALT_BYTES = 16;
@@ -2259,7 +2272,11 @@ const DEFAULT_TASK_EMOJIS = EMOJI_CATEGORIES.flatMap(c=>c.emojis.map(e=>e[0]));
 const DEFAULTS = {
   dataVersion: DATA_VERSION,
   hero: { name: "Hero", cls: "knight", level: 1, xp: 0, hp: 100, energy: 100,
-          appearance: { armor:"steel", accent:"gold", helm:"closed", cloak:"royal" },
+          appearance: { armor:"steel", accent:"gold", helm:"closed", cloak:"royal",
+            race:"human", body:"balanced", skin:"warm", hair:"short",
+            hairColor:"espresso", eyeShape:"focused", eyeColor:"azure", face:"calm" },
+          appearanceUpdatedAt: 0,
+          cosmetics: { hair:[], outfit:[], mount:[] },
           equipped: { weapon:null, helmet:null, armor:null, mount:null, pet:null } },
   settings: {
     focusMin: 25, shortMin: 5, longMin: 15, cyclesBeforeLong: 4,
@@ -2274,7 +2291,7 @@ const DEFAULTS = {
     lastAutoBackup: null,
     lastManualBackup: null,
     designVariant: "command",
-    characterPatchVersion: 1,
+    characterPatchVersion: 2,
     e2eEncryption: true
   },
   timer: { mode: "focus", endAt: 0, pausedAt: 0, running: false, msLeft: 25*60*1000,
@@ -2375,7 +2392,7 @@ const LOOT_TABLE = [
 ];
 const EQUIP_SLOTS = ["weapon","helmet","armor","mount","pet"];
 const TIER_RANK = { common:1, uncommon:2, rare:3, epic:4, legendary:5, mythic:6 };
-const HERO_APPEARANCE_VERSION = 1;
+const HERO_APPEARANCE_VERSION = 2;
 const APPEARANCE_OPTIONS = {
   armor: [
     { id:"steel", label:"Steel", mid:"#64748B", high:"#CBD5E1", dark:"#1F2937" },
@@ -2399,7 +2416,78 @@ const APPEARANCE_OPTIONS = {
     { id:"crimson", label:"Red cloak", color:"#B91C1C" },
     { id:"forest", label:"Green cloak", color:"#166534" },
     { id:"none", label:"No cloak", color:"#64748B" }
+  ],
+  race: [
+    { id:"human", label:"Human" },
+    { id:"elf", label:"Elf" },
+    { id:"orc", label:"Orc" },
+    { id:"dwarf", label:"Dwarf" },
+    { id:"fae", label:"Fae" }
+  ],
+  body: [
+    { id:"balanced", label:"Balanced" },
+    { id:"lean", label:"Lean" },
+    { id:"broad", label:"Broad" }
+  ],
+  skin: [
+    { id:"porcelain", label:"Porcelain", color:"#F6D7C3" },
+    { id:"warm", label:"Warm", color:"#D99B73" },
+    { id:"bronze", label:"Bronze", color:"#B86E47" },
+    { id:"umber", label:"Umber", color:"#75422E" },
+    { id:"verdant", label:"Verdant", color:"#6F995F" }
+  ],
+  hair: [
+    { id:"short", label:"Short" },
+    { id:"braids", label:"Braids" },
+    { id:"mohawk", label:"Mohawk" },
+    { id:"long", label:"Long" },
+    { id:"shaved", label:"Shaved" }
+  ],
+  hairColor: [
+    { id:"espresso", label:"Espresso", color:"#332117" },
+    { id:"raven", label:"Raven", color:"#121621" },
+    { id:"golden", label:"Golden", color:"#D6A54B" },
+    { id:"copper", label:"Copper", color:"#A64B32" },
+    { id:"violet", label:"Violet", color:"#7046A4" },
+    { id:"silver", label:"Silver", color:"#CDD2DD" }
+  ],
+  eyeShape: [
+    { id:"focused", label:"Focused" },
+    { id:"round", label:"Round" },
+    { id:"sharp", label:"Sharp" }
+  ],
+  eyeColor: [
+    { id:"azure", label:"Azure", color:"#7FE9FF" },
+    { id:"emerald", label:"Emerald", color:"#5EEB9B" },
+    { id:"amber", label:"Amber", color:"#FBBF24" },
+    { id:"violet", label:"Violet", color:"#C084FC" }
+  ],
+  face: [
+    { id:"calm", label:"Calm" },
+    { id:"smile", label:"Smile" },
+    { id:"scar", label:"Scar" },
+    { id:"warpaint", label:"Warpaint" }
   ]
+};
+const GEAR_EFFECTS = {
+  whetstone_blade:    { xpPct:5, label:"+5% XP" },
+  dualblade:           { xpPct:12, label:"+12% XP" },
+  tome_of_tomorrow:    { xpPct:7, label:"+7% XP" },
+  crown_of_flow:       { xpPct:15, label:"+15% XP" },
+  trail_boots:         { energySave:1, label:"-1 energy cost" },
+  moonplate_vest:      { energySave:3, label:"-3 energy cost" },
+  wolf_reins:          { coinPct:8, label:"+8% coins" },
+  unicorn_sigil:       { coinPct:15, label:"+15% coins" },
+  griffin_saddle:      { coinPct:16, label:"+16% coins" },
+  astral_stag_tack:    { coinPct:18, label:"+18% coins" },
+  void_skiff:          { coinPct:25, label:"+25% coins" },
+  phase_panther_reins: { coinPct:25, label:"+25% coins" },
+  study_owl:           { xpPct:5, label:"+5% XP" },
+  clockwork_fox:       { coinPct:6, label:"+6% coins" },
+  ember_wyrmling:      { xpPct:10, label:"+10% XP" },
+  wind_familiar:       { energySave:2, label:"-2 energy cost" },
+  star_mote:           { xpPct:12, label:"+12% XP" },
+  orbit_sprite:        { coinPct:12, label:"+12% coins" }
 };
 const ACHIEVEMENTS = [
   ["first_focus","First Focus","Complete 1 focus session","🥇",{sessions:1}],
@@ -2592,6 +2680,19 @@ function ensureHeroAppearanceShape(hero=state?.hero){
     if (!opts.some(o=>o.id === hero.appearance[group])) hero.appearance[group] = DEFAULTS.hero.appearance[group];
   }
   return hero.appearance;
+}
+function ensureHeroCosmeticsShape(hero=state?.hero){
+  if (!hero || typeof hero !== "object") return deepClone(DEFAULTS.hero.cosmetics);
+  if (!hero.cosmetics || typeof hero.cosmetics !== "object" || Array.isArray(hero.cosmetics)){
+    hero.cosmetics = deepClone(DEFAULTS.hero.cosmetics);
+  }
+  for (const group of ["hair","outfit","mount"]){
+    if (!Array.isArray(hero.cosmetics[group])) hero.cosmetics[group] = [];
+  }
+  if (typeof hero.appearanceUpdatedAt !== "number" || !(hero.appearanceUpdatedAt >= 0)){
+    hero.appearanceUpdatedAt = 0;
+  }
+  return hero.cosmetics;
 }
 const nonNegativeNumber = v => {
   const n = Number(v);
@@ -2860,6 +2961,16 @@ function migrate(raw){
     if (!Array.isArray(s.editLog)) s.editLog = [];
     s.dataVersion = 9;
   }
+  if (s.dataVersion < 10){
+    /* v8.1: character creator and gear display state. Additive only: legacy
+       appearance, cumulative time, XP, inventory, coins and edit logs remain. */
+    if (!s.hero || typeof s.hero !== "object") s.hero = deepClone(DEFAULTS.hero);
+    ensureHeroAppearanceShape(s.hero);
+    ensureHeroCosmeticsShape(s.hero);
+    if (!s.settings || typeof s.settings !== "object") s.settings = {};
+    s.settings.characterPatchVersion = Math.max(s.settings.characterPatchVersion|0, HERO_APPEARANCE_VERSION);
+    s.dataVersion = 10;
+  }
 
   /* Degraded-read resilience: rebuild malformed subtrees, but ONLY the malformed ones.
    * We never touch subtrees that parse cleanly. */
@@ -2895,6 +3006,7 @@ function migrate(raw){
   if (!s.hero.equipped || typeof s.hero.equipped !== "object" || Array.isArray(s.hero.equipped)) s.hero.equipped = { weapon:null, helmet:null, armor:null, mount:null, pet:null };
   for (const slot of EQUIP_SLOTS) if (!(slot in s.hero.equipped)) s.hero.equipped[slot] = null;
   ensureHeroAppearanceShape(s.hero);
+  ensureHeroCosmeticsShape(s.hero);
   if (!Array.isArray(s.battleLog)) s.battleLog = [];
   ensureV76StateShape(s);
   if (s.longestStreak < s.streak) s.longestStreak = s.streak;
@@ -3372,21 +3484,22 @@ function finalizeStopwatch(){
   const earnedRewards = minutes >= floor;
   let breakdownMeta = null;
   if (earnedRewards){
-    awardXp(xp.total);
+    const xpAwarded = awardXp(xp.total);
+    const gearStats = equippedStats();
     // Note: state.combo.count is intentionally not incremented for stopwatch sessions.
-    state.hero.energy = Math.max(0, state.hero.energy - 8);
+    state.hero.energy = Math.max(0, state.hero.energy - Math.max(0, 8 - gearStats.energySave));
     state.hero.hp = Math.min(100, state.hero.hp + 2);
     lootItem = rollLoot(minutes);
     updateDailyProgress("focus", 1);
     updateDailyProgress("minutes", minutes);
-    const coinsHere = computeCoins(minutes);
+    const coinsHere = computeCoins(minutes, true);
     state.coins = (state.coins|0) + coinsHere;
     state.coinsEarned = (state.coinsEarned|0) + coinsHere;
     if (coinsHere > 0) toast(`+${coinsHere} coins earned`, "good");
-    breakdownMeta = { lootItem, coins: coinsHere };
-    logLine(`Stopwatch logged: ${minutes}m · +${xp.total} XP (base ${xp.base}${xp.streakBonus?` +${xp.streakBonus} streak`:""})`);
-    logBattle(`Hero completed ${taskLabel}. +${xp.total} XP${lootItem ? `, Loot: ${lootItem[1]} (${lootItem[2]})` : ""}.`, lootItem ? "loot" : "good");
-    notify("Stopwatch logged!", `+${xp.total} XP · ${minutes}m saved`);
+    breakdownMeta = { lootItem, coins: coinsHere, xpAwarded };
+    logLine(`Stopwatch logged: ${minutes}m · +${xpAwarded} XP (base ${xp.base}${xp.streakBonus?` +${xp.streakBonus} streak`:""})`);
+    logBattle(`Hero completed ${taskLabel}. +${xpAwarded} XP${lootItem ? `, Loot: ${lootItem[1]} (${lootItem[2]})` : ""}.`, lootItem ? "loot" : "good");
+    notify("Stopwatch logged!", `+${xpAwarded} XP · ${minutes}m saved`);
   } else {
     breakdownMeta = { reasonShort: true };
     logLine(`Stopwatch logged: ${minutes}m (no rewards — below ${floor}m floor)`);
@@ -3527,21 +3640,22 @@ function commitFocusTimerSession(claim, minutes){
   const earnedRewards = minutes >= floor;
   let breakdownMeta = null;
   if (earnedRewards){
-    awardXp(xp.total);
+    const xpAwarded = awardXp(xp.total);
+    const gearStats = equippedStats();
     state.combo.count = comboPriorCount + 1;
-    state.hero.energy = Math.max(0, state.hero.energy - 8);
+    state.hero.energy = Math.max(0, state.hero.energy - Math.max(0, 8 - gearStats.energySave));
     state.hero.hp = Math.min(100, state.hero.hp + 2);
     lootItem = rollLoot(minutes);
     updateDailyProgress("focus", 1);
     updateDailyProgress("minutes", minutes);
-    const coinsHere = computeCoins(minutes);
+    const coinsHere = computeCoins(minutes, true);
     state.coins = (state.coins|0) + coinsHere;
     state.coinsEarned = (state.coinsEarned|0) + coinsHere;
     if (coinsHere > 0) toast(`+${coinsHere} coins earned`, "good");
-    breakdownMeta = { lootItem, coins: coinsHere };
-    logLine(`Focus complete: ${minutes}m · +${xp.total} XP (base ${xp.base}${xp.comboBonus?` +${xp.comboBonus} combo`:""}${xp.streakBonus?` +${xp.streakBonus} streak`:""})`);
-    logBattle(`Hero completed ${taskLabel}. +${xp.total} XP${lootItem ? `, Loot: ${lootItem[1]} (${lootItem[2]})` : ""}.`, lootItem ? "loot" : "good");
-    notify("Focus complete!", `+${xp.total} XP · time for a break`);
+    breakdownMeta = { lootItem, coins: coinsHere, xpAwarded };
+    logLine(`Focus complete: ${minutes}m · +${xpAwarded} XP (base ${xp.base}${xp.comboBonus?` +${xp.comboBonus} combo`:""}${xp.streakBonus?` +${xp.streakBonus} streak`:""})`);
+    logBattle(`Hero completed ${taskLabel}. +${xpAwarded} XP${lootItem ? `, Loot: ${lootItem[1]} (${lootItem[2]})` : ""}.`, lootItem ? "loot" : "good");
+    notify("Focus complete!", `+${xpAwarded} XP · time for a break`);
   } else {
     state.combo.count = comboPriorCount;
     breakdownMeta = { reasonShort: true };
@@ -3671,9 +3785,13 @@ function updateStreak(tk){
   if (state.streak > (state.longestStreak|0)) state.longestStreak = state.streak;
   state.lastFocusDate = tk;
 }
+function rewardXpTotal(amount){
+  const stats = equippedStats();
+  return Math.round((Number(amount)||0) * activeXpMultiplier() * (1 + stats.xpPct / 100));
+}
 function awardXp(amount){
   if (!(amount>0)) return;
-  amount = Math.round(amount * activeXpMultiplier());
+  amount = rewardXpTotal(amount);
   if (!(amount>0)) return;
   const cur = totalXpForLevel(state.hero.level) + state.hero.xp + amount;
   const info = levelFromTotalXp(cur);
@@ -3683,6 +3801,7 @@ function awardXp(amount){
   }
   state.hero.level = info.lv;
   state.hero.xp = info.xp;
+  return amount;
 }
 function titleIdxFor(lv){
   let i=0; for (let k=0;k<TITLE_BANDS.length;k++) if (lv>=TITLE_BANDS[k]) i=k;
@@ -3728,6 +3847,24 @@ function lootById(id){ return LOOT_TABLE.find(item=>lootId(item) === id) || null
 function lootSlot(item){ return item?.[4] || "none"; }
 function rarityRank(r){ return TIER_RANK[String(r||"").toLowerCase()] || 0; }
 function isEquippableSlot(slot){ return EQUIP_SLOTS.includes(slot); }
+function equippedStats(hero=state?.hero){
+  const totals = { xpPct:0, coinPct:0, energySave:0, effects:[] };
+  const equipped = (hero && hero.equipped) || {};
+  for (const slot of EQUIP_SLOTS){
+    const id = equipped[slot]?.lootId;
+    const fx = id && GEAR_EFFECTS[id];
+    if (!fx) continue;
+    totals.xpPct += fx.xpPct || 0;
+    totals.coinPct += fx.coinPct || 0;
+    totals.energySave += fx.energySave || 0;
+    totals.effects.push(fx.label);
+  }
+  totals.energySave = Math.min(7, totals.energySave);
+  return totals;
+}
+function gearEffectText(id){
+  return GEAR_EFFECTS[id]?.label || "Cosmetic";
+}
 function ensureEquippedShape(){
   if (!state.hero.equipped || typeof state.hero.equipped !== "object" || Array.isArray(state.hero.equipped)){
     state.hero.equipped = { weapon:null, helmet:null, armor:null, mount:null, pet:null };
@@ -4598,14 +4735,24 @@ function renderGearSummary(){
   const host = $("#gear-summary"); if (!host) return;
   ensureEquippedShape();
   const labels = { weapon:"Weapon", helmet:"Head", armor:"Armor", mount:"Mount", pet:"Pet" };
-  host.innerHTML = EQUIP_SLOTS.map(slot=>{
+  const chips = EQUIP_SLOTS.map(slot=>{
     const eq = state.hero.equipped[slot];
     const item = eq?.lootId ? lootById(eq.lootId) : null;
     const sym = item ? item[0] : "◇";
     const name = item ? item[1] : "Empty";
     const tier = item ? item[2] : "common";
-    return `<div class="gear-chip rar-${tier}" title="${labels[slot]}: ${escapeHtml(name)}"><span>${sym}</span><b>${escapeHtml(labels[slot])}</b><span>${escapeHtml(name)}</span></div>`;
+    const effect = item ? gearEffectText(eq.lootId) : "";
+    return `<div class="gear-chip rar-${tier}" title="${labels[slot]}: ${escapeHtml(name)}${effect ? ` · ${escapeHtml(effect)}` : ""}"><span>${sym}</span><b>${escapeHtml(labels[slot])}</b><span>${escapeHtml(name)}</span></div>`;
   }).join("");
+  const stats = equippedStats();
+  const bonuses = [
+    stats.xpPct ? `+${stats.xpPct}% XP` : "",
+    stats.coinPct ? `+${stats.coinPct}% coins` : "",
+    stats.energySave ? `-${stats.energySave} energy cost` : ""
+  ].filter(Boolean);
+  host.innerHTML = chips + (bonuses.length
+    ? `<div class="gear-bonuses">${bonuses.map(v=>`<span class="gear-bonus">${escapeHtml(v)}</span>`).join("")}</div>`
+    : "");
 }
 const AVATAR_CLASS_ART = {
   knight:  { kind:"knight",  outline:"#111827", mid:"#64748B", high:"#CBD5E1", dark:"#1F2937", trim:"#FBBF24", bg:"#0C1325", detail:"plates" },
@@ -4681,6 +4828,90 @@ function strongestAvatarTier(eq){
   }
   return best;
 }
+function avatarTraitsSvg(p){
+  const a = p.appearance || DEFAULTS.hero.appearance;
+  const skin = appearanceOption("skin", a.skin)?.color || "#D99B73";
+  const hair = appearanceOption("hairColor", a.hairColor)?.color || "#332117";
+  const eye = appearanceOption("eyeColor", a.eyeColor)?.color || "#7FE9FF";
+  const race = a.race || "human";
+  const body = a.body || "balanced";
+  const eyeRy = a.eyeShape === "round" ? 2 : a.eyeShape === "sharp" ? 1 : 1.45;
+  const ears = race === "elf"
+    ? `<path d="M52 39 l-10 -5 l8 11 Z M68 39 l10 -5 l-8 11 Z" fill="${skin}" stroke="#14161f" stroke-width="1"/>`
+    : race === "orc"
+      ? `<path d="M53 48 l2 5 l2 -5 Z M63 48 l2 5 l2 -5 Z" fill="#F5E7D0"/>`
+      : race === "fae"
+        ? `<path d="M51 38 q-12 -9 -11 4 q2 8 11 4 M69 38 q12 -9 11 4 q-2 8 -11 4" fill="${eye}" opacity=".36"/>`
+        : "";
+  const hairLayer = a.hair === "shaved" ? ""
+    : a.hair === "mohawk"
+      ? `<path d="M54 34 v-13 l4 -6 l3 8 l4 -8 l2 19 Z" fill="${hair}"/>`
+      : a.hair === "braids"
+        ? `<path d="M51 35 q9 -10 18 0 v4 H51 Z M51 40 v13 h-3 v-13 M69 40 v13 h3 v-13" fill="${hair}"/>`
+        : a.hair === "long"
+          ? `<path d="M51 34 q9 -11 18 0 v20 h-4 v-12 H55 v12 h-4 Z" fill="${hair}"/>`
+          : `<path d="M51 35 q9 -11 18 0 v4 H51 Z" fill="${hair}"/>`;
+  const faceLayer = a.face === "smile"
+    ? `<path d="M56 48 q4 4 8 0" stroke="#401C1A" stroke-width="1.3" fill="none"/>`
+    : a.face === "scar"
+      ? `<path d="M64 37 l-5 13 M63 40 l3 2" stroke="#9A4839" stroke-width="1.2"/>`
+      : a.face === "warpaint"
+        ? `<path d="M52 43 h6 l-4 3 h-4 Z M68 43 h-6 l4 3 h4 Z" fill="#B91C1C" opacity=".85"/>`
+        : `<path d="M57 49 h6" stroke="#401C1A" stroke-width="1.1"/>`;
+  const bodyLayer = body === "broad"
+    ? `<path d="M34 58 l-5 6 h10 Z M86 58 l5 6 h-10 Z" fill="${p.trim || "#FBBF24"}" opacity=".7"/>`
+    : body === "lean"
+      ? `<path d="M55 54 v28 M65 54 v28" stroke="${p.trim || "#FBBF24"}" stroke-width="1" opacity=".6"/>`
+      : "";
+  const beard = race === "dwarf" ? `<path d="M53 46 q7 13 14 0 v12 q-7 8 -14 0 Z" fill="${hair}"/>` : "";
+  return `<g class="v81-trait v81-build" data-body="${body}">${bodyLayer}</g>
+      <g class="v81-trait v81-face" data-race="${race}" data-hair="${a.hair || "short"}" data-face="${a.face || "calm"}">
+        ${ears}<path d="M52 36 q8 -5 16 0 v12 q-8 8 -16 0 Z" fill="${skin}"/>
+        ${hairLayer}${beard}
+        <g class="v81-eyes"><ellipse cx="56" cy="42" rx="2.2" ry="${eyeRy}" fill="${eye}"/><ellipse cx="64" cy="42" rx="2.2" ry="${eyeRy}" fill="${eye}"/><circle cx="56" cy="42" r=".7" fill="#121621"/><circle cx="64" cy="42" r=".7" fill="#121621"/></g>
+        ${faceLayer}
+      </g>`;
+}
+function avatarMountSvg(mountGear, p){
+  if (!mountGear) return "";
+  const id = mountGear.id || "";
+  const colors = id === "void_skiff" ? ["#312E81","#818CF8","#C4B5FD"]
+    : id === "phase_panther_reins" ? ["#111827","#7C3AED","#C084FC"]
+      : id === "unicorn_sigil" ? ["#F8FAFC","#C4B5FD","#FBBF24"]
+        : id === "griffin_saddle" ? ["#B45309","#FDE68A","#F59E0B"]
+          : id === "astral_stag_tack" ? ["#4B5563","#A5F3FC","#67E8F9"]
+            : ["#374151","#9CA3AF","#FBBF24"];
+  const horn = id === "unicorn_sigil" ? `<path d="M94 77 l5 -12 l1 13 Z" fill="${colors[2]}"/>` : "";
+  const wing = id === "griffin_saddle" ? `<path d="M57 91 q-18 -23 -28 -10 q12 1 22 17 Z" fill="${colors[1]}" opacity=".8"/>` : "";
+  const antlers = id === "astral_stag_tack" ? `<path d="M94 77 l-6 -13 M94 73 l7 -10 M92 70 l-6 -3 M98 68 l5 -4" stroke="${colors[2]}" stroke-width="2"/>` : "";
+  const skiff = id === "void_skiff" ? `<path d="M30 99 q30 16 60 0 q-7 13 -30 14 q-23 -1 -30 -14 Z" fill="${colors[2]}" opacity=".45"/>` : "";
+  return `<g class="v79-part v79-mount v81-mounted" data-mount="${id}" transform="translate(0,2)">
+    ${wing}<ellipse cx="60" cy="98" rx="30" ry="13" fill="${colors[0]}"/>
+    <path d="M82 92 q10 -4 13 -14 q5 2 3 9 q-3 9 -12 12 Z" fill="${colors[1]}"/>
+    <circle cx="95" cy="80" r="6" fill="${colors[1]}"/><circle cx="97" cy="79" r="1.4" fill="${colors[2]}"/>
+    ${horn}${antlers}${skiff}
+    <rect x="38" y="100" width="4" height="14" rx="2" fill="${p.outline || "#14161f"}"/>
+    <rect x="50" y="102" width="4" height="13" rx="2" fill="${colors[0]}"/>
+    <rect x="70" y="102" width="4" height="13" rx="2" fill="${colors[0]}"/>
+    <rect x="80" y="100" width="4" height="14" rx="2" fill="${p.outline || "#14161f"}"/>
+  </g>`;
+}
+function avatarEquipmentOverlaySvg(eq){
+  const weapon = eq.weapon?.id === "dualblade"
+    ? `<path d="M31 56 L34 31 L37 32 L38 58 Z" fill="#DDE7F2" stroke="#14161f" stroke-width="1.5"/>`
+    : "";
+  const helm = eq.helmet?.id === "crown_of_flow"
+    ? `<path d="M48 28 l3 -13 l8 8 l7 -10 l6 15 Z" fill="#FBBF24" stroke="#7C4A03" stroke-width="1.5"/>`
+    : eq.helmet?.id === "tome_of_tomorrow"
+      ? `<path d="M49 27 q11 -7 22 0 v6 q-11 -6 -22 0 Z" fill="#38BDF8" stroke="#0C4A6E" stroke-width="1.4"/>`
+      : "";
+  const armor = eq.armor?.id === "moonplate_vest"
+    ? `<path d="M50 66 q10 8 20 0 v15 q-10 8 -20 0 Z" fill="#C4B5FD" opacity=".38"/><circle cx="60" cy="70" r="3" fill="#E0F2FE"/>`
+    : "";
+  const petId = eq.pet?.id || "";
+  const pet = petId ? `<g class="v81-trait v81-pet" data-pet="${petId}"><circle cx="28" cy="96" r="7" fill="#C084FC"/><circle cx="26" cy="94" r="1.4" fill="#F8FAFC"/><circle cx="30" cy="94" r="1.4" fill="#F8FAFC"/></g>` : "";
+  return `<g class="v81-trait v81-equipment">${weapon}${helm}${armor}${pet}</g>`;
+}
 function pixelAvatarSvg(clsName, action, scene, p, eq){
   /* v7.9: detailed MMO-style cel-shaded knight, limb-rigged for animation.
      Replaces the v7 32x32 pixel sprite. Class palette tints cloak/plume/gem;
@@ -4698,7 +4929,7 @@ function pixelAvatarSvg(clsName, action, scene, p, eq){
   const goldSh  = "#b07d1c";
   const gem     = ts.gem  || "#ff5d6c";
   const sky     = p.bg   || "#16193a";
-  return `<svg class="fh79" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${clsName} hero, ${scene}">
+  return `<svg class="fh79 ${eq?.mount ? "has-mount" : "on-foot"}" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${clsName} hero, ${scene}">
   <rect x="0" y="0" width="120" height="120" fill="${sky}"/>
   <circle cx="90" cy="30" r="13" fill="#3a4570" opacity=".5"/>
   <g class="v79-part v79-horizon">
@@ -4707,17 +4938,7 @@ function pixelAvatarSvg(clsName, action, scene, p, eq){
     <path d="M14 104 l4 -12 l4 12 Z M44 102 l5 -14 l5 14 Z M82 104 l4 -11 l4 11 Z M104 103 l4 -12 l4 12 Z" fill="#161a36"/>
   </g>
   <rect x="0" y="106" width="120" height="14" fill="#0d0f22"/>
-  <g class="v79-part v79-mount" transform="translate(0,2)">
-    <ellipse cx="60" cy="98" rx="30" ry="13" fill="#3a2a44"/>
-    <path d="M82 92 q10 -4 13 -14 q5 2 3 9 q-3 9 -12 12 Z" fill="#4a3656"/>
-    <circle cx="95" cy="80" r="6" fill="#4a3656"/><circle cx="97" cy="79" r="1.4" fill="#ffd36b"/>
-    <path d="M88 76 l5 -8 l3 7 Z" fill="#2c2036"/>
-    <rect x="38" y="100" width="4" height="14" rx="2" fill="#2c2036"/>
-    <rect x="50" y="102" width="4" height="13" rx="2" fill="#3a2a44"/>
-    <rect x="70" y="102" width="4" height="13" rx="2" fill="#3a2a44"/>
-    <rect x="80" y="100" width="4" height="14" rx="2" fill="#2c2036"/>
-    <path d="M33 90 q-9 2 -11 12 q6 -2 8 -6 q3 2 6 0 Z" fill="#4a3656"/>
-  </g>
+  ${avatarMountSvg(eq?.mount, p)}
   <g class="v79-part v79-anvil">
     <rect x="78" y="98" width="22" height="6" rx="1.5" fill="#2a2e3c"/>
     <path d="M82 88 h18 q3 0 3 4 v4 H75 v-4 q0 -4 7 -4 Z" fill="#3d4250"/>
@@ -4810,6 +5031,7 @@ function pixelAvatarSvg(clsName, action, scene, p, eq){
       <path d="M48 46 h24 l-1.5 5 q-10.5 3 -21 0 Z" fill="#14161f"/>
       <path d="M49.5 47 h21 l-1 3 q-9.5 2.5 -19 0 Z" fill="#6b7689"/>
     </g>
+    ${avatarTraitsSvg(p)}
     <g class="v79-part v79-arm-front">
       <path d="M76 56 q9 1 12 13 q2 9 -1 18 l-9 -1 q3 -10 1 -17 q-2 -8 -7 -11 Z" fill="#14161f"/>
       <path d="M77 58 q7 1 10 12 q2 8 -0.4 15 l-5.6 -0.6 q2 -9 0.4 -15 q-2 -7 -6 -9 Z" fill="#6b7689"/>
@@ -4838,6 +5060,7 @@ function pixelAvatarSvg(clsName, action, scene, p, eq){
         <rect x="80" y="85" width="14" height="2.4" rx="1" fill="#5a606f" transform="rotate(8 86 96)"/>
       </g>
     </g>
+    ${avatarEquipmentOverlaySvg(eq)}
   </g>
   <g class="v79-fx">
     <g class="v79-part v79-fx-spark">
@@ -5723,6 +5946,21 @@ function mergeRemoteState(local, remote){
     else if (!b) out.hero.equipped[slot] = a;
     else out.hero.equipped[slot] = rarityRank(b.tier) > rarityRank(a.tier) ? b : a;
   }
+  const localLookAt = local.hero?.appearanceUpdatedAt || 0;
+  const remoteLookAt = remote.hero?.appearanceUpdatedAt || 0;
+  if (remoteLookAt > localLookAt){
+    out.hero.appearance = deepClone(remote.hero?.appearance || DEFAULTS.hero.appearance);
+  } else {
+    out.hero.appearance = deepClone(local.hero?.appearance || out.hero.appearance || DEFAULTS.hero.appearance);
+  }
+  out.hero.appearanceUpdatedAt = Math.max(localLookAt, remoteLookAt);
+  out.hero.cosmetics = {
+    hair: Array.from(new Set([...(local.hero?.cosmetics?.hair || []), ...(remote.hero?.cosmetics?.hair || [])])),
+    outfit: Array.from(new Set([...(local.hero?.cosmetics?.outfit || []), ...(remote.hero?.cosmetics?.outfit || [])])),
+    mount: Array.from(new Set([...(local.hero?.cosmetics?.mount || []), ...(remote.hero?.cosmetics?.mount || [])]))
+  };
+  ensureHeroAppearanceShape(out.hero);
+  ensureHeroCosmeticsShape(out.hero);
   out.history = Object.assign({}, local.history||{});
   for (const k of Object.keys(remote.history||{})) out.history[k] = Math.max(out.history[k]||0, remote.history[k]||0);
   out.sessionHistory = Object.assign({}, local.sessionHistory||{});
@@ -6800,7 +7038,11 @@ function renderCharacterPanel(){
 function renderAppearanceControls(){
   const host = $("#appearance-controls"); if (!host) return;
   const appearance = ensureHeroAppearanceShape();
-  const labels = { armor:"Armor color", accent:"Trim", helm:"Helmet", cloak:"Cloak" };
+  const labels = {
+    armor:"Armor color", accent:"Trim", helm:"Helmet", cloak:"Cloak",
+    race:"Race", body:"Build", skin:"Skin", hair:"Hair",
+    hairColor:"Hair color", eyeShape:"Eyes", eyeColor:"Eye color", face:"Face"
+  };
   host.innerHTML = Object.entries(APPEARANCE_OPTIONS).map(([group, opts])=>`
     <div class="appearance-group">
       <div class="appearance-label">${labels[group] || group}</div>
@@ -6820,7 +7062,9 @@ function renderAppearanceControls(){
 function setHeroAppearance(group, value){
   if (!APPEARANCE_OPTIONS[group]?.some(o=>o.id === value)) return;
   ensureHeroAppearanceShape();
+  ensureHeroCosmeticsShape();
   state.hero.appearance[group] = value;
+  state.hero.appearanceUpdatedAt = now();
   saveState();
   renderHero(); renderAvatar(); renderCharacterPanel();
 }
@@ -6850,7 +7094,7 @@ function renderEquipmentPicker(){
     b.type = "button";
     b.className = `equipment-card rar-${item[2]} ${owned ? "" : "locked"} ${equipped ? "equipped" : ""}`;
     b.disabled = !owned || equipped;
-    b.innerHTML = `<span class="sym">${item[0]}</span><span class="name">${escapeHtml(item[1])}</span><span class="meta">${item[2]} · ${owned ? "owned" : "locked"}</span>`;
+    b.innerHTML = `<span class="sym">${item[0]}</span><span class="name">${escapeHtml(item[1])}</span><span class="meta">${item[2]} · ${owned ? "owned" : "locked"}</span><span class="effect">${escapeHtml(gearEffectText(id))}</span>`;
     b.onclick = ()=>setEquipped(slot, id, item[2]);
     host.appendChild(b);
   });
@@ -7342,7 +7586,7 @@ async function runSmokeTests(){
   }
 
   /* ---- v8.0: coins, store, Time Ledger, edit log, migration ---- */
-  { add("v8: DATA_VERSION is 9", DATA_VERSION === 9); }
+  { add("v8: schema includes coin/store migration", DATA_VERSION >= 9); }
   { add("v8: DEFAULTS has coin/store/editLog fields",
         DEFAULTS.coins === 0 && ("coinsEarned" in DEFAULTS) && ("store" in DEFAULTS) && Array.isArray(DEFAULTS.editLog)); }
   { const c25 = computeCoins(25), c90 = computeCoins(90);
@@ -7355,17 +7599,17 @@ async function runSmokeTests(){
       tasks:[{ id:"tA", name:"Reading", emoji:"📚", totalFocusMin:1840, dailyMin:{"2026-05-23":90} }],
       lootOwned:{copper_coin:14,dualblade:1}, achievements:{first_focus:1,hours_100:1},
       history:{"2026-05-23":210}, sessionHistory:{"2026-05-23":4}, settings:{...DEFAULTS.settings,theme:"ocean"} };
-    const m9 = migrate(deepClone(v79));
-    const noLoss = m9.dataVersion===9 && m9.totalFocusMin===8421 && m9.completedFocusSessions===213
-      && m9.streak===23 && m9.longestStreak===41 && m9.hero.level===14 && m9.hero.xp===823
-      && m9.tasks[0].totalFocusMin===1840 && m9.tasks[0].dailyMin["2026-05-23"]===90
-      && m9.lootOwned.copper_coin===14 && m9.lootOwned.dualblade===1
-      && m9.achievements.hours_100===1 && m9.history["2026-05-23"]===210
-      && m9.hero.equipped.mount && m9.hero.equipped.mount.lootId==="wolf_reins"
-      && m9.hero.appearance.armor==="crimson" && m9.settings.theme==="ocean";
-    const added = m9.coins===0 && m9.coinsEarned===0 && m9.coinsSpent===0
-      && m9.store && Array.isArray(m9.store.boosts) && Array.isArray(m9.editLog);
-    add("v8: v7.9 -> v9 migration is zero-data-loss", noLoss && added);
+    const migrated = migrate(deepClone(v79));
+    const noLoss = migrated.dataVersion===DATA_VERSION && migrated.totalFocusMin===8421 && migrated.completedFocusSessions===213
+      && migrated.streak===23 && migrated.longestStreak===41 && migrated.hero.level===14 && migrated.hero.xp===823
+      && migrated.tasks[0].totalFocusMin===1840 && migrated.tasks[0].dailyMin["2026-05-23"]===90
+      && migrated.lootOwned.copper_coin===14 && migrated.lootOwned.dualblade===1
+      && migrated.achievements.hours_100===1 && migrated.history["2026-05-23"]===210
+      && migrated.hero.equipped.mount && migrated.hero.equipped.mount.lootId==="wolf_reins"
+      && migrated.hero.appearance.armor==="crimson" && migrated.settings.theme==="ocean";
+    const added = migrated.coins===0 && migrated.coinsEarned===0 && migrated.coinsSpent===0
+      && migrated.store && Array.isArray(migrated.store.boosts) && Array.isArray(migrated.editLog);
+    add("v8: v7.9 migration remains zero-data-loss", noLoss && added);
   }
   { /* edit-log entry shape + 100-cap */
     const snap = deepClone(state.editLog||[]);
@@ -7406,6 +7650,57 @@ async function runSmokeTests(){
     state = snap; saveState();
   }
   { add("v8: XP-boost multiplier defaults to 1.0", activeXpMultiplier()===1); }
+  { /* v8.1 migration adds creator state without disturbing v8 rewards/history. */
+    const v80 = {
+      dataVersion:9, totalFocusMin:3210, coins:123, coinsEarned:200, coinsSpent:77,
+      editLog:[{id:"e1", taskName:"Reading", delta:15, before:10, after:25}],
+      hero:{...deepClone(DEFAULTS.hero), appearance:{armor:"crimson",accent:"gold",helm:"open",cloak:"forest"}},
+      settings:{...DEFAULTS.settings, characterPatchVersion:1},
+      store:{purchased:["gear:dualblade"], boosts:[], unlockedThemes:[]}
+    };
+    const m10 = migrate(deepClone(v80));
+    const ok = m10.dataVersion===10 && m10.totalFocusMin===3210 && m10.coins===123
+      && m10.coinsEarned===200 && m10.coinsSpent===77 && m10.editLog.length===1
+      && m10.hero.appearance.armor==="crimson" && m10.hero.appearance.race==="human"
+      && Array.isArray(m10.hero.cosmetics.mount);
+    add("v8.1: v8 migration preserves progress and adds creator data", ok);
+  }
+  {
+    const local = deepClone(DEFAULTS), remote = deepClone(DEFAULTS);
+    local.hero.appearance.race = "human";
+    local.hero.appearanceUpdatedAt = 100;
+    local.hero.cosmetics.hair = ["braids"];
+    remote.hero.appearance.race = "fae";
+    remote.hero.appearanceUpdatedAt = 200;
+    remote.hero.cosmetics.hair = ["mohawk"];
+    const merged = mergeRemoteState(local, remote);
+    const ok = merged.hero.appearance.race==="fae" && merged.hero.appearanceUpdatedAt===200
+      && merged.hero.cosmetics.hair.includes("braids") && merged.hero.cosmetics.hair.includes("mohawk");
+    add("v8.1: cloud merge keeps newest appearance and unlocked cosmetics", ok);
+  }
+  {
+    const snap = deepClone(state);
+    ensureHeroAppearanceShape();
+    state.hero.appearance.race = "elf";
+    state.hero.appearance.hair = "braids";
+    renderAvatar();
+    const rendered = !!document.querySelector("#avatar .v81-face[data-race='elf'][data-hair='braids']");
+    add("v8.1: character traits render on avatar", rendered);
+    state = snap; saveState(); renderAll();
+  }
+  {
+    const snap = deepClone(state);
+    state.lootOwned.dualblade = 1;
+    state.lootOwned.wolf_reins = 1;
+    setEquipped("weapon", "dualblade", "epic");
+    setEquipped("mount", "wolf_reins", "epic");
+    const stats = equippedStats();
+    const boosted = computeCoins(25, true) > computeCoins(25) && rewardXpTotal(100) > 100;
+    renderAvatar();
+    const mounted = !!document.querySelector("#avatar .v81-mounted[data-mount='wolf_reins']");
+    add("v8.1: equipped rewards and mount display are active", stats.xpPct >= 12 && stats.coinPct >= 8 && boosted && mounted);
+    state = snap; saveState(); renderAll();
+  }
 
   return results;
 }
@@ -7536,14 +7831,15 @@ function mergeEditLog(a, b){
 /* --- coin curve --- coins scale with focus-session length; a non-stacked
    length bonus rewards longer runs. base = round(minutes/5).
    25m -> 5+3=8 ; 50m -> 10+8=18 ; 90m -> 18+15=33 ; 120m -> 24+15=39. */
-function computeCoins(minutes){
+function computeCoins(minutes, withGear=false){
   const m = Math.max(0, Math.floor(Number(minutes)||0));
   if (m <= 0) return 0;
   let bonus = 0;
   if (m >= 90) bonus = 15;
   else if (m >= 50) bonus = 8;
   else if (m >= 25) bonus = 3;
-  return Math.round(m/5) + bonus;
+  const base = Math.round(m/5) + bonus;
+  return withGear ? Math.round(base * (1 + equippedStats().coinPct / 100)) : base;
 }
 
 /* --- edit-log audit trail (last 100 time adjustments) --- */
@@ -7782,7 +8078,7 @@ function renderStore(){
     return `<div class="store-item rar-${g.rarity}${have?" owned":""}">
       <div class="store-sym">${g.sym}</div>
       <div class="store-name">${escapeHtml(g.name)}</div>
-      <div class="store-meta">${g.rarity} · ${escapeHtml(g.slot)}</div>
+      <div class="store-meta">${g.rarity} · ${escapeHtml(g.slot)}<br>${escapeHtml(gearEffectText(g.lootSlug))}</div>
       <button type="button" class="store-buy" data-buy="${g.id}" ${dis?"disabled":""}>${have?"Owned":g.price+" 🪙"}</button>
     </div>`;
   };
