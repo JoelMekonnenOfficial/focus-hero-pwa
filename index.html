@@ -15,7 +15,7 @@
 <title>Focus Hero</title>
 <style>
 /* ================================================================
- * Focus Hero v7.9 - inline styles (single-file PWA)
+ * Focus Hero v8.0 - inline styles (single-file PWA)
  * ================================================================ */
 :root{
   --bg:#0b0d1a; --bg-2:#111427; --panel:#171a30; --panel-2:#1f2340;
@@ -1682,6 +1682,95 @@ html[data-variant="terminal"] .timer-display{color:#C7FF45;text-shadow:0 0 16px 
 [data-scene="meditating"] .fh79 .v79-cloak{animation:v79CloakSway 5s ease-in-out infinite}
 @media (prefers-reduced-motion:reduce){.fh79 .v79-part{animation:none!important}}
 html,body{touch-action:manipulation;-ms-touch-action:manipulation}
+
+/* ===== Focus Hero v8.0 — popup fix, emoji picker, Time Ledger, Store ===== */
+
+/* v8.0: keep tall popups fully on-screen — dvh-sized + safe-area aware so the
+   OS taskbar / mobile browser chrome can never hide a modal or its close X. */
+.modal-backdrop{ padding:16px; padding-bottom:calc(16px + env(safe-area-inset-bottom)); }
+.modal{ max-height:calc(100dvh - 32px - env(safe-area-inset-bottom)); overflow:auto; }
+.toast-wrap{ bottom:calc(20px + env(safe-area-inset-bottom)); }
+.update-toast{ bottom:calc(22px + env(safe-area-inset-bottom)); z-index:90; }
+.claim-modal .modal{ max-height:calc(100dvh - 32px - env(safe-area-inset-bottom)); }
+
+/* v8.0: categorized + searchable emoji picker */
+.emoji-pop-v8{ display:flex; flex-direction:column; gap:6px; width:312px;
+  max-width:92vw; max-height:min(390px,72dvh); padding:8px; }
+.emoji-pop-v8 .emoji-search{ width:100%; padding:.4rem .55rem; font-size:.9rem;
+  border:1px solid var(--border-strong); border-radius:8px; background:var(--panel-2);
+  color:var(--ink); outline:none; flex:0 0 auto; }
+.emoji-pop-v8 .emoji-cats{ display:flex; gap:3px; overflow-x:auto; flex:0 0 auto;
+  padding-bottom:3px; scrollbar-width:thin; }
+.emoji-pop-v8 .emoji-cat{ flex:0 0 auto; padding:3px 6px; font-size:1.05rem; line-height:1;
+  border:1px solid transparent; border-radius:7px; background:var(--panel-2); cursor:pointer; }
+.emoji-pop-v8 .emoji-cat.active{ border-color:var(--accent); background:rgba(var(--accent-rgb),.16); }
+.emoji-pop-v8 .emoji-grid{ display:grid; grid-template-columns:repeat(8,1fr); gap:3px;
+  overflow-y:auto; overflow-x:hidden; flex:1 1 auto; -webkit-overflow-scrolling:touch;
+  touch-action:pan-y; min-height:120px; }
+.emoji-pop-v8 .emoji-grid button{ padding:5px 0; font-size:1.2rem; border:1px solid transparent;
+  border-radius:6px; background:transparent; cursor:pointer; }
+.emoji-pop-v8 .emoji-grid button:hover{ border-color:var(--accent); background:var(--panel-2); }
+.emoji-pop-v8 .emoji-empty{ grid-column:1/-1; text-align:center; color:var(--ink-dim);
+  font-size:.82rem; padding:14px 0; }
+.emoji-pop-v8 .emoji-custom{ display:flex; gap:4px; flex:0 0 auto;
+  border-top:1px solid var(--border); padding-top:6px; }
+.emoji-pop-v8 .emoji-custom input{ flex:1; min-width:0; padding:.35rem .5rem; text-align:center;
+  border:1px solid var(--border-strong); border-radius:7px; background:var(--panel-2); color:var(--ink); }
+.emoji-pop-v8 .emoji-custom button{ flex:0 0 auto; }
+
+/* v8.0: coin pill on the hero card */
+.coin-pill{ color:var(--ink); }
+.coin-pill b{ color:var(--accent-2); }
+
+/* v8.0: Time Ledger tab */
+.ledger-intro,.store-note{ font-size:.78rem; color:var(--ink-dim); margin-bottom:8px; }
+.ledger-list{ display:flex; flex-direction:column; gap:6px; }
+.ledger-row{ display:flex; flex-wrap:wrap; gap:6px 10px; align-items:center;
+  padding:.5rem .6rem; border:1px solid var(--border); border-radius:10px; background:var(--panel-2); }
+.ledger-task{ display:flex; align-items:center; gap:7px; min-width:130px; flex:1 1 130px; }
+.ledger-emoji{ font-size:1.15rem; }
+.ledger-name{ font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ledger-stat{ font-size:.82rem; color:var(--ink); white-space:nowrap; }
+.ledger-sub{ color:var(--ink-dim); }
+.ledger-adj{ display:flex; flex-wrap:wrap; gap:4px; align-items:center; }
+.ledger-adj button{ padding:3px 8px; font-size:.78rem; border-radius:7px;
+  border:1px solid var(--border-strong); background:var(--panel); cursor:pointer; }
+.ledger-adj button:hover{ border-color:var(--accent); }
+.ledger-adj .ledger-apply{ border-color:var(--accent); color:var(--accent); }
+.ledger-input{ width:64px; padding:3px 6px; font-size:.78rem; text-align:center;
+  border:1px solid var(--border-strong); border-radius:7px; background:var(--panel); color:var(--ink); }
+.ledger-empty{ font-size:.82rem; color:var(--ink-dim); padding:10px 2px; }
+.editlog-head,.store-head{ font-size:.8rem; font-weight:700; color:var(--ink-dim);
+  text-transform:uppercase; letter-spacing:.05em; margin:14px 0 6px; }
+.editlog-list{ display:flex; flex-direction:column; gap:3px; }
+.editlog-row{ font-size:.76rem; color:var(--ink-dim); padding:3px 8px; border-radius:6px;
+  background:var(--panel-2); border-left:3px solid var(--border-strong); }
+.editlog-row.add{ border-left-color:var(--good); }
+.editlog-row.sub{ border-left-color:var(--warn); }
+
+/* v8.0: coin Store tab */
+.store-bar{ display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center; margin-bottom:4px; }
+.store-balance{ font-size:1.05rem; }
+.store-balance b{ color:var(--accent-2); font-size:1.2rem; }
+.store-boost{ font-size:.78rem; color:var(--good); border:1px solid var(--good);
+  border-radius:999px; padding:2px 9px; }
+.store-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(108px,1fr));
+  gap:6px; margin-bottom:8px; }
+.store-item{ display:flex; flex-direction:column; align-items:center; gap:3px; text-align:center;
+  padding:.55rem .4rem; border:1px solid var(--border); border-radius:11px; background:var(--panel-2); }
+.store-item.owned{ opacity:.6; }
+.store-sym{ font-size:1.5rem; line-height:1; }
+.store-name{ font-size:.8rem; font-weight:600; }
+.store-meta{ font-size:.68rem; color:var(--ink-dim); }
+.store-buy{ margin-top:3px; padding:3px 10px; font-size:.76rem; border-radius:8px;
+  border:1px solid var(--accent); background:rgba(var(--accent-rgb),.12); color:var(--ink); cursor:pointer; }
+.store-buy:disabled{ opacity:.45; cursor:not-allowed; border-color:var(--border-strong); background:transparent; }
+.store-item.rar-uncommon{ border-color:var(--uncommon,#5b9); }
+.store-item.rar-rare{ border-color:var(--rare); }
+.store-item.rar-epic{ border-color:var(--epic); }
+.store-item.rar-legendary{ border-color:var(--legend); }
+.store-item.rar-mythic{ border-color:var(--myth); }
+
 </style>
 </head>
 <body>
@@ -1780,6 +1869,7 @@ html,body{touch-action:manipulation;-ms-touch-action:manipulation}
           <div class="row" style="margin-top:4px">
             <span class="pill" id="hero-class">Mage</span>
             <span class="pill">Lv <b id="hero-level">1</b></span>
+            <span class="pill coin-pill" id="coin-hud" title="Coins">🪙 <b id="coin-hud-n">0</b></span>
           </div>
         </div>
       </div>
@@ -1829,12 +1919,16 @@ html,body{touch-action:manipulation;-ms-touch-action:manipulation}
         <button role="tab" data-tab="mounts" aria-pressed="false">Mounts</button>
         <button role="tab" data-tab="pets" aria-pressed="false">Pets</button>
         <button role="tab" data-tab="ach" aria-pressed="false">Achievements</button>
+        <button role="tab" data-tab="store" aria-pressed="false">🪙 Store</button>
+        <button role="tab" data-tab="ledger" aria-pressed="false">📒 Ledger</button>
         <button role="tab" data-tab="heat" aria-pressed="false">Heatmap</button>
       </div>
       <div id="tab-loot" class="tab-panel"><div id="loot-grid" class="loot-grid"></div></div>
       <div id="tab-mounts" class="tab-panel" hidden><div id="mount-grid" class="loot-grid companion-grid"></div></div>
       <div id="tab-pets" class="tab-panel" hidden><div id="pet-grid" class="loot-grid companion-grid"></div></div>
       <div id="tab-ach" class="tab-panel" hidden><div id="ach-grid" class="ach-grid"></div></div>
+      <div id="tab-store" class="tab-panel" hidden><div id="store-panel"></div></div>
+      <div id="tab-ledger" class="tab-panel" hidden><div id="ledger-panel"></div></div>
       <div id="tab-heat" class="tab-panel" hidden>
         <div class="muted" style="font-size:.8rem;margin-bottom:6px">Last 14 weeks · darker = more focus minutes</div>
         <div class="heatmap" id="heatmap"></div>
@@ -2074,7 +2168,7 @@ html,body{touch-action:manipulation;-ms-touch-action:manipulation}
 </div>
 
 <!-- ================================================================
- * Focus Hero v7.9 - inline script (one file, no deps)
+ * Focus Hero v8.0 - inline script (one file, no deps)
  * ================================================================ -->
 <script>
 "use strict";
@@ -2126,32 +2220,41 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const STORAGE_KEY     = "focusHero.v4.state";
 const LEGACY_KEYS     = ["focusHero.v3.state", "focusHero.v2.state", "focusHero.v1.state"];
 const BC_KEY          = "focusHero.v4";
-const DATA_VERSION    = 8;
+const DATA_VERSION    = 9;
 const PBKDF2_ITERATIONS = 100_000;
 const AES_KEY_LENGTH = 256;
 const SALT_BYTES = 16;
 const IV_BYTES = 12;
-/* v4.3: full emoji picker grid — common categories so any task has a fitting choice. */
-const DEFAULT_TASK_EMOJIS = [
-  /* work / study */
-  "📚","💻","✍️","📝","📖","📒","📓","📔","📕","📗","📘","📙","📰","🗂️","📁","📂","🗃️","🗄️","📊","📈","📉","📋","📌","📍","🔖","🏷️","✉️","📧","📞","💼",
-  /* creative / hobbies */
-  "🎨","🎭","🎬","🎥","🎞️","📷","📸","🎼","🎵","🎶","🎤","🎧","🎸","🎹","🥁","🎺","🎻","🪕","🎯","🎲","🧩","♟️","🎮","🕹️","🎳","🎴",
-  /* science / craft */
-  "🔬","⚗️","🧪","🧬","🧮","📐","📏","🛠️","🔧","🔨","⚒️","🪛","🧰","🪚","🪡","🧵","🪢",
-  /* sports / health / wellness */
-  "🏃","🚶","🧘","🏋️","🤸","🤺","🤾","🏊","🚴","🚵","⛹️","🧗","🏄","🏌️","⚽","🏀","🏈","⚾","🥎","🎾","🏐","🏓","🥊","🥋","⛳","🎿","🏂",
-  /* food / cooking */
-  "🍳","🥗","🥘","🍲","🍱","🍣","🍜","🍞","🥐","🧁","🍰","🍪","🍎","🍌","🍇","🍓","☕","🍵","🍷","🍺","🧑‍🍳",
-  /* nature / outdoors */
-  "🌱","🌿","🍀","🌳","🌲","🌵","🌴","🌷","🌸","🌻","🌼","🌺","🌞","🌝","🌚","🌙","⭐","🌟","✨","☀️","☁️","🌧️","🌈","🔥","❄️",
-  /* travel / vehicles */
-  "✈️","🚗","🚙","🚌","🚎","🚓","🚑","🚒","🚐","🛻","🚛","🛵","🏍️","🚲","🛴","🛹","🚂","🚆","🛳️","⛵","🚀",
-  /* objects / household */
-  "🏠","🏡","🛏️","🪑","🚿","🧹","🧺","🧼","🧽","🛒","🛍️","💡","🔋","🔌","🔍","🗝️","🔑","💰","💵","💳",
-  /* abstract / symbols */
-  "🧠","💭","💡","❤️","💖","🔥","💯","✅","✔️","⭐","🌟","🏆","🥇","🥈","🥉","🎖️","🏅","🎁","🎉","🎊","🪄","💎","🚀","💤","⏰","⏳","🛡️","⚔️"
+/* v8.0: full categorized + searchable emoji picker.
+ * Ordered standard Unicode categories; each entry is [char, "search keywords"]. */
+const EMOJI_CATEGORIES = [
+  { name: "Smileys & Emotion", emojis: [
+    ["😀","grin happy smile face"],["😃","happy smile face joy"],["😄","laugh happy smile"],["😁","beam grin smile"],["😆","laugh grin haha"],["😅","sweat laugh nervous"],["🤣","rofl laugh hard"],["😂","joy tears laugh cry"],["🙂","slight smile happy"],["🙃","upside down silly"],["😉","wink flirt"],["😊","blush smile happy"],["😇","angel halo innocent"],["🥰","love hearts adore"],["😍","heart eyes love"],["🤩","star struck wow"],["😘","kiss blow love"],["😗","kiss pucker"],["😚","kiss closed eyes"],["😙","kiss smile"],["🥲","tear smile happy sad"],["😋","yum tasty tongue"],["😛","tongue silly"],["😜","wink tongue silly"],["🤪","zany crazy goofy"],["😝","tongue squint"],["🤑","money mouth rich"],["🤗","hug hands"],["🤭","giggle hand mouth"],["🤫","shush quiet secret"],["🤔","think hmm ponder"],["🤐","zipper mouth quiet"],["🤨","raised eyebrow skeptic"],["😐","neutral meh blank"],["😑","expressionless blank"],["😶","no mouth speechless"],["😏","smirk sly"],["😒","unamused annoyed"],["🙄","eye roll"],["😬","grimace awkward"],["😮‍💨","exhale relief sigh"],["🤥","lying pinocchio"],["😌","relieved calm content"],["😔","pensive sad down"],["😪","sleepy tired"],["🤤","drool sleep"],["😴","sleep zzz tired"],["😷","mask sick"],["🤒","sick thermometer fever"],["🤕","hurt bandage injured"],["🤢","nausea sick gross"],["🤮","vomit sick"],["🤧","sneeze sick tissue"],["🥵","hot heat sweat"],["🥶","cold freeze"],["🥴","woozy dizzy"],["😵","dizzy faint"],["😵‍💫","spiral dizzy confused"],["🤯","mind blown explode"],["🤠","cowboy hat"],["🥳","party celebrate"],["🥸","disguise glasses"],["😎","cool sunglasses"],["🤓","nerd geek glasses"],["🧐","monocle inspect"],["😕","confused unsure"],["😟","worried anxious"],["🙁","frown sad"],["☹️","frown sad"],["😮","wow surprise open mouth"],["😯","surprise hushed"],["😲","astonished shocked"],["😳","flushed embarrassed"],["🥺","pleading puppy eyes beg"],["😦","frown open"],["😧","anguished"],["😨","fearful scared"],["😰","anxious sweat"],["😥","sad relieved"],["😢","cry tear sad"],["😭","sob cry loud"],["😱","scream fear shock"],["😖","confounded"],["😣","persevere struggle"],["😞","disappointed sad"],["😓","downcast sweat"],["😩","weary tired"],["😫","tired exhausted"],["🥱","yawn bored tired"],["😤","triumph huff angry"],["😡","angry rage mad"],["😠","angry mad"],["🤬","cursing swear angry"],["😈","devil smile mischief"],["👿","devil angry imp"],["💀","skull dead"],["💩","poop"],["🤡","clown"],["👻","ghost spooky"],["👽","alien"],["🤖","robot"],["😺","cat smile"],["😸","cat grin"],["😹","cat joy tears"],["😻","cat heart eyes"],["🙀","cat scream"],["💋","kiss lips"],["💌","love letter"],["💘","heart arrow cupid"],["💝","heart gift"],["💖","sparkle heart"],["💗","growing heart"],["💓","beating heart"],["💞","revolving hearts"],["💕","two hearts"],["❤️","red heart love"],["🧡","orange heart"],["💛","yellow heart"],["💚","green heart"],["💙","blue heart"],["💜","purple heart"],["🖤","black heart"],["🤍","white heart"],["🤎","brown heart"],["💔","broken heart"],["❣️","heart exclamation"],["💯","hundred score perfect"],["💢","anger symbol"],["💥","collision boom explode"],["💫","dizzy stars"],["💦","sweat droplets"],["💨","dash wind"],["🕳️","hole"],["💭","thought bubble think"],["💤","zzz sleep"]
+  ]},
+  { name: "People & Body", emojis: [
+    ["👋","wave hello hi bye"],["🤚","raised hand back"],["🖐️","hand fingers"],["✋","raised hand stop"],["🖖","vulcan spock"],["👌","ok perfect"],["🤌","pinched fingers"],["🤏","pinch small"],["✌️","victory peace"],["🤞","crossed fingers luck"],["🤟","love you sign"],["🤘","rock horns"],["🤙","call me shaka"],["👈","point left"],["👉","point right"],["👆","point up"],["👇","point down"],["☝️","point up index"],["👍","thumbs up like good"],["👎","thumbs down dislike bad"],["✊","fist raised"],["👊","fist bump punch"],["🤛","fist left"],["🤜","fist right"],["👏","clap applause"],["🙌","raised hands celebrate"],["👐","open hands"],["🤲","palms up"],["🤝","handshake deal"],["🙏","pray thanks please"],["✍️","writing hand"],["💅","nail polish"],["🤳","selfie"],["💪","muscle strong flex"],["🦾","mechanical arm"],["🦵","leg"],["🦶","foot"],["👂","ear listen"],["👃","nose"],["🧠","brain think mind"],["🫀","heart organ"],["🫁","lungs breath"],["🦷","tooth"],["🦴","bone"],["👀","eyes look"],["👁️","eye"],["👅","tongue"],["👄","mouth lips"],["👶","baby"],["🧒","child kid"],["👦","boy"],["👧","girl"],["🧑","person adult"],["👨","man"],["👩","woman"],["🧓","old person elder"],["👴","old man grandpa"],["👵","old woman grandma"],["🧑‍🎓","student graduate"],["🧑‍🏫","teacher"],["🧑‍⚕️","doctor health worker"],["🧑‍💻","programmer coder developer"],["🧑‍🔬","scientist"],["🧑‍🎨","artist painter"],["🧑‍🚀","astronaut"],["🧑‍🍳","chef cook"],["🧑‍🌾","farmer"],["🧑‍🔧","mechanic"],["🧑‍⚖️","judge"],["💂","guard"],["🥷","ninja"],["🦸","superhero"],["🦹","supervillain"],["🧙","mage wizard"],["🧝","elf"],["🧛","vampire"],["🧜","mermaid"],["🧚","fairy"],["👼","angel baby"],["🎅","santa claus"],["🤶","mrs claus"],["🧌","troll"],["🚶","walk person"],["🏃","run person"],["💃","dance woman"],["🕺","dance man"],["🧘","yoga meditate calm"],["🛀","bath"],["🛌","sleep bed"],["🧗","climb"],["🤸","cartwheel gymnast"],["⛹️","basketball player"],["🏌️","golf"],["🏄","surf"],["🚣","row boat"],["🏊","swim"],["🚴","bike cycle"],["🚵","mountain bike"],["🤺","fencing"],["🤼","wrestle"],["🤽","water polo"],["🤾","handball"],["🏋️","weight lift gym"],["⛷️","ski"],["🏂","snowboard"],["👪","family"],["👫","couple"],["🗣️","speaking head talk"],["👤","silhouette person"],["👥","people silhouette"],["👣","footprints"]
+  ]},
+  { name: "Animals & Nature", emojis: [
+    ["🐶","dog puppy"],["🐱","cat kitten"],["🐭","mouse"],["🐹","hamster"],["🐰","rabbit bunny"],["🦊","fox"],["🐻","bear"],["🐼","panda"],["🐨","koala"],["🐯","tiger"],["🦁","lion"],["🐮","cow"],["🐷","pig"],["🐸","frog"],["🐵","monkey"],["🐔","chicken"],["🐧","penguin"],["🐦","bird"],["🐤","chick"],["🦆","duck"],["🦅","eagle"],["🦉","owl"],["🦇","bat"],["🐺","wolf"],["🐗","boar"],["🐴","horse"],["🦄","unicorn"],["🐝","bee"],["🐛","bug caterpillar"],["🦋","butterfly"],["🐌","snail"],["🐞","ladybug"],["🐜","ant"],["🦗","cricket grasshopper"],["🕷️","spider"],["🦂","scorpion"],["🐢","turtle"],["🐍","snake"],["🦎","lizard"],["🦖","t-rex dinosaur"],["🦕","dinosaur sauropod"],["🐙","octopus"],["🦑","squid"],["🦐","shrimp"],["🦀","crab"],["🐡","blowfish"],["🐠","tropical fish"],["🐟","fish"],["🐬","dolphin"],["🐳","whale"],["🐋","whale"],["🦈","shark"],["🐊","crocodile"],["🐅","tiger"],["🐆","leopard cheetah"],["🦓","zebra"],["🦍","gorilla"],["🦧","orangutan"],["🐘","elephant"],["🦛","hippo"],["🦏","rhino"],["🐪","camel"],["🐫","camel"],["🦒","giraffe"],["🦘","kangaroo"],["🐃","buffalo"],["🐂","ox"],["🐄","cow"],["🐎","horse race"],["🐖","pig"],["🐏","ram"],["🐑","sheep"],["🦙","llama alpaca"],["🐐","goat"],["🦌","deer stag"],["🐕","dog"],["🐩","poodle"],["🦮","guide dog"],["🐈","cat"],["🐓","rooster"],["🦃","turkey"],["🦚","peacock"],["🦜","parrot"],["🦢","swan"],["🦩","flamingo"],["🕊️","dove peace"],["🐇","rabbit"],["🦝","raccoon"],["🦨","skunk"],["🦡","badger"],["🦦","otter"],["🦥","sloth"],["🐁","mouse"],["🐀","rat"],["🐿️","chipmunk squirrel"],["🦔","hedgehog"],["🐾","paw prints"],["🐉","dragon"],["🐲","dragon face"],["🌵","cactus"],["🎄","christmas tree"],["🌲","evergreen tree pine"],["🌳","tree"],["🌴","palm tree"],["🌱","seedling sprout"],["🌿","herb plant"],["☘️","shamrock clover"],["🍀","four leaf clover luck"],["🎍","bamboo"],["🍃","leaf wind"],["🍂","fallen leaves autumn"],["🍁","maple leaf"],["🌾","wheat rice grain"],["🌷","tulip flower"],["🌹","rose flower"],["🥀","wilted flower"],["🌺","hibiscus flower"],["🌸","cherry blossom flower"],["🌼","daisy flower"],["🌻","sunflower"],["🌞","sun face"],["🌝","full moon face"],["🌛","moon face"],["🌜","moon face"],["🌚","new moon face"],["🌙","crescent moon night"],["⭐","star"],["🌟","glowing star sparkle"],["✨","sparkles shine"],["⚡","lightning bolt zap"],["☄️","comet"],["💥","boom explode"],["🔥","fire flame hot"],["🌪️","tornado"],["🌈","rainbow"],["☀️","sun sunny"],["🌤️","sun cloud"],["⛅","cloud sun"],["☁️","cloud"],["🌧️","rain cloud"],["⛈️","storm thunder"],["❄️","snowflake cold"],["☃️","snowman"],["💧","droplet water"],["🌊","wave ocean sea"]
+  ]},
+  { name: "Food & Drink", emojis: [
+    ["🍇","grapes"],["🍈","melon"],["🍉","watermelon"],["🍊","orange tangerine"],["🍋","lemon"],["🍌","banana"],["🍍","pineapple"],["🥭","mango"],["🍎","red apple"],["🍏","green apple"],["🍐","pear"],["🍑","peach"],["🍒","cherries"],["🍓","strawberry"],["🫐","blueberries"],["🥝","kiwi"],["🍅","tomato"],["🫒","olive"],["🥥","coconut"],["🥑","avocado"],["🍆","eggplant"],["🥔","potato"],["🥕","carrot"],["🌽","corn"],["🌶️","hot pepper chili"],["🫑","bell pepper"],["🥒","cucumber"],["🥬","leafy green lettuce"],["🥦","broccoli"],["🧄","garlic"],["🧅","onion"],["🍄","mushroom"],["🥜","peanut"],["🌰","chestnut"],["🍞","bread"],["🥐","croissant"],["🥖","baguette bread"],["🥨","pretzel"],["🥯","bagel"],["🥞","pancakes"],["🧇","waffle"],["🧀","cheese"],["🍖","meat bone"],["🍗","poultry chicken leg"],["🥩","steak meat"],["🥓","bacon"],["🍔","hamburger burger"],["🍟","fries"],["🍕","pizza"],["🌭","hotdog"],["🥪","sandwich"],["🌮","taco"],["🌯","burrito"],["🫔","tamale"],["🥙","stuffed flatbread"],["🧆","falafel"],["🥚","egg"],["🍳","fried egg cooking"],["🥘","paella pan food"],["🍲","stew pot"],["🫕","fondue"],["🥣","bowl"],["🥗","salad"],["🍿","popcorn"],["🧈","butter"],["🧂","salt"],["🥫","canned food"],["🍱","bento box"],["🍘","rice cracker"],["🍙","rice ball"],["🍚","rice"],["🍛","curry rice"],["🍜","ramen noodles"],["🍝","spaghetti pasta"],["🍠","sweet potato"],["🍢","oden"],["🍣","sushi"],["🍤","fried shrimp tempura"],["🍥","fish cake"],["🥮","moon cake"],["🍡","dango"],["🥟","dumpling"],["🥠","fortune cookie"],["🥡","takeout box"],["🍦","ice cream soft"],["🍧","shaved ice"],["🍨","ice cream"],["🍩","donut"],["🍪","cookie"],["🎂","birthday cake"],["🍰","cake slice shortcake"],["🧁","cupcake"],["🥧","pie"],["🍫","chocolate"],["🍬","candy sweet"],["🍭","lollipop"],["🍮","custard pudding"],["🍯","honey"],["🍼","baby bottle milk"],["🥛","milk glass"],["☕","coffee tea hot"],["🫖","teapot"],["🍵","green tea"],["🍶","sake"],["🍾","champagne bottle"],["🍷","wine glass"],["🍸","cocktail martini"],["🍹","tropical drink"],["🍺","beer"],["🍻","beers cheers"],["🥂","clink glasses toast"],["🥃","whiskey tumbler"],["🥤","cup straw soda"],["🧋","bubble tea boba"],["🧃","juice box"],["🧉","mate"],["🧊","ice cube"],["🥢","chopsticks"],["🍽️","plate fork knife dinner"],["🍴","fork knife"],["🥄","spoon"]
+  ]},
+  { name: "Activities", emojis: [
+    ["⚽","soccer football"],["🏀","basketball"],["🏈","american football"],["⚾","baseball"],["🥎","softball"],["🎾","tennis"],["🏐","volleyball"],["🏉","rugby"],["🥏","frisbee"],["🎱","8 ball pool billiards"],["🪀","yo-yo"],["🏓","ping pong table tennis"],["🏸","badminton"],["🏒","ice hockey"],["🏑","field hockey"],["🥍","lacrosse"],["🏏","cricket"],["🥅","goal net"],["⛳","golf flag"],["🪁","kite"],["🏹","bow arrow archery"],["🎣","fishing"],["🤿","diving mask"],["🥊","boxing glove"],["🥋","martial arts karate"],["🎽","running shirt"],["🛹","skateboard"],["🛼","roller skate"],["🛷","sled"],["⛸️","ice skate"],["🥌","curling stone"],["🎿","ski"],["⛷️","skier"],["🏂","snowboard"],["🪂","parachute"],["🏋️","weightlifting gym"],["🤼","wrestling"],["🤸","gymnastics cartwheel"],["⛹️","basketball play"],["🤺","fencing"],["🤾","handball"],["🏌️","golf"],["🏇","horse racing"],["🧘","yoga meditate"],["🏄","surfing"],["🏊","swimming"],["🤽","water polo"],["🚣","rowing"],["🧗","climbing"],["🚵","mountain biking"],["🚴","cycling"],["🏆","trophy win"],["🥇","gold medal first"],["🥈","silver medal second"],["🥉","bronze medal third"],["🏅","sports medal"],["🎖️","military medal"],["🏵️","rosette"],["🎗️","ribbon"],["🎫","ticket"],["🎟️","admission tickets"],["🎪","circus tent"],["🤹","juggling"],["🎭","performing arts theater drama"],["🩰","ballet shoes"],["🎨","art palette painting"],["🎬","clapper movie film"],["🎤","microphone sing"],["🎧","headphones music"],["🎼","musical score"],["🎹","piano keyboard"],["🥁","drum"],["🪘","long drum"],["🎷","saxophone"],["🎺","trumpet"],["🪗","accordion"],["🎸","guitar"],["🪕","banjo"],["🎻","violin"],["🎲","dice game"],["♟️","chess pawn"],["🎯","dart target bullseye"],["🎳","bowling"],["🎮","video game controller"],["🎰","slot machine"],["🧩","puzzle piece"],["🎴","playing cards flower"],["🃏","joker card"],["🀄","mahjong"]
+  ]},
+  { name: "Travel & Places", emojis: [
+    ["🚗","car automobile"],["🚕","taxi"],["🚙","suv car"],["🚌","bus"],["🚎","trolleybus"],["🏎️","race car"],["🚓","police car"],["🚑","ambulance"],["🚒","fire truck"],["🚐","minibus van"],["🛻","pickup truck"],["🚚","delivery truck"],["🚛","truck lorry"],["🚜","tractor"],["🛵","scooter"],["🏍️","motorcycle"],["🛺","auto rickshaw"],["🚲","bicycle bike"],["🛴","kick scooter"],["🛹","skateboard"],["🚏","bus stop"],["🛣️","highway motorway"],["🛤️","railway track"],["🚨","siren light"],["🚥","traffic light"],["🚦","traffic light"],["🛑","stop sign"],["🚧","construction"],["⚓","anchor"],["⛵","sailboat"],["🛶","canoe"],["🚤","speedboat"],["🛳️","passenger ship cruise"],["⛴️","ferry"],["🛥️","motor boat"],["🚢","ship"],["✈️","airplane flight"],["🛩️","small plane"],["🛫","departure plane takeoff"],["🛬","arrival plane landing"],["🪂","parachute"],["💺","seat"],["🚁","helicopter"],["🚟","suspension railway"],["🚠","cable car mountain"],["🚡","aerial tramway"],["🛰️","satellite"],["🚀","rocket launch"],["🛸","ufo flying saucer"],["🚉","station"],["🚊","tram"],["🚝","monorail"],["🚄","bullet train"],["🚅","bullet train"],["🚈","light rail"],["🚂","steam locomotive train"],["🚆","train"],["🚇","metro subway"],["🚋","tram car"],["🚞","mountain railway"],["🏔️","snow mountain"],["⛰️","mountain"],["🌋","volcano"],["🗻","mount fuji"],["🏕️","camping tent"],["🏖️","beach"],["🏜️","desert"],["🏝️","island"],["🏞️","national park nature"],["🏟️","stadium"],["🏛️","classical building"],["🏗️","construction site"],["🏘️","houses"],["🏚️","derelict house"],["🏠","house home"],["🏡","house garden"],["🏢","office building"],["🏣","post office"],["🏥","hospital"],["🏦","bank"],["🏨","hotel"],["🏩","love hotel"],["🏪","convenience store"],["🏫","school"],["🏬","department store"],["🏭","factory"],["🏯","castle japanese"],["🏰","castle"],["💒","wedding"],["🗼","tower tokyo"],["🗽","statue of liberty"],["⛪","church"],["🕌","mosque"],["🛕","hindu temple"],["🕍","synagogue"],["⛩️","shinto shrine"],["🕋","kaaba"],["⛲","fountain"],["⛺","tent"],["🌁","foggy"],["🌃","night stars city"],["🏙️","cityscape"],["🌄","sunrise mountains"],["🌅","sunrise"],["🌆","dusk city"],["🌇","sunset"],["🌉","bridge night"],["🗺️","world map"],["🧭","compass"],["🧳","luggage suitcase"]
+  ]},
+  { name: "Objects", emojis: [
+    ["⌚","watch"],["📱","mobile phone smartphone"],["💻","laptop computer"],["⌨️","keyboard"],["🖥️","desktop computer"],["🖨️","printer"],["🖱️","mouse computer"],["🕹️","joystick"],["💽","minidisk"],["💾","floppy disk save"],["💿","cd disc"],["📀","dvd"],["📷","camera photo"],["📸","camera flash"],["📹","video camera"],["🎥","movie camera"],["📽️","film projector"],["🎞️","film frames"],["📞","phone receiver"],["☎️","telephone"],["📟","pager"],["📠","fax"],["📺","television tv"],["📻","radio"],["🎙️","studio microphone"],["⏱️","stopwatch timer"],["⏲️","timer clock"],["⏰","alarm clock"],["🕰️","mantel clock"],["⌛","hourglass done"],["⏳","hourglass time"],["📡","satellite antenna"],["🔋","battery"],["🔌","plug electric"],["💡","light bulb idea"],["🔦","flashlight"],["🕯️","candle"],["🪔","oil lamp diya"],["🧯","fire extinguisher"],["🛢️","oil drum"],["💸","money wings"],["💵","dollar money cash"],["💴","yen money"],["💶","euro money"],["💷","pound money"],["💰","money bag"],["🪙","coin"],["💳","credit card"],["💎","gem diamond jewel"],["⚖️","balance scale justice"],["🪜","ladder"],["🧰","toolbox"],["🔧","wrench"],["🔨","hammer"],["⚒️","hammer pick"],["🛠️","hammer wrench tools"],["⛏️","pick mining"],["🪚","saw"],["🔩","nut bolt"],["⚙️","gear settings cog"],["🧲","magnet"],["🪛","screwdriver"],["🔫","water gun"],["🪃","boomerang"],["🏹","bow arrow"],["🛡️","shield protect"],["🪝","hook"],["🔭","telescope"],["🔬","microscope science"],["🕳️","hole"],["💊","pill medicine"],["🩹","bandage"],["🩺","stethoscope"],["💉","syringe injection"],["🧬","dna genetics"],["🦠","microbe germ"],["🧪","test tube experiment"],["🧫","petri dish"],["🌡️","thermometer"],["🧹","broom sweep"],["🪣","bucket"],["🧽","sponge"],["🧴","lotion soap bottle"],["🧷","safety pin"],["🪡","sewing needle"],["🧵","thread spool"],["🪢","knot"],["🧶","yarn"],["👓","glasses"],["🕶️","sunglasses"],["🥽","goggles"],["👔","necktie"],["👕","shirt tshirt"],["👖","jeans pants"],["🧣","scarf"],["🧤","gloves"],["🧥","coat"],["🧦","socks"],["👗","dress"],["👘","kimono"],["🥼","lab coat"],["🦺","safety vest"],["👚","blouse"],["👠","high heel"],["👟","sneaker shoe"],["🥾","hiking boot"],["👑","crown"],["👒","hat"],["🎩","top hat"],["🎓","graduation cap"],["🧢","cap"],["⛑️","rescue helmet"],["💄","lipstick"],["💍","ring"],["👜","handbag"],["👛","purse"],["🎒","backpack school bag"],["🛍️","shopping bags"],["🛒","shopping cart"],["🎁","gift present"],["🎈","balloon"],["🎀","ribbon bow"],["🪅","pinata"],["🎏","carp streamer"],["🎐","wind chime"],["🧧","red envelope"],["✉️","envelope mail"],["📧","email"],["📨","incoming envelope"],["📩","envelope arrow"],["📦","package box"],["📮","postbox"],["📫","mailbox"],["📜","scroll paper"],["📃","page"],["📄","document page"],["📑","bookmark tabs"],["📊","bar chart"],["📈","chart up trending"],["📉","chart down"],["🗒️","notepad note"],["🗓️","calendar"],["📅","calendar date"],["📆","calendar"],["📇","card index"],["🗃️","card file box"],["🗳️","ballot box"],["🗄️","file cabinet"],["📋","clipboard"],["📌","pushpin"],["📍","location pin"],["📎","paperclip"],["🖇️","linked paperclips"],["📐","triangle ruler"],["📏","straight ruler"],["✂️","scissors cut"],["🗒️","note"],["📖","open book reading"],["📕","closed book red"],["📗","green book"],["📘","blue book"],["📙","orange book"],["📚","books stack library"],["📓","notebook"],["📔","notebook decorative"],["📒","ledger book"],["📰","newspaper"],["🔖","bookmark"],["🏷️","label tag"],["✏️","pencil"],["✒️","pen nib"],["🖊️","pen"],["🖋️","fountain pen"],["🖌️","paintbrush"],["🖍️","crayon"],["📝","memo writing note"],["🔍","magnify search"],["🔎","magnify search right"],["🔐","locked key"],["🔒","locked secure"],["🔓","unlocked"],["🔑","key"],["🗝️","old key"],["🔨","hammer"],["🪦","headstone"],["⚱️","funeral urn"],["🏺","amphora vase"],["🔮","crystal ball fortune"],["🪬","hamsa"],["🧿","nazar amulet"],["🛏️","bed"],["🛋️","couch sofa"],["🪑","chair"],["🚪","door"],["🪟","window"],["🪞","mirror"],["🚽","toilet"],["🚿","shower"],["🛁","bathtub"],["🧼","soap"],["🪥","toothbrush"],["🧻","toilet paper roll"],["🧺","basket laundry"]
+  ]},
+  { name: "Symbols", emojis: [
+    ["❤️","red heart love"],["🧡","orange heart"],["💛","yellow heart"],["💚","green heart"],["💙","blue heart"],["💜","purple heart"],["🖤","black heart"],["🤍","white heart"],["💔","broken heart"],["❣️","heart exclamation"],["💕","two hearts"],["💞","revolving hearts"],["💓","beating heart"],["💗","growing heart"],["💖","sparkling heart"],["💘","heart arrow"],["💝","heart ribbon gift"],["☮️","peace"],["✝️","cross latin"],["☪️","star crescent"],["🕉️","om hindu"],["☸️","wheel dharma"],["✡️","star of david"],["🔯","six pointed star"],["☯️","yin yang"],["☦️","orthodox cross"],["⛎","ophiuchus"],["♈","aries"],["♉","taurus"],["♊","gemini"],["♋","cancer"],["♌","leo"],["♍","virgo"],["♎","libra"],["♏","scorpio"],["♐","sagittarius"],["♑","capricorn"],["♒","aquarius"],["♓","pisces"],["🆔","id"],["⚛️","atom science"],["🉑","accept"],["☢️","radioactive"],["☣️","biohazard"],["📴","phone off"],["📳","vibration"],["🈶","japanese not free"],["🈚","japanese free"],["🈸","japanese application"],["🆚","versus vs"],["💮","white flower"],["🉐","bargain"],["㊙️","secret"],["㊗️","congratulations"],["🈴","passing grade"],["🈵","no vacancy"],["🅰️","a button blood"],["🅱️","b button blood"],["🆎","ab button"],["🆑","cl button"],["🅾️","o button"],["🆘","sos help"],["❌","cross mark x wrong"],["⭕","circle hollow"],["🛑","stop"],["⛔","no entry"],["📛","name badge"],["🚫","prohibited no"],["💯","hundred perfect"],["💢","anger"],["♨️","hot springs"],["🚷","no pedestrians"],["🚯","no littering"],["🚳","no bicycles"],["🚱","non potable water"],["🔞","no under 18"],["📵","no phones"],["❗","exclamation"],["❕","white exclamation"],["❓","question mark"],["❔","white question"],["‼️","double exclamation"],["⁉️","exclamation question"],["🔅","dim brightness"],["🔆","bright brightness"],["〽️","part alternation"],["⚠️","warning caution"],["🚸","children crossing"],["🔱","trident"],["⚜️","fleur de lis"],["🔰","beginner"],["♻️","recycle"],["✅","check mark green done"],["☑️","checkbox checked"],["✔️","check mark"],["✳️","eight spoked asterisk"],["✴️","eight pointed star"],["❇️","sparkle"],["©️","copyright"],["®️","registered"],["™️","trademark"],["#️⃣","hash"],["*️⃣","asterisk"],["0️⃣","zero"],["1️⃣","one"],["2️⃣","two"],["3️⃣","three"],["4️⃣","four"],["5️⃣","five"],["6️⃣","six"],["7️⃣","seven"],["8️⃣","eight"],["9️⃣","nine"],["🔟","ten"],["🔠","input latin uppercase"],["🔡","input latin lowercase"],["🔢","input numbers"],["🔣","input symbols"],["🔤","input latin letters abc"],["🅰️","a"],["🆕","new"],["🆓","free"],["🆙","up"],["🆒","cool"],["🆗","ok"],["▶️","play"],["⏸️","pause"],["⏯️","play pause"],["⏹️","stop"],["⏺️","record"],["⏭️","next track"],["⏮️","previous track"],["⏩","fast forward"],["⏪","rewind"],["🔀","shuffle"],["🔁","repeat loop"],["🔂","repeat one"],["🔄","arrows counterclockwise refresh"],["🔃","clockwise vertical arrows"],["⬆️","up arrow"],["⬇️","down arrow"],["⬅️","left arrow"],["➡️","right arrow"],["↗️","up right arrow"],["↘️","down right arrow"],["↙️","down left arrow"],["↖️","up left arrow"],["↕️","up down arrow"],["↔️","left right arrow"],["🔝","top arrow"],["🔙","back arrow"],["🔚","end arrow"],["🔛","on arrow"],["🔜","soon arrow"],["➕","plus add"],["➖","minus subtract"],["➗","divide"],["✖️","multiply"],["♾️","infinity"],["💲","dollar sign"],["💱","currency exchange"],["™️","tm"],["🔔","bell notification"],["🔕","bell off mute"],["🎵","music note"],["🎶","music notes"],["💠","diamond shape"],["🔘","radio button"],["🔳","white square button"],["🔲","black square button"],["⚪","white circle"],["⚫","black circle"],["🔴","red circle"],["🟠","orange circle"],["🟡","yellow circle"],["🟢","green circle"],["🔵","blue circle"],["🟣","purple circle"],["🟤","brown circle"],["🟥","red square"],["🟧","orange square"],["🟨","yellow square"],["🟩","green square"],["🟦","blue square"],["🟪","purple square"],["⬛","black large square"],["⬜","white large square"],["🔶","large orange diamond"],["🔷","large blue diamond"],["🔸","small orange diamond"],["🔹","small blue diamond"],["🔺","red triangle up"],["🔻","red triangle down"],["💤","zzz sleep"],["🏁","checkered flag finish"],["🚩","triangular flag"],["🎌","crossed flags"],["🏴","black flag"],["🏳️","white flag"]
+  ]}
 ];
+/* v8.0: flat list kept for backward compatibility (pickRandomEmoji, dedupe). */
+const DEFAULT_TASK_EMOJIS = EMOJI_CATEGORIES.flatMap(c=>c.emojis.map(e=>e[0]));
 
 const DEFAULTS = {
   dataVersion: DATA_VERSION,
@@ -2206,6 +2309,11 @@ const DEFAULTS = {
   adventure: { action:"Travel", actionMin:{ Travel:0, Rest:0, Hunt:0, Loot:0, Fight:0, Craft:0, Meditate:0 }, actionsTriedSinceV76:{} },
   bestiary: {},
   achievementProgress: {},
+  coins: 0,
+  coinsEarned: 0,
+  coinsSpent: 0,
+  store: { purchased: [], boosts: [], unlockedThemes: [] },
+  editLog: [],
   sync: {
     enabled: false, backend: null,
     playerId: null, cloudRev: 0, lastPushedAt: 0, lastPulledAt: 0,
@@ -2739,6 +2847,19 @@ function migrate(raw){
     s.settings.characterPatchVersion = HERO_APPEARANCE_VERSION;
     s.dataVersion = 8;
   }
+  if (s.dataVersion < 9){
+    /* v8.0: coin currency, coin store, time-edit audit log. Purely additive
+       - no existing field is touched, renamed, or reset. */
+    if (typeof s.coins !== "number" || !(s.coins >= 0)) s.coins = 0;
+    if (typeof s.coinsEarned !== "number" || !(s.coinsEarned >= 0)) s.coinsEarned = Math.max(0, s.coins||0);
+    if (typeof s.coinsSpent !== "number" || !(s.coinsSpent >= 0)) s.coinsSpent = 0;
+    if (!s.store || typeof s.store !== "object" || Array.isArray(s.store)) s.store = { purchased:[], boosts:[], unlockedThemes:[] };
+    if (!Array.isArray(s.store.purchased)) s.store.purchased = [];
+    if (!Array.isArray(s.store.boosts)) s.store.boosts = [];
+    if (!Array.isArray(s.store.unlockedThemes)) s.store.unlockedThemes = [];
+    if (!Array.isArray(s.editLog)) s.editLog = [];
+    s.dataVersion = 9;
+  }
 
   /* Degraded-read resilience: rebuild malformed subtrees, but ONLY the malformed ones.
    * We never touch subtrees that parse cleanly. */
@@ -3258,7 +3379,11 @@ function finalizeStopwatch(){
     lootItem = rollLoot(minutes);
     updateDailyProgress("focus", 1);
     updateDailyProgress("minutes", minutes);
-    breakdownMeta = { lootItem };
+    const coinsHere = computeCoins(minutes);
+    state.coins = (state.coins|0) + coinsHere;
+    state.coinsEarned = (state.coinsEarned|0) + coinsHere;
+    if (coinsHere > 0) toast(`+${coinsHere} coins earned`, "good");
+    breakdownMeta = { lootItem, coins: coinsHere };
     logLine(`Stopwatch logged: ${minutes}m · +${xp.total} XP (base ${xp.base}${xp.streakBonus?` +${xp.streakBonus} streak`:""})`);
     logBattle(`Hero completed ${taskLabel}. +${xp.total} XP${lootItem ? `, Loot: ${lootItem[1]} (${lootItem[2]})` : ""}.`, lootItem ? "loot" : "good");
     notify("Stopwatch logged!", `+${xp.total} XP · ${minutes}m saved`);
@@ -3409,7 +3534,11 @@ function commitFocusTimerSession(claim, minutes){
     lootItem = rollLoot(minutes);
     updateDailyProgress("focus", 1);
     updateDailyProgress("minutes", minutes);
-    breakdownMeta = { lootItem };
+    const coinsHere = computeCoins(minutes);
+    state.coins = (state.coins|0) + coinsHere;
+    state.coinsEarned = (state.coinsEarned|0) + coinsHere;
+    if (coinsHere > 0) toast(`+${coinsHere} coins earned`, "good");
+    breakdownMeta = { lootItem, coins: coinsHere };
     logLine(`Focus complete: ${minutes}m · +${xp.total} XP (base ${xp.base}${xp.comboBonus?` +${xp.comboBonus} combo`:""}${xp.streakBonus?` +${xp.streakBonus} streak`:""})`);
     logBattle(`Hero completed ${taskLabel}. +${xp.total} XP${lootItem ? `, Loot: ${lootItem[1]} (${lootItem[2]})` : ""}.`, lootItem ? "loot" : "good");
     notify("Focus complete!", `+${xp.total} XP · time for a break`);
@@ -3543,6 +3672,8 @@ function updateStreak(tk){
   state.lastFocusDate = tk;
 }
 function awardXp(amount){
+  if (!(amount>0)) return;
+  amount = Math.round(amount * activeXpMultiplier());
   if (!(amount>0)) return;
   const cur = totalXpForLevel(state.hero.level) + state.hero.xp + amount;
   const info = levelFromTotalXp(cur);
@@ -4356,6 +4487,7 @@ function renderAll(){
   renderModeTabs(); renderAvatar(); renderTasks(); renderActiveTaskRow();
   renderStatStrip(); renderBattleLog(); renderBackupLast(); renderSecurityPanel();
   renderSwLaps(); renderActionPicker(); renderBestiary(); renderAllTasksSheet(); renderCharacterPanel();
+  if (typeof renderV8Panels === "function") renderV8Panels();
 }
 function renderModeTabs(){
   $$(".mode-tabs button").forEach(b=>b.setAttribute("aria-pressed", b.dataset.mode===state.timer.mode ? "true":"false"));
@@ -5655,6 +5787,18 @@ function mergeRemoteState(local, remote){
     seenBattle.add(k);
     return true;
   }).sort((a,b)=>(a.at||0)-(b.at||0)).slice(-80);
+  /* v8.0: additive coin/store/edit-log merge. Coins are spendable, so the
+     balance is NEVER max()'d - the monotonic earned & spent counters merge
+     and the balance is derived, so a spend on one device is not undone. */
+  out.coinsEarned = Math.max(local.coinsEarned||0, remote.coinsEarned||0);
+  out.coinsSpent  = Math.max(local.coinsSpent||0,  remote.coinsSpent||0);
+  out.coins = Math.max(0, out.coinsEarned - out.coinsSpent);
+  out.store = {
+    purchased: unionById(local.store&&local.store.purchased, remote.store&&remote.store.purchased),
+    boosts:    unionById(local.store&&local.store.boosts,    remote.store&&remote.store.boosts),
+    unlockedThemes: Array.from(new Set([...((local.store&&local.store.unlockedThemes)||[]), ...((remote.store&&remote.store.unlockedThemes)||[])]))
+  };
+  out.editLog = mergeEditLog(local.editLog, remote.editLog);
   out.dataVersion = Math.max(local.dataVersion||0, remote.dataVersion||0, DATA_VERSION);
   out.sync = deepClone(local.sync);
   return out;
@@ -6427,6 +6571,7 @@ function applySessionEdit(sessionId,newMinutes){
      credit is intentionally NOT reconstructed — combo is a sequential chain
      and fabricating a retroactive link risks corrupting it. */
   rec.minutes=nm; rec.xp=xpInfo.xpAfter; rec.rewarded=xpInfo.willReward; rec.edited=true; rec.editedAt=now(); rec.adjustedFrom=rec.adjustedFrom||original;
+  appendEditLog({ taskName:(task&&task.name)||rec.action||"Focus", before:oldMinutes, after:nm, source:"session-editor" });
   saveState(); renderAll();
   return{ok:true,sessionId,oldMinutes,newMinutes:nm,newMinutesCap:cap,minutesDelta:-delta,xpDelta:-xpDelta,rewardedAfter:xpInfo.willReward};
 }
@@ -7015,8 +7160,8 @@ async function runSmokeTests(){
   }
   {
     renderAvatar();
-    const ok = !!document.querySelector("#avatar svg[viewBox='0 0 32 32']");
-    add("Avatar: renders 32x32 crisp SVG", ok);
+    const ok = !!document.querySelector("#avatar svg[viewBox='0 0 120 120']");
+    add("Avatar: renders 120x120 detailed SVG", ok);
   }
   add("App-open tracking: totalAppOpenMs is number", typeof state.totalAppOpenMs === "number");
   add("App uptime: >24d formats without truncation", formatHMS(35*24*60*60*1000 + 3*60*60*1000 + 7*60*1000 + 11*1000) === "843:07:11");
@@ -7195,6 +7340,73 @@ async function runSmokeTests(){
     const m = mergeRemoteState(local, remote);
     add("Merge: cumulative max wins", m.totalFocusMin === 250 && m.streak === 10 && m.hero.level === 7 && m.totalAppOpenMs === 1000 && m.uptimeHistory["2026-04-20"] === 500 && m.sessionHistory["2026-04-20"] === 2);
   }
+
+  /* ---- v8.0: coins, store, Time Ledger, edit log, migration ---- */
+  { add("v8: DATA_VERSION is 9", DATA_VERSION === 9); }
+  { add("v8: DEFAULTS has coin/store/editLog fields",
+        DEFAULTS.coins === 0 && ("coinsEarned" in DEFAULTS) && ("store" in DEFAULTS) && Array.isArray(DEFAULTS.editLog)); }
+  { const c25 = computeCoins(25), c90 = computeCoins(90);
+    add("v8: coin curve scales with session length", c25 === 8 && c90 === 33 && c90 > c25, `25m=${c25} 90m=${c90}`); }
+  { /* migration zero-data-loss against a representative v7.9 (dataVersion 8) state */
+    const v79 = { dataVersion:8, totalFocusMin:8421, completedFocusSessions:213, streak:23, longestStreak:41,
+      hero:{ name:"J", cls:"knight", level:14, xp:823, hp:90, energy:80,
+        appearance:{armor:"crimson",accent:"gold",helm:"open",cloak:"forest"},
+        equipped:{weapon:{lootId:"dualblade",tier:"epic"},helmet:null,armor:null,mount:{lootId:"wolf_reins",tier:"epic"},pet:null} },
+      tasks:[{ id:"tA", name:"Reading", emoji:"📚", totalFocusMin:1840, dailyMin:{"2026-05-23":90} }],
+      lootOwned:{copper_coin:14,dualblade:1}, achievements:{first_focus:1,hours_100:1},
+      history:{"2026-05-23":210}, sessionHistory:{"2026-05-23":4}, settings:{...DEFAULTS.settings,theme:"ocean"} };
+    const m9 = migrate(deepClone(v79));
+    const noLoss = m9.dataVersion===9 && m9.totalFocusMin===8421 && m9.completedFocusSessions===213
+      && m9.streak===23 && m9.longestStreak===41 && m9.hero.level===14 && m9.hero.xp===823
+      && m9.tasks[0].totalFocusMin===1840 && m9.tasks[0].dailyMin["2026-05-23"]===90
+      && m9.lootOwned.copper_coin===14 && m9.lootOwned.dualblade===1
+      && m9.achievements.hours_100===1 && m9.history["2026-05-23"]===210
+      && m9.hero.equipped.mount && m9.hero.equipped.mount.lootId==="wolf_reins"
+      && m9.hero.appearance.armor==="crimson" && m9.settings.theme==="ocean";
+    const added = m9.coins===0 && m9.coinsEarned===0 && m9.coinsSpent===0
+      && m9.store && Array.isArray(m9.store.boosts) && Array.isArray(m9.editLog);
+    add("v8: v7.9 -> v9 migration is zero-data-loss", noLoss && added);
+  }
+  { /* edit-log entry shape + 100-cap */
+    const snap = deepClone(state.editLog||[]);
+    state.editLog = [];
+    appendEditLog({taskName:"Reading", before:40, after:55, source:"ledger"});
+    const e = state.editLog[state.editLog.length-1];
+    const okShape = e && e.delta===15 && e.before===40 && e.after===55 && typeof e.id==="string";
+    for (let i=0;i<140;i++) appendEditLog({taskName:"x", before:0, after:1, source:"ledger"});
+    add("v8: editLog entry shape + 100-cap", okShape && state.editLog.length===100);
+    state.editLog = snap; saveState();
+  }
+  { /* Time Ledger recalc + negative clamp */
+    const snap = deepClone(state);
+    state.tasks.push({ id:"v8tmp", name:"v8 test task", emoji:"🧪", totalFocusMin:0, dailyMin:{} });
+    const tfm0 = state.totalFocusMin|0;
+    applyTaskTimeAdjustment("v8tmp", 30);
+    const t = state.tasks.find(x=>x.id==="v8tmp");
+    const up = state.totalFocusMin===tfm0+30 && t.totalFocusMin===30;
+    applyTaskTimeAdjustment("v8tmp", -10);
+    const down = state.totalFocusMin===tfm0+20 && t.totalFocusMin===20;
+    applyTaskTimeAdjustment("v8tmp", -999);
+    const clamped = t.totalFocusMin===0 && state.totalFocusMin>=tfm0;
+    add("v8: Time Ledger recalc + no-negative clamp", up && down && clamped);
+    state = snap; saveState();
+  }
+  { /* coin store: buying gear spends coins + grants loot; blocked when broke */
+    const snap = deepClone(state);
+    state.coins = 5000; state.coinsSpent = 0;
+    const gear = storeGearItems().find(g=>(state.lootOwned[g.lootSlug]|0)===0);
+    const before = state.coins;
+    const r1 = buyStoreItem(gear.id);
+    const okBuy = r1 && r1.ok && state.coins===before-gear.price
+      && state.coinsSpent===gear.price && (state.lootOwned[gear.lootSlug]|0)>0;
+    state.coins = 0;
+    const gear2 = storeGearItems().find(g=>(state.lootOwned[g.lootSlug]|0)===0);
+    const r2 = buyStoreItem(gear2.id);
+    add("v8: store buy spends coins, blocks when unaffordable", okBuy && r2 && r2.ok===false);
+    state = snap; saveState();
+  }
+  { add("v8: XP-boost multiplier defaults to 1.0", activeXpMultiplier()===1); }
+
   return results;
 }
 
@@ -7286,6 +7498,493 @@ function showBootError(err){
     };
   } catch (_){ /* truly nothing more we can do */ }
 }
+
+
+/* ================================================================ *
+ * Focus Hero v8.0 — coins, Time Ledger, edit log, coin store.
+ * Appended block: all declarations are additive. Function declarations
+ * that re-define an earlier one (bindTabs, openEmojiPicker) are placed
+ * here deliberately so the later definition wins.
+ * ================================================================ */
+
+/* --- cloud-sync merge helpers for the new additive fields --- */
+function unionById(a, b){
+  const out = []; const seen = new Set();
+  for (const arr of [Array.isArray(a)?a:[], Array.isArray(b)?b:[]]){
+    for (const it of arr){
+      if (!it || typeof it !== "object"){ continue; }
+      const k = (it.id != null) ? it.id : it.uid;
+      if (k == null){ out.push(it); continue; }
+      if (seen.has(k)) continue;
+      seen.add(k); out.push(it);
+    }
+  }
+  return out;
+}
+function mergeEditLog(a, b){
+  const all = [...(Array.isArray(a)?a:[]), ...(Array.isArray(b)?b:[])];
+  const seen = new Set(); const out = [];
+  for (const e of all){
+    if (!e || typeof e !== "object" || e.id == null) continue;
+    if (seen.has(e.id)) continue;
+    seen.add(e.id); out.push(e);
+  }
+  out.sort((x,y)=>(x.at||0)-(y.at||0));
+  return out.slice(-100);
+}
+
+/* --- coin curve --- coins scale with focus-session length; a non-stacked
+   length bonus rewards longer runs. base = round(minutes/5).
+   25m -> 5+3=8 ; 50m -> 10+8=18 ; 90m -> 18+15=33 ; 120m -> 24+15=39. */
+function computeCoins(minutes){
+  const m = Math.max(0, Math.floor(Number(minutes)||0));
+  if (m <= 0) return 0;
+  let bonus = 0;
+  if (m >= 90) bonus = 15;
+  else if (m >= 50) bonus = 8;
+  else if (m >= 25) bonus = 3;
+  return Math.round(m/5) + bonus;
+}
+
+/* --- edit-log audit trail (last 100 time adjustments) --- */
+function appendEditLog(entry){
+  if (!entry || typeof entry !== "object") return;
+  if (!Array.isArray(state.editLog)) state.editLog = [];
+  const before = Math.round(Number(entry.before)||0);
+  const after  = Math.round(Number(entry.after)||0);
+  state.editLog.push({
+    id: uid(),
+    taskName: String(entry.taskName || "Focus").slice(0,60),
+    before: before, after: after, delta: after - before,
+    at: now(),
+    source: entry.source || "edit"
+  });
+  if (state.editLog.length > 100) state.editLog = state.editLog.slice(-100);
+}
+function fmtEditLogEntry(e){
+  const verb = (e.delta>=0) ? "Added" : "Removed";
+  const amt = Math.abs(e.delta|0);
+  const d = new Date(e.at||0);
+  const hh = String(d.getHours()).padStart(2,"0");
+  const mm = String(d.getMinutes()).padStart(2,"0");
+  return `${verb} ${amt} min to '${e.taskName}' (${e.before|0}→${e.after|0}) — ${hh}:${mm}`;
+}
+
+/* --- XP boost consumable --- returns the most generous active multiplier. */
+function activeXpMultiplier(){
+  const list = (state.store && Array.isArray(state.store.boosts)) ? state.store.boosts : [];
+  let mult = 1; const t = now();
+  for (const b of list){
+    if (!b || b.kind !== "xp" || !b.activatedAt || b.used) continue;
+    if (t < b.activatedAt + (b.durationMs||0)){
+      if ((b.mult||1) > mult) mult = b.mult||1;
+    } else {
+      b.used = true;
+    }
+  }
+  return mult;
+}
+function activeBoostLabel(){
+  const list = (state.store && Array.isArray(state.store.boosts)) ? state.store.boosts : [];
+  const t = now(); let best = null;
+  for (const b of list){
+    if (!b || b.kind !== "xp" || !b.activatedAt || b.used) continue;
+    const left = b.activatedAt + (b.durationMs||0) - t;
+    if (left > 0 && (!best || left > best.left)) best = { mult:b.mult||1, left:left };
+  }
+  if (!best) return null;
+  const mins = Math.ceil(best.left/60000);
+  return `+${Math.round((best.mult-1)*100)}% XP · ${mins}m left`;
+}
+
+/* --- Time Ledger --- add/remove focus minutes for any task at any time.
+   Recalculates the SAME downstream stats as the session-time editor:
+   per-task total, per-task daily minutes, totalFocusMin, day history,
+   adventure action minutes, XP (quiet), today's minute-quest progress.
+   Per-edit cap +/-240 min. Streak is intentionally NOT recomputed — this
+   matches applySessionEdit; a streak is a sequential day-chain and must
+   never be fabricated from a free-floating minute edit. */
+const LEDGER_EDIT_CAP = 240;
+function ledgerXpForMinutes(min){
+  try {
+    const b = computeXpBreakdown(Math.abs(min|0), { comboCount:0, streakDays:0, settings:state.settings });
+    return Math.max(0, b.base|0);
+  } catch(_){ return Math.max(0, Math.abs(min|0)); }
+}
+function applyTaskTimeAdjustment(taskId, deltaMin){
+  const task = state.tasks.find(t=>t.id===taskId);
+  if (!task) return { ok:false, reason:"no_task" };
+  let d = Math.round(Number(deltaMin)||0);
+  if (d === 0) return { ok:false, reason:"zero" };
+  d = Math.max(-LEDGER_EDIT_CAP, Math.min(LEDGER_EDIT_CAP, d));
+  ensureV76StateShape(state);
+  const day = todayKey();
+  if (!task.dailyMin || typeof task.dailyMin !== "object") task.dailyMin = {};
+  if (!state.history || typeof state.history !== "object") state.history = {};
+  const before = task.totalFocusMin|0;
+  if (d < 0){
+    const room = Math.min(task.totalFocusMin|0, task.dailyMin[day]|0,
+                          state.totalFocusMin|0, state.history[day]|0);
+    if (room <= 0) return { ok:false, reason:"nothing_to_remove" };
+    d = Math.max(d, -room);
+  }
+  task.totalFocusMin  = Math.max(0, (task.totalFocusMin|0) + d);
+  task.dailyMin[day]  = Math.max(0, (task.dailyMin[day]|0) + d);
+  state.totalFocusMin = Math.max(0, (state.totalFocusMin|0) + d);
+  state.history[day]  = Math.max(0, (state.history[day]||0) + d);
+  const action = normalizeAdventureAction(state.adventure.action);
+  state.adventure.actionMin[action] = Math.max(0, (state.adventure.actionMin[action]|0) + d);
+  const xpDelta = ledgerXpForMinutes(d);
+  if (d > 0) addXpQuiet(xpDelta);
+  else if (xpDelta > 0) removeXpQuiet(xpDelta);
+  if (d > 0) addDailyProgressForSession(day, "minutes", d);
+  else rollbackDailyProgressForSession(day, "minutes", -d);
+  const after = task.totalFocusMin|0;
+  appendEditLog({ taskName: task.name, before: before, after: after, source:"ledger" });
+  saveState(); renderAll();
+  return { ok:true, delta:d, before:before, after:after };
+}
+
+/* --- coin store catalog --- */
+const STORE_PRICE_BY_RARITY = { common:30, uncommon:75, rare:180, epic:400, legendary:900, mythic:2000 };
+const STORE_CONSUMABLES = [
+  { id:"boost_xp_50",  name:"XP Boost",         sym:"⚡", desc:"+50% XP for 1 hour",      price:150, boost:{ kind:"xp", mult:1.5, durationMs:60*60*1000 } },
+  { id:"boost_xp_100", name:"Greater XP Boost", sym:"🔥", desc:"+100% XP for 30 minutes", price:250, boost:{ kind:"xp", mult:2.0, durationMs:30*60*1000 } }
+];
+function storeGearItems(){
+  return LOOT_TABLE.filter(it=>isEquippableSlot(it[4])).map(it=>({
+    id: "gear_"+lootId(it),
+    name: it[1], sym: it[0], rarity: it[2], slot: it[4],
+    price: STORE_PRICE_BY_RARITY[it[2]] || 100,
+    lootSlug: lootId(it)
+  }));
+}
+function storeItemById(id){
+  if (id && id.indexOf("gear_")===0) return storeGearItems().find(g=>g.id===id) || null;
+  return STORE_CONSUMABLES.find(c=>c.id===id) || null;
+}
+function buyStoreItem(id){
+  const item = storeItemById(id);
+  if (!item) return { ok:false, reason:"unknown" };
+  if (!state.store || typeof state.store !== "object") state.store = { purchased:[], boosts:[], unlockedThemes:[] };
+  if (!Array.isArray(state.store.purchased)) state.store.purchased = [];
+  if (!Array.isArray(state.store.boosts)) state.store.boosts = [];
+  const price = item.price|0;
+  if ((state.coins|0) < price){ toast("Not enough coins for "+item.name, "warn"); return { ok:false, reason:"poor" }; }
+  if (item.lootSlug){
+    if ((state.lootOwned[item.lootSlug]|0) > 0){ toast(item.name+" already owned", "warn"); return { ok:false, reason:"owned" }; }
+    state.lootOwned[item.lootSlug] = (state.lootOwned[item.lootSlug]|0) + 1;
+    state.store.purchased.push({ id:item.id, at:now() });
+  } else if (item.boost){
+    state.store.boosts.push({
+      uid: uid(), kind:item.boost.kind, mult:item.boost.mult,
+      durationMs:item.boost.durationMs, name:item.name,
+      purchasedAt:now(), activatedAt:null, used:false
+    });
+  }
+  state.coins = Math.max(0, (state.coins|0) - price);
+  state.coinsSpent = (state.coinsSpent|0) + price;
+  saveState(); renderAll();
+  toast("Purchased "+item.name+" (−"+price+" 🪙)", "good");
+  return { ok:true };
+}
+function activateXpBoost(boostUid){
+  if (!state.store || !Array.isArray(state.store.boosts)) return;
+  const b = state.store.boosts.find(x=>x && x.uid===boostUid);
+  if (!b || b.activatedAt || b.used){ return; }
+  b.activatedAt = now();
+  saveState(); renderAll();
+  toast(b.name+" active — "+Math.round((b.mult-1)*100)+"% XP for "+Math.round(b.durationMs/60000)+"m", "good");
+}
+
+/* --- coin balance HUD on the hero card --- */
+function renderCoinHud(){
+  const n = document.getElementById("coin-hud-n");
+  if (n) n.textContent = String(state.coins|0);
+}
+
+/* --- Time Ledger panel --- */
+function renderLedger(){
+  const host = document.getElementById("ledger-panel");
+  if (!host) return;
+  const day = todayKey();
+  const fmt = (typeof formatHours === "function") ? formatHours : (m=>m+"m");
+  const tasks = Array.isArray(state.tasks) ? state.tasks : [];
+  let rows = "";
+  if (!tasks.length){
+    rows = `<div class="ledger-empty">No tasks yet — add a task to track its time here.</div>`;
+  } else {
+    rows = tasks.map(t=>{
+      const tdy = (t.dailyMin && t.dailyMin[day])|0;
+      return `<div class="ledger-row">
+        <div class="ledger-task"><span class="ledger-emoji">${escapeHtml(t.emoji||"•")}</span>
+          <span class="ledger-name">${escapeHtml(t.name||"(unnamed)")}</span></div>
+        <div class="ledger-stat">${escapeHtml(fmt(t.totalFocusMin||0))}<span class="ledger-sub"> · today ${tdy}m</span></div>
+        <div class="ledger-adj">
+          <button type="button" data-ledger-task="${escapeHtml(t.id)}" data-ledger-delta="-30">−30</button>
+          <button type="button" data-ledger-task="${escapeHtml(t.id)}" data-ledger-delta="-15">−15</button>
+          <button type="button" data-ledger-task="${escapeHtml(t.id)}" data-ledger-delta="-5">−5</button>
+          <button type="button" data-ledger-task="${escapeHtml(t.id)}" data-ledger-delta="5">+5</button>
+          <button type="button" data-ledger-task="${escapeHtml(t.id)}" data-ledger-delta="15">+15</button>
+          <button type="button" data-ledger-task="${escapeHtml(t.id)}" data-ledger-delta="30">+30</button>
+          <input type="number" class="ledger-input" data-ledger-input="${escapeHtml(t.id)}" placeholder="±min" step="5">
+          <button type="button" class="ledger-apply" data-ledger-task="${escapeHtml(t.id)}" data-ledger-delta="custom">Apply</button>
+        </div>
+      </div>`;
+    }).join("");
+  }
+  const log = (Array.isArray(state.editLog)?state.editLog:[]).slice(-20).reverse();
+  const logHtml = log.length
+    ? log.map(e=>`<div class="editlog-row ${e.delta>=0?"add":"sub"}">${escapeHtml(fmtEditLogEntry(e))}</div>`).join("")
+    : `<div class="ledger-empty">No time edits yet.</div>`;
+  host.innerHTML = `
+    <div class="ledger-intro">Adjust focus minutes for any task at any time. Edits recalculate XP, daily totals and quest progress. Per-edit limit ±${LEDGER_EDIT_CAP} min.</div>
+    <div class="ledger-list">${rows}</div>
+    <div class="editlog-head">Recent time edits</div>
+    <div class="editlog-list">${logHtml}</div>`;
+  if (!host.dataset.bound){
+    host.dataset.bound = "1";
+    host.addEventListener("click", (ev)=>{
+      const btn = ev.target.closest("button[data-ledger-task]");
+      if (!btn) return;
+      const tid = btn.getAttribute("data-ledger-task");
+      const dattr = btn.getAttribute("data-ledger-delta");
+      let delta;
+      if (dattr === "custom"){
+        const inp = host.querySelector(`input[data-ledger-input="${CSS.escape(tid)}"]`);
+        delta = inp ? Math.round(Number(inp.value)||0) : 0;
+        if (!delta){ toast("Enter a ± minute amount", "warn"); return; }
+      } else {
+        delta = Number(dattr)||0;
+      }
+      const r = applyTaskTimeAdjustment(tid, delta);
+      if (r && r.ok){
+        toast((r.delta>=0?"Added ":"Removed ")+Math.abs(r.delta)+" min", "good");
+      } else if (r && r.reason === "nothing_to_remove"){
+        toast("Nothing to remove from that task", "warn");
+      }
+    });
+  }
+}
+
+/* --- coin Store panel --- */
+function renderStore(){
+  const host = document.getElementById("store-panel");
+  if (!host) return;
+  const coins = state.coins|0;
+  const boostLabel = activeBoostLabel();
+  const gear = storeGearItems();
+  const owned = (state.lootOwned)||{};
+  const gearCard = g=>{
+    const have = (owned[g.lootSlug]|0) > 0;
+    const afford = coins >= g.price;
+    const dis = have || !afford;
+    return `<div class="store-item rar-${g.rarity}${have?" owned":""}">
+      <div class="store-sym">${g.sym}</div>
+      <div class="store-name">${escapeHtml(g.name)}</div>
+      <div class="store-meta">${g.rarity} · ${escapeHtml(g.slot)}</div>
+      <button type="button" class="store-buy" data-buy="${g.id}" ${dis?"disabled":""}>${have?"Owned":g.price+" 🪙"}</button>
+    </div>`;
+  };
+  const consCard = c=>{
+    const afford = coins >= c.price;
+    return `<div class="store-item store-consumable">
+      <div class="store-sym">${c.sym}</div>
+      <div class="store-name">${escapeHtml(c.name)}</div>
+      <div class="store-meta">${escapeHtml(c.desc)}</div>
+      <button type="button" class="store-buy" data-buy="${c.id}" ${afford?"":"disabled"}>${c.price} 🪙</button>
+    </div>`;
+  };
+  const boosts = (state.store && Array.isArray(state.store.boosts)) ? state.store.boosts : [];
+  const ownedBoosts = boosts.filter(b=>b && !b.activatedAt && !b.used);
+  const ownedBoostHtml = ownedBoosts.length
+    ? `<div class="store-head">Your consumables</div><div class="store-grid">` + ownedBoosts.map(b=>`
+        <div class="store-item store-consumable">
+          <div class="store-sym">⚗️</div>
+          <div class="store-name">${escapeHtml(b.name||"XP Boost")}</div>
+          <div class="store-meta">+${Math.round((b.mult-1)*100)}% XP · ${Math.round(b.durationMs/60000)}m</div>
+          <button type="button" class="store-buy" data-activate="${b.uid}">Activate</button>
+        </div>`).join("") + `</div>`
+    : "";
+  const gearByRarity = {};
+  gear.forEach(g=>{ (gearByRarity[g.rarity]=gearByRarity[g.rarity]||[]).push(g); });
+  const rarOrder = ["common","uncommon","rare","epic","legendary","mythic"];
+  const gearHtml = rarOrder.filter(r=>gearByRarity[r]).map(r=>
+    `<div class="store-grid">${gearByRarity[r].map(gearCard).join("")}</div>`).join("");
+  host.innerHTML = `
+    <div class="store-bar">
+      <div class="store-balance">🪙 <b>${coins}</b> coins</div>
+      ${boostLabel?`<div class="store-boost">⚡ ${escapeHtml(boostLabel)}</div>`:""}
+    </div>
+    <div class="store-note">Earn coins by completing focus sessions — longer sessions pay more.</div>
+    <div class="store-head">Consumables</div>
+    <div class="store-grid">${STORE_CONSUMABLES.map(consCard).join("")}</div>
+    ${ownedBoostHtml}
+    <div class="store-head">Gear &amp; mounts</div>
+    ${gearHtml}`;
+  if (!host.dataset.bound){
+    host.dataset.bound = "1";
+    host.addEventListener("click", (ev)=>{
+      const buy = ev.target.closest("button[data-buy]");
+      if (buy){ buyStoreItem(buy.getAttribute("data-buy")); return; }
+      const act = ev.target.closest("button[data-activate]");
+      if (act){ activateXpBoost(act.getAttribute("data-activate")); return; }
+    });
+  }
+}
+
+/* --- master v8 panel refresh, called from renderAll --- */
+function renderV8Panels(){
+  try { renderCoinHud(); } catch(_){}
+  try { renderLedger(); } catch(_){}
+  try { renderStore(); } catch(_){}
+}
+
+/* --- viewport-clamped popover positioning (used by the emoji picker) --- */
+function positionPopover(el, anchor){
+  el.style.position = "absolute";
+  const vv = window.visualViewport;
+  const vw = vv ? vv.width  : window.innerWidth;
+  const vh = vv ? vv.height : window.innerHeight;
+  const vx = vv ? vv.offsetLeft : 0;
+  const vy = vv ? vv.offsetTop  : 0;
+  const r = anchor ? anchor.getBoundingClientRect() : { left:vx+20, right:vx+20, top:vy+20, bottom:vy+20 };
+  const pw = el.offsetWidth, ph = el.offsetHeight;
+  const margin = 8;
+  let left = window.scrollX + r.left;
+  left = Math.min(left, window.scrollX + vx + vw - pw - margin);
+  left = Math.max(left, window.scrollX + vx + margin);
+  let top = window.scrollY + r.bottom + 6;
+  if (r.bottom + 6 + ph > vy + vh - margin){
+    top = window.scrollY + r.top - ph - 6;
+    if (top < window.scrollY + vy + margin){
+      top = window.scrollY + vy + Math.max(margin, (vh - ph) / 2);
+    }
+  }
+  el.style.left = left + "px";
+  el.style.top  = top + "px";
+}
+
+/* --- categorized + searchable emoji picker (overrides the v4.3 picker) --- */
+function openEmojiPicker(taskIdOrOpts, anchor){
+  try { closeEmojiPicker(); } catch(_){}
+  const isOpts = taskIdOrOpts && typeof taskIdOrOpts === "object";
+  const onPick = isOpts ? taskIdOrOpts.onPick : null;
+  const taskId = isOpts ? null : taskIdOrOpts;
+  const pick = (em)=>{
+    em = String(em||"").slice(0,8);
+    if (!em) return;
+    if (typeof onPick === "function") onPick(em);
+    else if (taskId){ setTaskEmoji(taskId, em); try{renderTasks();}catch(_){} renderAll(); }
+    try { closeEmojiPicker(); } catch(_){}
+  };
+  const pop = document.createElement("div");
+  pop.className = "emoji-pop emoji-pop-v8";
+  let activeCat = 0;
+
+  const search = document.createElement("input");
+  search.type = "text"; search.className = "emoji-search";
+  search.placeholder = "Search emoji…"; search.setAttribute("aria-label","Search emoji");
+
+  const catRow = document.createElement("div");
+  catRow.className = "emoji-cats";
+
+  const grid = document.createElement("div");
+  grid.className = "emoji-grid";
+
+  function renderGrid(){
+    grid.innerHTML = "";
+    const q = search.value.trim().toLowerCase();
+    let entries;
+    if (q){
+      const seen = new Set(); entries = [];
+      EMOJI_CATEGORIES.forEach(c=>c.emojis.forEach(e=>{
+        if (seen.has(e[0])) return;
+        if (e[0].indexOf(q) !== -1 || e[1].indexOf(q) !== -1){ seen.add(e[0]); entries.push(e); }
+      }));
+    } else {
+      entries = EMOJI_CATEGORIES[activeCat].emojis;
+    }
+    if (!entries.length){
+      const d = document.createElement("div");
+      d.className = "emoji-empty"; d.textContent = "No emoji match";
+      grid.appendChild(d); return;
+    }
+    entries.slice(0,500).forEach(e=>{
+      const b = document.createElement("button");
+      b.type = "button"; b.textContent = e[0]; b.title = e[1];
+      b.onclick = ()=>pick(e[0]);
+      grid.appendChild(b);
+    });
+  }
+
+  EMOJI_CATEGORIES.forEach((c,i)=>{
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "emoji-cat" + (i===0?" active":"");
+    b.textContent = c.emojis[0][0]; b.title = c.name;
+    b.onclick = ()=>{
+      activeCat = i; search.value = "";
+      catRow.querySelectorAll(".emoji-cat").forEach(x=>x.classList.remove("active"));
+      b.classList.add("active");
+      renderGrid();
+    };
+    catRow.appendChild(b);
+  });
+
+  search.addEventListener("input", renderGrid);
+  search.addEventListener("keydown", (e)=>{
+    if (e.key === "Enter"){ const first = grid.querySelector("button"); if (first) first.click(); }
+    else if (e.key === "Escape"){ try{closeEmojiPicker();}catch(_){} }
+  });
+
+  const custom = document.createElement("div");
+  custom.className = "emoji-custom";
+  const cInput = document.createElement("input");
+  cInput.type = "text"; cInput.maxLength = 8;
+  cInput.setAttribute("aria-label","Custom emoji"); cInput.placeholder = "Paste your own";
+  const cBtn = document.createElement("button");
+  cBtn.type = "button"; cBtn.textContent = "Use";
+  cBtn.onclick = ()=>pick(cInput.value.trim());
+  custom.appendChild(cInput); custom.appendChild(cBtn);
+
+  pop.appendChild(search);
+  pop.appendChild(catRow);
+  pop.appendChild(grid);
+  pop.appendChild(custom);
+  document.body.appendChild(pop);
+  emojiPopEl = pop;
+  renderGrid();
+  positionPopover(pop, anchor);
+
+  setTimeout(()=>{
+    const off = (ev)=>{
+      if (!pop.contains(ev.target) && ev.target !== anchor){
+        try{closeEmojiPicker();}catch(_){}
+        document.removeEventListener("mousedown", off);
+        window.removeEventListener("resize", reflow);
+      }
+    };
+    const reflow = ()=>{ if (document.body.contains(pop)) positionPopover(pop, anchor); };
+    document.addEventListener("mousedown", off);
+    window.addEventListener("resize", reflow);
+  }, 0);
+  try { search.focus(); } catch(_){}
+}
+
+/* --- progression sub-tabs (overrides the original; adds store + ledger) --- */
+function bindTabs(){
+  const KEYS = ["loot","mounts","pets","ach","bestiary","heat","store","ledger"];
+  $$(".tabs button[role='tab']").forEach(b=>{
+    b.addEventListener("click", ()=>{
+      const tab = b.dataset.tab;
+      $$(".tabs button[role='tab']").forEach(x=>x.setAttribute("aria-pressed", x===b?"true":"false"));
+      KEYS.forEach(k=>{ const p = $(`#tab-${k}`); if (!p) return; p.hidden = (k !== tab); });
+      if (tab === "store")  { try{renderStore();}  catch(_){} }
+      if (tab === "ledger") { try{renderLedger();} catch(_){} }
+    });
+  });
+}
+
 
 window.addEventListener("error", (ev)=>{ if (!document.getElementById("__fh_safe")) showBootError(ev.error || ev.message); });
 window.addEventListener("unhandledrejection", (ev)=>{ if (!document.getElementById("__fh_safe")) showBootError(ev.reason); });
