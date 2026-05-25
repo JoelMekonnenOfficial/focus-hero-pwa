@@ -15,7 +15,7 @@
 <title>Focus Hero</title>
 <style>
 /* ================================================================
- * Focus Hero v8.2 - inline styles (single-file PWA)
+ * Focus Hero v8.2.1 - inline styles (single-file PWA)
  * ================================================================ */
 :root{
   --bg:#0b0d1a; --bg-2:#111427; --panel:#171a30; --panel-2:#1f2340;
@@ -2184,7 +2184,7 @@ html,body{touch-action:manipulation;-ms-touch-action:manipulation}
       <div class="minute-edit-stat"><b id="minute-total-all">0m</b><span>All time</span></div>
       <div class="minute-edit-stat"><b id="minute-total-today">0m</b><span>Today</span></div>
     </div>
-    <p class="muted" style="font-size:.8rem">Corrections are added to today and immediately update Stats, XP, and daily progress.</p>
+    <p class="muted" style="font-size:.8rem">Added minutes count toward today. Removed minutes come out of the most recent task history available. Stats updates immediately.</p>
     <div class="minute-quick" aria-label="Quick minute adjustments">
       <button type="button" data-minute-delta="-30">-30</button>
       <button type="button" data-minute-delta="-15">-15</button>
@@ -2300,7 +2300,7 @@ html,body{touch-action:manipulation;-ms-touch-action:manipulation}
 </div>
 
 <!-- ================================================================
- * Focus Hero v8.2 - inline script (one file, no deps)
+ * Focus Hero v8.2.1 - inline script (one file, no deps)
  * ================================================================ -->
 <script>
 "use strict";
@@ -7170,7 +7170,7 @@ function applyTaskMinutesFromEditor(delta){
     renderTaskMinutesEditor();
     toast(`${result.delta >= 0 ? "Added" : "Removed"} ${Math.abs(result.delta)} min. Stats updated.`, "good");
   } else if (result && result.reason === "nothing_to_remove"){
-    toast("You can only remove minutes currently credited to today.", "warn");
+    toast("That task has no minutes left to remove.", "warn");
   } else {
     toast("Enter a non-zero minute correction.", "warn");
   }
@@ -7932,6 +7932,19 @@ async function runSmokeTests(){
     if (analyticsModal) analyticsModal.hidden = analyticsWasHidden;
     state = snap; saveState();
   }
+  {
+    const snap = deepClone(state);
+    const past = lastNDayKeys(2)[1];
+    const priorHistory = state.history[past]|0;
+    state.tasks.push({ id:"v82past", name:"Past correction", emoji:"", totalFocusMin:40, dailyMin:{[past]:40} });
+    state.totalFocusMin = (state.totalFocusMin|0) + 40;
+    state.history[past] = priorHistory + 40;
+    const result = applyTaskTimeAdjustment("v82past", -15);
+    const task = state.tasks.find(t=>t.id === "v82past");
+    add("v8.2.1: can remove previously logged task minutes", result.ok && task.totalFocusMin===25
+      && task.dailyMin[past]===25 && state.history[past]===priorHistory+25);
+    state = snap; saveState(); renderAll();
+  }
   { /* coin store: buying gear spends coins + grants loot; blocked when broke */
     const snap = deepClone(state);
     state.coins = 5000; state.coinsSpent = 0;
@@ -8226,22 +8239,36 @@ function applyTaskTimeAdjustment(taskId, deltaMin){
   if (!state.history || typeof state.history !== "object") state.history = {};
   const before = task.totalFocusMin|0;
   if (d < 0){
-    const room = Math.min(task.totalFocusMin|0, task.dailyMin[day]|0,
-                          state.totalFocusMin|0, state.history[day]|0);
+    const room = Math.min(task.totalFocusMin|0, state.totalFocusMin|0);
     if (room <= 0) return { ok:false, reason:"nothing_to_remove" };
     d = Math.max(d, -room);
   }
   task.totalFocusMin  = Math.max(0, (task.totalFocusMin|0) + d);
-  task.dailyMin[day]  = Math.max(0, (task.dailyMin[day]|0) + d);
   state.totalFocusMin = Math.max(0, (state.totalFocusMin|0) + d);
-  state.history[day]  = Math.max(0, (state.history[day]||0) + d);
+  let removedToday = 0;
+  if (d > 0){
+    task.dailyMin[day] = Math.max(0, (task.dailyMin[day]|0) + d);
+    state.history[day] = Math.max(0, (state.history[day]||0) + d);
+  } else {
+    let left = -d;
+    const trackedDays = Object.keys(task.dailyMin).sort().reverse();
+    for (const trackedDay of trackedDays){
+      if (left <= 0) break;
+      const take = Math.min(left, Math.max(0, task.dailyMin[trackedDay]|0));
+      if (take <= 0) continue;
+      task.dailyMin[trackedDay] = Math.max(0, (task.dailyMin[trackedDay]|0) - take);
+      state.history[trackedDay] = Math.max(0, (state.history[trackedDay]||0) - take);
+      if (trackedDay === day) removedToday += take;
+      left -= take;
+    }
+  }
   const action = normalizeAdventureAction(state.adventure.action);
   state.adventure.actionMin[action] = Math.max(0, (state.adventure.actionMin[action]|0) + d);
   const xpDelta = ledgerXpForMinutes(d);
   if (d > 0) addXpQuiet(xpDelta);
   else if (xpDelta > 0) removeXpQuiet(xpDelta);
   if (d > 0) addDailyProgressForSession(day, "minutes", d);
-  else rollbackDailyProgressForSession(day, "minutes", -d);
+  else if (removedToday > 0) rollbackDailyProgressForSession(day, "minutes", removedToday);
   const after = task.totalFocusMin|0;
   appendEditLog({ taskName: task.name, before: before, after: after, source:"ledger" });
   saveState(); renderAll();

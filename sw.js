@@ -14,7 +14,7 @@
  * deliberately invisible to users — the only place a version-looking string
  * lives is in the cache name in DevTools.
  */
-const BUILD_ID    = "fh-2026-05-25-v8-2";
+const BUILD_ID    = "fh-2026-05-25-v8-2-1";
 const CACHE_NAME  = `focus-hero-${BUILD_ID}`;
 const PRECACHE = [
   "./",
