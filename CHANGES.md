@@ -1,3 +1,11 @@
+## v8.3 - safe-area, accurate stopwatch, offline-first
+
+- CSS: `.app` and the achievement banner now respect `env(safe-area-inset-bottom/top/left/right)` so the app nav bar, content edges, and top-of-screen banners are no longer covered by the iOS home indicator, Android nav bar, or notch.
+- Stopwatch / timer accuracy: the display tick rate moved from 250 ms to 100 ms (10 Hz), and the per-second tick sound now fires once per actual second boundary regardless of tick rate. Combined with the existing timestamp-based elapsed math, the visible time stays within 1/10 s of wall-clock.
+- Visibility / wake: on `visibilitychange` (visible) and `pageshow`, the timer is force-re-rendered so the displayed seconds jump to the correct value immediately after returning from background — no more "seconds skip when I switch back" feel.
+- Offline-first: `cloudPush` and `cloudPull` are now gated on `navigator.onLine` — when offline, no network calls are made (zero wasted cellular data) and `state.sync.dirty` is set. The new `online` event listener flushes the dirty state and restarts pull polling; the `offline` listener stops the pull poll. All local writes (`saveState`) continue to work unchanged, so the app remains fully usable with no network.
+- `sw.js` BUILD_ID bumped to `fh-2026-05-30-v8-3`.
+
 ## v7.9 - session time edits both ways; MMO character rework; alternate prototype
 
 - Job 1: the session-time editor now accepts UPWARD corrections, not just reductions. The old "clamp at original elapsed" / "edits must decrease" rules are removed and replaced with an absolute safety cap (8h, or 2x the original elapsed, whichever is larger) so a fat-finger entry cannot corrupt stats.

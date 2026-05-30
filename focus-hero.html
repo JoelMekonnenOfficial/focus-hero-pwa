@@ -15,7 +15,7 @@
 <title>Focus Hero</title>
 <style>
 /* ================================================================
- * Focus Hero v8.2.1 - inline styles (single-file PWA)
+ * Focus Hero v8.3 - inline styles (single-file PWA)
  * ================================================================ */
 :root{
   --bg:#0b0d1a; --bg-2:#111427; --panel:#171a30; --panel-2:#1f2340;
@@ -476,7 +476,7 @@ body::before{
   max-width:1280px;
   grid-template-columns:minmax(0,1.08fr) minmax(360px,.92fr);
   gap:16px;
-  padding:18px 16px 120px;
+  padding:18px max(16px, env(safe-area-inset-right,0px)) calc(120px + env(safe-area-inset-bottom,0px)) max(16px, env(safe-area-inset-left,0px));
 }
 header.topbar{
   position:relative;
@@ -1182,7 +1182,7 @@ button.primary{
 
 /* Achievement unlock banner — appears top-of-screen for gold+ */
 .fh76-ach-banner{
-  position:fixed;left:50%;top:24px;transform:translateX(-50%);
+  position:fixed;left:50%;top:calc(24px + env(safe-area-inset-top,0px));transform:translateX(-50%);
   z-index:1200;
   padding:.6rem 1.2rem;
   border:3px solid #000;outline:2px solid #FBBF24;
@@ -3657,7 +3657,9 @@ function finalizeStopwatch(){
 }
 function ensureTickInterval(){
   if (tickInterval) return;
-  tickInterval = setInterval(tick, 250);
+  // v8.3: 100ms cadence keeps the visible time within 1/10s of wall-clock and
+  // makes the stopwatch feel like an actual stopwatch instead of a tracker.
+  tickInterval = setInterval(tick, 100);
 }
 function tick(){
   if (!state.timer.running) return;
@@ -3669,7 +3671,10 @@ function tick(){
   if (left <= 0){
     completeSession();
   } else {
-    if (Math.floor(left/1000) !== Math.floor((left+250)/1000)) playTick();
+    // v8.3: per-second tick sound fires once per crossed whole-second boundary,
+    // independent of tick interval — was a 250ms-coupled check before.
+    const s = Math.floor(left/1000);
+    if (tick._lastSec !== s){ tick._lastSec = s; playTick(); }
     renderTimer();
   }
 }
@@ -4276,6 +4281,10 @@ function bindAppOpenTracking(){
       lastTickTs = now();
       if (state.timer.running && state.timer.mode === "focus") acquireWakeLock();
       renderStatStrip();
+      // v8.3: force an immediate timer redraw so the display catches up after
+      // tab throttling / OS background. The math is timestamp-based so this just
+      // brings the visible number into sync with reality without skipping or drift.
+      try { renderTimer(); } catch(_){}
     } else {
       appOpenTick({ forceVisibleFlush:true }); // flush visible time up to hide
       lastTickTs = null;
@@ -5919,6 +5928,13 @@ async function cloudPush(opts){
      and the cloud row never gets created. Until v4.2 this flag was passed
      in but never read; now it gates the early-return below. */
   if (!state.sync.enabled && !opts.force) return;
+  // v8.3: offline-aware. Never burn cellular data on a doomed network call.
+  // Mark sync dirty so the next 'online' event flushes everything queued.
+  if (typeof navigator !== "undefined" && navigator.onLine === false){
+    state.sync.dirty = true;
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch(_){}
+    return;
+  }
   const backend = currentBackend();
   state.sync.backend = backend;
   const rev = (state.sync.cloudRev|0);
@@ -6024,6 +6040,9 @@ async function cloudPull(opts){
      state.sync.enabled — the toggle gates BACKGROUND polling, not user-
      initiated operations. */
   if (!state.sync.enabled && !opts.force) return false;
+  // v8.3: offline-aware — skip the fetch entirely instead of failing then
+  // retrying. The next 'online' event will resume polling.
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return false;
   const backend = currentBackend();
   state.sync.backend = backend;
   let remotePayload = null;
@@ -8047,6 +8066,32 @@ async function boot(){
     renderSyncStatus();
     ensureTickInterval();
     bindAppOpenTracking();
+    // v8.3: network-awareness — pause sync when offline, flush dirty state when online,
+    // and catch the iOS PWA wake-from-background case so the timer display jumps to truth.
+    try {
+      window.addEventListener("online", ()=>{
+        try { logLine("Network is back \u2014 flushing sync."); } catch(_){}
+        try { if (state.sync && state.sync.enabled){ startPullPoll(); } } catch(_){}
+        try {
+          if (state.sync && (state.sync.dirty || state.sync.enabled)){
+            cloudPush({ retryAfterOffline: true })
+              .then(()=>{ try { state.sync.dirty = false; localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch(_){} })
+              .catch(()=>{});
+          }
+        } catch(_){}
+        try { renderSyncStatus && renderSyncStatus(); } catch(_){}
+      });
+      window.addEventListener("offline", ()=>{
+        try { logLine("Network is offline \u2014 sync paused, all changes saved locally."); } catch(_){}
+        try { if (typeof stopPullPoll === "function") stopPullPoll(); } catch(_){}
+        try { renderSyncStatus && renderSyncStatus(); } catch(_){}
+      });
+      window.addEventListener("pageshow", ()=>{
+        // PWA wake-from-background: catch the display up even when visibilitychange doesn't fire.
+        try { renderTimer(); } catch(_){}
+        try { renderStatStrip(); } catch(_){}
+      });
+    } catch(_){}
     maybeWarnAboutFileMode();
     if (state.timer.running && state.timer.endAt && state.timer.mode === "focus"){ startKeepalive(); acquireWakeLock(); }
     try { maybeAutoBackup(); } catch(_){}
