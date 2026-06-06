@@ -1,3 +1,11 @@
+## v8.4.1 - 3D fixes & visual overhaul
+
+- Fixed: the home Hero card showed the old SVG because the shared 3D canvas was being parked in the hidden Character Studio at boot. Studio now only borrows the canvas while open; the modal observer moves it back to the home card on close.
+- Overhauled the 3D look: heroic (slimmer) proportions, a real face + proper knight helm (no "robot dome"), image-based lighting (PMREM env map) so metal armour reflects, and a class-coloured chest emblem so changing class is visible.
+- Redesigned the mount into a proper horse silhouette (two-segment legs, neck/head/muzzle, mane, tail); unicorn/griffin/stag/panther/wolf/skiff variants. A mount only ever appears when one is actually equipped.
+- Fixed in-app notifications (toasts) being hidden behind the bottom hotbar — they now sit above it with a higher stacking order.
+- `sw.js` BUILD_ID -> `fh-2026-06-06-v8-4-1` (forces clients to re-cache the updated `fh3d.js`).
+
 ## v8.4 - real-time 3D character, mounts & gear
 
 - New 3D hero system (`fh3d.js`, Three.js r160 vendored locally as `three.min.js` for offline-first). Replaces the flat SVG avatar with a stylized, game-quality 3D character: PBR materials, three-point lighting, soft shadows, a pedestal diorama, and idle/active animation.
