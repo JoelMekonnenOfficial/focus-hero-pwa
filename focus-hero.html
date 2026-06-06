@@ -15,7 +15,7 @@
 <title>Focus Hero</title>
 <style>
 /* ================================================================
- * Focus Hero v8.3 - inline styles (single-file PWA)
+ * Focus Hero v8.4 - 3D character system (Three.js) + inline styles (single-file PWA)
  * ================================================================ */
 :root{
   --bg:#0b0d1a; --bg-2:#111427; --panel:#171a30; --panel-2:#1f2340;
@@ -1853,9 +1853,22 @@ html,body{touch-action:manipulation;-ms-touch-action:manipulation}
 .store-item.rar-legendary{ border-color:var(--legend); }
 .store-item.rar-mythic{ border-color:var(--myth); }
 
+/* ===== v8.4: 3D character (FH3D) — canvas overlays the SVG fallback ===== */
+.fh3d-host{position:relative}
+.fh3d-canvas{position:absolute;inset:0;width:100%;height:100%;display:block;border-radius:inherit;z-index:3;cursor:grab;touch-action:pan-y}
+.fh3d-canvas:active{cursor:grabbing}
+/* larger, more prominent live 3D portrait on the home hero card */
+.hero-card .avatar{width:116px;height:116px}
+/* taller stage in Character Studio so full body + mount fit */
+#character-avatar-preview{height:312px}
+@media (max-width:760px){ #character-avatar-preview{height:264px} }
+
 </style>
 </head>
 <body>
+<!-- v8.4: 3D character system (Three.js, vendored locally for offline-first) -->
+<script src="three.min.js"></script>
+<script src="fh3d.js"></script>
 <script>
 /* v7.9: zoom-lock - block pinch + double-tap zoom; single-finger scroll stays. */
 (function(){
@@ -4944,6 +4957,67 @@ function avatarEquipment(){
   }
   return out;
 }
+/* ===== v8.4: 3D character (FH3D) bridge =====================================
+   fh3dSpec() builds a PLAIN-DATA snapshot for the Three.js renderer in fh3d.js.
+   It only READS state + catalogs — it never mutates state, localStorage, or
+   cloud sync. If WebGL/THREE is unavailable, FH3D stays dormant and the SVG
+   avatar above remains the visible fallback. */
+const FH3D_MOUNT_COLORS = {
+  void_skiff:        ["#312E81","#818CF8","#C4B5FD"],
+  phase_panther_reins:["#111827","#7C3AED","#C084FC"],
+  unicorn_sigil:     ["#F8FAFC","#C4B5FD","#FBBF24"],
+  griffin_saddle:    ["#B45309","#FDE68A","#F59E0B"],
+  astral_stag_tack:  ["#4B5563","#A5F3FC","#67E8F9"],
+  wolf_reins:        ["#374151","#9CA3AF","#FBBF24"]
+};
+function fh3dSpec(){
+  ensureHeroAppearanceShape(); ensureEquippedShape();
+  const a = state.hero.appearance || DEFAULTS.hero.appearance;
+  const clsKey = state.hero.cls || "knight";
+  const cls = CLASSES[clsKey] || CLASSES.knight;
+  const armor  = appearanceOption("armor", a.armor)  || {};
+  const accent = appearanceOption("accent", a.accent) || {};
+  const cloak  = appearanceOption("cloak", a.cloak)  || {};
+  const eq = avatarEquipment();
+  const gearInfo = (g)=>{
+    if (!g) return null;
+    const ts = AVATAR_TIER_ART[g.tier] || AVATAR_TIER_ART.common;
+    return { id:g.id, tier:g.tier||"common", metal:ts.metal, gem:ts.gem, glow:ts.glow||0 };
+  };
+  let mount = null;
+  if (eq.mount){
+    mount = { id:eq.mount.id, tier:eq.mount.tier||"common",
+              colors: FH3D_MOUNT_COLORS[eq.mount.id] || ["#374151","#9CA3AF","#FBBF24"] };
+  }
+  return {
+    cls:clsKey, className:cls.name, palette:cls.palette, level:state.hero.level||1,
+    running: !!(state.timer && state.timer.running),
+    colors:{
+      skin: appearanceOption("skin", a.skin)?.color || "#D99B73",
+      hair: appearanceOption("hairColor", a.hairColor)?.color || "#332117",
+      eye:  appearanceOption("eyeColor", a.eyeColor)?.color || "#7FE9FF",
+      armorMid:  armor.mid  || cls.palette[0],
+      armorHigh: armor.high || cls.palette[1],
+      armorDark: armor.dark || cls.palette[2],
+      accent: accent.color || cls.palette[3] || "#FBBF24",
+      cloak:  cloak.color || "#2563EB"
+    },
+    traits:{ race:a.race||"human", body:a.body||"balanced", hair:a.hair||"short",
+             helm:a.helm||"closed", face:a.face||"calm", eyeShape:a.eyeShape||"focused" },
+    equipped:{ weapon:gearInfo(eq.weapon), helmet:gearInfo(eq.helmet),
+               armor:gearInfo(eq.armor), pet:gearInfo(eq.pet) },
+    mount
+  };
+}
+function fh3dUpdate(){
+  if (window.FH3D && typeof FH3D.sync === "function"){
+    try { FH3D.sync(fh3dSpec()); } catch(e){ /* non-fatal: SVG fallback stays */ }
+  }
+}
+function fh3dStudioOpen(){
+  const cm = document.getElementById("character-modal");
+  return !!(cm && !cm.hasAttribute("hidden"));
+}
 function avatarTier(slotGear, fallback="common"){
   return slotGear?.tier || fallback;
 }
@@ -6606,6 +6680,14 @@ function renderAvatar(){
     av.setAttribute("data-action", adv ? adv.id.toLowerCase() : taskAction);
     av.setAttribute("data-running", running ? "1" : "0");
     av.setAttribute("data-scene", scene);
+    // v8.4: 3D overlay. innerHTML above rebuilt the SVG fallback; (re)attach the
+    // shared WebGL canvas on top of it for the home card — but never yank it away
+    // from the Character Studio modal while that's open.
+    if (window.FH3D && typeof FH3D.attachHome === "function"){
+      if (!FH3D._wired){ FH3D._wired = true; if (FH3D.wireModal) FH3D.wireModal("character-modal","character-avatar-preview","avatar"); }
+      if (!fh3dStudioOpen()) FH3D.attachHome(av);
+      fh3dUpdate();
+    }
   }
 }
 function refreshAvatarRunningState(){
@@ -7293,6 +7375,12 @@ function renderCharacterPanel(){
   if (preview){
     preview.innerHTML = characterPortraitSvg(avatarClassSpec(state.hero.cls, null), avatarEquipment());
     preview.removeAttribute("data-scene");
+    // v8.4: move the shared 3D canvas into the Studio for a large, drag-to-rotate
+    // live preview that updates instantly as appearance / gear / mount change.
+    if (window.FH3D && typeof FH3D.attachStudio === "function"){
+      FH3D.attachStudio(preview);
+      fh3dUpdate();
+    }
   }
   $$("[data-character-tab]").forEach(b=>b.setAttribute("aria-pressed", b.dataset.characterTab === selectedCharacterTab ? "true" : "false"));
   const lookPanel = $("#character-look-panel");

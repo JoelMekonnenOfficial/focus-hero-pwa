@@ -1,3 +1,13 @@
+## v8.4 - real-time 3D character, mounts & gear
+
+- New 3D hero system (`fh3d.js`, Three.js r160 vendored locally as `three.min.js` for offline-first). Replaces the flat SVG avatar with a stylized, game-quality 3D character: PBR materials, three-point lighting, soft shadows, a pedestal diorama, and idle/active animation.
+- Live 3D preview on the **home hero card** (auto-rotating, drag to spin) and a large drag-to-rotate stage in **Character Studio** that updates instantly as you change appearance, class, gear or mount.
+- Customization is fully wired: skin, hair (short/long/mohawk/braids/shaved/+colour), eyes, race traits (elf ears, dwarf beard, orc tusks), build, face, helmet (open/closed/crest), armour colour, trim/accent and cloak all drive the 3D model.
+- 3D gear: weapons (whetstone blade, dualblade), helmet pieces (Crown of Flow, Tome circlet), the Moonplate Vest glow, and a floating companion pet — all tier-tinted.
+- 3D mounts the hero rides: Wolf, Unicorn (horn), Griffin (wings, flap + gallop), Astral Stag (antlers), Phase Panther, and the Void Skiff (hover board). Gallop animation while a focus session is running.
+- Progressive enhancement: if WebGL/Three.js is unavailable the existing SVG avatar remains the fallback. The 3D layer is a **pure renderer** — it only reads a snapshot of `appearance`/`equipped` and never touches state, localStorage, focus minutes/hours, XP, or Supabase cloud sync. Render loop pauses when the tab/preview is hidden (battery-friendly).
+- `sw.js` BUILD_ID bumped to `fh-2026-06-06-v8-4`; `three.min.js` + `fh3d.js` added to the precache.
+
 ## v8.3 - safe-area, accurate stopwatch, offline-first
 
 - CSS: `.app` and the achievement banner now respect `env(safe-area-inset-bottom/top/left/right)` so the app nav bar, content edges, and top-of-screen banners are no longer covered by the iOS home indicator, Android nav bar, or notch.
