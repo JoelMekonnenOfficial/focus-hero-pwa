@@ -1,3 +1,9 @@
+## v8.8.2 - clean chibi 3D character
+
+- Rebuilt the 3D character with a cohesive **chibi** art style (FH3D v3): big expressive head, compact connected body, small balanced shoulders/hands — fixes the bulbous-pauldron / pot-belly / floating-gap lumpiness. Soft toon-ish PBR + image-based lighting, cute face (big eyes), and species traits read clearly (orc tusks, elf/demon ears, dwarf beard, demon horns).
+- Redesigned mounts to match (chunky clean horse/unicorn/etc.); camera framing fits the whole character + pedestal.
+- All v8.8.0 gameplay/data preserved (only `focus-hero.html` banner, `fh3d.js`, `sw.js`, `index.html`, `CHANGES.md` changed). `sw.js` BUILD_ID -> `fh-2026-06-06-v8-8-2`.
+
 ## v8.8.1 - 3D character re-merged onto v8.8.0
 
 - Re-integrated the Three.js 3D character (`fh3d.js` + vendored `three.min.js`) on TOP of v8.8.0. The app now has the full v8.8.0 gameplay (47 mount sprites, 11-species/8-class customizer, world zones, eggs, loot rework, activity log, data migrations) AND a live 3D character on the home Hero card + a drag-to-rotate preview in Character Studio.
