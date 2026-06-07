@@ -1,3 +1,11 @@
+## v8.8.3 - realistic 3D character, per-creature mounts, edit ±
+
+- Character rebuilt with realistic (non-chibi) proportions + toon outlines on a lighter stage so it reads as a deliberate stylized 3D game render (FH3D v4).
+- PER-CREATURE mounts: equipped mount now renders as the right animal — bird family = an actual eagle (wings/beak/talons), dragon = dragon, equine = horse/unicorn, feline = panther, canine = wolf, elemental = skiff. Fixes "eagle shows as a horse".
+- Session-end edit summary now has a ± delta adjuster (type a number, flip the sign) so you can subtract on iOS (numeric keypad has no minus).
+- Loot-on-edit (already present) is unchanged and its toasts are visible (clawback on edit-down, RNG bonus roll on edit-up).
+- All v8.8.0 gameplay/data preserved. `sw.js` BUILD_ID -> `fh-2026-06-06-v8-8-3`.
+
 ## v8.8.2 - clean chibi 3D character
 
 - Rebuilt the 3D character with a cohesive **chibi** art style (FH3D v3): big expressive head, compact connected body, small balanced shoulders/hands — fixes the bulbous-pauldron / pot-belly / floating-gap lumpiness. Soft toon-ish PBR + image-based lighting, cute face (big eyes), and species traits read clearly (orc tusks, elf/demon ears, dwarf beard, demon horns).

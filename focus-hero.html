@@ -15,7 +15,7 @@
 <title>Focus Hero</title>
 <style>
 /* ================================================================
- * Focus Hero v8.8.2 - clean chibi 3D character (Three.js) on v8.8.0 - + dramatic character fix + egg system
+ * Focus Hero v8.8.3 - realistic 3D character + per-creature mounts (Three.js) on v8.8.0 - + dramatic character fix + egg system
  *                    - v8.8.0 NEW: real per-family mount sprites + 2-frame walk cycle for ALL 15 families.
  *                                 Each family distinct silhouette; per-breed palette overrides.
  *                                 Was: 4-bucket rank lookup making every uncommon Eagle render as horse.
@@ -5239,6 +5239,11 @@ function openSessionEndEditTime(sessionId){
       <button type="button" data-delta="15">+15m</button>
       <button type="button" data-zero="1">Zero out</button>
     </div>
+    <div class="adjust" style="display:flex;gap:6px;align-items:center;margin-top:6px">
+      <button type="button" class="sign-toggle" id="xp-edit-sign" aria-label="Flip sign of adjustment" style="min-width:2.2em">+</button>
+      <input id="xp-edit-delta" type="text" inputmode="numeric" pattern="-?[0-9]*" placeholder="adjust by ± min" style="flex:1;min-width:0">
+      <button type="button" id="xp-edit-delta-apply">Apply</button>
+    </div>
     <div class="preview" id="xp-edit-preview"></div>
     <div class="err" id="xp-edit-err" hidden></div>
     <div class="actions">
@@ -5290,6 +5295,18 @@ function openSessionEndEditTime(sessionId){
       err.hidden = true; refreshPreview();
     };
   });
+  /* v8.8.3: ± delta adjuster (iOS numeric keypad has no minus) */
+  (function(){
+    const signBtn=editor.querySelector("#xp-edit-sign"), deltaInp=editor.querySelector("#xp-edit-delta"), applyBtn=editor.querySelector("#xp-edit-delta-apply");
+    if(!signBtn||!deltaInp) return;
+    const refSign=()=>{ const v=String(deltaInp.value||"").trim(); signBtn.textContent = v.startsWith("-")?"−":"+"; };
+    signBtn.addEventListener("click", ()=>{ const v=String(deltaInp.value||"").trim(); if(v.startsWith("-")) deltaInp.value=v.slice(1); else if(v&&v!=="0") deltaInp.value="-"+v; else deltaInp.value = signBtn.textContent==="−"?"":"-"; refSign(); try{deltaInp.focus();}catch(_){} });
+    deltaInp.addEventListener("input", refSign);
+    const applyDelta=()=>{ const d=Math.floor(Number(deltaInp.value)||0); if(!d){ err.hidden=true; return; } input.value = clampInput()+d; deltaInp.value=""; refSign(); err.hidden=true; refreshPreview(); };
+    if(applyBtn) applyBtn.addEventListener("click", applyDelta);
+    deltaInp.addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); applyDelta(); } });
+    refSign();
+  })();
   editor.querySelector("#xp-edit-cancel").onclick = ()=>{
     xpBreakdownEditing = false;
     const cached = showXpBreakdown._last;
@@ -5838,7 +5855,7 @@ function fh3dMountFor(eqMount){
   let m = map[fam] || { id:"horse", colors:["#6b5640","#caa46a","#fbbf24"] };
   if (/unicorn/i.test(id)) m = { id:"unicorn_sigil", colors:["#F8FAFC","#C4B5FD","#FBBF24"] };
   if (/stag|deer|elk/i.test(id)) m = { id:"astral_stag_tack", colors:["#4B5563","#A5F3FC","#67E8F9"] };
-  return { id:m.id, tier:eqMount.tier||"common", colors:m.colors };
+  return { id:id, family:fam, tier:eqMount.tier||"common", colors:m.colors };
 }
 function fh3dSpec(){
   try { ensureHeroAppearanceShape(); } catch(e){}
