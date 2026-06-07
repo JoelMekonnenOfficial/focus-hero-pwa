@@ -14,16 +14,21 @@
  * deliberately invisible to users — the only place a version-looking string
  * lives is in the cache name in DevTools.
  */
-const BUILD_ID    = "fh-2026-06-06-v8-4-1";
+const BUILD_ID    = "fh-2026-06-06-v8-8-0";
 const CACHE_NAME  = `focus-hero-${BUILD_ID}`;
 const PRECACHE = [
   "./",
   "./focus-hero.html",
+  "./loot-rework.js",
+  "./character-rebuild.js",
+  "./world-depth.js",
+  "./shop-rework.js",
+  "./character-v86-fix.js",
+  "./eggs.js",
+  "./v8.6.3-patch.js",
   "./manifest.webmanifest",
   "./icon-192.png",
-  "./icon-512.png",
-  "./three.min.js",
-  "./fh3d.js"
+  "./icon-512.png"
 ];
 
 self.addEventListener("install", event => {

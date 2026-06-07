@@ -15,7 +15,23 @@
 <title>Focus Hero</title>
 <style>
 /* ================================================================
- * Focus Hero v8.4.1 - 3D character system (Three.js) + inline styles (single-file PWA)
+ * Focus Hero v8.8.0 - inline styles (single-file PWA) - + dramatic character fix + egg system
+ *                    - v8.8.0 NEW: real per-family mount sprites + 2-frame walk cycle for ALL 15 families.
+ *                                 Each family distinct silhouette; per-breed palette overrides.
+ *                                 Was: 4-bucket rank lookup making every uncommon Eagle render as horse.
+ *                    - v8.7.0 NEW: customizer race→species + skin→skinIdx mirror at setHeroAppearance,
+ *                                 loot clawback on session edits (DOWN removes, UP rerolls via RNG),
+ *                                 universal activityLog cap 500 + category-filtered Recent Activity UI,
+ *                                 one-shot retroactive hygiene-session clawback (backed up to LS),
+ *                                 rare+ drop confetti burst
+ *                    - v8.6.3 fixes: migration ladder reorder, class outfit propagation,
+ *                                    cloud-merge pity preservation, Mystery Box single-charge,
+ *                                    mount progress display in hours
+ *                    - v8.6.3-egg-integrity (Codex): session provenance, dedup, quarantine
+ *                    - v8.6.4 fix:   iOS ± sign-toggle pill for minute-delta inputs
+ *                    - v8.6.5 fixes: removed visible mount progress bar, loot gate lowered
+ *                                    (5/15/25/50/90/120-min walls), pity ticks per session,
+ *                                    "No loot dropped" log on dry rewarded sessions
  * ================================================================ */
 :root{
   --bg:#0b0d1a; --bg-2:#111427; --panel:#171a30; --panel-2:#1f2340;
@@ -407,9 +423,55 @@ kbd{font-family:var(--mono);font-size:.78em;padding:1px 6px;border-radius:6px;ba
 .hero-card .avatar .fh-mount{opacity:0;transition:opacity .18s ease}
 .hero-card .avatar .fh-enemy{opacity:0}
 .hero-card .avatar[data-scene="resting"] .fh-sprite{animation:fh-rest-breathe 2s ease-in-out infinite}
-.hero-card .avatar[data-scene="travelling"] .fh-mount{opacity:1;animation:fh-mount-idle .7s steps(2,end) infinite}
+.hero-card .avatar[data-scene="travelling"] .fh-mount{opacity:1}
 .hero-card .avatar[data-scene="travelling"] .fh-horizon{animation:fh-travel-bg 3s linear infinite}
 .hero-card .avatar[data-scene="travelling"] .fh-sprite{animation:fh-mount-idle .7s steps(2,end) infinite}
+/* v8.8: real per-family walk/flap/slither cycles via frame swap (was: just a vertical bob) */
+.fh-mount .fh-mount-frame{visibility:hidden}
+.fh-mount .fh-mount-frame-a{visibility:visible;animation:fh-mount-frameA .5s steps(2,end) infinite}
+.fh-mount .fh-mount-frame-b{animation:fh-mount-frameB .5s steps(2,end) infinite}
+.fh-mount .fh-mount-frame[data-mount-family="bird"]{animation-duration:.32s}
+.fh-mount .fh-mount-frame[data-mount-family="dragon"]{animation-duration:.6s}
+.fh-mount .fh-mount-frame[data-mount-family="aquatic"]{animation-duration:.7s}
+.fh-mount .fh-mount-frame[data-mount-family="elemental"]{animation-duration:1.1s}
+.fh-mount .fh-mount-frame[data-mount-family="small"]{animation-duration:.42s}
+.fh-mount .fh-mount-frame[data-mount-family="insect"]{animation-duration:.36s}
+@keyframes fh-mount-frameA{0%,49.9%{visibility:visible}50%,100%{visibility:hidden}}
+@keyframes fh-mount-frameB{0%,49.9%{visibility:hidden}50%,100%{visibility:visible}}
+/* v8.8: Stable mount cards now show real per-family sprites */
+.stable-mount-svg{width:48px;height:48px;display:block;margin:0 auto;image-rendering:pixelated;}
+.stable-mount{cursor:pointer;transition:transform .12s ease,box-shadow .12s ease;}
+.stable-mount:not(.locked):hover{transform:translateY(-2px);box-shadow:0 4px 8px rgba(0,0,0,.3);}
+.stable-mount.locked{cursor:default;opacity:.35;}
+.stable-mount-sym.unowned{opacity:.4;}
+/* v8.8: Mount preview modal (click any owned mount) */
+.cr-mount-preview-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9000;display:flex;align-items:center;justify-content:center;animation:cr-mp-fade .2s ease;}
+@keyframes cr-mp-fade{from{opacity:0}to{opacity:1}}
+.cr-mount-preview-card{background:var(--panel);border:2px solid var(--border-strong);border-radius:12px;padding:20px;max-width:420px;width:90vw;position:relative;display:flex;flex-direction:column;gap:14px;animation:cr-mp-pop .25s cubic-bezier(.2,1.2,.4,1);}
+@keyframes cr-mp-pop{from{transform:scale(.85);opacity:0}to{transform:scale(1);opacity:1}}
+.cr-mount-preview-card.tier-common{border-color:#9CA3AF;} .cr-mount-preview-card.tier-uncommon{border-color:#10B981;}
+.cr-mount-preview-card.tier-rare{border-color:#3B82F6;} .cr-mount-preview-card.tier-epic{border-color:#A855F7;}
+.cr-mount-preview-card.tier-legendary{border-color:#F59E0B;box-shadow:0 0 30px rgba(245,158,11,.4);}
+.cr-mount-preview-card.tier-mythic{border-color:#EC4899;box-shadow:0 0 35px rgba(236,72,153,.5);}
+.cr-mount-preview-close{position:absolute;top:8px;right:8px;background:transparent;border:none;color:var(--ink-dim);font-size:1.3rem;cursor:pointer;padding:4px 8px;}
+.cr-mount-preview-close:hover{color:var(--ink);}
+.cr-mount-preview-stage{background:linear-gradient(180deg,#1a1f33 0%,#0F1322 100%);border-radius:8px;padding:30px 20px;display:flex;align-items:center;justify-content:center;min-height:220px;}
+.cr-mount-preview-svg{width:200px;height:200px;image-rendering:pixelated;}
+.cr-mount-preview-info{display:flex;flex-direction:column;gap:8px;}
+.cr-mount-preview-name{font-size:1.4rem;font-weight:700;color:var(--ink);}
+.cr-mount-preview-meta{display:flex;gap:10px;font-size:.85rem;color:var(--ink-dim);align-items:center;}
+.cr-mount-preview-tier{padding:2px 8px;border-radius:10px;font-size:.75rem;font-weight:600;text-transform:uppercase;}
+.cr-mount-preview-tier.tier-common{background:#9CA3AF;color:#0F1322;}
+.cr-mount-preview-tier.tier-uncommon{background:#10B981;color:#0F1322;}
+.cr-mount-preview-tier.tier-rare{background:#3B82F6;color:#FFF;}
+.cr-mount-preview-tier.tier-epic{background:#A855F7;color:#FFF;}
+.cr-mount-preview-tier.tier-legendary{background:#F59E0B;color:#0F1322;}
+.cr-mount-preview-tier.tier-mythic{background:#EC4899;color:#FFF;}
+.cr-mount-preview-effect{padding:8px 12px;background:rgba(255,255,255,.04);border-radius:6px;font-size:.9rem;color:var(--ink);}
+.cr-mount-preview-status{display:flex;justify-content:flex-end;}
+.cr-mount-preview-equip{padding:8px 20px;background:var(--accent);color:var(--bg);border:none;border-radius:6px;font-weight:600;cursor:pointer;}
+.cr-mount-preview-equip:hover{filter:brightness(1.15);}
+.cr-mount-preview-equipped{padding:8px 20px;background:rgba(16,185,129,.2);color:#10B981;border-radius:6px;font-weight:600;}
 .hero-card .avatar[data-scene="fighting"] .fh-sprite{animation:fh-lunge .6s ease-in-out infinite}
 .hero-card .avatar[data-scene="fighting"] .fh-weapon{animation:fh-arc-swing .6s ease-in-out infinite}
 .hero-card .avatar[data-scene="fighting"] .fh-enemy{opacity:1;animation:fh-enemy-recoil .6s ease-in-out infinite}
@@ -476,7 +538,7 @@ body::before{
   max-width:1280px;
   grid-template-columns:minmax(0,1.08fr) minmax(360px,.92fr);
   gap:16px;
-  padding:18px max(16px, env(safe-area-inset-right,0px)) calc(120px + env(safe-area-inset-bottom,0px)) max(16px, env(safe-area-inset-left,0px));
+  padding:18px 16px 120px;
 }
 header.topbar{
   position:relative;
@@ -799,10 +861,15 @@ button.primary{
   box-shadow:inset 2px 2px 0 rgba(255,255,255,.08),inset -2px -2px 0 rgba(0,0,0,.3);
 }
 .loot-item.rar-common{outline:2px solid #D1D5DB}
-.loot-item.rar-rare{outline:2px solid #3B82F6}
-.loot-item.rar-epic{outline:2px solid #A855F7}
-.loot-item.rar-legendary{outline:2px solid #F59E0B}
-.loot-item.rar-mythic{outline:2px solid #FF77C8}
+.loot-item.rar-uncommon{outline:2px solid #22C55E}   /* v8.8: was missing — caused uncommon items to look identical to common */
+.loot-item.rar-rare{outline:2px solid #3B82F6;box-shadow:0 0 8px rgba(59,130,246,.25)}
+.loot-item.rar-epic{outline:2px solid #A855F7;box-shadow:0 0 10px rgba(168,85,247,.35)}
+.loot-item.rar-legendary{outline:2px solid #F59E0B;box-shadow:0 0 14px rgba(245,158,11,.45)}
+.loot-item.rar-mythic{outline:2px solid #FF77C8;box-shadow:0 0 18px rgba(255,119,200,.55);animation:fh-mythic-shimmer 2.4s ease-in-out infinite}
+.loot-item.rar-cursed{outline:2px solid #000;box-shadow:inset 0 0 12px rgba(0,0,0,.7),0 0 10px rgba(120,0,0,.4)}
+.loot-item.rar-artifact{outline:2px solid transparent;background:linear-gradient(45deg,#ff6b6b,#ffd93d,#6bcf7f,#4d9de0,#c878ff,#ff6b6b);background-size:300% 300%;animation:fh-artifact-rainbow 4s linear infinite}
+@keyframes fh-mythic-shimmer{0%,100%{box-shadow:0 0 18px rgba(255,119,200,.55)}50%{box-shadow:0 0 28px rgba(255,119,200,.8)}}
+@keyframes fh-artifact-rainbow{0%{background-position:0% 50%}100%{background-position:100% 50%}}
 .analytics-card,.analytics-row,.quest,.task,.ach,.loot-item,.form-row{
   border-radius:0;
   box-shadow:inset 3px 3px 0 rgba(255,255,255,.055),inset -3px -3px 0 rgba(0,0,0,.22);
@@ -1182,7 +1249,7 @@ button.primary{
 
 /* Achievement unlock banner — appears top-of-screen for gold+ */
 .fh76-ach-banner{
-  position:fixed;left:50%;top:calc(24px + env(safe-area-inset-top,0px));transform:translateX(-50%);
+  position:fixed;left:50%;top:24px;transform:translateX(-50%);
   z-index:1200;
   padding:.6rem 1.2rem;
   border:3px solid #000;outline:2px solid #FBBF24;
@@ -1217,6 +1284,384 @@ button.primary{
 .bestiary-cell.tier-t3 {border-color:#C084FC}
 .bestiary-cell.tier-t4 {border-color:#FBBF24}
 .bestiary-cell.tier-t5 {border-color:#FF77C8}
+
+/* ---- v8.x LOOT REWORK — UI ---- */
+.drops-list{display:flex;flex-direction:column;gap:6px;max-height:520px;overflow-y:auto}
+.drops-list .drop-row{
+  display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;
+  padding:.5rem .6rem;border-radius:10px;border:1px solid var(--border);background:var(--panel-2);
+  font-size:.84rem
+}
+.drops-list .drop-row .drop-sym{font-size:1.5rem;line-height:1}
+.drops-list .drop-row.rar-common    {border-left:3px solid #9CA3AF}
+.drops-list .drop-row.rar-uncommon  {border-left:3px solid #22C55E}
+.drops-list .drop-row.rar-rare      {border-left:3px solid #3B82F6}
+.drops-list .drop-row.rar-epic      {border-left:3px solid #A855F7}
+.drops-list .drop-row.rar-legendary {border-left:3px solid #F59E0B}
+.drops-list .drop-row.rar-mythic    {border-left:3px solid #FF77C8}
+.drops-list .drop-row .drop-name{font-weight:700}
+.drops-list .drop-row .drop-meta{font-size:.72rem;color:var(--ink-dim);margin-top:2px}
+.drops-list .drop-row .drop-odds{font-size:.72rem;color:var(--ink-dim);text-align:right;white-space:nowrap}
+.drops-list .drop-row .pity-bump{color:#FBBF24;font-weight:700}
+.drops-empty{padding:.8rem;color:var(--ink-dim);font-size:.85rem;text-align:center}
+
+#forge-panel{display:flex;flex-direction:column;gap:14px}
+.forge-mats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.forge-mat{padding:.6rem;border-radius:10px;border:1px solid var(--border);background:var(--panel-2);text-align:center}
+.forge-mat b{font-size:1.4rem;display:block}
+.forge-mat .mat-name{font-size:.72rem;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.06em}
+.forge-section h4{margin:0 0 6px;font-size:.85rem;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.06em}
+.forge-instances{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
+.forge-instance{
+  padding:.55rem;border-radius:10px;border:1px solid var(--border);background:var(--panel-2);
+  cursor:pointer;transition:transform .12s ease,border-color .12s ease;text-align:left;color:var(--ink)
+}
+.forge-instance:hover{transform:translateY(-1px);border-color:var(--accent)}
+.forge-instance.rar-common    {border-left:3px solid #9CA3AF}
+.forge-instance.rar-uncommon  {border-left:3px solid #22C55E}
+.forge-instance.rar-rare      {border-left:3px solid #3B82F6}
+.forge-instance.rar-epic      {border-left:3px solid #A855F7}
+.forge-instance.rar-legendary {border-left:3px solid #F59E0B}
+.forge-instance.rar-mythic    {border-left:3px solid #FF77C8}
+.forge-instance .fi-name{font-weight:700;font-size:.85rem;margin:0}
+.forge-instance .fi-meta{font-size:.7rem;color:var(--ink-dim);margin-top:2px}
+.forge-instance .fi-affixes{margin-top:4px;font-size:.74rem;color:var(--ink)}
+.forge-instance .fi-aff{display:block}
+.forge-instance.equipped{box-shadow:0 0 0 2px rgba(251,191,36,.25) inset}
+.forge-instance.locked::after{content:" 🔒";font-size:.7rem}
+.forge-loadout{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.forge-loadout select{
+  width:100%;padding:.45rem .55rem;border-radius:8px;border:1px solid var(--border-strong);
+  background:var(--panel);color:var(--ink);font-size:.82rem
+}
+.forge-cons{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:6px;margin-top:4px}
+.forge-cons-cell{
+  padding:.4rem .5rem;border-radius:8px;border:1px solid var(--border);background:var(--panel-2);
+  font-size:.78rem;text-align:center
+}
+
+.loot-inspector{max-width:520px}
+.loot-inspector-body{font-size:.88rem}
+.loot-inspector .li-head{
+  display:flex;gap:10px;align-items:center;padding:.6rem .7rem;
+  border-radius:10px;background:var(--panel-2);border:1px solid var(--border)
+}
+.loot-inspector .li-head .li-sym{font-size:2rem;line-height:1}
+.loot-inspector .li-head h4{margin:0;font-size:1rem}
+.loot-inspector .li-head .li-sub{font-size:.74rem;color:var(--ink-dim)}
+.loot-inspector .li-section{margin-top:10px}
+.loot-inspector .li-section h5{margin:0 0 6px;font-size:.78rem;text-transform:uppercase;color:var(--ink-dim);letter-spacing:.06em}
+.loot-inspector .li-aff-row{
+  display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:.35rem .5rem;
+  border-radius:8px;border:1px solid var(--border);background:var(--panel-2);margin-bottom:4px;font-size:.84rem
+}
+.loot-inspector .li-aff-row .aff-fixed{color:var(--ink-dim);font-size:.72rem}
+.loot-inspector .li-aff-row .aff-cost{font-size:.74rem;color:var(--ink-dim)}
+.loot-inspector .li-sockets{display:flex;gap:6px;flex-wrap:wrap}
+.loot-inspector .li-socket{
+  padding:.35rem .5rem;border-radius:8px;border:1px dashed var(--border-strong);background:var(--panel);
+  font-size:.78rem;display:flex;align-items:center;gap:6px
+}
+.loot-inspector .li-socket.filled{border-style:solid;border-color:var(--accent)}
+.loot-inspector .li-dyes{display:flex;gap:5px;flex-wrap:wrap;margin-top:4px}
+.loot-inspector .li-dye{
+  width:22px;height:22px;border-radius:50%;border:2px solid var(--border-strong);cursor:pointer
+}
+.loot-inspector .li-dye.active{border-color:var(--ink);box-shadow:0 0 0 2px rgba(255,255,255,.15)}
+.loot-inspector .li-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.loot-inspector .li-actions button{
+  padding:.4rem .65rem;border-radius:8px;border:1px solid var(--border-strong);background:var(--panel-2);
+  color:var(--ink);font-size:.82rem;cursor:pointer
+}
+.loot-inspector .li-actions button:disabled{opacity:.45;cursor:not-allowed}
+
+.battle-report{max-width:600px}
+.battle-report-body{display:flex;flex-direction:column;gap:8px;max-height:520px;overflow-y:auto}
+.br-encounter{
+  display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:.6rem .7rem;
+  border-radius:10px;border:1px solid var(--border);background:var(--panel-2)
+}
+.br-encounter .br-enemy{font-size:1.6rem;line-height:1}
+.br-encounter .br-name{font-weight:700}
+.br-encounter .br-detail{font-size:.74rem;color:var(--ink-dim);margin-top:2px}
+.br-encounter .br-outcome{padding:.2rem .55rem;border-radius:999px;font-size:.72rem;text-transform:uppercase;letter-spacing:.06em}
+.br-encounter .br-outcome.clean{background:rgba(34,197,94,.18);color:#86EFAC}
+.br-encounter .br-outcome.solid{background:rgba(56,189,248,.18);color:#7DD3FC}
+.br-encounter .br-outcome.battered{background:rgba(245,158,11,.18);color:#FCD34D}
+.br-encounter .br-outcome.whiff{background:rgba(239,68,68,.18);color:#FCA5A5}
+.br-encounter .br-hpbar{height:6px;width:100px;background:#1F2937;border-radius:3px;overflow:hidden;margin-top:4px}
+.br-encounter .br-hpbar > div{height:100%;background:linear-gradient(90deg,#22D3EE,#A855F7)}
+
+@keyframes lr-pop-in {
+  0%   { transform:scale(.7) translateY(8px); opacity:0 }
+  60%  { transform:scale(1.06) translateY(-2px); opacity:1 }
+  100% { transform:scale(1) translateY(0); opacity:1 }
+}
+@keyframes lr-glow {
+  0% { box-shadow:0 0 0 0 rgba(255,255,255,0) }
+  50%{ box-shadow:0 0 24px 6px var(--lr-glow-color, rgba(99,102,241,.55)) }
+  100%{ box-shadow:0 0 0 0 rgba(255,255,255,0) }
+}
+.toast.lr-drop.rar-common    { --lr-glow-color:rgba(156,163,175,.45) }
+.toast.lr-drop.rar-uncommon  { --lr-glow-color:rgba(34,197,94,.45) }
+.toast.lr-drop.rar-rare      { --lr-glow-color:rgba(59,130,246,.55) }
+.toast.lr-drop.rar-epic      { --lr-glow-color:rgba(168,85,247,.55) }
+.toast.lr-drop.rar-legendary { --lr-glow-color:rgba(245,158,11,.65) }
+.toast.lr-drop.rar-mythic    { --lr-glow-color:rgba(255,119,200,.7) }
+.toast.lr-drop {
+  animation: lr-pop-in .35s cubic-bezier(.22,1.1,.36,1) both, lr-glow 1.1s ease-out both
+}
+@keyframes lr-shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-3px)} 75%{transform:translateX(3px)} }
+body.lr-screen-shake { animation: lr-shake .25s ease-in-out }
+
+/* ---- v8.6 EGG INCUBATOR ---- */
+.egg-incubator{
+  margin-top:12px;padding:.65rem .8rem;
+  background:linear-gradient(180deg,rgba(245,158,11,.06),rgba(245,158,11,.02));
+  border:1px solid var(--border);border-radius:10px
+}
+.egg-incubator-header{display:flex;justify-content:space-between;align-items:center;font-size:.86rem;color:var(--ink-dim);margin-bottom:8px}
+.egg-incubator-header b{color:var(--ink)}
+.egg-slots{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+.egg-slot{
+  padding:.45rem;border-radius:8px;border:1px dashed var(--border-strong);background:var(--panel);
+  min-height:88px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  font-size:.74rem;color:var(--ink-dim);text-align:center
+}
+.egg-slot-empty{opacity:.55}
+.egg-empty-icon{font-size:1.4rem}
+.egg-slot-active{
+  border-style:solid;background:var(--panel-2)
+}
+.egg-slot-active.tier-common    {border-left:3px solid #9CA3AF;background:linear-gradient(180deg,rgba(156,163,175,.1),var(--panel-2))}
+.egg-slot-active.tier-uncommon  {border-left:3px solid #22C55E;background:linear-gradient(180deg,rgba(34,197,94,.1),var(--panel-2))}
+.egg-slot-active.tier-rare      {border-left:3px solid #3B82F6;background:linear-gradient(180deg,rgba(59,130,246,.1),var(--panel-2))}
+.egg-slot-active.tier-epic      {border-left:3px solid #A855F7;background:linear-gradient(180deg,rgba(168,85,247,.1),var(--panel-2))}
+.egg-slot-active.tier-legendary {border-left:3px solid #F59E0B;background:linear-gradient(180deg,rgba(245,158,11,.15),var(--panel-2))}
+.egg-slot-active.tier-mythic    {border-left:3px solid #FF77C8;background:linear-gradient(180deg,rgba(255,119,200,.15),var(--panel-2))}
+.egg-sym{font-size:1.6rem;line-height:1}
+.egg-name{font-weight:700;color:var(--ink);font-size:.78rem;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.egg-bar{width:100%;height:6px;background:#1F2937;border-radius:3px;overflow:hidden;margin-top:4px}
+.egg-fill{height:100%;background:linear-gradient(90deg,#22D3EE,#F59E0B);transition:width .6s ease}
+.egg-pct{font-size:.66rem;color:var(--ink-dim);margin-top:3px}
+.egg-cancel-btn,.egg-incubate-btn{
+  margin-top:5px;padding:.22rem .5rem;border-radius:5px;border:1px solid var(--border-strong);
+  background:var(--panel);color:var(--ink);font-size:.7rem;cursor:pointer
+}
+.egg-cancel-btn:hover,.egg-incubate-btn:hover{background:var(--accent)}
+.egg-incubate-btn:disabled{opacity:.4;cursor:not-allowed}
+.egg-owned-title{font-size:.78rem;color:var(--ink-dim);margin:8px 0 4px;text-transform:uppercase;letter-spacing:.05em}
+.egg-owned-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:5px}
+.egg-owned{
+  padding:.4rem .3rem;border-radius:7px;border:1px solid var(--border);background:var(--panel-2);
+  text-align:center;font-size:.7rem
+}
+.egg-owned.tier-common    {border-left:3px solid #9CA3AF}
+.egg-owned.tier-uncommon  {border-left:3px solid #22C55E}
+.egg-owned.tier-rare      {border-left:3px solid #3B82F6}
+.egg-owned.tier-epic      {border-left:3px solid #A855F7}
+.egg-owned.tier-legendary {border-left:3px solid #F59E0B}
+.egg-owned.tier-mythic    {border-left:3px solid #FF77C8}
+.egg-owned .egg-name{font-size:.7rem}
+.egg-owned .egg-meta{font-size:.62rem;color:var(--ink-dim)}
+.egg-hatched-summary{font-size:.74rem;color:var(--ink-dim);margin-top:8px;text-align:center;font-style:italic}
+
+/* ---- v8.6 character avatar swap: make sure the v86 SVG fills the avatar container ---- */
+.v86-portrait{display:block;width:100%;height:100%;image-rendering:auto;shape-rendering:geometricPrecision}
+
+/* ---- v8.5 WORLD DEPTH + SHOP REWORK UI ---- */
+
+/* Shop currency HUD */
+.sr-hud{display:flex;gap:14px;flex-wrap:wrap;padding:.55rem .7rem;border-radius:10px;background:var(--panel-2);border:1px solid var(--border);margin-bottom:14px}
+.sr-coin{font-size:.95rem;color:var(--ink-dim)}
+.sr-coin b{color:var(--ink);font-size:1.05rem;margin:0 4px}
+.sr-coin-sym{font-size:1.2rem;margin-right:4px}
+.sr-shard b{color:#A8C0FF}
+.sr-dust b{color:#FBBF24}
+
+/* Featured carousel */
+.sr-featured{margin-bottom:18px}
+.sr-section-title{font-size:.95rem;font-weight:700;color:var(--ink);margin-bottom:8px;letter-spacing:.04em}
+.sr-featured-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.sr-featured-card{position:relative;padding:.7rem;border-radius:12px;border:1px solid var(--border);background:linear-gradient(180deg,rgba(245,158,11,.06),var(--panel-2));text-align:center}
+.sr-featured-card.rar-common    {border-left:3px solid #9CA3AF}
+.sr-featured-card.rar-uncommon  {border-left:3px solid #22C55E}
+.sr-featured-card.rar-rare      {border-left:3px solid #3B82F6}
+.sr-featured-card.rar-epic      {border-left:3px solid #A855F7}
+.sr-featured-card.rar-legendary {border-left:3px solid #F59E0B}
+.sr-featured-card.rar-mythic    {border-left:3px solid #FF77C8}
+.sr-feat-sym{font-size:2rem;line-height:1}
+.sr-feat-name{font-weight:700;margin-top:4px;font-size:.92rem}
+.sr-feat-eff{font-size:.74rem;color:var(--ink-dim);margin-top:2px;min-height:1em}
+.sr-feat-price{margin-top:6px;font-size:.84rem}
+.sr-price-old{text-decoration:line-through;color:var(--ink-dim)}
+.sr-price-new{font-weight:700;color:var(--ink)}
+.sr-discount-badge{display:inline-block;margin-left:6px;padding:.1rem .35rem;border-radius:6px;background:#A23B3B;color:#FCD34D;font-size:.7rem;font-weight:700}
+.sr-owned-badge{margin-top:6px;padding:.18rem .45rem;border-radius:6px;background:rgba(245,158,11,.18);color:#FCD34D;font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;display:inline-block}
+
+/* Category tabs */
+.sr-cat-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.sr-cat-tab{padding:.4rem .7rem;border-radius:8px;border:1px solid var(--border);background:var(--panel-2);color:var(--ink-dim);font-size:.84rem;cursor:pointer}
+.sr-cat-tab.active{background:var(--accent);color:var(--ink);border-color:var(--accent)}
+.sr-cat-icon{margin-right:4px}
+
+/* Filters row */
+.sr-filters{display:grid;grid-template-columns:1fr auto auto;gap:8px;margin-bottom:10px}
+.sr-search,.sr-sort,.sr-owned-filter{padding:.42rem .55rem;border-radius:8px;border:1px solid var(--border-strong);background:var(--panel);color:var(--ink);font-size:.84rem}
+
+/* Grid */
+.sr-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
+.sr-grid-card{position:relative;padding:.6rem .55rem;border-radius:10px;border:1px solid var(--border);background:var(--panel-2);text-align:center;font-size:.78rem;transition:transform .12s ease,border-color .12s ease}
+.sr-grid-card:hover{transform:translateY(-1px);border-color:var(--accent)}
+.sr-grid-card.rar-common    {border-left:3px solid #9CA3AF}
+.sr-grid-card.rar-uncommon  {border-left:3px solid #22C55E}
+.sr-grid-card.rar-rare      {border-left:3px solid #3B82F6}
+.sr-grid-card.rar-epic      {border-left:3px solid #A855F7}
+.sr-grid-card.rar-legendary {border-left:3px solid #F59E0B}
+.sr-grid-card.rar-mythic    {border-left:3px solid #FF77C8}
+.sr-grid-card.rar-cursed    {border-left:3px solid #7C1D1D;background:linear-gradient(180deg,rgba(124,29,29,.1),var(--panel-2))}
+.sr-grid-card.rar-artifact  {border-left:3px solid #E0E5FF;background:linear-gradient(180deg,rgba(224,229,255,.1),var(--panel-2))}
+.sr-card-sym{font-size:1.7rem;line-height:1}
+.sr-card-name{font-weight:700;margin-top:4px;font-size:.84rem}
+.sr-card-meta{font-size:.68rem;color:var(--ink-dim);margin-top:2px}
+.sr-card-eff{font-size:.7rem;color:var(--ink-dim);margin-top:2px;min-height:1em}
+.sr-card-price{font-weight:700;color:var(--ink);font-size:.84rem;margin-top:5px}
+.sr-buy-btn{margin-top:5px;padding:.3rem .6rem;border-radius:6px;border:1px solid var(--border-strong);background:var(--panel);color:var(--ink);font-size:.78rem;cursor:pointer}
+.sr-buy-btn:hover{background:var(--accent)}
+.sr-buy-btn:disabled{opacity:.45;cursor:not-allowed;background:var(--panel)}
+.sr-empty{padding:1rem;color:var(--ink-dim);text-align:center;font-size:.85rem}
+
+/* Confirm modal */
+.sr-modal-inner{max-width:420px}
+.sr-confirm-card{display:flex;gap:12px;align-items:center;padding:.7rem;border-radius:10px;border:1px solid var(--border);background:var(--panel-2);margin-bottom:10px}
+.sr-confirm-card.rar-common    {border-left:3px solid #9CA3AF}
+.sr-confirm-card.rar-uncommon  {border-left:3px solid #22C55E}
+.sr-confirm-card.rar-rare      {border-left:3px solid #3B82F6}
+.sr-confirm-card.rar-epic      {border-left:3px solid #A855F7}
+.sr-confirm-card.rar-legendary {border-left:3px solid #F59E0B}
+.sr-confirm-card.rar-mythic    {border-left:3px solid #FF77C8}
+.sr-confirm-sym{font-size:2.5rem;line-height:1}
+.sr-confirm-name{font-size:1.05rem;font-weight:700}
+.sr-confirm-meta{font-size:.78rem;color:var(--ink-dim);margin-top:2px}
+.sr-confirm-eff{font-size:.82rem;color:var(--ink);margin-top:4px}
+.sr-confirm-lore{font-size:.76rem;color:var(--ink-dim);margin-top:6px;font-style:italic}
+.sr-confirm-price{font-size:1.05rem;margin:10px 0;text-align:center}
+.sr-confirm-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}
+.sr-confirm-cancel,.sr-confirm-buy{padding:.45rem .9rem;border-radius:8px;border:1px solid var(--border-strong);background:var(--panel);color:var(--ink);font-size:.88rem;cursor:pointer}
+.sr-confirm-buy{background:var(--accent);font-weight:700}
+
+/* Quest panel */
+#quests-v85-panel{display:flex;flex-direction:column;gap:14px}
+.q85-section{padding:.6rem;border-radius:10px;border:1px solid var(--border);background:var(--panel-2)}
+.q85-section-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.q85-section-header h4{margin:0;font-size:.95rem;color:var(--ink)}
+.q85-section-header .q85-roll-time{font-size:.7rem;color:var(--ink-dim)}
+.q85-quest{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:.55rem;border-radius:8px;border:1px solid var(--border);background:var(--panel);margin-bottom:6px}
+.q85-quest.completed{border-color:#22C55E;background:linear-gradient(180deg,rgba(34,197,94,.08),var(--panel))}
+.q85-quest.claimed{opacity:.55}
+.q85-q-label{font-weight:600;font-size:.86rem;color:var(--ink);margin-bottom:3px}
+.q85-q-progress{display:flex;align-items:center;gap:6px;font-size:.74rem;color:var(--ink-dim)}
+.q85-q-bar{width:100px;height:6px;background:#1F2937;border-radius:3px;overflow:hidden}
+.q85-q-bar > div{height:100%;background:linear-gradient(90deg,#22D3EE,#A855F7);transition:width .4s ease}
+.q85-q-rewards{font-size:.76rem;color:var(--ink-dim)}
+.q85-q-claim{padding:.32rem .7rem;border-radius:6px;border:1px solid #22C55E;background:#0F4F23;color:#86EFAC;font-size:.78rem;cursor:pointer}
+.q85-q-claim:disabled{opacity:.45;cursor:not-allowed;border-color:var(--border);background:var(--panel);color:var(--ink-dim)}
+
+/* World/zones panel */
+#world-panel{display:flex;flex-direction:column;gap:10px}
+.w85-current{padding:.65rem;border-radius:10px;border:1px solid var(--border);background:var(--panel-2);margin-bottom:8px}
+.w85-current b{color:var(--ink)}
+.w85-current span{color:var(--ink-dim);font-size:.78rem}
+.w85-zones{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px}
+.w85-zone-card{padding:.6rem;border-radius:10px;border:1px solid var(--border);background:var(--panel-2);position:relative}
+.w85-zone-card.locked{opacity:.55}
+.w85-zone-card.current{border-color:#22D3EE;box-shadow:inset 0 0 0 1px rgba(34,211,238,.2)}
+.w85-zone-icon{font-size:1.4rem;margin-right:6px}
+.w85-zone-name{font-weight:700;font-size:.9rem;color:var(--ink)}
+.w85-zone-lore{font-size:.74rem;color:var(--ink-dim);margin-top:3px;line-height:1.4;font-style:italic}
+.w85-zone-actions{margin-top:8px;display:flex;gap:6px}
+.w85-zone-btn{padding:.32rem .65rem;border-radius:6px;border:1px solid var(--border-strong);background:var(--panel);color:var(--ink);font-size:.76rem;cursor:pointer}
+.w85-zone-btn:hover{background:var(--accent)}
+.w85-zone-btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* Vault panel */
+#vault-panel{display:flex;flex-direction:column;gap:10px}
+.vault-header{display:flex;justify-content:space-between;align-items:center;padding:.55rem .7rem;border-radius:8px;background:var(--panel-2);border:1px solid var(--border);font-size:.85rem;color:var(--ink)}
+.vault-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px}
+.vault-cell{padding:.42rem .35rem;border-radius:8px;border:1px solid var(--border);background:var(--panel-2);text-align:center;font-size:.74rem}
+.vault-cell-sym{font-size:1.4rem}
+.vault-cell-name{font-weight:700;color:var(--ink);font-size:.74rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
+.vault-cell-tier{font-size:.62rem;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.06em}
+.vault-cell-actions{display:flex;justify-content:center;gap:4px;margin-top:4px}
+.vault-cell-btn{padding:.2rem .35rem;border-radius:4px;border:1px solid var(--border);background:var(--panel);color:var(--ink-dim);font-size:.68rem;cursor:pointer}
+
+/* ---- v8.4 CHARACTER + MOUNT-ECOSYSTEM + EDIT-UX UI ---- */
+.cr-portrait{display:block;width:100%;height:100%;image-rendering:auto;shape-rendering:geometricPrecision}
+
+/* Mount progress bar in the hero card */
+.cr-mount-progress{
+  margin-top:10px;padding:.55rem .7rem;
+  background:linear-gradient(180deg,rgba(168,192,255,.05),rgba(168,192,255,.02));
+  border:1px solid var(--border);border-radius:10px;
+}
+.cr-mp-label{display:flex;justify-content:space-between;font-size:.78rem;color:var(--ink-dim);margin-bottom:5px}
+.cr-mp-label b{color:var(--ink)}
+.cr-mp-track{height:8px;background:#1F2937;border-radius:4px;overflow:hidden;position:relative}
+.cr-mp-fill{height:100%;background:linear-gradient(90deg,#22D3EE,#A855F7,#F59E0B);transition:width .6s ease}
+.cr-mp-hint{font-size:.72rem;color:var(--ink-dim);margin-top:4px;text-align:right}
+
+/* Stable / Bestiary panel */
+.stable-header{
+  display:grid;grid-template-columns:1fr auto;gap:14px;align-items:center;
+  padding:.7rem;border-radius:10px;background:var(--panel-2);border:1px solid var(--border);margin-bottom:14px
+}
+.stable-progress{display:flex;flex-direction:column;gap:5px}
+.stable-progress-label{display:flex;justify-content:space-between;font-size:.82rem}
+.stable-progress-label b{color:var(--ink)}
+.stable-progress-label span{color:var(--ink-dim);font-size:.75rem}
+.stable-progress-track{height:10px;background:#1F2937;border-radius:5px;overflow:hidden}
+.stable-progress-fill{height:100%;background:linear-gradient(90deg,#9CA3AF,#22C55E,#3B82F6,#A855F7,#F59E0B,#FF77C8);transition:width .8s ease}
+.stable-progress-tiers{display:flex;justify-content:space-between;font-size:.62rem;color:var(--ink-dim);margin-top:3px}
+.stable-collected{font-size:.85rem;color:var(--ink-dim);text-align:right}
+.stable-collected b{font-size:1.4rem;color:var(--ink);display:block}
+.stable-families{display:flex;flex-direction:column;gap:12px}
+.stable-family{
+  padding:.65rem .8rem;border-radius:10px;border:1px solid var(--border);background:var(--panel-2);
+  transition:border-color .15s ease
+}
+.stable-family.complete{border-color:#F59E0B;box-shadow:0 0 0 2px rgba(245,158,11,.18) inset}
+.stable-fam-head{display:flex;align-items:center;gap:8px;font-size:.92rem;margin-bottom:6px}
+.stable-fam-head b{color:var(--ink)}
+.stable-fam-icon{font-size:1.4rem;line-height:1}
+.stable-fam-count{margin-left:auto;font-size:.78rem;color:var(--ink-dim)}
+.stable-fam-title{padding:.18rem .55rem;border-radius:999px;font-size:.7rem;background:rgba(245,158,11,.18);color:#FCD34D;text-transform:uppercase;letter-spacing:.06em}
+.stable-fam-bar{height:5px;background:#1F2937;border-radius:3px;overflow:hidden;margin-bottom:8px}
+.stable-fam-bar > div{height:100%;background:linear-gradient(90deg,#22C55E,#A855F7);transition:width .6s ease}
+.stable-fam-mounts{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px}
+.stable-mount{
+  padding:.45rem .35rem;border-radius:8px;border:1px solid var(--border);background:var(--panel);
+  text-align:center;font-size:.74rem;transition:transform .12s ease
+}
+.stable-mount:hover{transform:translateY(-1px)}
+.stable-mount.locked{opacity:.32;filter:grayscale(.9)}
+.stable-mount.tier-common    {border-left:3px solid #9CA3AF}
+.stable-mount.tier-uncommon  {border-left:3px solid #22C55E}
+.stable-mount.tier-rare      {border-left:3px solid #3B82F6}
+.stable-mount.tier-epic      {border-left:3px solid #A855F7}
+.stable-mount.tier-legendary {border-left:3px solid #F59E0B}
+.stable-mount.tier-mythic    {border-left:3px solid #FF77C8}
+.stable-mount-sym{font-size:1.6rem;line-height:1}
+.stable-mount-name{font-weight:700;margin-top:2px;color:var(--ink);font-size:.72rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stable-mount-tier{font-size:.62rem;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.04em;margin-top:2px}
+
+/* Delta-edit popup tweaks (visual tightening) */
+#xp-breakdown-slot .editor .row{align-items:center;gap:8px}
+#xp-breakdown-slot .editor .row input[type="number"]{
+  padding:.42rem .55rem;border-radius:8px;border:1px solid var(--border-strong);
+  background:var(--panel);color:var(--ink);font-size:.95rem;width:100px
+}
+#xp-breakdown-slot .editor .row .max{font-size:.78rem;color:var(--ink-dim)}
+#xp-breakdown-slot .editor .row .max b{color:var(--ink)}
 
 /* ---- Session row edit affordance (Analytics modal) ---- */
 .session-row{display:flex;align-items:center;gap:.5rem;padding:.25rem .35rem;border-bottom:1px solid rgba(255,255,255,.05)}
@@ -1547,6 +1992,30 @@ button.primary{
 .minute-quick{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;margin:12px 0}
 .minute-quick button{padding:.45rem .25rem;font-size:.74rem}
 .minute-custom{display:flex;gap:8px;align-items:end;margin-top:8px}
+/* v8.7.0: Recent Activity panel */
+.activity-head{margin-top:12px;font-size:.85rem;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.05em;}
+.activity-hint{font-size:.7rem;color:var(--ink-mute);text-transform:none;letter-spacing:0;margin-left:6px;}
+.activity-filter-bar{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0;}
+.activity-filter{padding:2px 8px;font-size:.7rem;background:var(--panel-2);color:var(--ink-dim);border:1px solid var(--border);border-radius:10px;cursor:pointer;}
+.activity-filter.active{background:var(--accent);color:var(--bg);border-color:var(--accent);}
+.activity-list{display:flex;flex-direction:column;gap:2px;max-height:300px;overflow-y:auto;}
+.activity-row{display:flex;gap:6px;align-items:flex-start;padding:4px 8px;font-size:.78rem;border-radius:4px;background:rgba(255,255,255,.02);}
+.activity-row:hover{background:rgba(255,255,255,.05);}
+.activity-icon{flex-shrink:0;width:16px;text-align:center;}
+.activity-text{flex:1;color:var(--ink-dim);}
+.activity-loot{border-left:2px solid var(--rare);} .activity-character{border-left:2px solid var(--accent-2);}
+.activity-edit{border-left:2px solid var(--good);}
+.activity-currency{border-left:2px solid var(--legend);}
+.activity-mount{border-left:2px solid var(--epic);}
+.activity-egg{border-left:2px solid var(--myth);}
+/* v8.6.4: sign-toggle pill for delta inputs (iOS keypad has no minus key) */
+.minute-custom-row{display:flex;gap:6px;align-items:center;}
+.sign-toggle{min-width:34px;padding:.45rem .5rem;font-size:.95rem;font-weight:600;line-height:1;
+  background:var(--panel-2);color:var(--ink);border:1px solid var(--border-strong);
+  border-radius:6px;cursor:pointer;transition:background .12s,color .12s;}
+.sign-toggle:hover{background:var(--accent);color:var(--bg);}
+.sign-toggle:active{transform:translateY(1px);}
+.ledger-adj .sign-toggle{padding:3px 6px;font-size:.85rem;min-width:26px;}
 .minute-custom label{display:grid;gap:4px;flex:1;color:var(--ink-dim);font-size:.73rem;text-transform:uppercase}
 .minute-actions{display:flex;justify-content:space-between;gap:8px;margin-top:14px}
 .companion-grid .loot-item .role{
@@ -1771,8 +2240,8 @@ html,body{touch-action:manipulation;-ms-touch-action:manipulation}
    OS taskbar / mobile browser chrome can never hide a modal or its close X. */
 .modal-backdrop{ padding:16px; padding-bottom:calc(16px + env(safe-area-inset-bottom)); }
 .modal{ max-height:calc(100dvh - 32px - env(safe-area-inset-bottom)); overflow:auto; }
-.toast-wrap{ bottom:calc(88px + env(safe-area-inset-bottom)); z-index:80; }
-.update-toast{ bottom:calc(88px + env(safe-area-inset-bottom)); z-index:95; }
+.toast-wrap{ bottom:calc(20px + env(safe-area-inset-bottom)); }
+.update-toast{ bottom:calc(22px + env(safe-area-inset-bottom)); z-index:90; }
 .claim-modal .modal{ max-height:calc(100dvh - 32px - env(safe-area-inset-bottom)); }
 
 /* v8.0: categorized + searchable emoji picker */
@@ -1853,22 +2322,9 @@ html,body{touch-action:manipulation;-ms-touch-action:manipulation}
 .store-item.rar-legendary{ border-color:var(--legend); }
 .store-item.rar-mythic{ border-color:var(--myth); }
 
-/* ===== v8.4: 3D character (FH3D) — canvas overlays the SVG fallback ===== */
-.fh3d-host{position:relative}
-.fh3d-canvas{position:absolute;inset:0;width:100%;height:100%;display:block;border-radius:inherit;z-index:3;cursor:grab;touch-action:pan-y}
-.fh3d-canvas:active{cursor:grabbing}
-/* larger, more prominent live 3D portrait on the home hero card */
-.hero-card .avatar{width:116px;height:116px}
-/* taller stage in Character Studio so full body + mount fit */
-#character-avatar-preview{height:312px}
-@media (max-width:760px){ #character-avatar-preview{height:264px} }
-
 </style>
 </head>
 <body>
-<!-- v8.4: 3D character system (Three.js, vendored locally for offline-first) -->
-<script src="three.min.js"></script>
-<script src="fh3d.js"></script>
 <script>
 /* v7.9: zoom-lock - block pinch + double-tap zoom; single-finger scroll stays. */
 (function(){
@@ -2015,8 +2471,14 @@ html,body{touch-action:manipulation;-ms-touch-action:manipulation}
       <h2 id="tabs-heading" class="sr-only">Progression</h2>
       <div class="tabs" role="tablist" aria-label="Progression">
         <button role="tab" data-tab="loot" aria-pressed="true">Loot</button>
+        <button role="tab" data-tab="quests-v85" aria-pressed="false">📋 Quests</button>
+        <button role="tab" data-tab="world" aria-pressed="false">🌍 World</button>
+        <button role="tab" data-tab="vault" aria-pressed="false">🏛️ Vault</button>
+        <button role="tab" data-tab="stable" aria-pressed="false">🐎 Stable</button>
         <button role="tab" data-tab="mounts" aria-pressed="false">Mounts</button>
         <button role="tab" data-tab="pets" aria-pressed="false">Pets</button>
+        <button role="tab" data-tab="drops" aria-pressed="false">📜 Drops</button>
+        <button role="tab" data-tab="forge" aria-pressed="false">🔥 Forge</button>
         <button role="tab" data-tab="ach" aria-pressed="false">Achievements</button>
         <button role="tab" data-tab="store" aria-pressed="false">🪙 Store</button>
         <button role="tab" data-tab="ledger" aria-pressed="false">📒 Ledger</button>
@@ -2025,6 +2487,12 @@ html,body{touch-action:manipulation;-ms-touch-action:manipulation}
       <div id="tab-loot" class="tab-panel"><div id="loot-grid" class="loot-grid"></div></div>
       <div id="tab-mounts" class="tab-panel" hidden><div id="mount-grid" class="loot-grid companion-grid"></div></div>
       <div id="tab-pets" class="tab-panel" hidden><div id="pet-grid" class="loot-grid companion-grid"></div></div>
+      <div id="tab-quests-v85" class="tab-panel" hidden><div id="quests-v85-panel"><div class="muted" style="font-size:.85rem;margin-bottom:6px">Daily, weekly, and seasonal quests. Claim rewards when complete.</div></div></div>
+      <div id="tab-world" class="tab-panel" hidden><div id="world-panel"><div class="muted" style="font-size:.85rem;margin-bottom:6px">6 zones. Each has its own enemies, mounts, and loot bias. Use maps or Crystal Shards to unlock.</div></div></div>
+      <div id="tab-vault" class="tab-panel" hidden><div id="vault-panel"><div class="muted" style="font-size:.85rem;margin-bottom:6px">Long-term storage for loot instances. 100-slot cap.</div></div></div>
+      <div id="tab-stable" class="tab-panel" hidden><div id="stable-panel"><div class="muted" style="font-size:.85rem;margin-bottom:6px">Mount ecosystem. Complete a full family to earn a "Master of" title.</div></div></div>
+      <div id="tab-drops" class="tab-panel" hidden><div id="drops-panel"><div class="muted" style="font-size:.8rem;margin-bottom:6px">Every drop you've earned, with the odds at the moment it rolled.</div><div id="drops-list" class="drops-list"></div></div></div>
+      <div id="tab-forge" class="tab-panel" hidden><div id="forge-panel"></div></div>
       <div id="tab-ach" class="tab-panel" hidden><div id="ach-grid" class="ach-grid"></div></div>
       <div id="tab-store" class="tab-panel" hidden><div id="store-panel"></div></div>
       <div id="tab-ledger" class="tab-panel" hidden><div id="ledger-panel"></div></div>
@@ -2050,6 +2518,13 @@ html,body{touch-action:manipulation;-ms-touch-action:manipulation}
 </nav>
 
 <div class="toast-wrap" id="toasts" aria-live="polite" aria-atomic="false"></div>
+<script src="./loot-rework.js"></script>
+<script src="./character-rebuild.js"></script>
+<script src="./world-depth.js"></script>
+<script src="./shop-rework.js"></script>
+<script src="./character-v86-fix.js"></script>
+<script src="./eggs.js"></script>
+<script src="./v8.6.3-patch.js"></script>
 
 <!-- Settings modal -->
 <div class="modal-backdrop" id="settings-modal" hidden>
@@ -2063,7 +2538,8 @@ html,body{touch-action:manipulation;-ms-touch-action:manipulation}
     <div class="form-row"><label>Hero name</label><div class="val"><input type="text" id="cfg-name" maxlength="32" style="width:180px"></div></div>
     <div class="form-row"><label>Class</label><div class="val"><select id="cfg-class">
       <option value="knight">Knight</option><option value="mage">Mage</option><option value="rogue">Rogue</option><option value="warrior">Warrior</option>
-      <option value="druid">Druid</option><option value="bard">Bard</option></select></div></div>
+      <option value="druid">Druid</option><option value="bard">Bard</option>
+      <option value="ranger">Ranger</option><option value="cleric">Cleric</option></select></div></div>
     <hr>
     <div class="form-row"><label>Auto-start next session</label><div class="val"><button class="toggle" id="tog-auto" aria-checked="false" aria-label="Auto-start next session"></button></div></div>
     <div class="form-row"><label>Tick sounds</label><div class="val"><button class="toggle" id="tog-tick" aria-checked="false" aria-label="Tick sounds"></button></div></div>
@@ -2084,6 +2560,11 @@ html,body{touch-action:manipulation;-ms-touch-action:manipulation}
     <div class="form-row"><label title="Sessions shorter than this earn no XP, loot, or achievements">Minimum session length for rewards (minutes)</label><div class="val"><input type="number" id="cfg-min-reward" min="1" max="15" step="1"></div></div>
     <div class="form-row"><label title="Streak day N adds N% bonus XP, up to this cap">Daily streak XP cap (%)</label><div class="val"><input type="number" id="cfg-streak-cap" min="0" max="200" step="1"></div></div>
     <div class="form-row"><label title="Each back-to-back focus session today adds 10% XP, up to this cap">Combo XP cap (%)</label><div class="val"><input type="number" id="cfg-combo-cap" min="0" max="200" step="1"></div></div>
+    <hr>
+    <h4 style="margin:.25rem 0 .25rem;font-size:.82rem;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.1em">Loot rework</h4>
+    <div class="form-row"><label title="Animated drop reveal with rarity-tinted glow and sound effects">Drop animations &amp; sounds</label><div class="val"><button class="toggle" id="tog-lr-anim" aria-checked="true" aria-label="Drop animations"></button></div></div>
+    <div class="form-row"><label title="Show recent drops as a tab in the Loot card">Show drop log tab</label><div class="val"><button class="toggle" id="tog-lr-log" aria-checked="true" aria-label="Show drop log"></button></div></div>
+    <div class="form-row"><label title="Once you own 4+ instances of a common template, auto-salvage new common drops of that template">Auto-salvage common duplicates</label><div class="val"><button class="toggle" id="tog-lr-autosalvage" aria-checked="false" aria-label="Auto-salvage common duplicates"></button></div></div>
     <hr>
     <h4 style="margin:.25rem 0 .25rem;font-size:.82rem;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.1em">Background play (iOS/Safari stays alive)</h4>
     <div class="form-row"><label title="Silent audio tone keeps the timer running when the tab is backgrounded">Audio keepalive during focus</label><div class="val"><button class="toggle" id="tog-keepalive" aria-checked="true" aria-label="Audio keepalive"></button></div></div>
@@ -2177,6 +2658,28 @@ html,body{touch-action:manipulation;-ms-touch-action:manipulation}
   </div>
 </div>
 
+<!-- v8.x Loot rework — Inspector modal (per-instance customize) -->
+<div class="modal-backdrop" id="loot-inspector-modal" hidden>
+  <div class="modal loot-inspector" role="dialog" aria-modal="true" aria-labelledby="loot-inspector-title">
+    <button class="close" data-close="loot-inspector-modal" aria-label="Close">✕</button>
+    <h3 id="loot-inspector-title">Customize</h3>
+    <div id="loot-inspector-body" class="loot-inspector-body">No item selected.</div>
+    <hr>
+    <div class="muted" style="font-size:.78rem">Reroll spends <b>Arcane Dust</b>. Upgrade spends <b>Crystal Shards</b> + coins. Removing a gem destroys it. Locked items can't be salvaged or rerolled.</div>
+  </div>
+</div>
+
+<!-- v8.x Loot rework — Battle Report modal -->
+<div class="modal-backdrop" id="battle-report-modal" hidden>
+  <div class="modal battle-report" role="dialog" aria-modal="true" aria-labelledby="battle-report-title">
+    <button class="close" data-close="battle-report-modal" aria-label="Close">✕</button>
+    <h3 id="battle-report-title">Battle Report</h3>
+    <div id="battle-report-body" class="battle-report-body"></div>
+    <hr>
+    <div class="muted" style="font-size:.78rem">Equipped gear's elemental damage interacts with enemy weaknesses (1.5×) and resistances (0.5×). Dodge and crit are rolled per round.</div>
+  </div>
+</div>
+
 <!-- Analytics modal — v4.3 -->
 <div class="modal-backdrop" id="analytics-modal" hidden>
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="analytics-title">
@@ -2207,7 +2710,12 @@ html,body{touch-action:manipulation;-ms-touch-action:manipulation}
       <button type="button" data-minute-delta="30">+30</button>
     </div>
     <div class="minute-custom">
-      <label>Custom correction (+/- minutes)<input id="minute-custom-input" type="number" step="5" placeholder="e.g. 45 or -10"></label>
+      <label>Custom correction (+/- minutes)
+        <div class="minute-custom-row">
+          <button type="button" class="sign-toggle" id="minute-custom-sign" aria-label="Flip sign of value">+</button>
+          <input id="minute-custom-input" type="text" inputmode="numeric" pattern="-?[0-9]*" placeholder="e.g. 45 or -10">
+        </div>
+      </label>
       <button type="button" class="primary" id="btn-minute-apply">Apply</button>
     </div>
     <div class="minute-actions">
@@ -2260,6 +2768,7 @@ html,body{touch-action:manipulation;-ms-touch-action:manipulation}
           <label>Class<select id="character-class" aria-label="Hero class">
             <option value="knight">Knight</option><option value="mage">Mage</option><option value="rogue">Rogue</option><option value="warrior">Warrior</option>
             <option value="druid">Druid</option><option value="bard">Bard</option>
+            <option value="ranger">Ranger</option><option value="cleric">Cleric</option>
           </select></label>
         </div>
         <div class="character-tabs" role="tablist" aria-label="Character Studio sections">
@@ -2313,7 +2822,7 @@ html,body{touch-action:manipulation;-ms-touch-action:manipulation}
 </div>
 
 <!-- ================================================================
- * Focus Hero v8.2.1 - inline script (one file, no deps)
+ * Focus Hero v8.6.0 - + character-v86-fix.js + eggs.js (Hero card avatar finally uses species/class, eggs drop and hatch)
  * ================================================================ -->
 <script>
 "use strict";
@@ -2365,7 +2874,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const STORAGE_KEY     = "focusHero.v4.state";
 const LEGACY_KEYS     = ["focusHero.v3.state", "focusHero.v2.state", "focusHero.v1.state"];
 const BC_KEY          = "focusHero.v4";
-const DATA_VERSION    = 10;
+const DATA_VERSION    = 14;
 const PBKDF2_ITERATIONS = 100_000;
 const AES_KEY_LENGTH = 256;
 const SALT_BYTES = 16;
@@ -2454,14 +2963,33 @@ const DEFAULTS = {
   history: {},
   sessionHistory: {},
   sessionsLog: [],
+  activityLog: [],   /* v8.7.0: append-only universal change log (cap 500) */
   battleLog: [],
   adventure: { action:"Travel", actionMin:{ Travel:0, Rest:0, Hunt:0, Loot:0, Fight:0, Craft:0, Meditate:0 }, actionsTriedSinceV76:{} },
   bestiary: {},
+  eggs: { owned:[], incubating:[], hatched:[], quarantined:[], processedSessionIds:[], slotCap:3, systemVersion:2 },
   achievementProgress: {},
   coins: 0,
   coinsEarned: 0,
   coinsSpent: 0,
   store: { purchased: [], boosts: [], unlockedThemes: [] },
+  /* v8.x LOOT REWORK — additive only. lootInstances holds per-drop
+     unique items with rolled affixes / sockets / dye / level. state.loot
+     holds the drop log, pity counters, materials, and the consumable
+     combat loadout. state.lootOwned (legacy template counts) is preserved
+     bitwise. See loot-rework-design.md. */
+  lootInstances: {},
+  loot: {
+    drops: [],
+    pity: { common:0, uncommon:0, rare:0, epic:0, legendary:0, mythic:0 },
+    materials: { dust:0, shards:0, essence:0 },
+    dyesOwned: {},
+    gemsOwned: {},
+    consumables: {},
+    loadout: { slot1:null, slot2:null, slot3:null },
+    loadoutUpdatedAt: 0
+  },
+  lootRework: { version:1, flags:{ animationsOn:true, showDropLog:true, autoSalvageCommonDupes:false } },
   editLog: [],
   sync: {
     enabled: false, backend: null,
@@ -2485,7 +3013,12 @@ const CLASSES = {
   druid:   { name: "Druid",   palette: ["#7bd88f","#f2b94b","#172312","#e9f6d6"],
              titles: ["Seedling","Wildkin","Druid","Verdant","Greenwarden","Worldroot"] },
   bard:    { name: "Bard",    palette: ["#ff8ad0","#ffd76b","#2a1029","#ffe6f5"],
-             titles: ["Minstrel","Chanter","Bard","Virtuoso","Maestro","Muse"] }
+             titles: ["Minstrel","Chanter","Bard","Virtuoso","Maestro","Muse"] },
+  /* v8.8: previously orphaned — v86 already had overlays for these. */
+  ranger:  { name: "Ranger",  palette: ["#84cc16","#a3e635","#1a2e05","#ecfccb"],
+             titles: ["Tracker","Hunter","Ranger","Pathfinder","Warden","Greenhood"] },
+  cleric:  { name: "Cleric",  palette: ["#fbbf24","#fef3c7","#451a03","#fefce8"],
+             titles: ["Acolyte","Priest","Cleric","Bishop","Holy Champion","Saint"] }
 };
 const TITLE_BANDS = [1, 5, 10, 20, 35, 60]; // idx into titles
 const RARITY = ["common","uncommon","rare","epic","legendary","mythic"]; // mythic bonus
@@ -2554,7 +3087,14 @@ const APPEARANCE_OPTIONS = {
     { id:"elf", label:"Elf" },
     { id:"orc", label:"Orc" },
     { id:"dwarf", label:"Dwarf" },
-    { id:"fae", label:"Fae" }
+    { id:"fae", label:"Fae" },
+    /* v8.8: previously hidden — fully wired in CR_SPECIES + v86 renderer */
+    { id:"goblin", label:"Goblin" },
+    { id:"beastfolk_cat", label:"Beastfolk · Cat" },
+    { id:"beastfolk_wolf", label:"Beastfolk · Wolf" },
+    { id:"beastfolk_lizard", label:"Beastfolk · Lizard" },
+    { id:"undead", label:"Undead" },
+    { id:"demon", label:"Demon" }
   ],
   body: [
     { id:"balanced", label:"Balanced" },
@@ -3103,6 +3643,238 @@ function migrate(raw){
     s.settings.characterPatchVersion = Math.max(s.settings.characterPatchVersion|0, HERO_APPEARANCE_VERSION);
     s.dataVersion = 10;
   }
+  /* v8.6.3 fix: migration ladder reordered to ascending order (11→12→13→14).
+     v8.6.2 ran them in 14→13→12→11, causing v14 to fire first and the three
+     later `if (s.dataVersion < N)` checks to evaluate false, skipping
+     v11/v12/v13 init for any user on dataVersion <= 10. */
+  if (s.dataVersion < 11){
+    /* v8.x: LOOT REWORK — gain / customize / use.
+       Purely additive: lootOwned counts, hero.equipped slots, bestiary
+       counters, achievements, sessionsLog, history, coins, store — all
+       preserved bitwise. New subtrees default to safe empties. */
+    var __lr_rarities = ["common","uncommon","rare","epic","legendary","mythic"];
+    if (!s.lootInstances || typeof s.lootInstances !== "object" || Array.isArray(s.lootInstances)){
+      s.lootInstances = {};
+    }
+    if (!s.loot || typeof s.loot !== "object" || Array.isArray(s.loot)){
+      s.loot = {
+        drops: [],
+        pity: { common:0, uncommon:0, rare:0, epic:0, legendary:0, mythic:0 },
+        materials: { dust:0, shards:0, essence:0 },
+        dyesOwned: {},
+        gemsOwned: {},
+        consumables: {},
+        loadout: { slot1:null, slot2:null, slot3:null },
+        loadoutUpdatedAt: 0
+      };
+    } else {
+      if (!Array.isArray(s.loot.drops)) s.loot.drops = [];
+      if (!s.loot.pity || typeof s.loot.pity !== "object" || Array.isArray(s.loot.pity)){
+        s.loot.pity = { common:0, uncommon:0, rare:0, epic:0, legendary:0, mythic:0 };
+      } else {
+        for (var __r=0; __r<__lr_rarities.length; __r++){
+          var __rk = __lr_rarities[__r];
+          if (typeof s.loot.pity[__rk] !== "number" || !(s.loot.pity[__rk] >= 0)) s.loot.pity[__rk] = 0;
+        }
+      }
+      if (!s.loot.materials || typeof s.loot.materials !== "object" || Array.isArray(s.loot.materials)){
+        s.loot.materials = { dust:0, shards:0, essence:0 };
+      } else {
+        var __mk = ["dust","shards","essence"];
+        for (var __m=0; __m<__mk.length; __m++){
+          if (typeof s.loot.materials[__mk[__m]] !== "number" || !(s.loot.materials[__mk[__m]] >= 0)) s.loot.materials[__mk[__m]] = 0;
+        }
+      }
+      if (!s.loot.dyesOwned   || typeof s.loot.dyesOwned   !== "object" || Array.isArray(s.loot.dyesOwned))   s.loot.dyesOwned   = {};
+      if (!s.loot.gemsOwned   || typeof s.loot.gemsOwned   !== "object" || Array.isArray(s.loot.gemsOwned))   s.loot.gemsOwned   = {};
+      if (!s.loot.consumables || typeof s.loot.consumables !== "object" || Array.isArray(s.loot.consumables)) s.loot.consumables = {};
+      if (!s.loot.loadout || typeof s.loot.loadout !== "object" || Array.isArray(s.loot.loadout)){
+        s.loot.loadout = { slot1:null, slot2:null, slot3:null };
+      } else {
+        var __lk = ["slot1","slot2","slot3"];
+        for (var __l=0; __l<__lk.length; __l++) if (!(__lk[__l] in s.loot.loadout)) s.loot.loadout[__lk[__l]] = null;
+      }
+      if (typeof s.loot.loadoutUpdatedAt !== "number" || !(s.loot.loadoutUpdatedAt >= 0)) s.loot.loadoutUpdatedAt = 0;
+    }
+    /* Bestiary extension: per-template drop tally + lastEncounteredAt.
+       Existing { unlocked, firstSeenAt, kills } stays exactly as it was. */
+    if (s.bestiary && typeof s.bestiary === "object" && !Array.isArray(s.bestiary)){
+      var __bk = Object.keys(s.bestiary);
+      for (var __bi=0; __bi<__bk.length; __bi++){
+        var __ent = s.bestiary[__bk[__bi]];
+        if (__ent && typeof __ent === "object" && !Array.isArray(__ent)){
+          if (!__ent.drops || typeof __ent.drops !== "object" || Array.isArray(__ent.drops)) __ent.drops = {};
+          if (!("lastEncounteredAt" in __ent)) __ent.lastEncounteredAt = null;
+        }
+      }
+    }
+    if (!s.lootRework || typeof s.lootRework !== "object" || Array.isArray(s.lootRework)){
+      s.lootRework = { version:1, flags:{ animationsOn:true, showDropLog:true, autoSalvageCommonDupes:false } };
+    } else {
+      if (typeof s.lootRework.version !== "number") s.lootRework.version = 1;
+      if (!s.lootRework.flags || typeof s.lootRework.flags !== "object" || Array.isArray(s.lootRework.flags)){
+        s.lootRework.flags = { animationsOn:true, showDropLog:true, autoSalvageCommonDupes:false };
+      } else {
+        if (typeof s.lootRework.flags.animationsOn !== "boolean") s.lootRework.flags.animationsOn = true;
+        if (typeof s.lootRework.flags.showDropLog !== "boolean") s.lootRework.flags.showDropLog = true;
+        if (typeof s.lootRework.flags.autoSalvageCommonDupes !== "boolean") s.lootRework.flags.autoSalvageCommonDupes = false;
+      }
+    }
+    s.dataVersion = 11;
+  }
+  if (s.dataVersion < 12){
+    /* v8.4: character + mount-ecosystem + edit-UX. Purely additive.
+       Existing hero.appearance, lootInstances, loot.*, lootRework,
+       lootOwned, bestiary, equipped, achievements, sessionsLog and
+       every cumulative counter are preserved bit-identically. */
+    if (!s.hero || typeof s.hero !== "object") s.hero = deepClone(DEFAULTS.hero);
+    if (!s.hero.appearance || typeof s.hero.appearance !== "object") s.hero.appearance = deepClone(DEFAULTS.hero.appearance);
+    /* New unified species field: prefer existing .race for compat. */
+    if (typeof s.hero.appearance.species !== "string"){
+      s.hero.appearance.species = (typeof s.hero.appearance.race === "string") ? s.hero.appearance.race : "human";
+    }
+    /* New unified class field, mirror of hero.cls. */
+    if (typeof s.hero.appearance.classKey !== "string"){
+      s.hero.appearance.classKey = (typeof s.hero.cls === "string") ? s.hero.cls : "warrior";
+    }
+    /* skinIdx integer index into the species-specific skinTones palette. */
+    if (typeof s.hero.appearance.skinIdx !== "number" || !(s.hero.appearance.skinIdx >= 0)) s.hero.appearance.skinIdx = 0;
+    /* Mount-progress counter (focus minutes since the last guaranteed mount). */
+    if (!s.loot || typeof s.loot !== "object" || Array.isArray(s.loot)){
+      s.loot = { drops: [], pity: { common:0, uncommon:0, rare:0, epic:0, legendary:0, mythic:0 },
+                 materials: { dust:0, shards:0, essence:0 }, dyesOwned: {}, gemsOwned: {},
+                 consumables: {}, loadout: { slot1:null, slot2:null, slot3:null }, loadoutUpdatedAt: 0 };
+    }
+    if (typeof s.loot.mountProgress !== "number" || !(s.loot.mountProgress >= 0)) s.loot.mountProgress = 0;
+    if (!s.loot.mountFamilies || typeof s.loot.mountFamilies !== "object" || Array.isArray(s.loot.mountFamilies)) s.loot.mountFamilies = {};
+    s.dataVersion = 12;
+  }
+  if (s.dataVersion < 13){
+    /* v8.5: world depth - loot kinds, sets, affixes, crafting, vault,
+       Crystal Shards, quests, zones, expanded enemies, bosses,
+       achievements expansion. Purely additive. */
+    if (typeof s.crystalShards !== "number" || !(s.crystalShards >= 0)) s.crystalShards = 0;
+    if (typeof s.crystalShardsEarned !== "number" || !(s.crystalShardsEarned >= 0)) s.crystalShardsEarned = 0;
+    if (typeof s.crystalShardsSpent !== "number" || !(s.crystalShardsSpent >= 0)) s.crystalShardsSpent = 0;
+    if (typeof s.craftingDust !== "number" || !(s.craftingDust >= 0)) s.craftingDust = 0;
+    if (!s.questSystem || typeof s.questSystem !== "object" || Array.isArray(s.questSystem)){
+      s.questSystem = { daily:[], weekly:[], seasonal:[], lastRoll:{ daily:null, weekly:null, seasonal:null },
+                        dailyClaimedCount:0, weeklyClaimedCount:0, seasonalClaimedCount:0 };
+    } else {
+      if (!Array.isArray(s.questSystem.daily)) s.questSystem.daily = [];
+      if (!Array.isArray(s.questSystem.weekly)) s.questSystem.weekly = [];
+      if (!Array.isArray(s.questSystem.seasonal)) s.questSystem.seasonal = [];
+      if (!s.questSystem.lastRoll) s.questSystem.lastRoll = { daily:null, weekly:null, seasonal:null };
+      if (typeof s.questSystem.dailyClaimedCount !== "number") s.questSystem.dailyClaimedCount = 0;
+      if (typeof s.questSystem.weeklyClaimedCount !== "number") s.questSystem.weeklyClaimedCount = 0;
+      if (typeof s.questSystem.seasonalClaimedCount !== "number") s.questSystem.seasonalClaimedCount = 0;
+    }
+    if (!s.world || typeof s.world !== "object" || Array.isArray(s.world)){
+      s.world = { currentZone:"verdant_vale", unlockedZones:{verdant_vale:true}, zonesVisited:{verdant_vale:1},
+                  bossesDefeated:0, mysteryBoxesOpened:0, artifactsFound:{}, questCounters:{} };
+    } else {
+      if (typeof s.world.currentZone !== "string") s.world.currentZone = "verdant_vale";
+      if (!s.world.unlockedZones || typeof s.world.unlockedZones !== "object" || Array.isArray(s.world.unlockedZones)){
+        s.world.unlockedZones = { verdant_vale:true };
+      } else {
+        s.world.unlockedZones.verdant_vale = true;
+      }
+      if (!s.world.zonesVisited) s.world.zonesVisited = { verdant_vale:1 };
+      if (typeof s.world.bossesDefeated !== "number") s.world.bossesDefeated = 0;
+      if (typeof s.world.mysteryBoxesOpened !== "number") s.world.mysteryBoxesOpened = 0;
+      if (!s.world.artifactsFound) s.world.artifactsFound = {};
+      if (!s.world.questCounters) s.world.questCounters = {};
+    }
+    if (!s.loot) s.loot = { drops:[], pity:{}, materials:{}, dyesOwned:{}, gemsOwned:{}, consumables:{}, loadout:{slot1:null,slot2:null,slot3:null}, loadoutUpdatedAt:0 };
+    if (!s.loot.vault || typeof s.loot.vault !== "object" || Array.isArray(s.loot.vault)){
+      s.loot.vault = { instances:{}, cap:100 };
+    } else {
+      if (!s.loot.vault.instances) s.loot.vault.instances = {};
+      if (typeof s.loot.vault.cap !== "number") s.loot.vault.cap = 100;
+    }
+    if (!s.achievementsV85 || typeof s.achievementsV85 !== "object" || Array.isArray(s.achievementsV85)) s.achievementsV85 = {};
+    s.dataVersion = 13;
+  }
+  if (s.dataVersion < 14){
+    /* v8.6: egg system + character SVG fix. Purely additive.
+       state.eggs holds owned eggs, currently-incubating eggs (3 slots),
+       and history of hatched eggs. Existing data fields untouched. */
+    if (!s.eggs || typeof s.eggs !== "object" || Array.isArray(s.eggs)){
+      s.eggs = { owned:[], incubating:[], hatched:[], quarantined:[], processedSessionIds:[], slotCap:3, systemVersion:2 };
+    } else {
+      if (!Array.isArray(s.eggs.owned)) s.eggs.owned = [];
+      if (!Array.isArray(s.eggs.incubating)) s.eggs.incubating = [];
+      if (!Array.isArray(s.eggs.hatched)) s.eggs.hatched = [];
+      if (!Array.isArray(s.eggs.quarantined)) s.eggs.quarantined = [];
+      if (!Array.isArray(s.eggs.processedSessionIds)) s.eggs.processedSessionIds = [];
+      if (typeof s.eggs.slotCap !== "number" || !(s.eggs.slotCap >= 1)) s.eggs.slotCap = 3;
+      s.eggs.systemVersion = 2;
+    }
+    s.dataVersion = 14;
+  }
+  if (s.dataVersion < 15){
+    /* v8.7.0: universal activity log (append-only, capped 500). Existing
+       editLog is preserved unchanged. activityLog tracks EVERY change with
+       a typed schema (category/action/before/after/delta/source). */
+    if (!Array.isArray(s.activityLog)) s.activityLog = [];
+    s.dataVersion = 15;
+  }
+  /* v8.7.0 ONE-SHOT: retroactive clawback of loot from the hygiene session
+     that was edited to 0 minutes. Per Joel's directive, the new v8.7 loot
+     clawback rule should have removed that session's 4 loot items at edit
+     time but didn't (because the rule didn't exist yet). Apply ONLY to that
+     session, ONLY once (gated by s.v87HygieneFixApplied), and back up state
+     to localStorage as state_pre_v87_hygiene_fix first. */
+  if (!s.v87HygieneFixApplied){
+    try {
+      /* Backup BEFORE touching anything */
+      try { localStorage.setItem("focusHero.v4.state.pre_v87_hygiene_fix", JSON.stringify(s)); } catch(_){}
+      var __targetRec = null;
+      if (Array.isArray(s.sessionsLog) && Array.isArray(s.tasks)){
+        /* Find last session where: edited (adjustedFrom > 0), now 0 min,
+           and its task name contains "hygiene" (case-insensitive). */
+        for (var __si = s.sessionsLog.length - 1; __si >= 0; __si--){
+          var __r = s.sessionsLog[__si];
+          if (!__r) continue;
+          if ((__r.adjustedFrom|0) <= 0) continue;
+          if ((__r.minutes|0) !== 0) continue;
+          var __tk = __r.taskId ? s.tasks.find(function(t){ return t && t.id === __r.taskId; }) : null;
+          var __tname = __tk && __tk.name ? String(__tk.name).toLowerCase() : "";
+          if (__tname.indexOf("hygiene") >= 0){
+            __targetRec = __r;
+            break;
+          }
+        }
+      }
+      var __removed = 0;
+      if (__targetRec && s.loot && Array.isArray(s.loot.drops)){
+        var __keep = [];
+        for (var __di2 = 0; __di2 < s.loot.drops.length; __di2++){
+          var __d2 = s.loot.drops[__di2];
+          if (!__d2 || __d2.sessionId !== __targetRec.id){ __keep.push(__d2); continue; }
+          /* Claw back: remove instance, decrement owned count */
+          if (__d2.iid && s.lootInstances && s.lootInstances[__d2.iid]){ delete s.lootInstances[__d2.iid]; }
+          if (__d2.templateId && s.lootOwned && (s.lootOwned[__d2.templateId]|0) > 0){
+            s.lootOwned[__d2.templateId] = Math.max(0, (s.lootOwned[__d2.templateId]|0) - 1);
+            if (s.lootOwned[__d2.templateId] === 0) delete s.lootOwned[__d2.templateId];
+          }
+          __removed++;
+        }
+        s.loot.drops = __keep;
+        if (__removed > 0){
+          if (!Array.isArray(s.activityLog)) s.activityLog = [];
+          s.activityLog.push({
+            id: "v87_hygiene_fix", timestamp:(new Date()).toISOString(), at: Date.now(),
+            category:"loot", action:"loot_clawback_retroactive",
+            sessionId: __targetRec.id, taskId: __targetRec.taskId || null,
+            before:{ lootCount: __removed }, after:{ lootCount: 0 }, delta: -__removed,
+            source:"admin", note:"v8.7.0 retroactive — hygiene session was edited to 0min without clawback"
+          });
+        }
+      }
+    } catch(__e){ /* swallow — never break migration */ }
+    s.v87HygieneFixApplied = true;
+  }
 
   /* Degraded-read resilience: rebuild malformed subtrees, but ONLY the malformed ones.
    * We never touch subtrees that parse cleanly. */
@@ -3116,7 +3888,7 @@ function migrate(raw){
     }
   }
   // sub-keys for nested objects (additive only)
-  ["hero","settings","timer","sync","daily","combo"].forEach(group=>{
+  ["hero","settings","timer","sync","daily","combo","eggs"].forEach(group=>{
     s[group] = s[group]||{};
     for (const k of Object.keys(DEFAULTS[group]||{})) if (!(k in s[group])) s[group][k]=deepClone(DEFAULTS[group][k]);
   });
@@ -3140,7 +3912,44 @@ function migrate(raw){
   ensureHeroAppearanceShape(s.hero);
   ensureHeroCosmeticsShape(s.hero);
   if (!Array.isArray(s.battleLog)) s.battleLog = [];
+  /* v8.x: snapshot bestiary v8.x-extension fields BEFORE
+     ensureV76StateShape rebuilds entries (which would otherwise drop
+     drops/lastEncounteredAt). */
+  var __bestPre = {};
+  if (s.bestiary && typeof s.bestiary === "object" && !Array.isArray(s.bestiary)){
+    for (var __bk0 in s.bestiary){
+      var __e = s.bestiary[__bk0];
+      if (__e && typeof __e === "object" && !Array.isArray(__e)){
+        __bestPre[__bk0] = {
+          drops: (__e.drops && typeof __e.drops === "object" && !Array.isArray(__e.drops)) ? deepClone(__e.drops) : null,
+          lastEncounteredAt: ("lastEncounteredAt" in __e) ? __e.lastEncounteredAt : undefined
+        };
+      }
+    }
+  }
   ensureV76StateShape(s);
+  /* v8.x: restore bestiary drops + lastEncounteredAt - prefer the
+     snapshot taken pre-shape (preserves real values), else default. */
+  if (s.bestiary && typeof s.bestiary === "object"){
+    var __bk2 = Object.keys(s.bestiary);
+    for (var __bi2=0; __bi2<__bk2.length; __bi2++){
+      var __id2 = __bk2[__bi2];
+      var __ent2 = s.bestiary[__id2];
+      if (__ent2 && typeof __ent2 === "object" && !Array.isArray(__ent2)){
+        var __saved = __bestPre[__id2];
+        if (__saved && __saved.drops){
+          __ent2.drops = __saved.drops;
+        } else if (!__ent2.drops || typeof __ent2.drops !== "object" || Array.isArray(__ent2.drops)){
+          __ent2.drops = {};
+        }
+        if (__saved && typeof __saved.lastEncounteredAt !== "undefined"){
+          __ent2.lastEncounteredAt = __saved.lastEncounteredAt;
+        } else if (!("lastEncounteredAt" in __ent2)){
+          __ent2.lastEncounteredAt = null;
+        }
+      }
+    }
+  }
   if (s.longestStreak < s.streak) s.longestStreak = s.streak;
   return s;
 }
@@ -3621,16 +4430,24 @@ function finalizeStopwatch(){
     // Note: state.combo.count is intentionally not incremented for stopwatch sessions.
     state.hero.energy = Math.max(0, state.hero.energy - Math.max(0, 8 - gearStats.energySave));
     state.hero.hp = Math.min(100, state.hero.hp + 2);
-    lootItem = rollLoot(minutes);
+    /* v8.x: multi-encounter loot pipeline replaces the single rollLoot() call.
+       Falls back to legacy if loot-rework.js failed to load. */
+    var __lrSwSessId = "sw_" + Date.now() + "_" + Math.floor(Math.random()*1e6);
+    var __lrSwRun = runSessionRewardPipeline(currentAdventureActionId(), minutes, __lrSwSessId);
+    lootItem = __lrSwRun.legacyItem;
     updateDailyProgress("focus", 1);
     updateDailyProgress("minutes", minutes);
     const coinsHere = computeCoins(minutes, true);
     state.coins = (state.coins|0) + coinsHere;
     state.coinsEarned = (state.coinsEarned|0) + coinsHere;
     if (coinsHere > 0) toast(`+${coinsHere} coins earned`, "good");
-    breakdownMeta = { lootItem, coins: coinsHere, xpAwarded };
+    breakdownMeta = { lootItem, coins: coinsHere, xpAwarded, lrRun: __lrSwRun };
     logLine(`Stopwatch logged: ${minutes}m · +${xpAwarded} XP (base ${xp.base}${xp.streakBonus?` +${xp.streakBonus} streak`:""})`);
-    logBattle(`Hero completed ${taskLabel}. +${xpAwarded} XP${lootItem ? `, Loot: ${lootItem[1]} (${lootItem[2]})` : ""}.`, lootItem ? "loot" : "good");
+    logBattle(`Hero completed ${taskLabel}. +${xpAwarded} XP${lootItem ? `, Loot: ${lootItem[1]} (${lootItem[2]})` : ""}${__lrSwRun.drops.length>1 ? ` (+${__lrSwRun.drops.length-1} more)` : ""}.`, lootItem ? "loot" : "good");
+    /* v8.6.5: tell the user the dice were rolled even when nothing dropped. */
+    if (!lootItem && __lrSwRun && Array.isArray(__lrSwRun.drops) && __lrSwRun.drops.length === 0){
+      logLine(`No loot dropped this time (${minutes}m roll completed).`);
+    }
     notify("Stopwatch logged!", `+${xpAwarded} XP · ${minutes}m saved`);
   } else {
     breakdownMeta = { reasonShort: true };
@@ -3642,6 +4459,7 @@ function finalizeStopwatch(){
   if (earnedRewards) maybeRecordActionEncounter("stopwatchComplete");
   if (typeof checkAchievementsV76 === "function") achievementsUnlockedHere = checkAchievementsV76("stopwatchComplete") || [];
   const sessionRecord = buildSessionLogRecordV76({
+    id: earnedRewards ? __lrSwSessId : undefined,
     type:"focus", source:"stopwatch", minutes, taskId: state.timer.activeTaskId||null,
     xpBreakdown: xp, rewarded: earnedRewards, comboPriorCount:0, streakBefore,
     streakForCalc: state.streak, comboApplied:0,
@@ -3651,6 +4469,7 @@ function finalizeStopwatch(){
     action: currentAdventureActionId()
   });
   pushSessionLog(sessionRecord);
+  if (earnedRewards && typeof window.eggRecordCompletedSession === "function") window.eggRecordCompletedSession(sessionRecord, __lrSwRun);
   showXpBreakdown(xp, Object.assign({}, breakdownMeta, { sessionId: sessionRecord.id }));
   playChime(false);
   // reset stopwatch counter, stay in stopwatch mode for another session
@@ -3670,9 +4489,7 @@ function finalizeStopwatch(){
 }
 function ensureTickInterval(){
   if (tickInterval) return;
-  // v8.3: 100ms cadence keeps the visible time within 1/10s of wall-clock and
-  // makes the stopwatch feel like an actual stopwatch instead of a tracker.
-  tickInterval = setInterval(tick, 100);
+  tickInterval = setInterval(tick, 250);
 }
 function tick(){
   if (!state.timer.running) return;
@@ -3684,10 +4501,7 @@ function tick(){
   if (left <= 0){
     completeSession();
   } else {
-    // v8.3: per-second tick sound fires once per crossed whole-second boundary,
-    // independent of tick interval — was a 250ms-coupled check before.
-    const s = Math.floor(left/1000);
-    if (tick._lastSec !== s){ tick._lastSec = s; playTick(); }
+    if (Math.floor(left/1000) !== Math.floor((left+250)/1000)) playTick();
     renderTimer();
   }
 }
@@ -3782,16 +4596,23 @@ function commitFocusTimerSession(claim, minutes){
     state.combo.count = comboPriorCount + 1;
     state.hero.energy = Math.max(0, state.hero.energy - Math.max(0, 8 - gearStats.energySave));
     state.hero.hp = Math.min(100, state.hero.hp + 2);
-    lootItem = rollLoot(minutes);
+    /* v8.x: multi-encounter loot pipeline. */
+    var __lrSessId = "focus_" + Date.now() + "_" + Math.floor(Math.random()*1e6);
+    var __lrRun = runSessionRewardPipeline(claim.action || currentAdventureActionId(), minutes, __lrSessId);
+    lootItem = __lrRun.legacyItem;
     updateDailyProgress("focus", 1);
     updateDailyProgress("minutes", minutes);
     const coinsHere = computeCoins(minutes, true);
     state.coins = (state.coins|0) + coinsHere;
     state.coinsEarned = (state.coinsEarned|0) + coinsHere;
     if (coinsHere > 0) toast(`+${coinsHere} coins earned`, "good");
-    breakdownMeta = { lootItem, coins: coinsHere, xpAwarded };
+    breakdownMeta = { lootItem, coins: coinsHere, xpAwarded, lrRun: __lrRun };
     logLine(`Focus complete: ${minutes}m · +${xpAwarded} XP (base ${xp.base}${xp.comboBonus?` +${xp.comboBonus} combo`:""}${xp.streakBonus?` +${xp.streakBonus} streak`:""})`);
-    logBattle(`Hero completed ${taskLabel}. +${xpAwarded} XP${lootItem ? `, Loot: ${lootItem[1]} (${lootItem[2]})` : ""}.`, lootItem ? "loot" : "good");
+    logBattle(`Hero completed ${taskLabel}. +${xpAwarded} XP${lootItem ? `, Loot: ${lootItem[1]} (${lootItem[2]})` : ""}${__lrRun.drops.length>1 ? ` (+${__lrRun.drops.length-1} more)` : ""}.`, lootItem ? "loot" : "good");
+    /* v8.6.5: tell the user the dice were rolled even when nothing dropped. */
+    if (!lootItem && __lrRun && Array.isArray(__lrRun.drops) && __lrRun.drops.length === 0){
+      logLine(`No loot dropped this time (${minutes}m roll completed).`);
+    }
     notify("Focus complete!", `+${xpAwarded} XP · time for a break`);
   } else {
     state.combo.count = comboPriorCount;
@@ -3804,6 +4625,7 @@ function commitFocusTimerSession(claim, minutes){
   if (earnedRewards) maybeRecordActionEncounter("sessionComplete");
   if (typeof checkAchievementsV76 === "function") achievementsUnlockedHere = checkAchievementsV76("sessionComplete") || [];
   const sessionRecord = buildSessionLogRecordV76({
+    id: earnedRewards ? __lrSessId : undefined,
     type:"focus", source:"timer", minutes, taskId: claim.taskId||null,
     xpBreakdown: xp, rewarded: earnedRewards, comboPriorCount, streakBefore,
     streakForCalc: state.streak,
@@ -3814,6 +4636,7 @@ function commitFocusTimerSession(claim, minutes){
     action: claim.action || currentAdventureActionId()
   });
   pushSessionLog(sessionRecord);
+  if (earnedRewards && typeof window.eggRecordCompletedSession === "function") window.eggRecordCompletedSession(sessionRecord, __lrRun);
   showXpBreakdown(xp, Object.assign({}, breakdownMeta, { sessionId: sessionRecord.id }));
   playChime(false);
   const nextIsLong = state.cycleCount % state.settings.cyclesBeforeLong === 0;
@@ -3892,23 +4715,32 @@ function computeXpBreakdown(minutes, opts){
   return { minutes, base, comboCount, comboPct, comboBonus, streakDays, streakPct, streakBonus, total, reason:null, floor };
 }
 
-/* v4: loot gate.
- * <25: no roll at all
- * 25+: common/uncommon allowed
- * 50+: rare allowed
- * 90+: epic allowed
- * 120+: legendary/mythic allowed */
+/* v8.6.5 loot gate (was v4).
+ * Older walls (25/50/90/120) meant standard 25-min Pomodoros could only roll
+ * common/uncommon and any session <25min got NOTHING. Joel was grinding without
+ * seeing loot. Lowered so common is reachable from the reward floor (5min) and
+ * rare unlocks at the standard Pomodoro length.
+ *  5+ : common
+ * 15+ : uncommon
+ * 25+ : rare       (standard Pomodoro)
+ * 50+ : epic       (long-focus)
+ * 90+ : legendary  (deep-work)
+ * 120+: mythic     (truly exceptional) */
 function allowedRaritiesForMinutes(minutes){
   const out = new Set();
-  if (minutes >= 25){ out.add("common"); out.add("uncommon"); }
-  if (minutes >= 50) out.add("rare");
-  if (minutes >= 90) out.add("epic");
-  if (minutes >= 120){ out.add("legendary"); out.add("mythic"); }
+  if (minutes >=   5) out.add("common");
+  if (minutes >=  15) out.add("uncommon");
+  if (minutes >=  25) out.add("rare");
+  if (minutes >=  50) out.add("epic");
+  if (minutes >=  90) out.add("legendary");
+  if (minutes >= 120) out.add("mythic");
   return out;
 }
 function pushSessionLog(entry){
   state.sessionsLog = (state.sessionsLog||[]); state.sessionsLog.push(entry);
   if (state.sessionsLog.length > 60) state.sessionsLog.shift();
+  /* v8.7.0: mirror to activityLog */
+  try { if (typeof logActivity === "function") logActivity({ category:"session", action: entry.rewarded ? "session_complete" : "session_below_floor", sessionId: entry.id || null, taskId: entry.taskId || null, after: { minutes: entry.minutes|0, xp: (entry.xpBreakdown && entry.xpBreakdown.total)|0 }, source: entry.source || "session" }); } catch(_){}
 }
 function updateStreak(tk){
   const prev = state.lastFocusDate;
@@ -4034,8 +4866,11 @@ function setEquipped(slot, lootIdValue, tier){
     return;
   }
   ensureEquippedShape();
+  const beforeId = state.hero.equipped[slot] && state.hero.equipped[slot].lootId || null;
   state.hero.equipped[slot] = { lootId: lootIdValue, tier: tier || item[2] };
   logBattle(`Equipped ${item[1]} (${tier || item[2]} ${slot}).`, "loot");
+  /* v8.8: activity log */
+  try { if (typeof logActivity === "function") logActivity({category:"character", action:"equip", before:beforeId, after:{slot:slot, lootId:lootIdValue, name:item[1], tier:tier||item[2]}, source:"setEquipped"}); } catch(_){}
   saveState();
   renderHero(); renderAvatar(); renderLoot(); renderCompanions(); renderCharacterPanel();
   toast(`Equipped ${item[1]}`, "good");
@@ -4044,7 +4879,10 @@ function clearEquipped(slot){
   if (!isEquippableSlot(slot)) return;
   ensureEquippedShape();
   const oldName = equippedName(slot);
+  const beforeId = state.hero.equipped[slot] && state.hero.equipped[slot].lootId || null;
   state.hero.equipped[slot] = null;
+  /* v8.8: activity log */
+  try { if (typeof logActivity === "function") logActivity({category:"character", action:"unequip", before:{slot:slot, name:oldName, lootId:beforeId}, after:null, source:"clearEquipped"}); } catch(_){}
   saveState();
   renderHero(); renderAvatar(); renderLoot(); renderCompanions(); renderCharacterPanel();
   if (oldName) toast(`${oldName} unequipped`);
@@ -4294,10 +5132,6 @@ function bindAppOpenTracking(){
       lastTickTs = now();
       if (state.timer.running && state.timer.mode === "focus") acquireWakeLock();
       renderStatStrip();
-      // v8.3: force an immediate timer redraw so the display catches up after
-      // tab throttling / OS background. The math is timestamp-based so this just
-      // brings the visible number into sync with reality without skipping or drift.
-      try { renderTimer(); } catch(_){}
     } else {
       appOpenTick({ forceVisibleFlush:true }); // flush visible time up to hide
       lastTickTs = null;
@@ -4340,10 +5174,18 @@ function renderXpBreakdown(xp, meta){
     rows.push(`<div class="row"><span>Total</span><span>+${xp.total} XP</span></div>`);
   }
   const canEdit = !!(rec && canEditSessionRecord(rec));
-  const actionsHtml = canEdit ? `<div class="actions"><button type="button" id="xp-edit-time-btn" title="Adjust logged minutes for this session — up or down">Edit time</button></div>` : "";
-  slot.innerHTML = `<div class="xp-breakdown"><div class="sub">Session summary${adjusted ? " · adjusted" : ""}</div>${rows.join("")}${actionsHtml}</div>`;
+  /* v8.x: surface a "Battle Report" button when the session produced encounters. */
+  const hasReport = meta.lrRun && Array.isArray(meta.lrRun.encounters) && meta.lrRun.encounters.length > 0;
+  const dropsCount = meta.lrRun && Array.isArray(meta.lrRun.drops) ? meta.lrRun.drops.length : 0;
+  const dropSummary = dropsCount > 1 ? `<div class="row"><span>Drops this session</span><span>+${dropsCount} items</span></div>` : "";
+  const reportBtn = hasReport ? `<button type="button" id="xp-battle-report-btn" title="View encounter-by-encounter breakdown">Battle Report</button>` : "";
+  const editBtn = canEdit ? `<button type="button" id="xp-edit-time-btn" title="Adjust logged minutes for this session — up or down">Edit time</button>` : "";
+  const actionsHtml = (reportBtn || editBtn) ? `<div class="actions">${reportBtn}${editBtn}</div>` : "";
+  slot.innerHTML = `<div class="xp-breakdown"><div class="sub">Session summary${adjusted ? " · adjusted" : ""}</div>${rows.join("")}${dropSummary}${actionsHtml}</div>`;
   const btn = document.getElementById("xp-edit-time-btn");
   if (btn) btn.onclick = () => openSessionEndEditTime(meta.sessionId);
+  const reportEl = document.getElementById("xp-battle-report-btn");
+  if (reportEl) reportEl.onclick = () => { if (typeof window.showBattleReport === "function") window.showBattleReport(meta.lrRun); };
 }
 function showXpBreakdown(xp, meta){
   showXpBreakdown._last = { xp, meta: meta||{} };
@@ -4765,6 +5607,9 @@ function renderAll(){
   renderModeTabs(); renderAvatar(); renderTasks(); renderActiveTaskRow();
   renderStatStrip(); renderBattleLog(); renderBackupLast(); renderSecurityPanel();
   renderSwLaps(); renderActionPicker(); renderBestiary(); renderAllTasksSheet(); renderCharacterPanel();
+  /* v8.x LOOT REWORK — new panels (defined in loot-rework.js). */
+  if (typeof window.renderDropsPanel === "function") window.renderDropsPanel();
+  if (typeof window.renderForgePanel === "function") window.renderForgePanel();
   if ($("#analytics-modal") && !$("#analytics-modal").hidden) renderAnalytics();
   if ($("#task-minutes-modal") && !$("#task-minutes-modal").hidden) renderTaskMinutesEditor();
   if (typeof renderV8Panels === "function") renderV8Panels();
@@ -4957,67 +5802,6 @@ function avatarEquipment(){
   }
   return out;
 }
-/* ===== v8.4: 3D character (FH3D) bridge =====================================
-   fh3dSpec() builds a PLAIN-DATA snapshot for the Three.js renderer in fh3d.js.
-   It only READS state + catalogs — it never mutates state, localStorage, or
-   cloud sync. If WebGL/THREE is unavailable, FH3D stays dormant and the SVG
-   avatar above remains the visible fallback. */
-const FH3D_MOUNT_COLORS = {
-  void_skiff:        ["#312E81","#818CF8","#C4B5FD"],
-  phase_panther_reins:["#111827","#7C3AED","#C084FC"],
-  unicorn_sigil:     ["#F8FAFC","#C4B5FD","#FBBF24"],
-  griffin_saddle:    ["#B45309","#FDE68A","#F59E0B"],
-  astral_stag_tack:  ["#4B5563","#A5F3FC","#67E8F9"],
-  wolf_reins:        ["#374151","#9CA3AF","#FBBF24"]
-};
-function fh3dSpec(){
-  ensureHeroAppearanceShape(); ensureEquippedShape();
-  const a = state.hero.appearance || DEFAULTS.hero.appearance;
-  const clsKey = state.hero.cls || "knight";
-  const cls = CLASSES[clsKey] || CLASSES.knight;
-  const armor  = appearanceOption("armor", a.armor)  || {};
-  const accent = appearanceOption("accent", a.accent) || {};
-  const cloak  = appearanceOption("cloak", a.cloak)  || {};
-  const eq = avatarEquipment();
-  const gearInfo = (g)=>{
-    if (!g) return null;
-    const ts = AVATAR_TIER_ART[g.tier] || AVATAR_TIER_ART.common;
-    return { id:g.id, tier:g.tier||"common", metal:ts.metal, gem:ts.gem, glow:ts.glow||0 };
-  };
-  let mount = null;
-  if (eq.mount){
-    mount = { id:eq.mount.id, tier:eq.mount.tier||"common",
-              colors: FH3D_MOUNT_COLORS[eq.mount.id] || ["#374151","#9CA3AF","#FBBF24"] };
-  }
-  return {
-    cls:clsKey, className:cls.name, palette:cls.palette, level:state.hero.level||1,
-    running: !!(state.timer && state.timer.running),
-    colors:{
-      skin: appearanceOption("skin", a.skin)?.color || "#D99B73",
-      hair: appearanceOption("hairColor", a.hairColor)?.color || "#332117",
-      eye:  appearanceOption("eyeColor", a.eyeColor)?.color || "#7FE9FF",
-      armorMid:  armor.mid  || cls.palette[0],
-      armorHigh: armor.high || cls.palette[1],
-      armorDark: armor.dark || cls.palette[2],
-      accent: accent.color || cls.palette[3] || "#FBBF24",
-      cloak:  cloak.color || "#2563EB"
-    },
-    traits:{ race:a.race||"human", body:a.body||"balanced", hair:a.hair||"short",
-             helm:a.helm||"closed", face:a.face||"calm", eyeShape:a.eyeShape||"focused" },
-    equipped:{ weapon:gearInfo(eq.weapon), helmet:gearInfo(eq.helmet),
-               armor:gearInfo(eq.armor), pet:gearInfo(eq.pet) },
-    mount
-  };
-}
-function fh3dUpdate(){
-  if (window.FH3D && typeof FH3D.sync === "function"){
-    try { FH3D.sync(fh3dSpec()); } catch(e){ /* non-fatal: SVG fallback stays */ }
-  }
-}
-function fh3dStudioOpen(){
-  const cm = document.getElementById("character-modal");
-  return !!(cm && !cm.hasAttribute("hidden"));
-}
 function avatarTier(slotGear, fallback="common"){
   return slotGear?.tier || fallback;
 }
@@ -5091,28 +5875,28 @@ function avatarTraitsSvg(p){
       </g>`;
 }
 function avatarMountSvg(mountGear, p){
+  /* v8.8: delegate to the per-family drawMount system. Was: a generic ellipse
+     for every mount + 5 hardcoded special cases. Now every owned mount renders
+     with its family-distinct silhouette + 2-frame walk cycle.
+     drawMount outputs SVG <g> at 32x32 grid; we scale it to ~60x60 at the
+     Hero card mount position (centered around x=60, y=98 — same as legacy). */
   if (!mountGear) return "";
-  const id = mountGear.id || "";
-  const colors = id === "void_skiff" ? ["#312E81","#818CF8","#C4B5FD"]
-    : id === "phase_panther_reins" ? ["#111827","#7C3AED","#C084FC"]
-      : id === "unicorn_sigil" ? ["#F8FAFC","#C4B5FD","#FBBF24"]
-        : id === "griffin_saddle" ? ["#B45309","#FDE68A","#F59E0B"]
-          : id === "astral_stag_tack" ? ["#4B5563","#A5F3FC","#67E8F9"]
-            : ["#374151","#9CA3AF","#FBBF24"];
-  const horn = id === "unicorn_sigil" ? `<path d="M94 77 l5 -12 l1 13 Z" fill="${colors[2]}"/>` : "";
-  const wing = id === "griffin_saddle" ? `<path d="M57 91 q-18 -23 -28 -10 q12 1 22 17 Z" fill="${colors[1]}" opacity=".8"/>` : "";
-  const antlers = id === "astral_stag_tack" ? `<path d="M94 77 l-6 -13 M94 73 l7 -10 M92 70 l-6 -3 M98 68 l5 -4" stroke="${colors[2]}" stroke-width="2"/>` : "";
-  const skiff = id === "void_skiff" ? `<path d="M30 99 q30 16 60 0 q-7 13 -30 14 q-23 -1 -30 -14 Z" fill="${colors[2]}" opacity=".45"/>` : "";
-  return `<g class="v79-part v79-mount v81-mounted" data-mount="${id}" transform="translate(0,2)">
-    ${wing}<ellipse cx="60" cy="98" rx="30" ry="13" fill="${colors[0]}"/>
-    <path d="M82 92 q10 -4 13 -14 q5 2 3 9 q-3 9 -12 12 Z" fill="${colors[1]}"/>
-    <circle cx="95" cy="80" r="6" fill="${colors[1]}"/><circle cx="97" cy="79" r="1.4" fill="${colors[2]}"/>
-    ${horn}${antlers}${skiff}
-    <rect x="38" y="100" width="4" height="14" rx="2" fill="${p.outline || "#14161f"}"/>
-    <rect x="50" y="102" width="4" height="13" rx="2" fill="${colors[0]}"/>
-    <rect x="70" y="102" width="4" height="13" rx="2" fill="${colors[0]}"/>
-    <rect x="80" y="100" width="4" height="14" rx="2" fill="${p.outline || "#14161f"}"/>
-  </g>`;
+  var lootId = mountGear.lootId || mountGear.id || "";
+  var mountSvg = "";
+  try { mountSvg = drawMount(mountGear, p); } catch(e){ mountSvg = ""; }
+  if (!mountSvg) {
+    /* Fallback to a simple silhouette only if drawMount fails entirely */
+    return '<g class="v79-part v79-mount" data-mount="' + lootId + '" transform="translate(0,2)">' +
+      '<ellipse cx="60" cy="98" rx="30" ry="13" fill="#374151"/>' +
+      '<circle cx="95" cy="80" r="6" fill="#9CA3AF"/>' +
+    '</g>';
+  }
+  /* Wrap drawMount output (32x32 fhRect) inside an SVG transform so the
+     32-unit sprite scales to ~64 units at the mount stage. fh-mount class
+     activates the v8.8 frame-swap CSS animation. */
+  return '<g class="v79-part v79-mount v81-mounted fh-mount" data-mount="' + lootId + '" transform="translate(32,54) scale(2.0)">' +
+    mountSvg +
+  '</g>';
 }
 function avatarEquipmentOverlaySvg(eq){
   const weapon = eq.weapon?.id === "dualblade"
@@ -5395,32 +6179,580 @@ function drawWeapon(p, weaponGear, action){
   if (rank >= 6) out += fhRect(24,5,2,2,style.aura);
   return out;
 }
+/* ============================================================
+ * v8.8 MOUNT SPRITE SYSTEM
+ * Replaces v8.6's 4-bucket rank-keyed renderer (the one that
+ * made every uncommon Eagle render as a horse). Each of the
+ * 15 mount families has a distinct silhouette + a 2-frame
+ * animation cycle. Breed palette overrides by id so Black
+ * Stallion is black, Arctic Wolf is white, Nightmare is dark+red,
+ * etc. Defaults gracefully when CR_MOUNTS_FULL isn't loaded.
+ * ============================================================ */
+var FH_MOUNT_PALETTES = {
+  // Horses
+  mount_thoroughbred:{body:"#7C2D12",mane:"#1F2937",hoof:"#3F1908",accent:"#B45309"},
+  mount_mustang:{body:"#92400E",mane:"#451A03",hoof:"#1C0A02",accent:"#FBBF24"},
+  mount_pinto:{body:"#FFFFFF",mane:"#1F2937",hoof:"#0F172A",accent:"#7C2D12"},
+  mount_palomino:{body:"#FDE68A",mane:"#FFFBEB",hoof:"#D6A23F",accent:"#A16207"},
+  mount_arabian:{body:"#FCD34D",mane:"#92400E",hoof:"#451A03",accent:"#FBBF24"},
+  mount_appaloosa:{body:"#A8A29E",mane:"#1F2937",hoof:"#1C0A02",accent:"#FFFFFF"},
+  mount_friesian:{body:"#0A0A0F",mane:"#000000",hoof:"#000000",accent:"#1F2937"},
+  mount_andalusian:{body:"#E5E7EB",mane:"#9CA3AF",hoof:"#4B5563",accent:"#F9FAFB"},
+  mount_shire:{body:"#451A03",mane:"#1C0A02",hoof:"#000000",accent:"#FFFFFF"},
+  mount_clydesdale:{body:"#7C2D12",mane:"#FFFFFF",hoof:"#FFFFFF",accent:"#1F2937"},
+  mount_akhal_teke:{body:"#FCD34D",mane:"#FBBF24",hoof:"#92400E",accent:"#F59E0B"},
+  mount_lipizzaner:{body:"#FFFFFF",mane:"#F9FAFB",hoof:"#9CA3AF",accent:"#E5E7EB"},
+  mount_black_stallion:{body:"#000000",mane:"#0A0A0F",hoof:"#000000",accent:"#FBBF24"},
+  mount_white_charger:{body:"#FFFFFF",mane:"#FFFFFF",hoof:"#E5E7EB",accent:"#FBBF24"},
+  mount_nightmare:{body:"#1C0A02",mane:"#DC2626",hoof:"#7F1D1D",accent:"#F97316"},
+  // Wolves
+  mount_grey_wolf:{body:"#6B7280",mane:"#4B5563",hoof:"#1F2937",accent:"#D1D5DB"},
+  mount_timber_wolf:{body:"#78716C",mane:"#44403C",hoof:"#1C1917",accent:"#A8A29E"},
+  mount_red_wolf:{body:"#9A3412",mane:"#7C2D12",hoof:"#451A03",accent:"#FED7AA"},
+  mount_arctic_wolf:{body:"#F9FAFB",mane:"#E5E7EB",hoof:"#9CA3AF",accent:"#BFDBFE"},
+  mount_direwolf:{body:"#374151",mane:"#1F2937",hoof:"#0F172A",accent:"#9CA3AF"},
+  mount_frost_wolf:{body:"#BFDBFE",mane:"#3B82F6",hoof:"#1E3A8A",accent:"#FFFFFF"},
+  mount_shadow_wolf:{body:"#0F172A",mane:"#000000",hoof:"#000000",accent:"#7C3AED"},
+  mount_hellhound:{body:"#1C0A02",mane:"#DC2626",hoof:"#000000",accent:"#FBBF24"},
+  // Cats
+  mount_lioness:{body:"#D6B08A",mane:"#A16207",hoof:"#7C2D12",accent:"#FDE68A"},
+  mount_lion:{body:"#D6B08A",mane:"#92400E",hoof:"#7C2D12",accent:"#FBBF24"},
+  mount_bengal_tiger:{body:"#F59E0B",mane:"#1F2937",hoof:"#000000",accent:"#FEF3C7"},
+  mount_siberian_tiger:{body:"#FBBF24",mane:"#000000",hoof:"#1F2937",accent:"#FFFFFF"},
+  mount_white_tiger:{body:"#FFFFFF",mane:"#1F2937",hoof:"#000000",accent:"#BFDBFE"},
+  mount_black_panther:{body:"#0A0A0F",mane:"#000000",hoof:"#000000",accent:"#7C3AED"},
+  mount_snow_leopard:{body:"#E5E7EB",mane:"#374151",hoof:"#1F2937",accent:"#FFFFFF"},
+  mount_cheetah:{body:"#FBBF24",mane:"#1F2937",hoof:"#000000",accent:"#FDE68A"},
+  mount_sabertooth:{body:"#D6B08A",mane:"#7C2D12",hoof:"#000000",accent:"#FFFFFF"},
+  // Birds
+  mount_eagle:{body:"#7C2D12",mane:"#FFFFFF",hoof:"#FBBF24",accent:"#FDE68A"},
+  mount_golden_eagle:{body:"#FBBF24",mane:"#F59E0B",hoof:"#7C2D12",accent:"#FFFBEB"},
+  mount_bald_eagle:{body:"#451A03",mane:"#FFFFFF",hoof:"#FBBF24",accent:"#FDE68A"},
+  mount_hawk:{body:"#7C2D12",mane:"#D6B08A",hoof:"#FBBF24",accent:"#FFFFFF"},
+  mount_falcon:{body:"#374151",mane:"#9CA3AF",hoof:"#FBBF24",accent:"#FFFFFF"},
+  mount_raven:{body:"#0A0A0F",mane:"#000000",hoof:"#1F2937",accent:"#7C3AED"},
+  mount_phoenix:{body:"#DC2626",mane:"#FBBF24",hoof:"#F97316",accent:"#FEF3C7"},
+  mount_peacock:{body:"#1E40AF",mane:"#10B981",hoof:"#FBBF24",accent:"#7C3AED"},
+  // Dragons
+  mount_juvenile_dragon:{body:"#10B981",mane:"#064E3B",hoof:"#34D399",accent:"#FBBF24"},
+  mount_red_dragon:{body:"#DC2626",mane:"#7F1D1D",hoof:"#FBBF24",accent:"#FEF3C7"},
+  mount_blue_dragon:{body:"#1E40AF",mane:"#1E3A8A",hoof:"#BFDBFE",accent:"#FFFFFF"},
+  mount_green_dragon:{body:"#10B981",mane:"#064E3B",hoof:"#34D399",accent:"#FDE68A"},
+  mount_black_dragon:{body:"#000000",mane:"#1F2937",hoof:"#374151",accent:"#7C3AED"},
+  mount_golden_dragon:{body:"#FBBF24",mane:"#92400E",hoof:"#7C2D12",accent:"#FFFFFF"},
+  mount_silver_dragon:{body:"#E5E7EB",mane:"#9CA3AF",hoof:"#4B5563",accent:"#FFFFFF"},
+  mount_celestial_dragon:{body:"#A855F7",mane:"#581C87",hoof:"#FBBF24",accent:"#FEF3C7"}
+};
+
+var FH_FAMILY_PALETTES = {
+  horse:{body:"#8B5A2B",mane:"#451A03",hoof:"#1C0A02",accent:"#D6B08A"},
+  wolf:{body:"#6B7280",mane:"#4B5563",hoof:"#1F2937",accent:"#D1D5DB"},
+  cat:{body:"#D6B08A",mane:"#A16207",hoof:"#451A03",accent:"#FBBF24"},
+  bear:{body:"#5D4037",mane:"#3E2723",hoof:"#1B0F0A",accent:"#A1887F"},
+  cattle:{body:"#4E342E",mane:"#3E2723",hoof:"#1B0F0A",accent:"#FFFFFF"},
+  forest:{body:"#92400E",mane:"#7C2D12",hoof:"#451A03",accent:"#FED7AA"},
+  bird:{body:"#7C2D12",mane:"#FBBF24",hoof:"#F59E0B",accent:"#FFFFFF"},
+  dragon:{body:"#10B981",mane:"#064E3B",hoof:"#34D399",accent:"#FBBF24"},
+  reptile:{body:"#65A30D",mane:"#3F6212",hoof:"#1A2E05",accent:"#FBBF24"},
+  insect:{body:"#1F2937",mane:"#0F172A",hoof:"#000000",accent:"#10B981"},
+  small:{body:"#A1887F",mane:"#7C5447",hoof:"#3E2723",accent:"#FFFFFF"},
+  aquatic:{body:"#0EA5E9",mane:"#0369A1",hoof:"#082F49",accent:"#BAE6FD"},
+  elemental:{body:"#FBBF24",mane:"#DC2626",hoof:"#7C2D12",accent:"#FEF3C7"},
+  mythical:{body:"#FFFFFF",mane:"#FBBF24",hoof:"#A855F7",accent:"#FDE68A"},
+  undead:{body:"#E5E7EB",mane:"#9CA3AF",hoof:"#1F2937",accent:"#7C3AED"}
+};
+
+/* Each sprite function takes (palette, frame=0|1) and returns rect string.
+   Sprites are positioned within ~32x32 grid centered around y=16-28 (lower body region).
+   Frame 0 = "stride A" / "wings up" / "tail left"; Frame 1 = opposite. */
+var FH_MOUNT_SPRITES = {
+  horse: function(c, f){
+    var legA = f===0 ? "" : "_b";
+    var FL = f===0?fhRect(7,26,1,4,c.hoof):fhRect(8,26,1,4,c.hoof);   // front-left leg
+    var FR = f===0?fhRect(10,26,1,4,c.hoof):fhRect(9,26,1,4,c.hoof);  // front-right leg
+    var BL = f===0?fhRect(15,26,1,4,c.hoof):fhRect(16,26,1,4,c.hoof); // back-left
+    var BR = f===0?fhRect(18,26,1,4,c.hoof):fhRect(17,26,1,4,c.hoof); // back-right
+    return [
+      // body
+      fhRect(5,22,14,4,c.body),
+      // back ridge
+      fhRect(5,21,14,1,c.mane),
+      // chest
+      fhRect(5,23,2,4,c.body),
+      // hindquarters
+      fhRect(17,22,3,4,c.body),
+      // neck up to head
+      fhRect(20,18,3,5,c.body),
+      // head
+      fhRect(22,17,4,4,c.body),
+      // ear
+      fhRect(23,16,1,2,c.body),
+      // muzzle
+      fhRect(25,19,1,2,c.mane),
+      // eye
+      fhRect(24,18,1,1,c.hoof),
+      // mane (along neck)
+      fhRect(19,18,2,5,c.mane),
+      fhRect(20,17,2,2,c.mane),
+      // tail
+      fhRect(3,21,2,6,c.mane),
+      fhRect(2,23,2,3,c.mane),
+      // legs (4)
+      FL, FR, BL, BR
+    ].join("");
+  },
+  wolf: function(c, f){
+    var FL = f===0?fhRect(7,25,1,4,c.hoof):fhRect(8,25,1,4,c.hoof);
+    var FR = f===0?fhRect(10,25,1,4,c.hoof):fhRect(9,25,1,4,c.hoof);
+    var BL = f===0?fhRect(14,25,1,4,c.hoof):fhRect(15,25,1,4,c.hoof);
+    var BR = f===0?fhRect(17,25,1,4,c.hoof):fhRect(16,25,1,4,c.hoof);
+    return [
+      // sleeker, lower body
+      fhRect(5,22,13,3,c.body),
+      // back fur
+      fhRect(5,21,13,1,c.mane),
+      // shoulder
+      fhRect(15,21,3,2,c.body),
+      // neck
+      fhRect(18,21,3,3,c.body),
+      // head (more pointed)
+      fhRect(20,19,4,3,c.body),
+      fhRect(23,21,2,2,c.body),
+      // pointed ears
+      fhRect(20,17,1,2,c.body),
+      fhRect(22,17,1,2,c.body),
+      // snout
+      fhRect(24,21,1,1,c.mane),
+      // eye
+      fhRect(22,20,1,1,c.hoof),
+      // bushy tail (signature wolf)
+      fhRect(3,22,3,3,c.mane),
+      fhRect(2,21,2,2,c.mane),
+      fhRect(1,22,2,2,c.mane),
+      FL, FR, BL, BR
+    ].join("");
+  },
+  cat: function(c, f){
+    var FL = f===0?fhRect(7,25,1,4,c.hoof):fhRect(8,25,1,4,c.hoof);
+    var FR = f===0?fhRect(10,25,1,4,c.hoof):fhRect(9,25,1,4,c.hoof);
+    var BL = f===0?fhRect(14,25,1,4,c.hoof):fhRect(15,25,1,4,c.hoof);
+    var BR = f===0?fhRect(17,25,1,4,c.hoof):fhRect(16,25,1,4,c.hoof);
+    return [
+      // sleek low body
+      fhRect(5,22,13,3,c.body),
+      fhRect(5,21,13,1,c.mane),
+      // hindquarters slightly raised
+      fhRect(15,20,3,4,c.body),
+      // chest
+      fhRect(5,22,2,4,c.body),
+      // neck low
+      fhRect(18,21,2,3,c.body),
+      // head (round)
+      fhRect(19,19,4,4,c.body),
+      // triangular ears
+      fhRect(19,17,1,2,c.body),
+      fhRect(22,17,1,2,c.body),
+      // muzzle small
+      fhRect(23,21,1,1,c.mane),
+      // eye
+      fhRect(21,20,1,1,c.accent),
+      // long curved tail (signature cat) — curls up in frame b
+      f===0 ? fhRect(2,22,3,1,c.body) + fhRect(1,21,2,2,c.body) + fhRect(1,19,1,3,c.body)
+            : fhRect(2,22,3,1,c.body) + fhRect(1,20,2,2,c.body) + fhRect(0,17,1,4,c.body),
+      // stripe markings (if accent)
+      fhRect(8,22,1,2,c.mane), fhRect(11,22,1,2,c.mane), fhRect(14,22,1,2,c.mane),
+      FL, FR, BL, BR
+    ].join("");
+  },
+  bear: function(c, f){
+    var FL = f===0?fhRect(7,26,2,4,c.hoof):fhRect(8,26,2,4,c.hoof);
+    var FR = f===0?fhRect(11,26,2,4,c.hoof):fhRect(10,26,2,4,c.hoof);
+    var BL = f===0?fhRect(15,26,2,4,c.hoof):fhRect(16,26,2,4,c.hoof);
+    var BR = f===0?fhRect(19,26,2,4,c.hoof):fhRect(18,26,2,4,c.hoof);
+    return [
+      // bulky body
+      fhRect(5,20,16,6,c.body),
+      // back hump
+      fhRect(7,19,6,1,c.body),
+      // head (large, rounded)
+      fhRect(20,18,5,5,c.body),
+      // round ears
+      fhRect(20,17,2,1,c.body),
+      fhRect(23,17,2,1,c.body),
+      // snout
+      fhRect(24,20,1,2,c.mane),
+      // eye
+      fhRect(22,19,1,1,c.hoof),
+      // short stubby tail
+      fhRect(3,22,2,2,c.body),
+      FL, FR, BL, BR
+    ].join("");
+  },
+  cattle: function(c, f){
+    var FL = f===0?fhRect(7,26,2,4,c.hoof):fhRect(8,26,2,4,c.hoof);
+    var FR = f===0?fhRect(11,26,2,4,c.hoof):fhRect(10,26,2,4,c.hoof);
+    var BL = f===0?fhRect(15,26,2,4,c.hoof):fhRect(16,26,2,4,c.hoof);
+    var BR = f===0?fhRect(19,26,2,4,c.hoof):fhRect(18,26,2,4,c.hoof);
+    return [
+      // boxy body
+      fhRect(5,21,16,5,c.body),
+      // hindquarters
+      fhRect(5,20,4,1,c.body),
+      // head (broad, square)
+      fhRect(20,19,5,4,c.body),
+      // HORNS (signature cattle) — curved horns coming out the top
+      fhRect(20,17,1,2,c.accent), fhRect(19,16,1,1,c.accent),
+      fhRect(24,17,1,2,c.accent), fhRect(25,16,1,1,c.accent),
+      // muzzle
+      fhRect(24,21,1,2,c.mane),
+      // eye
+      fhRect(22,20,1,1,c.hoof),
+      // tail with tuft
+      fhRect(3,21,2,5,c.mane),
+      fhRect(2,25,2,2,c.accent),
+      FL, FR, BL, BR
+    ].join("");
+  },
+  forest: function(c, f){
+    // deer / elk / stag — tall thin legs, antlers
+    var FL = f===0?fhRect(7,26,1,4,c.hoof):fhRect(8,26,1,4,c.hoof);
+    var FR = f===0?fhRect(10,26,1,4,c.hoof):fhRect(9,26,1,4,c.hoof);
+    var BL = f===0?fhRect(15,26,1,4,c.hoof):fhRect(16,26,1,4,c.hoof);
+    var BR = f===0?fhRect(18,26,1,4,c.hoof):fhRect(17,26,1,4,c.hoof);
+    return [
+      // slender body
+      fhRect(5,21,14,4,c.body),
+      fhRect(5,20,14,1,c.mane),
+      // long graceful neck
+      fhRect(19,17,3,5,c.body),
+      // head
+      fhRect(21,15,4,4,c.body),
+      // ANTLERS (signature forest mounts) — branching
+      fhRect(21,13,1,2,c.accent), fhRect(20,12,1,1,c.accent),
+      fhRect(24,13,1,2,c.accent), fhRect(25,12,1,1,c.accent),
+      fhRect(22,11,2,1,c.accent), // crown
+      // muzzle
+      fhRect(24,17,1,1,c.mane),
+      // eye
+      fhRect(22,16,1,1,c.hoof),
+      // small tail
+      fhRect(3,21,2,3,c.mane),
+      fhRect(2,21,1,1,c.accent), // white spot
+      FL, FR, BL, BR
+    ].join("");
+  },
+  bird: function(c, f){
+    // wing-flap animation, no quadruped legs — perches on talons
+    var wingUp = [
+      fhRect(7,15,3,2,c.mane), fhRect(9,13,4,3,c.mane), fhRect(12,11,5,3,c.mane),
+      fhRect(13,16,5,1,c.body),
+      fhRect(18,15,3,2,c.mane), fhRect(20,13,4,3,c.mane), fhRect(23,11,5,3,c.mane)
+    ].join("");
+    var wingDown = [
+      fhRect(7,21,3,2,c.mane), fhRect(9,23,4,3,c.mane), fhRect(12,25,5,3,c.mane),
+      fhRect(13,18,5,1,c.body),
+      fhRect(18,21,3,2,c.mane), fhRect(20,23,4,3,c.mane), fhRect(23,25,5,3,c.mane)
+    ].join("");
+    return [
+      // body (compact central)
+      fhRect(13,17,5,5,c.body),
+      // head
+      fhRect(17,15,3,3,c.body),
+      // BEAK (signature bird)
+      fhRect(20,16,2,2,c.hoof),
+      fhRect(22,17,1,1,c.hoof),
+      // eye
+      fhRect(18,16,1,1,c.mane),
+      // tail feathers (fanned)
+      fhRect(9,18,5,2,c.mane),
+      fhRect(8,17,2,1,c.accent),
+      fhRect(8,20,2,1,c.accent),
+      // talons (clutching invisible perch)
+      fhRect(14,22,1,2,c.hoof),
+      fhRect(16,22,1,2,c.hoof),
+      // wings — change frame
+      f===0 ? wingUp : wingDown,
+      // accent flash
+      fhRect(15,18,1,1,c.accent)
+    ].join("");
+  },
+  dragon: function(c, f){
+    // serpentine body, wings, long tail, spikes
+    var wingUp = [
+      fhRect(10,15,4,2,c.body), fhRect(11,12,4,3,c.mane), fhRect(13,10,3,2,c.mane),
+      fhRect(18,15,4,2,c.body), fhRect(19,12,4,3,c.mane), fhRect(21,10,3,2,c.mane)
+    ].join("");
+    var wingDown = [
+      fhRect(8,20,5,3,c.body), fhRect(7,22,4,3,c.mane), fhRect(6,24,3,2,c.mane),
+      fhRect(20,20,5,3,c.body), fhRect(22,22,4,3,c.mane), fhRect(24,24,3,2,c.mane)
+    ].join("");
+    return [
+      // long body
+      fhRect(5,21,17,4,c.body),
+      // spikes along back (signature dragon)
+      fhRect(7,20,1,1,c.accent), fhRect(10,20,1,1,c.accent),
+      fhRect(13,20,1,1,c.accent), fhRect(16,20,1,1,c.accent),
+      fhRect(19,20,1,1,c.accent),
+      // head (horned)
+      fhRect(22,19,4,5,c.body),
+      // horns
+      fhRect(22,17,1,2,c.hoof), fhRect(24,17,1,2,c.hoof),
+      // jaw / mouth
+      fhRect(25,22,1,2,c.accent),
+      // eye (glowing)
+      fhRect(23,20,1,1,c.accent),
+      // long tail with spike tip
+      fhRect(3,22,2,3,c.body),
+      fhRect(1,22,2,2,c.body),
+      fhRect(0,22,1,1,c.accent), // tail tip
+      // legs (claws)
+      f===0 ? fhRect(8,25,2,2,c.hoof)+fhRect(17,25,2,2,c.hoof)
+            : fhRect(10,25,2,2,c.hoof)+fhRect(19,25,2,2,c.hoof),
+      // wings
+      f===0 ? wingUp : wingDown
+    ].join("");
+  },
+  reptile: function(c, f){
+    // low body, lateral leg sprawl, long tail (lizard/raptor)
+    var FL = f===0?fhRect(6,26,1,3,c.hoof):fhRect(8,26,1,3,c.hoof);
+    var FR = f===0?fhRect(11,26,1,3,c.hoof):fhRect(9,26,1,3,c.hoof);
+    var BL = f===0?fhRect(14,26,1,3,c.hoof):fhRect(16,26,1,3,c.hoof);
+    var BR = f===0?fhRect(19,26,1,3,c.hoof):fhRect(17,26,1,3,c.hoof);
+    return [
+      // very low flat body
+      fhRect(5,23,15,3,c.body),
+      // back scale pattern
+      fhRect(7,22,1,1,c.accent), fhRect(10,22,1,1,c.accent),
+      fhRect(13,22,1,1,c.accent), fhRect(16,22,1,1,c.accent),
+      // head
+      fhRect(19,21,4,4,c.body),
+      // jaw open
+      fhRect(22,23,1,2,c.mane),
+      // teeth
+      fhRect(22,23,1,1,c.accent),
+      // eye
+      fhRect(21,22,1,1,c.hoof),
+      // long tail (s-curve flips per frame)
+      f===0 ? fhRect(2,22,3,3,c.body) + fhRect(0,21,2,2,c.body)
+            : fhRect(2,23,3,3,c.body) + fhRect(0,25,2,2,c.body),
+      FL, FR, BL, BR
+    ].join("");
+  },
+  insect: function(c, f){
+    // 6 legs, antennae, body segments
+    return [
+      // segmented body
+      fhRect(8,21,4,4,c.body),
+      fhRect(12,20,4,5,c.body),
+      fhRect(16,21,4,4,c.body),
+      // head
+      fhRect(20,21,3,4,c.body),
+      // ANTENNAE (signature insect)
+      fhRect(21,19,1,2,c.mane), fhRect(20,18,1,1,c.mane),
+      fhRect(22,19,1,2,c.mane), fhRect(23,18,1,1,c.mane),
+      // eye
+      fhRect(21,22,1,1,c.accent),
+      // 6 legs in two stride patterns
+      f===0 ? [
+        fhRect(8,25,1,2,c.hoof), fhRect(13,25,1,2,c.hoof), fhRect(18,25,1,2,c.hoof),
+        fhRect(9,26,1,2,c.hoof), fhRect(14,26,1,2,c.hoof), fhRect(19,26,1,2,c.hoof)
+      ].join("") : [
+        fhRect(9,25,1,2,c.hoof), fhRect(14,25,1,2,c.hoof), fhRect(19,25,1,2,c.hoof),
+        fhRect(8,26,1,2,c.hoof), fhRect(13,26,1,2,c.hoof), fhRect(18,26,1,2,c.hoof)
+      ].join(""),
+      // back highlight
+      fhRect(11,20,3,1,c.accent),
+      fhRect(15,20,3,1,c.accent)
+    ].join("");
+  },
+  small: function(c, f){
+    // hop animation — body moves up/down (rabbit/fox compact)
+    var yOff = f===0 ? 0 : -1;
+    return [
+      // compact body
+      fhRect(8,22+yOff,8,4,c.body),
+      // hindquarters elevated
+      fhRect(8,21+yOff,4,2,c.body),
+      // head
+      fhRect(15,20+yOff,4,4,c.body),
+      // BIG EARS (signature small mount = rabbit)
+      fhRect(16,16+yOff,1,4,c.body),
+      fhRect(18,16+yOff,1,4,c.body),
+      fhRect(16,16+yOff,1,1,c.accent),
+      fhRect(18,16+yOff,1,1,c.accent),
+      // eye
+      fhRect(17,21+yOff,1,1,c.hoof),
+      // nose
+      fhRect(19,22+yOff,1,1,c.mane),
+      // fluffy tail
+      fhRect(7,23+yOff,1,2,c.accent),
+      // legs (tucked when hopping)
+      f===0 ? fhRect(9,26,2,2,c.hoof)+fhRect(13,26,2,2,c.hoof)
+            : fhRect(9,25,2,3,c.hoof)+fhRect(13,25,2,3,c.hoof)
+    ].join("");
+  },
+  aquatic: function(c, f){
+    // streamlined body with fins — fish/dolphin/seahorse
+    return [
+      // streamlined body
+      fhRect(7,21,12,4,c.body),
+      // dorsal fin
+      fhRect(11,19,4,2,c.mane),
+      fhRect(12,18,2,1,c.mane),
+      // belly (lighter)
+      fhRect(8,24,10,1,c.accent),
+      // head (rounded)
+      fhRect(18,20,4,5,c.body),
+      // eye
+      fhRect(20,22,1,1,c.hoof),
+      // mouth
+      fhRect(21,23,1,1,c.mane),
+      // tail fin (wags per frame)
+      f===0 ? [
+        fhRect(4,20,3,2,c.mane), fhRect(3,18,2,3,c.mane), fhRect(5,22,2,2,c.mane)
+      ].join("") : [
+        fhRect(4,23,3,2,c.mane), fhRect(3,25,2,3,c.mane), fhRect(5,21,2,2,c.mane)
+      ].join(""),
+      // side fins
+      fhRect(10,25,2,2,c.mane),
+      fhRect(15,25,2,2,c.mane)
+    ].join("");
+  },
+  elemental: function(c, f){
+    // glowing aura around floating core — aura pulses per frame
+    var auraRadius = f===0 ? 0 : 1;
+    return [
+      // outer aura
+      fhRect(6-auraRadius,20-auraRadius,16+2*auraRadius,8+2*auraRadius,c.accent),
+      // mid aura
+      fhRect(8,21,12,6,c.mane),
+      // bright core
+      fhRect(11,22,8,4,c.body),
+      // sparkle accents (move per frame)
+      f===0 ? [
+        fhRect(7,19,1,1,c.accent), fhRect(20,21,1,1,c.accent),
+        fhRect(9,27,1,1,c.accent), fhRect(18,26,1,1,c.accent)
+      ].join("") : [
+        fhRect(10,19,1,1,c.accent), fhRect(17,20,1,1,c.accent),
+        fhRect(13,28,1,1,c.accent), fhRect(20,26,1,1,c.accent)
+      ].join(""),
+      // central glow
+      fhRect(14,23,2,2,c.accent)
+    ].join("");
+  },
+  mythical: function(c, f){
+    // horse-like base + horn (unicorn) — wings if pegasus context
+    var FL = f===0?fhRect(7,26,1,4,c.hoof):fhRect(8,26,1,4,c.hoof);
+    var FR = f===0?fhRect(10,26,1,4,c.hoof):fhRect(9,26,1,4,c.hoof);
+    var BL = f===0?fhRect(15,26,1,4,c.hoof):fhRect(16,26,1,4,c.hoof);
+    var BR = f===0?fhRect(18,26,1,4,c.hoof):fhRect(17,26,1,4,c.hoof);
+    return [
+      // body
+      fhRect(5,22,14,4,c.body),
+      // sparkle/glow back
+      fhRect(5,21,14,1,c.accent),
+      // neck
+      fhRect(19,18,3,5,c.body),
+      // head
+      fhRect(21,17,4,4,c.body),
+      // SPIRAL HORN (signature mythical)
+      fhRect(23,13,1,4,c.accent),
+      fhRect(22,12,1,1,c.accent), fhRect(24,12,1,1,c.accent),
+      // flowing mane (sparkles)
+      fhRect(19,18,2,5,c.mane),
+      fhRect(20,17,2,2,c.mane),
+      fhRect(20,16,1,1,c.accent),
+      // tail (flowing/sparkly)
+      fhRect(2,21,3,7,c.mane),
+      fhRect(1,22,1,4,c.accent),
+      // eye (glowing)
+      fhRect(23,18,1,1,c.accent),
+      // ETHEREAL WINGS (when frame b)
+      f===1 ? fhRect(10,18,4,3,c.accent) + fhRect(11,16,3,2,c.accent) : "",
+      FL, FR, BL, BR
+    ].join("");
+  },
+  undead: function(c, f){
+    // skeletal — exposed ribs, no flesh
+    var FL = f===0?fhRect(7,26,1,4,c.body):fhRect(8,26,1,4,c.body);
+    var FR = f===0?fhRect(10,26,1,4,c.body):fhRect(9,26,1,4,c.body);
+    var BL = f===0?fhRect(15,26,1,4,c.body):fhRect(16,26,1,4,c.body);
+    var BR = f===0?fhRect(18,26,1,4,c.body):fhRect(17,26,1,4,c.body);
+    return [
+      // SKELETAL spine
+      fhRect(5,22,14,1,c.body),
+      // RIBS (signature undead)
+      fhRect(6,23,1,3,c.body), fhRect(8,23,1,3,c.body),
+      fhRect(10,23,1,3,c.body), fhRect(12,23,1,3,c.body),
+      fhRect(14,23,1,3,c.body), fhRect(16,23,1,3,c.body),
+      // pelvis
+      fhRect(17,22,3,4,c.body),
+      // SKULL
+      fhRect(20,18,5,4,c.body),
+      fhRect(22,17,2,1,c.body),
+      // EMPTY EYE SOCKETS (glowing)
+      fhRect(21,20,1,1,c.accent), fhRect(23,20,1,1,c.accent),
+      // jaw
+      fhRect(21,21,3,1,c.mane),
+      // tail (bone)
+      fhRect(3,22,2,1,c.body),
+      fhRect(2,22,1,1,c.body),
+      FL, FR, BL, BR
+    ].join("");
+  }
+};
+
+/* Family inference for legacy lootIds (wolf_reins, dragon_harness, etc.) that
+   don't match a CR_MOUNTS_FULL entry. Maps substring → family. */
+function fhInferMountFamily(lootId){
+  if (!lootId) return "horse";
+  var s = String(lootId).toLowerCase();
+  if (s.indexOf("dragon") >= 0 || s.indexOf("wyrm") >= 0) return "dragon";
+  if (s.indexOf("eagle") >= 0 || s.indexOf("hawk") >= 0 || s.indexOf("falcon") >= 0 ||
+      s.indexOf("raven") >= 0 || s.indexOf("bird") >= 0 || s.indexOf("phoenix") >= 0 ||
+      s.indexOf("griffin") >= 0 || s.indexOf("peacock") >= 0) return "bird";
+  if (s.indexOf("wolf") >= 0 || s.indexOf("hound") >= 0 || s.indexOf("direwolf") >= 0) return "wolf";
+  if (s.indexOf("lion") >= 0 || s.indexOf("tiger") >= 0 || s.indexOf("leopard") >= 0 ||
+      s.indexOf("panther") >= 0 || s.indexOf("cheetah") >= 0 || s.indexOf("cat") >= 0 ||
+      s.indexOf("sabertooth") >= 0) return "cat";
+  if (s.indexOf("bear") >= 0) return "bear";
+  if (s.indexOf("cow") >= 0 || s.indexOf("bull") >= 0 || s.indexOf("bison") >= 0 ||
+      s.indexOf("ox") >= 0 || s.indexOf("yak") >= 0) return "cattle";
+  if (s.indexOf("deer") >= 0 || s.indexOf("stag") >= 0 || s.indexOf("elk") >= 0 ||
+      s.indexOf("moose") >= 0 || s.indexOf("caribou") >= 0) return "forest";
+  if (s.indexOf("lizard") >= 0 || s.indexOf("raptor") >= 0 || s.indexOf("gecko") >= 0 ||
+      s.indexOf("salamander") >= 0) return "reptile";
+  if (s.indexOf("beetle") >= 0 || s.indexOf("scorpion") >= 0 || s.indexOf("spider") >= 0 ||
+      s.indexOf("mantis") >= 0) return "insect";
+  if (s.indexOf("rabbit") >= 0 || s.indexOf("fox") >= 0 || s.indexOf("squirrel") >= 0) return "small";
+  if (s.indexOf("dolphin") >= 0 || s.indexOf("whale") >= 0 || s.indexOf("fish") >= 0 ||
+      s.indexOf("manta") >= 0 || s.indexOf("seahorse") >= 0) return "aquatic";
+  if (s.indexOf("flame") >= 0 || s.indexOf("frost") >= 0 || s.indexOf("storm") >= 0 ||
+      s.indexOf("elemental") >= 0 || s.indexOf("spirit") >= 0) return "elemental";
+  if (s.indexOf("unicorn") >= 0 || s.indexOf("pegasus") >= 0 || s.indexOf("chimera") >= 0 ||
+      s.indexOf("mythical") >= 0 || s.indexOf("kelpie") >= 0) return "mythical";
+  if (s.indexOf("skeleton") >= 0 || s.indexOf("undead") >= 0 || s.indexOf("zombie") >= 0 ||
+      s.indexOf("ghost") >= 0 || s.indexOf("specter") >= 0) return "undead";
+  return "horse"; // default
+}
+
 function drawMount(mountGear, p){
-  const rank = rarityRank(avatarTier(mountGear, "common"));
-  const kind = rank >= 5 ? "dragon" : rank >= 4 ? "griffin" : rank >= 3 ? "wolf" : "horse";
-  if (kind === "dragon"){
-    return [
-      fhRect(4,22,15,4,"#10B981"), fhRect(8,19,9,3,"#34D399"), fhRect(18,20,5,4,"#10B981"),
-      fhRect(21,18,4,3,"#6EE7B7"), fhRect(6,16,5,5,"#064E3B"), fhRect(12,15,6,5,"#064E3B"),
-      fhRect(6,26,2,4,p.outline), fhRect(15,26,2,4,p.outline), fhRect(22,21,1,1,"#FBBF24")
-    ].join("");
-  }
-  if (kind === "griffin"){
-    return [
-      fhRect(5,23,14,3,"#B45309"), fhRect(9,20,9,3,"#FDE68A"), fhRect(18,21,5,3,"#F59E0B"),
-      fhRect(4,18,6,3,"#FDE68A"), fhRect(10,17,6,3,"#FEF3C7"), fhRect(6,26,2,4,p.outline), fhRect(16,26,2,4,p.outline)
-    ].join("");
-  }
-  if (kind === "wolf"){
-    return [
-      fhRect(4,23,15,4,"#6B7280"), fhRect(9,21,9,2,"#9CA3AF"), fhRect(18,20,5,4,"#6B7280"),
-      fhRect(21,18,2,2,"#D1D5DB"), fhRect(6,26,2,4,p.outline), fhRect(15,26,2,4,p.outline), fhRect(22,22,1,1,"#F8FAFC")
-    ].join("");
-  }
-  return [
-    fhRect(4,23,15,4,"#8B5A2B"), fhRect(8,21,10,2,"#A16207"), fhRect(18,20,5,4,"#8B5A2B"),
-    fhRect(21,18,2,2,"#D6B08A"), fhRect(6,26,2,4,p.outline), fhRect(15,26,2,4,p.outline), fhRect(10,20,5,1,p.trim)
-  ].join("");
+  /* v8.8: per-family mount sprite + 2-frame walk cycle.
+     Looks up mountGear.lootId in CR_MOUNTS_FULL for family. Falls back to
+     name-inference for legacy lootIds. Per-breed palette overrides. */
+  var lootId = mountGear && mountGear.lootId ? mountGear.lootId : (mountGear && mountGear.id) || null;
+  var registry = (typeof window !== "undefined" && Array.isArray(window.CR_MOUNTS_FULL)) ? window.CR_MOUNTS_FULL : null;
+  var mount = (lootId && registry) ? registry.filter(function(m){ return m.id === lootId; })[0] : null;
+  var family = mount ? mount.family : fhInferMountFamily(lootId);
+  var palette = FH_MOUNT_PALETTES[lootId] || FH_FAMILY_PALETTES[family] || FH_FAMILY_PALETTES.horse;
+  // Adapt palette.outline from caller for fallback continuity
+  if (p && p.outline && !palette.outline) palette.outline = p.outline;
+  var spriteFn = FH_MOUNT_SPRITES[family] || FH_MOUNT_SPRITES.horse;
+  var frameA, frameB;
+  try { frameA = spriteFn(palette, 0); frameB = spriteFn(palette, 1); }
+  catch(_){ frameA = FH_MOUNT_SPRITES.horse(palette, 0); frameB = FH_MOUNT_SPRITES.horse(palette, 1); }
+  return '<g class="fh-mount-frame fh-mount-frame-a" data-mount-family="'+family+'" data-mount-id="'+(lootId||"none")+'">'+frameA+'</g>' +
+         '<g class="fh-mount-frame fh-mount-frame-b" data-mount-family="'+family+'" data-mount-id="'+(lootId||"none")+'">'+frameB+'</g>';
 }
 function drawPet(petGear, p){
   const itemId = petGear?.id || "";
@@ -6002,13 +7334,6 @@ async function cloudPush(opts){
      and the cloud row never gets created. Until v4.2 this flag was passed
      in but never read; now it gates the early-return below. */
   if (!state.sync.enabled && !opts.force) return;
-  // v8.3: offline-aware. Never burn cellular data on a doomed network call.
-  // Mark sync dirty so the next 'online' event flushes everything queued.
-  if (typeof navigator !== "undefined" && navigator.onLine === false){
-    state.sync.dirty = true;
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch(_){}
-    return;
-  }
   const backend = currentBackend();
   state.sync.backend = backend;
   const rev = (state.sync.cloudRev|0);
@@ -6114,9 +7439,6 @@ async function cloudPull(opts){
      state.sync.enabled — the toggle gates BACKGROUND polling, not user-
      initiated operations. */
   if (!state.sync.enabled && !opts.force) return false;
-  // v8.3: offline-aware — skip the fetch entirely instead of failing then
-  // retrying. The next 'online' event will resume polling.
-  if (typeof navigator !== "undefined" && navigator.onLine === false) return false;
   const backend = currentBackend();
   state.sync.backend = backend;
   let remotePayload = null;
@@ -6270,6 +7592,115 @@ function mergeRemoteState(local, remote){
     unlockedThemes: Array.from(new Set([...((local.store&&local.store.unlockedThemes)||[]), ...((remote.store&&remote.store.unlockedThemes)||[])]))
   };
   out.editLog = mergeEditLog(local.editLog, remote.editLog);
+  /* v8.x LOOT REWORK — additive merge rules. */
+  var __LR_R = ["common","uncommon","rare","epic","legendary","mythic"];
+  var __LR_CAP = 200;
+  var __lInst = (local.lootInstances && typeof local.lootInstances === "object") ? local.lootInstances : {};
+  var __rInst = (remote.lootInstances && typeof remote.lootInstances === "object") ? remote.lootInstances : {};
+  out.lootInstances = {};
+  var __iids = new Set(Object.keys(__lInst).concat(Object.keys(__rInst)));
+  __iids.forEach(function(iid){
+    var a = __lInst[iid], b = __rInst[iid];
+    if (a && !b) out.lootInstances[iid] = deepClone(a);
+    else if (b && !a) out.lootInstances[iid] = deepClone(b);
+    else if (a && b) out.lootInstances[iid] = (b.level|0) > (a.level|0) ? deepClone(b) : deepClone(a);
+  });
+  var __lLoot = (local.loot && typeof local.loot === "object") ? local.loot : {};
+  var __rLoot = (remote.loot && typeof remote.loot === "object") ? remote.loot : {};
+  out.loot = {
+    drops: [], pity: { common:0, uncommon:0, rare:0, epic:0, legendary:0, mythic:0 },
+    materials: { dust:0, shards:0, essence:0 },
+    dyesOwned: {}, gemsOwned: {}, consumables: {},
+    loadout: { slot1:null, slot2:null, slot3:null }, loadoutUpdatedAt: 0
+  };
+  var __allDrops = (Array.isArray(__lLoot.drops)?__lLoot.drops:[]).concat(Array.isArray(__rLoot.drops)?__rLoot.drops:[]);
+  var __seenIds = new Set();
+  out.loot.drops = __allDrops.filter(function(d){ if (!d || !d.id || __seenIds.has(d.id)) return false; __seenIds.add(d.id); return true; })
+    .sort(function(a,b){ return (a.at||0)-(b.at||0); }).slice(-__LR_CAP);
+  __LR_R.forEach(function(r){
+    var lv = (__lLoot.pity && typeof __lLoot.pity[r] === "number") ? __lLoot.pity[r] : 0;
+    var rv = (__rLoot.pity && typeof __rLoot.pity[r] === "number") ? __rLoot.pity[r] : 0;
+    /* v8.6.3 fix: pity counts UP since last drop; Math.max preserves
+       the player's progress toward the next pity grant. Math.min
+       silently threw away pity built on the other device. */
+    out.loot.pity[r] = Math.max(lv, rv);
+  });
+  ["dust","shards","essence"].forEach(function(k){
+    var lv = (__lLoot.materials && typeof __lLoot.materials[k] === "number") ? __lLoot.materials[k] : 0;
+    var rv = (__rLoot.materials && typeof __rLoot.materials[k] === "number") ? __rLoot.materials[k] : 0;
+    out.loot.materials[k] = Math.max(lv, rv);
+  });
+  function __mergeCounts(a,b){ var o={}; var ks=new Set(Object.keys(a||{}).concat(Object.keys(b||{}))); ks.forEach(function(k){ o[k] = Math.max((a||{})[k]|0,(b||{})[k]|0); }); return o; }
+  out.loot.dyesOwned   = __mergeCounts(__lLoot.dyesOwned,   __rLoot.dyesOwned);
+  out.loot.gemsOwned   = __mergeCounts(__lLoot.gemsOwned,   __rLoot.gemsOwned);
+  out.loot.consumables = __mergeCounts(__lLoot.consumables, __rLoot.consumables);
+  var __lLoad = __lLoot.loadoutUpdatedAt|0, __rLoad = __rLoot.loadoutUpdatedAt|0;
+  if (__rLoad > __lLoad){
+    out.loot.loadout = deepClone(__rLoot.loadout || { slot1:null, slot2:null, slot3:null });
+    out.loot.loadoutUpdatedAt = __rLoad;
+  } else {
+    out.loot.loadout = deepClone(__lLoot.loadout || { slot1:null, slot2:null, slot3:null });
+    out.loot.loadoutUpdatedAt = __lLoad;
+  }
+  out.lootRework = deepClone(local.lootRework || { version:1, flags:{ animationsOn:true, showDropLog:true, autoSalvageCommonDupes:false } });
+  if (remote.lootRework && remote.lootRework.flags){
+    Object.keys(remote.lootRework.flags).forEach(function(k){
+      out.lootRework.flags[k] = remote.lootRework.flags[k];
+    });
+  }
+  /* v8.6.3 egg integrity merge. Preserve every egg by id, keep the furthest
+     lifecycle state, and quarantine active pre-fix high-tier eggs that have
+     no completed-session provenance. */
+  var __lEggs = (local.eggs && typeof local.eggs === "object") ? local.eggs : {};
+  var __rEggs = (remote.eggs && typeof remote.eggs === "object") ? remote.eggs : {};
+  var __eggById = new Map();
+  ["owned","incubating","quarantined","hatched"].forEach(function(bucket){
+    [__lEggs,__rEggs].forEach(function(src, side){
+      (Array.isArray(src[bucket]) ? src[bucket] : []).forEach(function(egg, idx){
+        if (!egg || typeof egg !== "object") return;
+        var key = egg.id || ("anon_" + side + "_" + bucket + "_" + idx);
+        __eggById.set(key, { bucket:bucket, egg:deepClone(egg) });
+      });
+    });
+  });
+  out.eggs = { owned:[], incubating:[], hatched:[], quarantined:[], processedSessionIds:[], slotCap:3, systemVersion:2 };
+  __eggById.forEach(function(entry){
+    var egg = entry.egg;
+    var active = entry.bucket === "owned" || entry.bucket === "incubating";
+    var highTier = egg.rarity === "legendary" || egg.rarity === "mythic";
+    var verified = typeof egg.sourceSessionId === "string" && egg.sourceSessionId &&
+      Number(egg.sourceMinutes) >= 30 && (egg.sourceType === "timer" || egg.sourceType === "stopwatch");
+    if (active && highTier && !verified){
+      entry.bucket = "quarantined";
+      if (!egg.quarantinedAt) egg.quarantinedAt = Date.now();
+      if (!egg.quarantineReason) egg.quarantineReason = "pre-v2-unverified-high-tier";
+    }
+    out.eggs[entry.bucket].push(egg);
+  });
+  out.eggs.processedSessionIds = Array.from(new Set(
+    (Array.isArray(__lEggs.processedSessionIds) ? __lEggs.processedSessionIds : [])
+      .concat(Array.isArray(__rEggs.processedSessionIds) ? __rEggs.processedSessionIds : [])
+      .filter(function(id){ return typeof id === "string" && id; })
+  )).slice(-200);
+  out.eggs.slotCap = Math.max(1, Number(__lEggs.slotCap)||3, Number(__rEggs.slotCap)||3);
+  /* Bestiary drops merge — per-template MAX. */
+  var __lBest = (local.bestiary && typeof local.bestiary === "object") ? local.bestiary : {};
+  var __rBest = (remote.bestiary && typeof remote.bestiary === "object") ? remote.bestiary : {};
+  if (!out.bestiary) out.bestiary = {};
+  Object.keys(__lBest).forEach(function(k){ if (!out.bestiary[k] && __lBest[k]) out.bestiary[k] = deepClone(__lBest[k]); });
+  Object.keys(__rBest).forEach(function(k){
+    var localEnt = (out.bestiary[k] || {});
+    var remoteEnt = __rBest[k] || {};
+    var merged = Object.assign({}, localEnt);
+    merged.unlocked = !!localEnt.unlocked || !!remoteEnt.unlocked;
+    merged.kills = Math.max(localEnt.kills|0, remoteEnt.kills|0);
+    merged.firstSeenAt = (localEnt.firstSeenAt && remoteEnt.firstSeenAt)
+      ? Math.min(localEnt.firstSeenAt, remoteEnt.firstSeenAt)
+      : (localEnt.firstSeenAt || remoteEnt.firstSeenAt || null);
+    merged.lastEncounteredAt = Math.max(localEnt.lastEncounteredAt||0, remoteEnt.lastEncounteredAt||0) || null;
+    merged.drops = __mergeCounts(localEnt.drops, remoteEnt.drops);
+    out.bestiary[k] = merged;
+  });
   out.dataVersion = Math.max(local.dataVersion||0, remote.dataVersion||0, DATA_VERSION);
   out.sync = deepClone(local.sync);
   return out;
@@ -6363,7 +7794,7 @@ function bindSettings(){
   bind("#cfg-long",  e=>{ state.settings.longMin  = clamp(parseInt(e.target.value||"15",10),1,120); saveState(); if (!state.timer.running) setMode(state.timer.mode); });
   bind("#cfg-cycles",e=>{ state.settings.cyclesBeforeLong = clamp(parseInt(e.target.value||"4",10),1,12); saveState(); renderTopMeta(); });
   bind("#cfg-name",  e=>{ state.hero.name = e.target.value.slice(0,32); saveState(); renderHero(); renderAvatar(); });
-  bind("#cfg-class", e=>{ state.hero.cls = e.target.value; saveState(); renderHero(); renderAvatar(); });
+  bind("#cfg-class", e=>{ state.hero.cls = e.target.value; if (state.hero.appearance) state.hero.appearance.classKey = e.target.value; saveState(); renderHero(); renderAvatar(); });
   bind("#cfg-theme", e=>{ state.settings.theme = e.target.value; saveState(); applyTheme(); });
   bind("#cfg-min-reward", e=>{ state.settings.minRewardMinutes = clamp(parseInt(e.target.value||"5",10),1,15); saveState(); });
   bind("#cfg-streak-cap", e=>{ state.settings.streakBonusCap = clamp(parseInt(e.target.value||"30",10),0,200); saveState(); });
@@ -6608,6 +8039,11 @@ function renderAnalytics(){
 let burstInterval = null;
 function currentAdventureActionId(){ ensureV76StateShape(state); return normalizeAdventureAction(state.adventure?.action); }
 function currentAdventureSpec(){ return ACTION_BY_ID[currentAdventureActionId()] || ACTION_BY_ID.Travel; }
+function runSessionRewardPipeline(action, minutes, sessionId){
+  return (typeof lrSessionEndLootPipeline === "function")
+    ? lrSessionEndLootPipeline(action, minutes, sessionId)
+    : { legacyItem: rollLoot(minutes), drops:[], encounters:[] };
+}
 function buildSessionLogRecordV76(meta){
   meta = meta || {};
   const xpTotal = meta.rewarded && meta.xpBreakdown ? (meta.xpBreakdown.total|0) : (meta.xp|0);
@@ -6680,14 +8116,6 @@ function renderAvatar(){
     av.setAttribute("data-action", adv ? adv.id.toLowerCase() : taskAction);
     av.setAttribute("data-running", running ? "1" : "0");
     av.setAttribute("data-scene", scene);
-    // v8.4: 3D overlay. innerHTML above rebuilt the SVG fallback; (re)attach the
-    // shared WebGL canvas on top of it for the home card — but never yank it away
-    // from the Character Studio modal while that's open.
-    if (window.FH3D && typeof FH3D.attachHome === "function"){
-      if (!FH3D._wired){ FH3D._wired = true; if (FH3D.wireModal) FH3D.wireModal("character-modal","character-avatar-preview","avatar"); }
-      if (!fh3dStudioOpen()) FH3D.attachHome(av);
-      fh3dUpdate();
-    }
   }
 }
 function refreshAvatarRunningState(){
@@ -7050,9 +8478,60 @@ function applySessionEdit(sessionId,newMinutes){
      credit is intentionally NOT reconstructed — combo is a sequential chain
      and fabricating a retroactive link risks corrupting it. */
   rec.minutes=nm; rec.xp=xpInfo.xpAfter; rec.rewarded=xpInfo.willReward; rec.edited=true; rec.editedAt=now(); rec.adjustedFrom=rec.adjustedFrom||original;
-  appendEditLog({ taskName:(task&&task.name)||rec.action||"Focus", before:oldMinutes, after:nm, source:"session-editor" });
+  /* v8.7.0 LOOT CLAWBACK: if edited DOWN, claw back any loot from this session
+     whose rarity wouldn't have been allowed at the new minute total. If edited
+     UP and the new minutes crosses a new rarity threshold, run a bonus mini-
+     session through the existing RNG pipeline (NOT guaranteed — same RNG). */
+  var __clawbackResult = { removed: [], gained: [] };
+  try {
+    if (delta > 0 && typeof allowedRaritiesForMinutes === "function" && state.loot && Array.isArray(state.loot.drops)){
+      var allowedNow = allowedRaritiesForMinutes(nm);
+      var remaining = [];
+      for (var __di = 0; __di < state.loot.drops.length; __di++){
+        var __d = state.loot.drops[__di];
+        if (!__d || __d.sessionId !== sessionId){ remaining.push(__d); continue; }
+        if (allowedNow.has(__d.rarity)){ remaining.push(__d); continue; }
+        /* Claw back this drop */
+        var __tmpl = (typeof window.lootById === "function") ? window.lootById(__d.templateId) : null;
+        var __name = (__tmpl && __tmpl[1]) || __d.templateId;
+        if (__d.iid && state.lootInstances && state.lootInstances[__d.iid]){
+          delete state.lootInstances[__d.iid];
+        }
+        if (__d.templateId && state.lootOwned && (state.lootOwned[__d.templateId]|0) > 0){
+          state.lootOwned[__d.templateId] = Math.max(0, (state.lootOwned[__d.templateId]|0) - 1);
+          if (state.lootOwned[__d.templateId] === 0) delete state.lootOwned[__d.templateId];
+        }
+        __clawbackResult.removed.push({ iid:__d.iid, templateId:__d.templateId, rarity:__d.rarity, name:__name });
+        logActivity({ category:"loot", action:"loot_clawback", sessionId:sessionId, taskId:rec.taskId||null, before:{templateId:__d.templateId,rarity:__d.rarity,name:__name}, after:null, source:"session-editor", note:"session edited "+oldMinutes+"m → "+nm+"m" });
+      }
+      state.loot.drops = remaining;
+      if (__clawbackResult.removed.length && typeof toast === "function"){
+        toast("Loot clawback: "+__clawbackResult.removed.length+" item(s) removed (session edited down).", "warn");
+      }
+    } else if (delta < 0 && typeof window.lrSessionEndLootPipeline === "function"){
+      /* Edit UP: roll for additional loot using the delta as a bonus mini-session.
+         allowedRaritiesForMinutes(nm) tightens or loosens via the pipeline's
+         internal gate. Use a new sessionId so eggs/loot dedup doesn't reject. */
+      var __addMin = -delta;
+      var __editSessId = sessionId + "_edit_"+(now()|0);
+      var __rerollAction = action;
+      var __rerollRun = window.lrSessionEndLootPipeline(__rerollAction, __addMin, __editSessId);
+      if (__rerollRun && Array.isArray(__rerollRun.drops)){
+        for (var __ri=0; __ri<__rerollRun.drops.length; __ri++){
+          var __rd = __rerollRun.drops[__ri];
+          if (!__rd) continue;
+          __clawbackResult.gained.push({ iid:__rd.iid||null, templateId:__rd.templateId, rarity:__rd.rarity });
+          logActivity({ category:"loot", action:"edit_roll_gain", sessionId:sessionId, taskId:rec.taskId||null, before:null, after:{templateId:__rd.templateId,rarity:__rd.rarity}, source:"session-editor", note:"+"+__addMin+"m bonus roll" });
+        }
+        if (__rerollRun.drops.length && typeof toast === "function"){
+          toast("Bonus roll from edit-up: "+__rerollRun.drops.length+" item(s).", "good");
+        }
+      }
+    }
+  } catch(__e){ console.warn("v8.7.0 loot clawback/reroll failed", __e); }
+  appendEditLog({ taskName:(task&&task.name)||rec.action||"Focus", before:oldMinutes, after:nm, source:"session-editor", sessionId:sessionId, taskId:rec.taskId||null });
   saveState(); renderAll();
-  return{ok:true,sessionId,oldMinutes,newMinutes:nm,newMinutesCap:cap,minutesDelta:-delta,xpDelta:-xpDelta,rewardedAfter:xpInfo.willReward};
+  return{ok:true,sessionId,oldMinutes,newMinutes:nm,newMinutesCap:cap,minutesDelta:-delta,xpDelta:-xpDelta,rewardedAfter:xpInfo.willReward, clawback:__clawbackResult};
 }
 function renderEditableSessionRows(){
   const rows=(state.sessionsLog||[]).filter(r=>r&&r.type==="focus").slice(-8).reverse();
@@ -7375,12 +8854,6 @@ function renderCharacterPanel(){
   if (preview){
     preview.innerHTML = characterPortraitSvg(avatarClassSpec(state.hero.cls, null), avatarEquipment());
     preview.removeAttribute("data-scene");
-    // v8.4: move the shared 3D canvas into the Studio for a large, drag-to-rotate
-    // live preview that updates instantly as appearance / gear / mount change.
-    if (window.FH3D && typeof FH3D.attachStudio === "function"){
-      if (fh3dStudioOpen()) FH3D.attachStudio(preview);
-      fh3dUpdate();
-    }
   }
   $$("[data-character-tab]").forEach(b=>b.setAttribute("aria-pressed", b.dataset.characterTab === selectedCharacterTab ? "true" : "false"));
   const lookPanel = $("#character-look-panel");
@@ -7445,8 +8918,21 @@ function setHeroAppearance(group, value){
   if (!APPEARANCE_OPTIONS[group]?.some(o=>o.id === value)) return;
   ensureHeroAppearanceShape();
   ensureHeroCosmeticsShape();
+  const beforeVal = state.hero.appearance[group];
   state.hero.appearance[group] = value;
+  /* v8.7.0 customizer fix: v86CharacterSvg reads `a.species` (not race) and
+     `a.skinIdx` (numeric, not the string id). Mirror at this canonical write
+     point so every dropdown — settings, character studio, future paths — gets
+     the propagation. Class handlers mirror cls→classKey separately. */
+  if (group === "race"){
+    state.hero.appearance.species = value;
+  } else if (group === "skin"){
+    const opts = APPEARANCE_OPTIONS.skin || [];
+    const idx = Math.max(0, opts.findIndex(o => o.id === value));
+    state.hero.appearance.skinIdx = idx;
+  }
   state.hero.appearanceUpdatedAt = now();
+  try { if (typeof logActivity === "function") logActivity({ category:"character", action:"appearance_change", group, before:beforeVal, after:value, source:"customizer" }); } catch(_){}
   saveState();
   renderHero(); renderAvatar(); renderCharacterPanel();
 }
@@ -7505,12 +8991,32 @@ function bindDesignShell(){
   }));
   $("#btn-variants")?.addEventListener("click", ()=>openModal("variants-modal"));
   $("#character-name")?.addEventListener("input", e=>{ state.hero.name = e.target.value.trim() || "Hero"; saveState(); renderHero(); renderCharacterPanel(); });
-  $("#character-class")?.addEventListener("change", e=>{ state.hero.cls = e.target.value; saveState(); renderHero(); renderAvatar(); renderCharacterPanel(); });
+  $("#character-class")?.addEventListener("change", e=>{ state.hero.cls = e.target.value; if (state.hero.appearance) state.hero.appearance.classKey = e.target.value; saveState(); renderHero(); renderAvatar(); renderCharacterPanel(); });
   $$("[data-minute-delta]").forEach(b=>b.addEventListener("click", ()=>applyTaskMinutesFromEditor(Number(b.dataset.minuteDelta)||0)));
   $("#btn-minute-apply")?.addEventListener("click", ()=>applyTaskMinutesFromEditor(Number($("#minute-custom-input")?.value)||0));
   $("#minute-custom-input")?.addEventListener("keydown", e=>{
     if (e.key === "Enter"){ e.preventDefault(); applyTaskMinutesFromEditor(Number(e.target.value)||0); }
   });
+  /* v8.6.4: sign-toggle pill for #minute-custom-input (iOS numeric keypad has no minus) */
+  (function(){
+    const btn = $("#minute-custom-sign"), inp = $("#minute-custom-input");
+    if (!btn || !inp || btn.dataset.signBound) return;
+    btn.dataset.signBound = "1";
+    function refresh(){
+      const v = String(inp.value || "").trim();
+      btn.textContent = v.startsWith("-") ? "−" : "+";
+    }
+    btn.addEventListener("click", ()=>{
+      const v = String(inp.value || "").trim();
+      if (v.startsWith("-"))      inp.value = v.slice(1);
+      else if (v && v !== "0")    inp.value = "-" + v;
+      else                        inp.value = btn.textContent === "−" ? "" : "-";
+      refresh();
+      try { inp.focus(); } catch(_){}
+    });
+    inp.addEventListener("input", refresh);
+    refresh();
+  })();
   $("#btn-minute-stats")?.addEventListener("click", ()=>openModal("analytics-modal"));
   $("#btn-minute-ledger")?.addEventListener("click", ()=>{ closeModal("task-minutes-modal"); openProgressPanel("ledger"); });
   $$("[data-variant-choice]").forEach(b=>b.addEventListener("click", ()=>{ setDesignVariant(b.dataset.variantChoice); closeModal("variants-modal"); }));
@@ -8154,32 +9660,6 @@ async function boot(){
     renderSyncStatus();
     ensureTickInterval();
     bindAppOpenTracking();
-    // v8.3: network-awareness — pause sync when offline, flush dirty state when online,
-    // and catch the iOS PWA wake-from-background case so the timer display jumps to truth.
-    try {
-      window.addEventListener("online", ()=>{
-        try { logLine("Network is back \u2014 flushing sync."); } catch(_){}
-        try { if (state.sync && state.sync.enabled){ startPullPoll(); } } catch(_){}
-        try {
-          if (state.sync && (state.sync.dirty || state.sync.enabled)){
-            cloudPush({ retryAfterOffline: true })
-              .then(()=>{ try { state.sync.dirty = false; localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch(_){} })
-              .catch(()=>{});
-          }
-        } catch(_){}
-        try { renderSyncStatus && renderSyncStatus(); } catch(_){}
-      });
-      window.addEventListener("offline", ()=>{
-        try { logLine("Network is offline \u2014 sync paused, all changes saved locally."); } catch(_){}
-        try { if (typeof stopPullPoll === "function") stopPullPoll(); } catch(_){}
-        try { renderSyncStatus && renderSyncStatus(); } catch(_){}
-      });
-      window.addEventListener("pageshow", ()=>{
-        // PWA wake-from-background: catch the display up even when visibilitychange doesn't fire.
-        try { renderTimer(); } catch(_){}
-        try { renderStatStrip(); } catch(_){}
-      });
-    } catch(_){}
     maybeWarnAboutFileMode();
     if (state.timer.running && state.timer.endAt && state.timer.mode === "focus"){ startKeepalive(); acquireWakeLock(); }
     try { maybeAutoBackup(); } catch(_){}
@@ -8296,6 +9776,89 @@ function computeCoins(minutes, withGear=false){
 }
 
 /* --- edit-log audit trail (last 100 time adjustments) --- */
+/* v8.7.0 particle confetti burst on rare+ drops. Pure canvas, no deps. */
+window.fhConfettiBurst = function(rarity){
+  try {
+    var colors = {
+      rare:["#6cd1ff","#3fa9d6","#a8e6ff"],
+      epic:["#c58bff","#8b4dd6","#e0b8ff"],
+      legendary:["#ffd76b","#d6a23f","#fff0b8"],
+      mythic:["#ff8ad0","#d65aa0","#ffbce0"],
+      cursed:["#222","#444","#7a3030"],
+      artifact:["#ff6b6b","#ffd93d","#6bcf7f","#4d9de0","#c878ff"]
+    };
+    var pal = colors[rarity] || colors.rare;
+    var cv = document.createElement("canvas");
+    cv.style.cssText = "position:fixed;inset:0;z-index:9999;pointer-events:none;";
+    cv.width = window.innerWidth; cv.height = window.innerHeight;
+    document.body.appendChild(cv);
+    var ctx = cv.getContext("2d");
+    var n = (rarity === "legendary" || rarity === "mythic" || rarity === "artifact") ? 80 : 40;
+    var parts = [];
+    for (var i=0; i<n; i++){
+      parts.push({
+        x: cv.width/2 + (Math.random()-.5)*60,
+        y: cv.height/2 + (Math.random()-.5)*30,
+        vx: (Math.random()-.5)*14,
+        vy: (Math.random()-.9)*16,
+        rot: Math.random()*Math.PI*2,
+        vr: (Math.random()-.5)*.4,
+        size: 4 + Math.random()*6,
+        color: pal[(Math.random()*pal.length)|0],
+        life: 60 + Math.random()*40
+      });
+    }
+    var frame = 0;
+    function tick(){
+      frame++;
+      ctx.clearRect(0,0,cv.width,cv.height);
+      var alive = 0;
+      for (var k=0; k<parts.length; k++){
+        var p = parts[k];
+        if (p.life <= 0) continue;
+        alive++;
+        p.x += p.vx; p.y += p.vy; p.vy += 0.45; p.vx *= 0.99;
+        p.rot += p.vr; p.life--;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rot);
+        ctx.globalAlpha = Math.max(0, p.life/100);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(-p.size/2, -p.size/2, p.size, p.size);
+        ctx.restore();
+      }
+      if (alive > 0 && frame < 180) requestAnimationFrame(tick);
+      else if (cv.parentNode) cv.parentNode.removeChild(cv);
+    }
+    requestAnimationFrame(tick);
+  } catch(_){}
+};
+
+/* v8.7.0 universal activity log. Append-only. Cap 500 entries. Pushes
+   to both state.activityLog (new schema) AND, when category==="edit",
+   the legacy state.editLog so the existing Recent Edits UI keeps working
+   for users who only know that view. */
+function logActivity(entry){
+  if (!entry || typeof entry !== "object") return;
+  if (!Array.isArray(state.activityLog)) state.activityLog = [];
+  var e = {
+    id: (typeof uid === "function") ? uid() : String(Date.now()) + Math.random().toString(36).slice(2,8),
+    timestamp: (new Date()).toISOString(),
+    at: now(),
+    category: String(entry.category || "misc"),
+    action: String(entry.action || "change"),
+    sessionId: entry.sessionId || null,
+    taskId: entry.taskId || null,
+    before: entry.before !== undefined ? entry.before : null,
+    after:  entry.after  !== undefined ? entry.after  : null,
+    delta:  entry.delta  !== undefined ? entry.delta  : null,
+    source: String(entry.source || "auto"),
+    note:   entry.note || null
+  };
+  state.activityLog.push(e);
+  if (state.activityLog.length > 500) state.activityLog = state.activityLog.slice(-500);
+  return e;
+}
 function appendEditLog(entry){
   if (!entry || typeof entry !== "object") return;
   if (!Array.isArray(state.editLog)) state.editLog = [];
@@ -8309,6 +9872,8 @@ function appendEditLog(entry){
     source: entry.source || "edit"
   });
   if (state.editLog.length > 100) state.editLog = state.editLog.slice(-100);
+  /* v8.7.0: mirror to activityLog for the universal log view */
+  try { logActivity({ category:"edit", action:"time_edit", taskId:entry.taskId||null, sessionId:entry.sessionId||null, before:before, after:after, delta:after-before, source:entry.source||"edit", note:"task='"+(entry.taskName||"")+"'" }); } catch(_){}
 }
 function fmtEditLogEntry(e){
   const verb = (e.delta>=0) ? "Added" : "Removed";
@@ -8490,24 +10055,90 @@ function renderLedger(){
           <button type="button" data-ledger-task="${escapeHtml(t.id)}" data-ledger-delta="5">+5</button>
           <button type="button" data-ledger-task="${escapeHtml(t.id)}" data-ledger-delta="15">+15</button>
           <button type="button" data-ledger-task="${escapeHtml(t.id)}" data-ledger-delta="30">+30</button>
-          <input type="number" class="ledger-input" data-ledger-input="${escapeHtml(t.id)}" placeholder="±min" step="5">
+          <button type="button" class="sign-toggle ledger-sign" data-ledger-sign="${escapeHtml(t.id)}" aria-label="Flip sign of value">+</button>
+          <input type="text" inputmode="numeric" pattern="-?[0-9]*" class="ledger-input" data-ledger-input="${escapeHtml(t.id)}" placeholder="±min">
           <button type="button" class="ledger-apply" data-ledger-task="${escapeHtml(t.id)}" data-ledger-delta="custom">Apply</button>
         </div>
       </div>`;
     }).join("");
   }
-  const log = (Array.isArray(state.editLog)?state.editLog:[]).slice(-20).reverse();
-  const logHtml = log.length
-    ? log.map(e=>`<div class="editlog-row ${e.delta>=0?"add":"sub"}">${escapeHtml(fmtEditLogEntry(e))}</div>`).join("")
-    : `<div class="ledger-empty">No time edits yet.</div>`;
+  /* v8.7.0: Recent Activity panel — merged view of activityLog (all categories)
+     with a category filter. Falls back to editLog if activityLog is empty. */
+  const acts = Array.isArray(state.activityLog) ? state.activityLog.slice(-200).reverse() : [];
+  const editLog = (Array.isArray(state.editLog)?state.editLog:[]).slice(-20).reverse();
+  function actIcon(a){
+    var m = { edit:"✏️", session:"⏱️", loot:"⚔️", currency:"🪙", character:"🎨", achievement:"🏆", quest:"📜", mount:"🐎", egg:"🥚", misc:"•" };
+    return m[a.category] || "•";
+  }
+  function actText(a){
+    var when = a.at ? new Date(a.at) : new Date();
+    var hh = String(when.getHours()).padStart(2,"0"), mm = String(when.getMinutes()).padStart(2,"0");
+    var stamp = hh+":"+mm;
+    if (a.action === "time_edit"){
+      var d = a.delta||0;
+      return stamp+" "+(d>=0?"Added ":"Removed ")+Math.abs(d|0)+"m"+(a.note?" "+escapeHtml(a.note):"");
+    }
+    if (a.action === "loot_clawback"){
+      return stamp+" Loot clawed back: "+escapeHtml((a.before&&a.before.name)||a.before&&a.before.templateId||"item")+(a.note?" — "+escapeHtml(a.note):"");
+    }
+    if (a.action === "loot_clawback_retroactive"){
+      return stamp+" Retroactive clawback: "+(a.delta?Math.abs(a.delta|0):0)+" item(s) "+(a.note?escapeHtml(a.note):"");
+    }
+    if (a.action === "edit_roll_gain"){
+      return stamp+" Bonus roll gain: "+escapeHtml((a.after&&a.after.templateId)||"item")+" ("+escapeHtml((a.after&&a.after.rarity)||"")+")";
+    }
+    if (a.action === "appearance_change"){
+      return stamp+" Appearance: "+escapeHtml(a.group||"")+" "+escapeHtml(String(a.before||"?"))+" → "+escapeHtml(String(a.after||"?"));
+    }
+    return stamp+" "+escapeHtml(a.category)+"/"+escapeHtml(a.action);
+  }
+  const acthtml = acts.length
+    ? acts.map(a=>`<div class="activity-row activity-${escapeHtml(a.category)}"><span class="activity-icon">${actIcon(a)}</span><span class="activity-text">${actText(a)}</span></div>`).join("")
+    : (editLog.length
+        ? editLog.map(e=>`<div class="activity-row activity-edit"><span class="activity-icon">✏️</span><span class="activity-text">${escapeHtml(fmtEditLogEntry(e))}</span></div>`).join("")
+        : `<div class="ledger-empty">No activity yet.</div>`);
+  const cats = ["all","edit","loot","character","session","currency","mount","egg","achievement"];
+  const catBar = cats.map(c=>`<button type="button" class="activity-filter" data-activity-filter="${c}">${c}</button>`).join("");
   host.innerHTML = `
     <div class="ledger-intro">Edit minutes directly from any task row, or adjust them here. Corrections update Stats, XP and daily progress instantly. Per-edit limit ±${LEDGER_EDIT_CAP} min.</div>
     <div class="ledger-list">${rows}</div>
-    <div class="editlog-head">Recent time edits</div>
-    <div class="editlog-list">${logHtml}</div>`;
+    <div class="activity-head">Recent activity <span class="activity-hint">(all changes, append-only)</span></div>
+    <div class="activity-filter-bar">${catBar}</div>
+    <div class="activity-list" id="activity-list">${acthtml}</div>`;
+  /* Wire category filter — pure client-side DOM filter, no re-render needed */
+  setTimeout(function(){
+    var bar = host.querySelector(".activity-filter-bar");
+    if (!bar || bar.dataset.bound) return;
+    bar.dataset.bound = "1";
+    bar.addEventListener("click", function(ev){
+      var btn = ev.target.closest(".activity-filter");
+      if (!btn) return;
+      var sel = btn.getAttribute("data-activity-filter");
+      bar.querySelectorAll(".activity-filter").forEach(function(b){ b.classList.toggle("active", b===btn); });
+      host.querySelectorAll(".activity-row").forEach(function(r){
+        if (sel === "all"){ r.style.display = ""; return; }
+        r.style.display = r.classList.contains("activity-"+sel) ? "" : "none";
+      });
+    });
+  }, 0);
   if (!host.dataset.bound){
     host.dataset.bound = "1";
     host.addEventListener("click", (ev)=>{
+      /* v8.6.4: sign-toggle pill in each ledger row */
+      const signBtn = ev.target.closest("button[data-ledger-sign]");
+      if (signBtn){
+        const tid = signBtn.getAttribute("data-ledger-sign");
+        const inp = host.querySelector(`input[data-ledger-input="${CSS.escape(tid)}"]`);
+        if (inp){
+          const v = String(inp.value || "").trim();
+          if (v.startsWith("-"))      inp.value = v.slice(1);
+          else if (v && v !== "0")    inp.value = "-" + v;
+          else                        inp.value = signBtn.textContent === "−" ? "" : "-";
+          signBtn.textContent = String(inp.value).startsWith("-") ? "−" : "+";
+          try { inp.focus(); } catch(_){}
+        }
+        return;
+      }
       const btn = ev.target.closest("button[data-ledger-task]");
       if (!btn) return;
       const tid = btn.getAttribute("data-ledger-task");
@@ -8526,6 +10157,14 @@ function renderLedger(){
       } else if (r && r.reason === "nothing_to_remove"){
         toast("Nothing to remove from that task", "warn");
       }
+    });
+    /* v8.6.4: live-sync the sign pill when user types into a ledger-input */
+    host.addEventListener("input", (ev)=>{
+      const inp = ev.target.closest("input[data-ledger-input]");
+      if (!inp) return;
+      const tid = inp.getAttribute("data-ledger-input");
+      const sb = host.querySelector(`button[data-ledger-sign="${CSS.escape(tid)}"]`);
+      if (sb) sb.textContent = String(inp.value || "").trim().startsWith("-") ? "−" : "+";
     });
   }
 }
@@ -8746,6 +10385,24 @@ function bindTabs(){
       if (tab === "ledger") { try{renderLedger();} catch(_){} }
     });
   });
+}
+
+/* Compatibility bridge for feature modules loaded as separate classic scripts.
+   Top-level let/const bindings are not properties of window, while the modules
+   intentionally resolve shared state and registries through window. */
+try {
+  Object.defineProperty(window, "state", {
+    configurable: true,
+    get: ()=>state,
+    set: value=>{ state = value; }
+  });
+  Object.assign(window, {
+    LOOT_TABLE, EQUIP_SLOTS, APPEARANCE_OPTIONS, GEAR_EFFECTS, MONSTERS,
+    STORE_CONSUMABLES
+  });
+  window.__FocusHero = Object.assign(window.__FocusHero || {}, __FocusHero);
+} catch (e) {
+  console.warn("[Focus Hero] feature-module bridge failed", e);
 }
 
 
