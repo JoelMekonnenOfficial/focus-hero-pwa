@@ -1,3 +1,11 @@
+## v8.8.1 - 3D character re-merged onto v8.8.0
+
+- Re-integrated the Three.js 3D character (`fh3d.js` + vendored `three.min.js`) on TOP of v8.8.0. The app now has the full v8.8.0 gameplay (47 mount sprites, 11-species/8-class customizer, world zones, eggs, loot rework, activity log, data migrations) AND a live 3D character on the home Hero card + a drag-to-rotate preview in Character Studio.
+- The 3D bridge (`fh3dSpec`) reads the v8.6+ model: `CR_SPECIES` skin tones by `skinIdx`, `CR_HAIR_COLORS`/`CR_EYE_COLORS`, and `CR_CLASSES[class].primary/secondary` for armour/trim, so customization + class changes drive the 3D model. Equipped mounts map to a 3D mount by family via `fhInferMountFamily`.
+- In-app notifications (toasts) lifted above the bottom hotbar.
+- Pure renderer: NO changes to any gameplay/data/cloud code — every v8.8.0 JS module (loot-rework, character-rebuild, world-depth, shop-rework, character-v86-fix, eggs, v8.6.3-patch) is byte-identical to v8.8.0. The 3D layer only reads a state snapshot.
+- `sw.js` BUILD_ID -> `fh-2026-06-06-v8-8-1`; `three.min.js` + `fh3d.js` added to precache.
+
 ## v8.4.1 - 3D fixes & visual overhaul
 
 - Fixed: the home Hero card showed the old SVG because the shared 3D canvas was being parked in the hidden Character Studio at boot. Studio now only borrows the canvas while open; the modal observer moves it back to the home card on close.

@@ -15,7 +15,7 @@
 <title>Focus Hero</title>
 <style>
 /* ================================================================
- * Focus Hero v8.8.0 - inline styles (single-file PWA) - + dramatic character fix + egg system
+ * Focus Hero v8.8.1 - 3D character (Three.js) re-merged onto v8.8.0 - + dramatic character fix + egg system
  *                    - v8.8.0 NEW: real per-family mount sprites + 2-frame walk cycle for ALL 15 families.
  *                                 Each family distinct silhouette; per-breed palette overrides.
  *                                 Was: 4-bucket rank lookup making every uncommon Eagle render as horse.
@@ -2240,8 +2240,8 @@ html,body{touch-action:manipulation;-ms-touch-action:manipulation}
    OS taskbar / mobile browser chrome can never hide a modal or its close X. */
 .modal-backdrop{ padding:16px; padding-bottom:calc(16px + env(safe-area-inset-bottom)); }
 .modal{ max-height:calc(100dvh - 32px - env(safe-area-inset-bottom)); overflow:auto; }
-.toast-wrap{ bottom:calc(20px + env(safe-area-inset-bottom)); }
-.update-toast{ bottom:calc(22px + env(safe-area-inset-bottom)); z-index:90; }
+.toast-wrap{ bottom:calc(88px + env(safe-area-inset-bottom)); z-index:80; }
+.update-toast{ bottom:calc(88px + env(safe-area-inset-bottom)); z-index:95; }
 .claim-modal .modal{ max-height:calc(100dvh - 32px - env(safe-area-inset-bottom)); }
 
 /* v8.0: categorized + searchable emoji picker */
@@ -2322,9 +2322,20 @@ html,body{touch-action:manipulation;-ms-touch-action:manipulation}
 .store-item.rar-legendary{ border-color:var(--legend); }
 .store-item.rar-mythic{ border-color:var(--myth); }
 
+/* ===== v8.8.1: 3D character (FH3D) — canvas overlays the SVG fallback ===== */
+.fh3d-host{position:relative}
+.fh3d-canvas{position:absolute;inset:0;width:100%;height:100%;display:block;border-radius:inherit;z-index:3;cursor:grab;touch-action:pan-y}
+.fh3d-canvas:active{cursor:grabbing}
+.hero-card .avatar{width:116px;height:116px}
+#character-avatar-preview{height:312px}
+@media (max-width:760px){ #character-avatar-preview{height:264px} }
+
 </style>
 </head>
 <body>
+<!-- v8.8.1: 3D character system (Three.js, vendored locally for offline-first) -->
+<script src="three.min.js"></script>
+<script src="fh3d.js"></script>
 <script>
 /* v7.9: zoom-lock - block pinch + double-tap zoom; single-finger scroll stays. */
 (function(){
@@ -5802,6 +5813,80 @@ function avatarEquipment(){
   }
   return out;
 }
+/* ===== v8.8.1: 3D character (FH3D) bridge — reads the v8.6+ species/class model.
+   Pure READ of state + CR_* catalogs; never mutates state / localStorage / cloud. */
+function fh3dHexRgb(h){ h=String(h||"").replace("#",""); if(h.length===3)h=h.split("").map(c=>c+c).join(""); return {r:parseInt(h.slice(0,2),16)||0,g:parseInt(h.slice(2,4),16)||0,b:parseInt(h.slice(4,6),16)||0}; }
+function fh3dToHex(c){ const t=n=>{let s=Math.max(0,Math.min(255,Math.round(n))).toString(16);return s.length<2?"0"+s:s;}; return "#"+t(c.r)+t(c.g)+t(c.b); }
+function fh3dLighten(hex,a){ const c=fh3dHexRgb(hex); return fh3dToHex({r:c.r+(255-c.r)*a,g:c.g+(255-c.g)*a,b:c.b+(255-c.b)*a}); }
+function fh3dDarken(hex,a){ const c=fh3dHexRgb(hex); return fh3dToHex({r:c.r*(1-a),g:c.g*(1-a),b:c.b*(1-a)}); }
+function fh3dMountFor(eqMount){
+  if(!eqMount) return null;
+  const id = eqMount.lootId || eqMount.id; if(!id) return null;
+  let fam = "equine";
+  try { if (typeof window.fhInferMountFamily === "function") fam = window.fhInferMountFamily(id) || fam; } catch(e){}
+  fam = String(fam||"").toLowerCase();
+  const map = {
+    bird:     { id:"griffin_saddle",      colors:["#B45309","#FDE68A","#F59E0B"] },
+    dragon:   { id:"griffin_saddle",      colors:["#3f6212","#a3e635","#22d3ee"] },
+    feline:   { id:"phase_panther_reins", colors:["#1f2430","#7c3aed","#c084fc"] },
+    cat:      { id:"phase_panther_reins", colors:["#1f2430","#7c3aed","#c084fc"] },
+    canine:   { id:"wolf_reins",          colors:["#6b7280","#9ca3af","#e5e7eb"] },
+    wolf:     { id:"wolf_reins",          colors:["#6b7280","#9ca3af","#e5e7eb"] },
+    elemental:{ id:"void_skiff",          colors:["#312E81","#818CF8","#C4B5FD"] },
+    aquatic:  { id:"void_skiff",          colors:["#0e7490","#22d3ee","#a5f3fc"] }
+  };
+  let m = map[fam] || { id:"horse", colors:["#6b5640","#caa46a","#fbbf24"] };
+  if (/unicorn/i.test(id)) m = { id:"unicorn_sigil", colors:["#F8FAFC","#C4B5FD","#FBBF24"] };
+  if (/stag|deer|elk/i.test(id)) m = { id:"astral_stag_tack", colors:["#4B5563","#A5F3FC","#67E8F9"] };
+  return { id:m.id, tier:eqMount.tier||"common", colors:m.colors };
+}
+function fh3dSpec(){
+  try { ensureHeroAppearanceShape(); } catch(e){}
+  try { ensureEquippedShape(); } catch(e){}
+  const a = (state.hero && state.hero.appearance) || {};
+  const SP = window.CR_SPECIES || {}, CL = window.CR_CLASSES || {}, HC = window.CR_HAIR_COLORS || {}, EC = window.CR_EYE_COLORS || {};
+  const PROF = window.V86_SPECIES_PROFILES || {}, OV = window.V86_CLASS_OVERLAYS || {};
+  const speciesKey = a.species || a.race || "human";
+  const sp = SP[speciesKey] || SP.human || {};
+  const classKey = a.classKey || (state.hero && state.hero.cls) || a.cls || "knight";
+  const kl = CL[classKey] || CL.knight || CL.warrior || {};
+  const prof = PROF[speciesKey] || PROF.human || { widthScale:1, stockiness:1, heightScale:1 };
+  const tones = sp.skinTones || ["#e7b48c"];
+  const skin = tones[Math.max(0, Math.min(tones.length-1, a.skinIdx|0))] || "#e7b48c";
+  const hair = HC[a.hairColor] || "#3a2417";
+  const eye = EC[a.eyeColor] || "#7fe9ff";
+  const primary = kl.primary || "#5566aa";
+  const secondary = kl.secondary || "#fbbf24";
+  let body = "balanced";
+  if ((prof.widthScale||1) >= 1.18 || (prof.stockiness||1) >= 1.3) body = "broad";
+  else if ((prof.heightScale||1) <= 0.95 && (prof.stockiness||1) <= 0.88) body = "lean";
+  const ov = OV[classKey] || {};
+  const helm = (ov.helm === "open" || ov.helm === "none" || ov.helm === "hood" || !ov.helm) ? "open" : "crest";
+  const eq = (typeof avatarEquipment === "function") ? avatarEquipment() : {};
+  const tierArt = (window.AVATAR_TIER_ART) || (typeof AVATAR_TIER_ART !== "undefined" ? AVATAR_TIER_ART : {});
+  const gearInfo = (g)=>{ if(!g) return null; const ts = tierArt[g.tier] || {}; return { id:g.id, tier:g.tier||"common", metal:ts.metal||"#cbd5e1", gem:ts.gem||"#22d3ee", glow:ts.glow||0 }; };
+  return {
+    cls: classKey, className: (kl.label || classKey),
+    palette: [primary, fh3dLighten(primary,.28), fh3dDarken(primary,.45), secondary],
+    level: (state.hero && state.hero.level) || 1,
+    running: !!(state.timer && state.timer.running),
+    colors:{ skin, hair, eye,
+      armorMid: primary, armorHigh: fh3dLighten(primary,.28), armorDark: fh3dDarken(primary,.45),
+      accent: secondary, cloak: kl.cape || primary || "#2563eb" },
+    traits:{ race: speciesKey, body, hair: a.hair || "short", helm, face: a.face || "calm", eyeShape: a.eyeShape || "focused" },
+    equipped:{ weapon: gearInfo(eq.weapon), helmet: gearInfo(eq.helmet), armor: gearInfo(eq.armor), pet: gearInfo(eq.pet) },
+    mount: fh3dMountFor(eq.mount || (state.hero.equipped && state.hero.equipped.mount))
+  };
+}
+function fh3dUpdate(){
+  if (window.FH3D && typeof FH3D.sync === "function"){
+    try { FH3D.sync(fh3dSpec()); } catch(e){ /* non-fatal: SVG fallback stays */ }
+  }
+}
+function fh3dStudioOpen(){
+  const cm = document.getElementById("character-modal");
+  return !!(cm && !cm.hasAttribute("hidden"));
+}
 function avatarTier(slotGear, fallback="common"){
   return slotGear?.tier || fallback;
 }
@@ -8116,6 +8201,12 @@ function renderAvatar(){
     av.setAttribute("data-action", adv ? adv.id.toLowerCase() : taskAction);
     av.setAttribute("data-running", running ? "1" : "0");
     av.setAttribute("data-scene", scene);
+    // v8.8.1: 3D overlay on the home Hero card (SVG remains as fallback underneath)
+    if (window.FH3D && typeof FH3D.attachHome === "function"){
+      if (!FH3D._wired){ FH3D._wired = true; if (FH3D.wireModal) FH3D.wireModal("character-modal","character-avatar-preview","avatar"); }
+      if (!fh3dStudioOpen()) FH3D.attachHome(av);
+      fh3dUpdate();
+    }
   }
 }
 function refreshAvatarRunningState(){
@@ -8854,6 +8945,11 @@ function renderCharacterPanel(){
   if (preview){
     preview.innerHTML = characterPortraitSvg(avatarClassSpec(state.hero.cls, null), avatarEquipment());
     preview.removeAttribute("data-scene");
+    // v8.8.1: large drag-to-rotate 3D preview in Character Studio
+    if (window.FH3D && typeof FH3D.attachStudio === "function"){
+      if (fh3dStudioOpen()) FH3D.attachStudio(preview);
+      fh3dUpdate();
+    }
   }
   $$("[data-character-tab]").forEach(b=>b.setAttribute("aria-pressed", b.dataset.characterTab === selectedCharacterTab ? "true" : "false"));
   const lookPanel = $("#character-look-panel");
