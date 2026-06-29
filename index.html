@@ -2636,7 +2636,8 @@ html[data-layout="mobile"] .timer-display{font-size:clamp(4rem,8vw,6rem)}
         <button role="tab" data-mode="stopwatch" aria-pressed="false" title="Open-ended count-up timer (Shift+S)">Stopwatch</button>
       </div>
       <div class="timer-display" id="timer-display" role="timer" aria-live="polite" aria-atomic="true">25:00</div>
-      <div id="game-mode-badge" class="game-mode-badge" hidden aria-live="polite" style="text-align:center">🎮 Game Mode on</div>
+      <div id="game-mode-badge" class="game-mode-badge" hidden aria-live="polite" style="text-align:center">🔒 Locked In</div>
+      <button type="button" id="btn-lockedin-reset" hidden style="display:block;width:fit-content;margin:6px auto 0;padding:6px 14px;border-radius:999px;font-size:.76rem;font-weight:700;background:rgba(255,122,138,.16);color:#ff9aa7;border:1px solid rgba(255,122,138,.5);cursor:pointer">🔁 I slipped — reset run</button>
       <div class="progress"><div id="progress-bar" style="width:0%"></div></div>
       <div class="active-task-row" id="active-task-row" hidden>
         <span>Working on</span>
@@ -2808,7 +2809,7 @@ html[data-layout="mobile"] .timer-display{font-size:clamp(4rem,8vw,6rem)}
     <div class="form-row"><label>Tick sounds</label><div class="val"><button class="toggle" id="tog-tick" aria-checked="false" aria-label="Tick sounds"></button></div></div>
     <div class="form-row"><label>Chime on session end</label><div class="val"><button class="toggle" id="tog-chime" aria-checked="true" aria-label="Chime sound"></button></div></div>
     <div class="form-row"><label>Browser notifications</label><div class="val"><button class="toggle" id="tog-notif" aria-checked="false" aria-label="Notifications"></button></div></div>
-    <div class="form-row"><label>🎮 Game Mode <span class="hint">Leave the app during a session and your timer resets — no minutes, XP, or loot for that run. Stay locked in.</span></label><div class="val"><button class="toggle" id="tog-gamemode" aria-checked="false" aria-label="Game Mode — reset timer if you leave the app"></button></div></div>
+    <div class="form-row"><label>🔒 Locked In <span class="hint">A focus mode. If you break focus (social media, etc.) you tap "Reset run" yourself to wipe the current run — nothing is logged. Honor system; nothing resets automatically.</span></label><div class="val"><button class="toggle" id="tog-gamemode" aria-checked="false" aria-label="Locked In focus mode"></button></div></div>
     <div class="form-row"><label>Theme</label><div class="val"><select id="cfg-theme">
       <option value="dark">Midnight (default)</option>
       <option value="light">Paper</option>
@@ -5453,29 +5454,31 @@ function gameModeResetSession(awayMs){
   state.timer.activeTaskNameAtStart = null;
   state.gameModeResets = (state.gameModeResets|0) + 1;
   try { stopKeepalive(); releaseWakeLock(); } catch(_){}
-  try { logBattle("Game Mode: left the app — focus run reset, nothing logged.", "warn"); } catch(_){}
+  try { logBattle("Locked In: run reset by you — nothing logged.", "warn"); } catch(_){}
   saveState();
   try { renderTimer(); renderActiveTaskRow(); renderSwLaps(); updateGameModeIndicator(); } catch(_){}
   try { var sb=$("#btn-start"); if(sb) sb.textContent = "Start"; } catch(_){}
-  const secs = Math.max(1, Math.round((awayMs||0)/1000));
-  try { toast("🎮 Game Mode: you left for "+secs+"s — your timer was reset. Stay locked in.", "warn"); } catch(_){}
+  try { toast("🔒 Run reset — nothing logged. Start fresh whenever you are ready.", "warn"); } catch(_){}
 }
 function updateGameModeIndicator(){
   const el = document.getElementById("game-mode-badge");
-  if (!el) return;
   const on = !!(state.settings && state.settings.gameMode);
   const armed = gameModeArmed();
-  el.hidden = false; /* v9.3.1: always visible + tappable so Game Mode is discoverable on the timer screen */
-  el.setAttribute("role","button");
-  el.setAttribute("tabindex","0");
-  el.setAttribute("aria-pressed", on ? "true" : "false");
-  el.textContent = on ? (armed ? "🎮 Game Mode ON — stay in the app" : "🎮 Game Mode: ON (tap to turn off)") : "🎮 Game Mode: OFF (tap to enable)";
-  el.style.cssText = "display:block;width:fit-content;max-width:92%;margin:6px auto 0;padding:5px 13px;border-radius:999px;font-size:.74rem;font-weight:700;letter-spacing:.02em;cursor:pointer;text-align:center;"+
-    (on
-      ? (armed
-          ? "background:rgba(74,222,128,.2);color:#86efac;border:1px solid rgba(74,222,128,.55);box-shadow:0 0 12px rgba(74,222,128,.35);"
-          : "background:rgba(74,222,128,.14);color:#86efac;border:1px solid rgba(74,222,128,.4);")
-      : "background:rgba(148,163,184,.12);color:#cbd5e1;border:1px solid rgba(148,163,184,.3);");
+  if (el){
+    el.hidden = false;
+    el.setAttribute("role","button");
+    el.setAttribute("tabindex","0");
+    el.setAttribute("aria-pressed", on ? "true" : "false");
+    el.textContent = on ? (armed ? "🔒 Locked In — stay focused" : "🔒 Locked In: ON (tap to turn off)") : "🔒 Locked In: OFF (tap to enable)";
+    el.style.cssText = "display:block;width:fit-content;max-width:92%;margin:6px auto 0;padding:5px 13px;border-radius:999px;font-size:.74rem;font-weight:700;letter-spacing:.02em;cursor:pointer;text-align:center;"+
+      (on
+        ? (armed
+            ? "background:rgba(74,222,128,.2);color:#86efac;border:1px solid rgba(74,222,128,.55);box-shadow:0 0 12px rgba(74,222,128,.35);"
+            : "background:rgba(74,222,128,.14);color:#86efac;border:1px solid rgba(74,222,128,.4);")
+        : "background:rgba(148,163,184,.12);color:#cbd5e1;border:1px solid rgba(148,163,184,.3);");
+  }
+  const reset = document.getElementById("btn-lockedin-reset");
+  if (reset) reset.hidden = !(on && state.timer && state.timer.running);
 }
 function toggleGameMode(){
   if (!state.settings) return;
@@ -5483,30 +5486,48 @@ function toggleGameMode(){
   try { saveState(); } catch(_){}
   try { setToggle("#tog-gamemode", state.settings.gameMode); } catch(_){}
   updateGameModeIndicator();
-  try { toast(state.settings.gameMode ? "🎮 Game Mode ON — leave the app mid-session and your timer resets." : "Game Mode off.", state.settings.gameMode ? "good" : "info"); } catch(_){}
+  try { toast(state.settings.gameMode ? "🔒 Locked In ON — if you break focus, tap Reset run to wipe the run yourself." : "Locked In off.", state.settings.gameMode ? "good" : "info"); } catch(_){}
 }
 function bindGameModeWatch(){
-  document.addEventListener("visibilitychange", ()=>{
-    if (document.visibilityState === "hidden"){
-      __gmHiddenAt = gameModeArmed() ? now() : 0;
-    } else {
-      if (__gmHiddenAt){
-        const away = now() - __gmHiddenAt;
-        __gmHiddenAt = 0;
-        const grace = (state.settings && (state.settings.gameModeGraceMs|0)) || 2500;
-        if (away >= grace && state.settings && state.settings.gameMode &&
-            state.timer && state.timer.running && (isStopwatch() || state.timer.mode === "focus")){
-          gameModeResetSession(away);
-        }
-      }
-    }
-  });
+  /* v9.4: Locked In is MANUAL — no automatic reset on leaving the app. You decide
+     if a run is broken and tap "Reset run" yourself (honor system). */
   const gmBadge = document.getElementById("game-mode-badge");
   if (gmBadge){
     gmBadge.addEventListener("click", toggleGameMode);
     gmBadge.addEventListener("keydown", e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); toggleGameMode(); } });
   }
+  const gmReset = document.getElementById("btn-lockedin-reset");
+  if (gmReset) gmReset.addEventListener("click", ()=>{ try{ gameModeResetSession(); }catch(_){} });
   updateGameModeIndicator();
+}
+/* v9.4: standard mobile swipe — horizontal swipe switches the main tabs
+   (Focus/Tasks/Hero/Rewards). Guarded so it never fights horizontal scrollers,
+   sliders, the tab strip, inputs, modals, or normal vertical scrolling. */
+function bindSwipeGestures(){
+  const NAV = ["section-focus","section-tasks","section-hero","section-progress"];
+  let sx=0, sy=0, st=0, ok=false;
+  function curIdx(){
+    let best=0, bd=Infinity;
+    for (let i=0;i<NAV.length;i++){ const el=document.getElementById(NAV[i]); if(!el) continue; const r=el.getBoundingClientRect(); const d=Math.abs(r.top-70); if(d<bd){bd=d;best=i;} }
+    return best;
+  }
+  document.addEventListener("touchstart", e=>{
+    if (e.touches.length!==1){ ok=false; return; }
+    const t=e.touches[0];
+    if (t.target && t.target.closest && t.target.closest("input[type='range'], .tabs, [role='tablist'], .mode-tabs, select, textarea, .modal-backdrop")){ ok=false; return; }
+    sx=t.clientX; sy=t.clientY; st=Date.now(); ok=true;
+  }, { passive:true });
+  document.addEventListener("touchend", e=>{
+    if (!ok) return; ok=false;
+    const t=e.changedTouches[0]; if(!t) return;
+    const dx=t.clientX-sx, dy=t.clientY-sy, dt=Date.now()-st;
+    if (dt>700) return;
+    if (Math.abs(dx)>70 && Math.abs(dx) > Math.abs(dy)*1.7){
+      const i=curIdx();
+      const n = dx<0 ? Math.min(NAV.length-1, i+1) : Math.max(0, i-1);
+      if (n!==i){ try{ scrollToSection(NAV[n]); }catch(_){} }
+    }
+  }, { passive:true });
 }
 /* v9: QUICK-START STOPWATCH — one tap to begin an open-ended session
    (previously: switch to the Stopwatch tab, then press Start). */
@@ -8431,7 +8452,7 @@ function bindSettings(){
   toggle("#tog-tick","tick");
   toggle("#tog-chime","chime");
   toggle("#tog-notif","notif", v=>{ if (v) requestNotifPermIfNeeded(); });
-  toggle("#tog-gamemode","gameMode", v=>{ try{ updateGameModeIndicator(); toast(v?"🎮 Game Mode ON — leave the app during a session and your timer resets.":"Game Mode off.", v?"good":"info"); }catch(_){} });
+  toggle("#tog-gamemode","gameMode", v=>{ try{ updateGameModeIndicator(); toast(v?"🔒 Locked In ON — tap Reset run yourself if you break focus.":"Locked In off.", v?"good":"info"); }catch(_){} });
   toggle("#tog-keepalive","keepalive", v=>{ if (!v) stopKeepalive(); else if (state.timer.running && state.timer.mode==="focus") startKeepalive(); });
   toggle("#tog-wakelock","wakelock", v=>{ if (!v) releaseWakeLock(); else if (state.timer.running && state.timer.mode==="focus") acquireWakeLock(); });
   toggle("#tog-monthly-backup","monthlyBackup");
@@ -10390,7 +10411,7 @@ async function boot(){
     renderSyncStatus();
     ensureTickInterval();
     bindAppOpenTracking();
-    bindGameModeWatch(); bindQuickStart();
+    bindGameModeWatch(); bindQuickStart(); bindSwipeGestures();
     maybeWarnAboutFileMode();
     if (state.timer.running && state.timer.endAt && state.timer.mode === "focus"){ startKeepalive(); acquireWakeLock(); }
     try { maybeAutoBackup(); } catch(_){}
