@@ -5464,14 +5464,26 @@ function updateGameModeIndicator(){
   const el = document.getElementById("game-mode-badge");
   if (!el) return;
   const on = !!(state.settings && state.settings.gameMode);
-  el.hidden = !on;
-  if (!on) return;
   const armed = gameModeArmed();
-  el.textContent = armed ? "🎮 Game Mode — stay in the app" : "🎮 Game Mode on";
-  el.style.cssText = "display:inline-block;margin:6px auto 0;padding:4px 11px;border-radius:999px;font-size:.72rem;font-weight:700;letter-spacing:.02em;"+
-    (armed
-      ? "background:rgba(74,222,128,.18);color:#86efac;border:1px solid rgba(74,222,128,.5);box-shadow:0 0 12px rgba(74,222,128,.35);"
-      : "background:rgba(148,163,184,.14);color:#cbd5e1;border:1px solid rgba(148,163,184,.3);");
+  el.hidden = false; /* v9.3.1: always visible + tappable so Game Mode is discoverable on the timer screen */
+  el.setAttribute("role","button");
+  el.setAttribute("tabindex","0");
+  el.setAttribute("aria-pressed", on ? "true" : "false");
+  el.textContent = on ? (armed ? "🎮 Game Mode ON — stay in the app" : "🎮 Game Mode: ON (tap to turn off)") : "🎮 Game Mode: OFF (tap to enable)";
+  el.style.cssText = "display:block;width:fit-content;max-width:92%;margin:6px auto 0;padding:5px 13px;border-radius:999px;font-size:.74rem;font-weight:700;letter-spacing:.02em;cursor:pointer;text-align:center;"+
+    (on
+      ? (armed
+          ? "background:rgba(74,222,128,.2);color:#86efac;border:1px solid rgba(74,222,128,.55);box-shadow:0 0 12px rgba(74,222,128,.35);"
+          : "background:rgba(74,222,128,.14);color:#86efac;border:1px solid rgba(74,222,128,.4);")
+      : "background:rgba(148,163,184,.12);color:#cbd5e1;border:1px solid rgba(148,163,184,.3);");
+}
+function toggleGameMode(){
+  if (!state.settings) return;
+  state.settings.gameMode = !state.settings.gameMode;
+  try { saveState(); } catch(_){}
+  try { setToggle("#tog-gamemode", state.settings.gameMode); } catch(_){}
+  updateGameModeIndicator();
+  try { toast(state.settings.gameMode ? "🎮 Game Mode ON — leave the app mid-session and your timer resets." : "Game Mode off.", state.settings.gameMode ? "good" : "info"); } catch(_){}
 }
 function bindGameModeWatch(){
   document.addEventListener("visibilitychange", ()=>{
@@ -5489,6 +5501,11 @@ function bindGameModeWatch(){
       }
     }
   });
+  const gmBadge = document.getElementById("game-mode-badge");
+  if (gmBadge){
+    gmBadge.addEventListener("click", toggleGameMode);
+    gmBadge.addEventListener("keydown", e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); toggleGameMode(); } });
+  }
   updateGameModeIndicator();
 }
 /* v9: QUICK-START STOPWATCH — one tap to begin an open-ended session
@@ -7864,8 +7881,8 @@ function markCloudPending(err){
   state.sync.retryAfter = Date.now() + cloudRetryDelay();
   state.sync.lastSyncError = message;
   const t = Date.now();
-  if (!wasPending || t - (state.sync.lastErrorLoggedAt||0) > 5 * 60_000){
-    logLine("Cloud sync paused — local progress is safe. Retrying automatically.", true);
+  if (!wasPending){
+    logLine("Cloud sync paused — your progress is saved on this device and will sync automatically.", false);
     state.sync.lastErrorLoggedAt = t;
   }
   saveState({ fromPull:true });
