@@ -2298,6 +2298,15 @@ html,body{touch-action:manipulation;-ms-touch-action:manipulation}
   background:var(--panel-2); border-left:3px solid var(--border-strong); }
 .editlog-row.add{ border-left-color:var(--good); }
 .editlog-row.sub{ border-left-color:var(--warn); }
+/* v8.9.0: danger button (delete session) */
+button.danger{background:rgba(220,38,38,.12);color:#f87171;border:1px solid rgba(220,38,38,.35);}
+button.danger:hover{background:rgba(220,38,38,.22);color:#fca5a5;}
+/* v8.9.0: daily hours summary card */
+.daily-hours-card{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:10px 12px;margin:8px 0;background:var(--panel-2);border:1px solid var(--border);border-radius:10px;}
+.daily-hours-card .dh-cell{text-align:center;}
+.daily-hours-card .dh-num{font-size:1.4rem;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums;}
+.daily-hours-card .dh-lbl{font-size:.7rem;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.05em;margin-top:2px;}
+@media (max-width: 360px){.daily-hours-card .dh-num{font-size:1.2rem;}}
 
 /* v8.0: coin Store tab */
 .store-bar{ display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center; margin-bottom:4px; }
@@ -2386,6 +2395,7 @@ html,body{touch-action:manipulation;-ms-touch-action:manipulation}
         <button role="tab" data-mode="stopwatch" aria-pressed="false" title="Open-ended count-up timer (Shift+S)">Stopwatch</button>
       </div>
       <div class="timer-display" id="timer-display" role="timer" aria-live="polite" aria-atomic="true">25:00</div>
+      <div id="game-mode-badge" class="game-mode-badge" hidden aria-live="polite" style="text-align:center">🎮 Game Mode on</div>
       <div class="progress"><div id="progress-bar" style="width:0%"></div></div>
       <div class="active-task-row" id="active-task-row" hidden>
         <span>Working on</span>
@@ -2393,6 +2403,7 @@ html,body{touch-action:manipulation;-ms-touch-action:manipulation}
       </div>
       <div class="timer-controls">
         <button class="primary" id="btn-start">Start</button>
+        <button id="btn-quick-stopwatch" title="One tap: start an open-ended stopwatch session">⏱️ Stopwatch</button>
         <button id="btn-stop-log" title="Stop & log this stopwatch session" hidden>Stop & log</button>
         <button id="btn-lap" title="Lap (L) — capture current stopwatch time" hidden>Lap</button>
         <button id="btn-skip" title="Skip (N)">Skip</button>
@@ -2556,6 +2567,7 @@ html,body{touch-action:manipulation;-ms-touch-action:manipulation}
     <div class="form-row"><label>Tick sounds</label><div class="val"><button class="toggle" id="tog-tick" aria-checked="false" aria-label="Tick sounds"></button></div></div>
     <div class="form-row"><label>Chime on session end</label><div class="val"><button class="toggle" id="tog-chime" aria-checked="true" aria-label="Chime sound"></button></div></div>
     <div class="form-row"><label>Browser notifications</label><div class="val"><button class="toggle" id="tog-notif" aria-checked="false" aria-label="Notifications"></button></div></div>
+    <div class="form-row"><label>🎮 Game Mode <span class="hint">Leave the app during a session and your timer resets — no minutes, XP, or loot for that run. Stay locked in.</span></label><div class="val"><button class="toggle" id="tog-gamemode" aria-checked="false" aria-label="Game Mode — reset timer if you leave the app"></button></div></div>
     <div class="form-row"><label>Theme</label><div class="val"><select id="cfg-theme">
       <option value="dark">Dark Fantasy (default)</option>
       <option value="light">Light</option>
@@ -2933,6 +2945,7 @@ const DEFAULTS = {
   settings: {
     focusMin: 25, shortMin: 5, longMin: 15, cyclesBeforeLong: 4,
     autoStart: false, tick: false, chime: true, notif: false, theme: "dark",
+    gameMode: false, gameModeGraceMs: 2500, /* v9: Game Mode — leaving the app mid-session resets the running timer (no credit) */
     /* v4 additions */
     minRewardMinutes: 5,
     streakBonusCap: 30,
@@ -4749,7 +4762,8 @@ function allowedRaritiesForMinutes(minutes){
 }
 function pushSessionLog(entry){
   state.sessionsLog = (state.sessionsLog||[]); state.sessionsLog.push(entry);
-  if (state.sessionsLog.length > 60) state.sessionsLog.shift();
+  /* v8.9.0: was 60, ~6h of heavy use. Raised to 500 (~30d). */
+  if (state.sessionsLog.length > 500) state.sessionsLog.shift();
   /* v8.7.0: mirror to activityLog */
   try { if (typeof logActivity === "function") logActivity({ category:"session", action: entry.rewarded ? "session_complete" : "session_below_floor", sessionId: entry.id || null, taskId: entry.taskId || null, after: { minutes: entry.minutes|0, xp: (entry.xpBreakdown && entry.xpBreakdown.total)|0 }, source: entry.source || "session" }); } catch(_){}
 }
@@ -5152,6 +5166,91 @@ function bindAppOpenTracking(){
   setInterval(()=>{ appOpenTick(); renderStatStrip(); }, 1000);
   window.addEventListener("beforeunload", ()=>{ appOpenTick(); saveState(); });
 }
+
+/* ================================================================
+ * v9: GAME MODE — leaving the app mid-session resets your timer.
+ * Requested verbatim: "if I go on a social media app or click something
+ * I clearly didn't need to, my time resets." Page Visibility API based.
+ * Arms ONLY during a RUNNING focus or stopwatch session. A short grace
+ * window (default 2.5s) ignores brief blips (notification shade, an
+ * accidental swipe). NEVER credits or touches logged minutes / history /
+ * XP / loot — it only rolls the in-progress timer back to its start.
+ * ================================================================ */
+let __gmHiddenAt = 0;
+function gameModeArmed(){
+  return !!(state.settings && state.settings.gameMode) &&
+         !!(state.timer && state.timer.running) &&
+         (isStopwatch() || state.timer.mode === "focus");
+}
+function gameModeResetSession(awayMs){
+  const wasStopwatch = isStopwatch();
+  state.timer.running = false;
+  state.timer.endAt = 0;
+  state.timer.pausedAt = 0;
+  if (wasStopwatch){
+    state.timer.swStartedAt = 0; state.timer.swAccumulatedMs = 0;
+    state.timer.swSessionStartedAt = 0; state.timer.swLaps = [];
+  } else {
+    state.timer.msLeft = modeMinutes(state.timer.mode) * 60 * 1000;
+  }
+  state.timer.activeTaskId = null;
+  state.timer.activeTaskNameAtStart = null;
+  state.gameModeResets = (state.gameModeResets|0) + 1;
+  try { stopKeepalive(); releaseWakeLock(); } catch(_){}
+  try { logBattle("Game Mode: left the app — focus run reset, nothing logged.", "warn"); } catch(_){}
+  saveState();
+  try { renderTimer(); renderActiveTaskRow(); renderSwLaps(); updateGameModeIndicator(); } catch(_){}
+  try { var sb=$("#btn-start"); if(sb) sb.textContent = "Start"; } catch(_){}
+  const secs = Math.max(1, Math.round((awayMs||0)/1000));
+  try { toast("🎮 Game Mode: you left for "+secs+"s — your timer was reset. Stay locked in.", "warn"); } catch(_){}
+}
+function updateGameModeIndicator(){
+  const el = document.getElementById("game-mode-badge");
+  if (!el) return;
+  const on = !!(state.settings && state.settings.gameMode);
+  el.hidden = !on;
+  if (!on) return;
+  const armed = gameModeArmed();
+  el.textContent = armed ? "🎮 Game Mode — stay in the app" : "🎮 Game Mode on";
+  el.style.cssText = "display:inline-block;margin:6px auto 0;padding:4px 11px;border-radius:999px;font-size:.72rem;font-weight:700;letter-spacing:.02em;"+
+    (armed
+      ? "background:rgba(74,222,128,.18);color:#86efac;border:1px solid rgba(74,222,128,.5);box-shadow:0 0 12px rgba(74,222,128,.35);"
+      : "background:rgba(148,163,184,.14);color:#cbd5e1;border:1px solid rgba(148,163,184,.3);");
+}
+function bindGameModeWatch(){
+  document.addEventListener("visibilitychange", ()=>{
+    if (document.visibilityState === "hidden"){
+      __gmHiddenAt = gameModeArmed() ? now() : 0;
+    } else {
+      if (__gmHiddenAt){
+        const away = now() - __gmHiddenAt;
+        __gmHiddenAt = 0;
+        const grace = (state.settings && (state.settings.gameModeGraceMs|0)) || 2500;
+        if (away >= grace && state.settings && state.settings.gameMode &&
+            state.timer && state.timer.running && (isStopwatch() || state.timer.mode === "focus")){
+          gameModeResetSession(away);
+        }
+      }
+    }
+  });
+  updateGameModeIndicator();
+}
+/* v9: QUICK-START STOPWATCH — one tap to begin an open-ended session
+   (previously: switch to the Stopwatch tab, then press Start). */
+function quickStartStopwatch(){
+  try {
+    if (state.timer && state.timer.running && isStopwatch()) return;
+    if (state.timer && state.timer.running) pauseTimer();
+    setMode("stopwatch");
+    if (!state.timer.running) startTimer();
+    toast("⏱️ Stopwatch started", "good");
+    updateGameModeIndicator();
+  } catch(e){ console.warn("quickStartStopwatch failed", e); }
+}
+function bindQuickStart(){
+  const qs = document.getElementById("btn-quick-stopwatch");
+  if (qs) qs.onclick = ()=>quickStartStopwatch();
+}
 /* H:MM:SS counter format (e.g. 12:04:37) */
 function formatHMS(ms){
   ms = nonNegativeNumber(ms);
@@ -5227,7 +5326,7 @@ function openSessionEndEditTime(sessionId){
   const editor = document.createElement("div");
   editor.className = "editor";
   editor.innerHTML = `
-    <div class="label">Set what this session should actually count as — you can correct it up or down:</div>
+    <div class="label">Set the <b>exact total</b> this session should count as — type the number, or nudge it with the buttons:</div>
     <div class="row">
       <input type="number" id="xp-edit-input" min="0" max="${cap}" step="1" value="${suggested}" inputmode="numeric" aria-label="Corrected session length in minutes">
       <span class="max">currently ${max}m · max ${cap}m</span>
@@ -5239,14 +5338,12 @@ function openSessionEndEditTime(sessionId){
       <button type="button" data-delta="15">+15m</button>
       <button type="button" data-zero="1">Zero out</button>
     </div>
-    <div class="adjust" style="display:flex;gap:6px;align-items:center;margin-top:6px">
-      <button type="button" class="sign-toggle" id="xp-edit-sign" aria-label="Flip sign of adjustment" style="min-width:2.2em">+</button>
-      <input id="xp-edit-delta" type="text" inputmode="numeric" pattern="-?[0-9]*" placeholder="adjust by ± min" style="flex:1;min-width:0">
-      <button type="button" id="xp-edit-delta-apply">Apply</button>
-    </div>
+    <!-- v9: removed the duplicate +/- adjuster. The exact-total field above plus the quick buttons cover both setting the total and nudging up/down. -->
+
     <div class="preview" id="xp-edit-preview"></div>
     <div class="err" id="xp-edit-err" hidden></div>
     <div class="actions">
+      <button type="button" id="xp-edit-delete" class="danger" title="Permanently delete this session and reverse its stats">🗑 Delete session</button>
       <button type="button" id="xp-edit-cancel">Cancel</button>
       <button type="button" id="xp-edit-save" class="primary">Save</button>
     </div>
@@ -5295,22 +5392,35 @@ function openSessionEndEditTime(sessionId){
       err.hidden = true; refreshPreview();
     };
   });
-  /* v8.8.3: ± delta adjuster (iOS numeric keypad has no minus) */
-  (function(){
-    const signBtn=editor.querySelector("#xp-edit-sign"), deltaInp=editor.querySelector("#xp-edit-delta"), applyBtn=editor.querySelector("#xp-edit-delta-apply");
-    if(!signBtn||!deltaInp) return;
-    const refSign=()=>{ const v=String(deltaInp.value||"").trim(); signBtn.textContent = v.startsWith("-")?"−":"+"; };
-    signBtn.addEventListener("click", ()=>{ const v=String(deltaInp.value||"").trim(); if(v.startsWith("-")) deltaInp.value=v.slice(1); else if(v&&v!=="0") deltaInp.value="-"+v; else deltaInp.value = signBtn.textContent==="−"?"":"-"; refSign(); try{deltaInp.focus();}catch(_){} });
-    deltaInp.addEventListener("input", refSign);
-    const applyDelta=()=>{ const d=Math.floor(Number(deltaInp.value)||0); if(!d){ err.hidden=true; return; } input.value = clampInput()+d; deltaInp.value=""; refSign(); err.hidden=true; refreshPreview(); };
-    if(applyBtn) applyBtn.addEventListener("click", applyDelta);
-    deltaInp.addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); applyDelta(); } });
-    refSign();
-  })();
+  /* v9: duplicate +/- delta adjuster removed (see note in the editor markup above). */
   editor.querySelector("#xp-edit-cancel").onclick = ()=>{
     xpBreakdownEditing = false;
     const cached = showXpBreakdown._last;
     if (cached) showXpBreakdown(cached.xp, cached.meta);
+  };
+  /* v8.9.0: Delete session button. Removes the session entirely, reverses
+     its stats contributions (minutes, history, daily, XP, dailyMin), removes
+     its loot drops (full clawback), and logs to activityLog. */
+  const delBtn = editor.querySelector("#xp-edit-delete");
+  if (delBtn) delBtn.onclick = ()=>{
+    if (!rec || !rec.id) return;
+    const confirmed = window.confirm(
+      "Delete this session?\n\n"+
+      "• Removes " + (rec.minutes|0) + " minutes from your totals\n"+
+      "• Removes " + (rec.xp|0) + " XP\n"+
+      "• Removes any loot dropped this session\n\n"+
+      "This cannot be undone."
+    );
+    if (!confirmed) return;
+    const result = deleteSessionRecord(rec.id);
+    if (result && result.ok){
+      xpBreakdownEditing = false;
+      try { closeXpBreakdown(); } catch(_){ const m=document.querySelector(".xp-breakdown-modal,#xp-breakdown-modal"); if(m) m.remove(); }
+      toast("Session deleted — " + (result.minutesRemoved|0) + "m, " + (result.xpRemoved|0) + " XP rolled back", "warn");
+    } else {
+      err.textContent = "Could not delete session (" + (result && result.reason || "unknown") + ").";
+      err.hidden = false;
+    }
   };
   save.onclick = ()=>{
     const n = clampInput();
@@ -5630,7 +5740,7 @@ function notify(title, body){
 
 /* -------- rendering -------- */
 function renderAll(){
-  renderTimer(); renderHero(); renderQuests(); renderDaily();
+  renderTimer(); renderHero(); renderQuests(); renderDaily(); if (typeof fhRenderDailyHoursCard === "function") fhRenderDailyHoursCard();
   renderLoot(); renderCompanions(); renderAchievements(); renderHeatmap(); renderTopMeta();
   renderModeTabs(); renderAvatar(); renderTasks(); renderActiveTaskRow();
   renderStatStrip(); renderBattleLog(); renderBackupLast(); renderSecurityPanel();
@@ -5675,6 +5785,7 @@ function renderSwLaps(){
     `<ol>${items.join("")}</ol>`;
 }
 function renderTimer(){
+  try { updateGameModeIndicator(); } catch(_){}
   const display = $("#timer-display");
   if (isStopwatch()){
     const elapsed = stopwatchElapsedMs(state.timer, now());
@@ -5731,6 +5842,45 @@ function renderStatStrip(){
     oa.textContent = formatHMS(nonNegativeNumber(state.totalAppOpenMs) + liveDelta);
   }
   const sa = $("#stat-sessions"); if (sa) sa.textContent = state.completedFocusSessions|0;
+}
+/* v8.9.0: build & render the daily/weekly/monthly focused-time summary */
+function fhComputeHoursSummary(){
+  const hist = state.history || {};
+  const today = todayKey();
+  const dayMs = 86400000;
+  const todayDate = new Date();
+  function dayKey(d){
+    return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+  }
+  const day = hist[today] || 0;
+  let week = 0, month = 0;
+  for (let i = 0; i < 7; i++){
+    const d = new Date(todayDate.getTime() - i * dayMs);
+    week += (hist[dayKey(d)] || 0);
+  }
+  for (let i = 0; i < 30; i++){
+    const d = new Date(todayDate.getTime() - i * dayMs);
+    month += (hist[dayKey(d)] || 0);
+  }
+  return { day, week, month };
+}
+function fhRenderDailyHoursCard(){
+  const heroCard = document.querySelector(".hero-card");
+  if (!heroCard) return;
+  let card = heroCard.querySelector(".daily-hours-card");
+  if (!card){
+    card = document.createElement("div");
+    card.className = "daily-hours-card";
+    const top = heroCard.querySelector(".top");
+    if (top && top.nextSibling) top.parentNode.insertBefore(card, top.nextSibling);
+    else heroCard.insertBefore(card, heroCard.firstChild);
+  }
+  const h = fhComputeHoursSummary();
+  function fmt(min){ const hrs = (min||0) / 60; return hrs >= 10 ? hrs.toFixed(0)+"h" : hrs.toFixed(1)+"h"; }
+  card.innerHTML =
+    '<div class="dh-cell"><div class="dh-num">'+fmt(h.day)+'</div><div class="dh-lbl">Today</div></div>' +
+    '<div class="dh-cell"><div class="dh-num">'+fmt(h.week)+'</div><div class="dh-lbl">7 days</div></div>' +
+    '<div class="dh-cell"><div class="dh-num">'+fmt(h.month)+'</div><div class="dh-lbl">30 days</div></div>';
 }
 function renderHero(){
   const cls = CLASSES[state.hero.cls] || CLASSES.knight;
@@ -7879,6 +8029,7 @@ function fillSettingsForm(){
   setToggle("#tog-tick", s.tick);
   setToggle("#tog-chime", s.chime);
   setToggle("#tog-notif", s.notif);
+  setToggle("#tog-gamemode", s.gameMode);
   setToggle("#tog-keepalive", s.keepalive);
   setToggle("#tog-wakelock", s.wakelock);
   setToggle("#tog-monthly-backup", s.monthlyBackup);
@@ -7906,6 +8057,7 @@ function bindSettings(){
   toggle("#tog-tick","tick");
   toggle("#tog-chime","chime");
   toggle("#tog-notif","notif", v=>{ if (v) requestNotifPermIfNeeded(); });
+  toggle("#tog-gamemode","gameMode", v=>{ try{ updateGameModeIndicator(); toast(v?"🎮 Game Mode ON — leave the app during a session and your timer resets.":"Game Mode off.", v?"good":"info"); }catch(_){} });
   toggle("#tog-keepalive","keepalive", v=>{ if (!v) stopKeepalive(); else if (state.timer.running && state.timer.mode==="focus") startKeepalive(); });
   toggle("#tog-wakelock","wakelock", v=>{ if (!v) releaseWakeLock(); else if (state.timer.running && state.timer.mode==="focus") acquireWakeLock(); });
   toggle("#tog-monthly-backup","monthlyBackup");
@@ -8467,6 +8619,79 @@ function renderAchievements(){
 function canEditSessionRecord(rec){
   return !!(rec&&rec.type==="focus"&&typeof rec.id==="string"&&typeof rec.originalMinutes==="number"&&(rec.minutes|0)>0);
 }
+/* v8.9.0: deleteSessionRecord — removes the session entirely and reverses
+   its stat contributions atomically. Never touches other sessions or any
+   counter beyond the ones this session credited. */
+function deleteSessionRecord(sessionId){
+  if (!sessionId) return { ok:false, reason:"no_id" };
+  const idx = (state.sessionsLog||[]).findIndex(r => r && r.id === sessionId);
+  if (idx < 0) return { ok:false, reason:"not_found" };
+  const rec = state.sessionsLog[idx];
+  const day = todayKey(new Date(rec.at || now()));
+  const minutes = rec.minutes | 0;
+  const xp = rec.xp | 0;
+  /* Backup before mutating */
+  try { localStorage.setItem("focusHero.v4.state.pre_session_delete_" + sessionId, JSON.stringify(state)); } catch(_){}
+  /* Reverse totals */
+  state.totalFocusMin = Math.max(0, (state.totalFocusMin|0) - minutes);
+  if (state.history && typeof state.history === "object"){
+    state.history[day] = Math.max(0, (state.history[day]||0) - minutes);
+  }
+  const task = rec.taskId ? state.tasks.find(t => t.id === rec.taskId) : null;
+  if (task){
+    task.totalFocusMin = Math.max(0, (task.totalFocusMin|0) - minutes);
+    if (task.dailyMin && typeof task.dailyMin === "object"){
+      task.dailyMin[day] = Math.max(0, (task.dailyMin[day]|0) - minutes);
+    }
+  }
+  ensureV76StateShape(state);
+  const action = normalizeAdventureAction(rec.action || state.adventure.action);
+  state.adventure.actionMin[action] = Math.max(0, (state.adventure.actionMin[action]||0) - minutes);
+  /* Reverse XP */
+  if (xp > 0 && typeof removeXpQuiet === "function") removeXpQuiet(xp);
+  /* Reverse daily progress credit */
+  if ((rec.dailyMinApplied|0) > 0 && typeof rollbackDailyProgressForSession === "function"){
+    rollbackDailyProgressForSession(day, "minutes", rec.dailyMinApplied|0);
+  }
+  if ((rec.dailyFocusApplied|0) > 0 && typeof rollbackDailyProgressForSession === "function"){
+    rollbackDailyProgressForSession(day, "focus", rec.dailyFocusApplied|0);
+  }
+  /* Reverse combo credit */
+  if ((rec.comboApplied|0) > 0 && state.combo && state.combo.date === day){
+    state.combo.count = Math.max(0, (state.combo.count|0) - (rec.comboApplied|0));
+  }
+  /* Remove loot drops from this session */
+  let lootRemoved = 0;
+  if (state.loot && Array.isArray(state.loot.drops)){
+    const keep = [];
+    for (const d of state.loot.drops){
+      if (d && d.sessionId === sessionId){
+        if (d.iid && state.lootInstances && state.lootInstances[d.iid]) delete state.lootInstances[d.iid];
+        if (d.templateId && state.lootOwned && (state.lootOwned[d.templateId]|0) > 0){
+          state.lootOwned[d.templateId] = Math.max(0, (state.lootOwned[d.templateId]|0) - 1);
+          if (state.lootOwned[d.templateId] === 0) delete state.lootOwned[d.templateId];
+        }
+        lootRemoved++;
+      } else {
+        keep.push(d);
+      }
+    }
+    state.loot.drops = keep;
+  }
+  /* Remove the session record */
+  state.sessionsLog.splice(idx, 1);
+  /* Log */
+  try {
+    if (typeof logActivity === "function") logActivity({
+      category:"session", action:"session_deleted", sessionId, taskId: rec.taskId||null,
+      before: { minutes, xp, lootCount: lootRemoved }, after: null,
+      source:"summary_delete", note: "minutes="+minutes+" xp="+xp+" loot="+lootRemoved
+    });
+  } catch(_){}
+  saveState();
+  renderAll();
+  return { ok:true, minutesRemoved: minutes, xpRemoved: xp, lootRemoved };
+}
 function sessionRecordById(sessionId){
   return (state.sessionsLog||[]).find(r=>r&&r.id===sessionId) || null;
 }
@@ -8543,7 +8768,8 @@ function applySessionEdit(sessionId,newMinutes){
   const cap=sessionEditCap(original);
   const raw=Math.floor(Number(newMinutes)||0);
   const nm=Math.max(0,Math.min(cap,raw));
-  if(nm===current)return{ok:false,reason:"no_change"};
+  const __clampedEdit=(raw!==nm); /* v9: surface silent clamps so an edit is never quietly inaccurate */
+  if(nm===current)return{ok:false,reason:"no_change",clamped:__clampedEdit,requested:raw,newMinutesCap:cap};
   const oldMinutes=rec.minutes|0, delta=oldMinutes-nm, day=todayKey(new Date(rec.at||now()));
   state.totalFocusMin=Math.max(0,(state.totalFocusMin|0)-delta);
   if(state.history&&typeof state.history==="object")state.history[day]=Math.max(0,(state.history[day]||0)-delta);
@@ -8639,7 +8865,7 @@ function applySessionEdit(sessionId,newMinutes){
   } catch(__e){ console.warn("v8.7.0 loot clawback/reroll failed", __e); }
   appendEditLog({ taskName:(task&&task.name)||rec.action||"Focus", before:oldMinutes, after:nm, source:"session-editor", sessionId:sessionId, taskId:rec.taskId||null });
   saveState(); renderAll();
-  return{ok:true,sessionId,oldMinutes,newMinutes:nm,newMinutesCap:cap,minutesDelta:-delta,xpDelta:-xpDelta,rewardedAfter:xpInfo.willReward, clawback:__clawbackResult};
+  return{ok:true,sessionId,oldMinutes,newMinutes:nm,newMinutesCap:cap,minutesDelta:-delta,xpDelta:-xpDelta,rewardedAfter:xpInfo.willReward, clawback:__clawbackResult, clamped:__clampedEdit, requested:raw};
 }
 function renderEditableSessionRows(){
   const rows=(state.sessionsLog||[]).filter(r=>r&&r.type==="focus").slice(-8).reverse();
@@ -8662,6 +8888,7 @@ function bindSessionEditButtons(host){
       if(ans==null)return;
       const result=applySessionEdit(rec.id,Number(ans));
       if(!result.ok)toast(`Edit not applied: ${result.reason}`,"warn");
+      else if(result.clamped)toast(`Capped to ${result.newMinutes}m (safety max ${result.newMinutesCap}m) — your ${result.requested}m was out of range`,"warn");
       else toast(`Session corrected to ${result.newMinutes}m`,"good");
       renderAnalytics();
     };
@@ -9773,11 +10000,20 @@ async function boot(){
     renderSyncStatus();
     ensureTickInterval();
     bindAppOpenTracking();
+    bindGameModeWatch(); bindQuickStart();
     maybeWarnAboutFileMode();
     if (state.timer.running && state.timer.endAt && state.timer.mode === "focus"){ startKeepalive(); acquireWakeLock(); }
     try { maybeAutoBackup(); } catch(_){}
     if (state.sync.enabled){ startPullPoll(); cloudPull().catch(()=>{}); }
     window.addEventListener("focus", ()=>{ if (state.sync.enabled) cloudPull().catch(()=>{}); });
+    /* v9 offline-first: the app already saves every session to this device immediately
+       (localStorage), so it stays fully usable with no wifi/data. These listeners flush
+       the cloud sync the instant a connection returns, and reassure the user when offline. */
+    window.addEventListener("online", ()=>{
+      if (state.sync.enabled){ cloudPull().catch(()=>{}); cloudPush({reason:"reconnect"}).catch(()=>{}); }
+      try { toast("📶 Back online — syncing your progress…", "info"); } catch(_){}
+    });
+    window.addEventListener("offline", ()=>{ try { toast("✈️ Offline — sessions still save on this device and sync when you reconnect.", "info"); } catch(_){} });
     document.addEventListener("visibilitychange", ()=>{ if (!document.hidden && state.sync.enabled) cloudPull().catch(()=>{}); });
     handleUrlActions();
     registerSW();
@@ -9969,7 +10205,8 @@ function logActivity(entry){
     note:   entry.note || null
   };
   state.activityLog.push(e);
-  if (state.activityLog.length > 500) state.activityLog = state.activityLog.slice(-500);
+  /* v8.9.0: was 500, filled in hours. Raised to 5000 (~30d). */
+  if (state.activityLog.length > 5000) state.activityLog = state.activityLog.slice(-5000);
   return e;
 }
 function appendEditLog(entry){
@@ -9984,7 +10221,8 @@ function appendEditLog(entry){
     at: now(),
     source: entry.source || "edit"
   });
-  if (state.editLog.length > 100) state.editLog = state.editLog.slice(-100);
+  /* v8.9.0: was 100, kept for back-compat. Raised to 1000. */
+  if (state.editLog.length > 1000) state.editLog = state.editLog.slice(-1000);
   /* v8.7.0: mirror to activityLog for the universal log view */
   try { logActivity({ category:"edit", action:"time_edit", taskId:entry.taskId||null, sessionId:entry.sessionId||null, before:before, after:after, delta:after-before, source:entry.source||"edit", note:"task='"+(entry.taskName||"")+"'" }); } catch(_){}
 }
@@ -10031,7 +10269,7 @@ function activeBoostLabel(){
    Per-edit cap +/-240 min. Streak is intentionally NOT recomputed — this
    matches applySessionEdit; a streak is a sequential day-chain and must
    never be fabricated from a free-floating minute edit. */
-const LEDGER_EDIT_CAP = 240;
+const LEDGER_EDIT_CAP = 1440; /* v9: raised from 240 — large legitimate edits were being silently capped. A 24h fat-finger guard remains, and any clamp now shows a toast. */
 function ledgerXpForMinutes(min){
   try {
     const b = computeXpBreakdown(Math.abs(min|0), { comboCount:0, streakDays:0, settings:state.settings });
@@ -10043,7 +10281,9 @@ function applyTaskTimeAdjustment(taskId, deltaMin){
   if (!task) return { ok:false, reason:"no_task" };
   let d = Math.round(Number(deltaMin)||0);
   if (d === 0) return { ok:false, reason:"zero" };
+  const __requested = d; /* v9: remember requested amount so we can flag a silent cap */
   d = Math.max(-LEDGER_EDIT_CAP, Math.min(LEDGER_EDIT_CAP, d));
+  let __capClamped = (d !== __requested);
   ensureV76StateShape(state);
   const day = todayKey();
   if (!task.dailyMin || typeof task.dailyMin !== "object") task.dailyMin = {};
@@ -10052,7 +10292,7 @@ function applyTaskTimeAdjustment(taskId, deltaMin){
   if (d < 0){
     const room = Math.min(task.totalFocusMin|0, state.totalFocusMin|0);
     if (room <= 0) return { ok:false, reason:"nothing_to_remove" };
-    d = Math.max(d, -room);
+    if (d < -room){ d = -room; __capClamped = true; } /* clamped to minutes actually available to remove */
   }
   task.totalFocusMin  = Math.max(0, (task.totalFocusMin|0) + d);
   state.totalFocusMin = Math.max(0, (state.totalFocusMin|0) + d);
@@ -10083,7 +10323,7 @@ function applyTaskTimeAdjustment(taskId, deltaMin){
   const after = task.totalFocusMin|0;
   appendEditLog({ taskName: task.name, before: before, after: after, source:"ledger" });
   saveState(); renderAll();
-  return { ok:true, delta:d, before:before, after:after };
+  return { ok:true, delta:d, before:before, after:after, requested:__requested, clamped:__capClamped };
 }
 
 /* --- coin store catalog --- */
@@ -10266,7 +10506,8 @@ function renderLedger(){
       }
       const r = applyTaskTimeAdjustment(tid, delta);
       if (r && r.ok){
-        toast((r.delta>=0?"Added ":"Removed ")+Math.abs(r.delta)+" min", "good");
+        if (r.clamped) toast("Applied "+(r.delta>=0?"+":"")+r.delta+"m (capped from "+(r.requested>=0?"+":"")+r.requested+"m — limit ±"+LEDGER_EDIT_CAP+"/edit)", "warn");
+        else toast((r.delta>=0?"Added ":"Removed ")+Math.abs(r.delta)+" min", "good");
       } else if (r && r.reason === "nothing_to_remove"){
         toast("Nothing to remove from that task", "warn");
       }

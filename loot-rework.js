@@ -256,7 +256,8 @@
       if (!s.loot.loadout) s.loot.loadout = { slot1:null, slot2:null, slot3:null };
       if (typeof s.loot.loadoutUpdatedAt !== "number") s.loot.loadoutUpdatedAt = 0;
     }
-    if (!s.lootRework || typeof s.lootRework !== "object") s.lootRework = { version:1, flags:{ animationsOn:true, showDropLog:true, autoSalvageCommonDupes:false } };
+    if (!s.lootRework || typeof s.lootRework !== "object") s.lootRework = { version:1, flags:{ animationsOn:true, showDropLog:true, autoSalvageCommonDupes:false, autoSalvageDupes:true } };
+    if (s.lootRework && s.lootRework.flags && typeof s.lootRework.flags.autoSalvageDupes === "undefined") s.lootRework.flags.autoSalvageDupes = true; /* v9: default dupe->materials on */
     return s;
   }
 
@@ -317,14 +318,21 @@
   function lrPickTemplateInRarity(action, rarity, minutes, rng){
     var eligible = lrEligibleTemplates(action, minutes).filter(function(it){ return it[2] === rarity; });
     if (!eligible.length) return null;
+    /* v9 dedup: don't hand back an item you already own until the rarity pool is
+       exhausted. Draw only from UNOWNED eligible templates; once you own them all,
+       fall back to the full pool (those dupes get auto-converted to materials in
+       lrCommitDrop). Hearthstone-style "no dupes until the set is complete". */
+    var owned = (_state() && _state().lootOwned) || {};
+    var unowned = eligible.filter(function(it){ return !((owned[_lootId(it)]|0) > 0); });
+    var pool = unowned.length ? unowned : eligible;
     var total = 0;
-    for (var i=0; i<eligible.length; i++) total += (eligible[i][3] || 1);
+    for (var i=0; i<pool.length; i++) total += (pool[i][3] || 1);
     var roll = rng() * total;
-    for (var j=0; j<eligible.length; j++){
-      roll -= (eligible[j][3] || 1);
-      if (roll <= 0) return eligible[j];
+    for (var j=0; j<pool.length; j++){
+      roll -= (pool[j][3] || 1);
+      if (roll <= 0) return pool[j];
     }
-    return eligible[eligible.length - 1];
+    return pool[pool.length - 1];
   }
 
   function lrRollAffix(rng, excludeIds){
@@ -672,6 +680,9 @@
         var t = _lootById(id);
         return t && t[2] === rarity;
       });
+      var ownedMap = (s.lootOwned) || {};
+      var matchingUnowned = matching.filter(function(id){ return !((ownedMap[id]|0) > 0); });
+      if (matchingUnowned.length) matching = matchingUnowned;
       if (matching.length){
         var total = 0;
         for (var x=0; x<matching.length; x++) total += pool[matching[x]];
@@ -696,6 +707,7 @@
     s = lrEnsureShape(s || _state());
     var template = drop.template;
     var templateId = _lootId(template);
+    var __wasOwned = ((s.lootOwned[templateId]|0) > 0); /* v9: owned before this drop => duplicate */
     var instance = lrMintInstance(template, { source:{ kind:"drop", action:ctx.action, enemyId:ctx.enemyId } });
     s.lootInstances[instance.iid] = instance;
     s.lootOwned[templateId] = (s.lootOwned[templateId]|0) + 1;
@@ -730,7 +742,23 @@
     s.loot.drops.push(entry);
     if (s.loot.drops.length > LR_DROP_LOG_CAP) s.loot.drops.shift();
     var flags = (s.lootRework && s.lootRework.flags) || {};
-    if (flags.autoSalvageCommonDupes && drop.rarity === "common"){
+    /* v9: a drop you ALREADY own is a duplicate (rarity pool exhausted -- see
+       lrPickTemplateInRarity). Auto-convert it to materials so dupes still feel
+       rewarding instead of "the same item again". Opt-out via flag; default on. */
+    if (__wasOwned && flags.autoSalvageDupes !== false){
+      var __sv = lrSalvageInstance(s, instance.iid);
+      if (__sv && __sv.ok){
+        entry.autoSalvaged = true; entry.dupeConverted = true;
+        var __y = __sv.yield || {};
+        var __tname = (template[1] || templateId);
+        var __bits = [];
+        if (__y.dust)    __bits.push("+"+__y.dust+" dust");
+        if (__y.shards)  __bits.push("+"+__y.shards+" shards");
+        if (__y.essence) __bits.push("+"+__y.essence+" essence");
+        if (__sv.gemDropped && LR_GEM_DEFS[__sv.gemDropped]) __bits.push("+"+LR_GEM_DEFS[__sv.gemDropped].sym+" "+LR_GEM_DEFS[__sv.gemDropped].name);
+        try { _toast("♻️ Duplicate "+__tname+" -> "+(__bits.join(", ")||"materials"), "info"); } catch(_){}
+      }
+    } else if (flags.autoSalvageCommonDupes && drop.rarity === "common"){
       var dupes = 0;
       var keys = Object.keys(s.lootInstances);
       for (var k=0; k<keys.length; k++){
