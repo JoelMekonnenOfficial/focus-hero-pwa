@@ -2343,6 +2343,42 @@ button.danger:hover{background:rgba(220,38,38,.22);color:#fca5a5;}
 </head>
 <body>
 <!-- v8.8.1: 3D character system (Three.js, vendored locally for offline-first) -->
+<style id="fh-v9-polish">
+/* Focus Hero v9 — visual polish + accessibility (additive, non-destructive) */
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{ animation-duration:.001ms!important; animation-iteration-count:1!important; transition-duration:.001ms!important; scroll-behavior:auto!important; }
+}
+:focus-visible{ outline:2px solid #7dd3fc; outline-offset:2px; }
+.timer-controls button,.mode-tabs button,.tabs button,#btn-start,#btn-quick-stopwatch{ min-height:44px; }
+#btn-quick-stopwatch{ background:linear-gradient(135deg,rgba(125,211,252,.18),rgba(74,222,128,.14)); border:1px solid rgba(125,211,252,.42); color:#bae6fd; font-weight:700; border-radius:10px; }
+#btn-quick-stopwatch:hover{ border-color:rgba(125,211,252,.75); box-shadow:0 0 12px rgba(125,211,252,.3); }
+@keyframes fhGmPulse{ 0%,100%{ box-shadow:0 0 10px rgba(74,222,128,.30);} 50%{ box-shadow:0 0 18px rgba(74,222,128,.55);} }
+.game-mode-badge.armed{ animation:fhGmPulse 2.4s ease-in-out infinite; }
+/* Rarity system on item CARDS only (colorblind-safe: shape glyph + accent bar, never on inline text) */
+.loot-item,.drops-list .drop-row,.forge-instance{ position:relative; }
+.loot-item.rar-uncommon,.drop-row.rar-uncommon,.forge-instance.rar-uncommon{ border-left:3px solid #34d399; }
+.loot-item.rar-rare,.drop-row.rar-rare,.forge-instance.rar-rare{ border-left:3px solid #22d3ee; }
+.loot-item.rar-epic,.drop-row.rar-epic,.forge-instance.rar-epic{ border-left:3px solid #c084fc; }
+.loot-item.rar-legendary,.drop-row.rar-legendary,.forge-instance.rar-legendary{ border-left:3px solid #f59e0b; }
+.loot-item.rar-mythic,.drop-row.rar-mythic,.forge-instance.rar-mythic{ border-left:3px solid #f472b6; box-shadow:0 0 14px rgba(244,114,182,.4); }
+.loot-item.rar-common::after,.drop-row.rar-common::after,.forge-instance.rar-common::after{ content:"●"; }
+.loot-item.rar-uncommon::after,.drop-row.rar-uncommon::after,.forge-instance.rar-uncommon::after{ content:"\25C6"; color:#34d399; }
+.loot-item.rar-rare::after,.drop-row.rar-rare::after,.forge-instance.rar-rare::after{ content:"\25C6\25C6"; color:#22d3ee; letter-spacing:-1px; }
+.loot-item.rar-epic::after,.drop-row.rar-epic::after,.forge-instance.rar-epic::after{ content:"\2605"; color:#c084fc; }
+.loot-item.rar-legendary::after,.drop-row.rar-legendary::after,.forge-instance.rar-legendary::after{ content:"\2605\2605"; color:#f59e0b; letter-spacing:-1px; }
+.loot-item.rar-mythic::after,.drop-row.rar-mythic::after,.forge-instance.rar-mythic::after{ content:"\2726"; color:#f472b6; }
+.loot-item.rar-common::after,.loot-item[class*="rar-"]::after,.drops-list .drop-row[class*="rar-"]::after,.forge-instance[class*="rar-"]::after{ position:absolute; top:4px; right:6px; font-size:.62rem; opacity:.9; pointer-events:none; }
+/* Pity meter */
+.fh-pity-wrap{ display:flex; flex-direction:column; gap:6px; margin:8px 0 10px; }
+.fh-pity{ display:flex; align-items:center; gap:8px; font-size:.72rem; }
+.fh-pity .lbl{ width:88px; color:#9aa3b2; }
+.fh-pity .track{ flex:1; height:7px; border-radius:4px; background:rgba(148,163,184,.18); overflow:hidden; }
+.fh-pity .fill{ height:100%; border-radius:4px; transition:width .3s ease; }
+.fh-pity .pct{ width:34px; text-align:right; color:#cbd5e1; }
+/* Empty states */
+.fh-empty{ text-align:center; color:#9aa3b2; padding:18px 12px; font-size:.85rem; opacity:.9; }
+.fh-empty .ico{ font-size:1.6rem; display:block; margin-bottom:6px; opacity:.7; }
+</style>
 <script src="three.min.js"></script>
 <script src="fh3d.js"></script>
 <script>
@@ -4046,7 +4082,9 @@ function saveState(opts={}){
   if (bc && !opts.fromBroadcast){ try { bc.postMessage({ type:"state", state }); } catch(e){} }
   if (state.sync.enabled && !opts.fromPull){
     clearTimeout(cloudDebounce);
-    cloudDebounce = setTimeout(()=>cloudPush().catch(e=>{ console.warn("push failed", e); logLine("Cloud push failed: "+ (e.message||e), true); }), 500);
+    cloudDebounce = setTimeout(()=>cloudPush()
+      .then(()=>{ if(state.sync) state.sync.pendingSync=false; })
+      .catch(e=>{ if(state.sync) state.sync.pendingSync=true; /* v9 offline-first: remember unsynced changes, retry on reconnect */ console.warn("push failed", e); logLine("Cloud push queued — will retry when online: "+ (e.message||e), true); }), 500);
   }
 }
 /* v4.2: emergency recovery helper exposed via window.__FocusHero.recover().
@@ -10010,11 +10048,14 @@ async function boot(){
        (localStorage), so it stays fully usable with no wifi/data. These listeners flush
        the cloud sync the instant a connection returns, and reassure the user when offline. */
     window.addEventListener("online", ()=>{
-      if (state.sync.enabled){ cloudPull().catch(()=>{}); cloudPush({reason:"reconnect"}).catch(()=>{}); }
+      if (state.sync.enabled){ cloudPull().catch(()=>{}); cloudPush({reason:"reconnect"}).then(()=>{ if(state.sync) state.sync.pendingSync=false; }).catch(()=>{}); }
       try { toast("📶 Back online — syncing your progress…", "info"); } catch(_){}
     });
     window.addEventListener("offline", ()=>{ try { toast("✈️ Offline — sessions still save on this device and sync when you reconnect.", "info"); } catch(_){} });
     document.addEventListener("visibilitychange", ()=>{ if (!document.hidden && state.sync.enabled) cloudPull().catch(()=>{}); });
+    /* v9 offline-first: durable retry — if changes could not reach the cloud, keep trying
+       every 30s while online. Local data is always saved on-device regardless. */
+    setInterval(()=>{ try{ if (state.sync && state.sync.enabled && state.sync.pendingSync && (navigator.onLine !== false)){ cloudPush({reason:"retry"}).then(()=>{ if(state.sync) state.sync.pendingSync=false; }).catch(()=>{}); } }catch(_){} }, 30000);
     handleUrlActions();
     registerSW();
     const q = new URLSearchParams(location.search);

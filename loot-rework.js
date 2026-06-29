@@ -1031,14 +1031,34 @@
 
   /* ---------- UI: drops list, forge panel, inspector, battle report ---------- */
 
+  function lrPityMeterHtml(s){
+    try{
+      var rows=[["rare","Rare","#22d3ee"],["epic","Epic","#c084fc"],["legendary","Legendary","#f59e0b"]];
+      var pity=(s.loot&&s.loot.pity)||{};
+      var html='<div class="fh-pity-wrap"><div style="font-size:.68rem;color:#9aa3b2;letter-spacing:.04em">LUCK METER \u2014 the longer you go without a drop, the better your odds get</div>';
+      for(var i=0;i<rows.length;i++){
+        var k=rows[i][0], lbl=rows[i][1], col=rows[i][2];
+        var th=LR_PITY_THRESHOLD[k]; if(!isFinite(th)) continue;
+        var cnt=(pity[k]|0);
+        var pct=Math.max(0,Math.min(100,Math.round(cnt/th*100)));
+        var boosted=cnt>=th;
+        html+='<div class="fh-pity"><span class="lbl">'+lbl+'</span>'+
+          '<span class="track"><span class="fill" style="width:'+pct+'%;background:'+col+(boosted?(';box-shadow:0 0 8px '+col):'')+'"></span></span>'+
+          '<span class="pct">'+(boosted?'BOOST':(pct+'%'))+'</span></div>';
+      }
+      html+='</div>';
+      return html;
+    }catch(_){ return ""; }
+  }
   function renderDropsPanel(){
     var host = document.getElementById("drops-list");
     if (!host) return;
     var s = lrEnsureShape(_state());
     if (!s) return;
+    var pityHtml = lrPityMeterHtml(s);
     var drops = Array.isArray(s.loot.drops) ? s.loot.drops.slice().reverse() : [];
     if (!drops.length){
-      host.innerHTML = '<div class="drops-empty">No drops yet — complete a focus session to earn your first loot.</div>';
+      host.innerHTML = pityHtml + '<div class="fh-empty"><span class="ico">\U0001F381</span>No drops yet — finish a focus session to earn your first loot.</div>';
       return;
     }
     var MS = _MONSTERS() || [];
@@ -1069,7 +1089,7 @@
         '<div class="drop-odds">' + odds + '<br><span class="muted" style="font-size:.7rem">' + pityTxt + '</span></div>' +
         '</div>';
     }).join("");
-    host.innerHTML = rows;
+    host.innerHTML = pityHtml + rows;
   }
 
   function renderForgePanel(){
