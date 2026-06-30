@@ -114,6 +114,7 @@ body{
   background-image:radial-gradient(1100px 600px at 10% -10%,rgba(var(--accent-rgb),.12),transparent 60%),
     radial-gradient(900px 500px at 110% 0%,rgba(var(--accent-2-rgb),.10),transparent 60%);
   -webkit-font-smoothing:antialiased; line-height:1.45; overflow-x:hidden; touch-action:pan-y;
+  transition:background-color .18s ease,color .18s ease;
 }
 button,input,select,textarea{font:inherit;color:inherit}
 button{cursor:pointer;background:transparent;border:1px solid var(--border-strong);color:var(--ink);padding:.55rem .9rem;border-radius:10px;transition:transform .08s ease,background .15s ease,border-color .15s ease;touch-action:manipulation}
@@ -1838,34 +1839,44 @@ body.lr-screen-shake { animation: lr-shake .25s ease-in-out }
 .all-task-row .task-meta{font-size:.72rem;color:var(--ink-dim)}
 .all-task-row.active{border-color:var(--accent);box-shadow:0 0 0 2px rgba(var(--accent-rgb),.24)}
 @keyframes task-sheet-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
-.character-modal{max-width:1010px}
+.character-modal{
+  max-width:1160px;
+  border-color:rgba(var(--accent-rgb),.24);
+  background:
+    radial-gradient(circle at 12% 10%,rgba(var(--accent-rgb),.18),transparent 32%),
+    radial-gradient(circle at 88% 4%,rgba(var(--accent-2-rgb),.16),transparent 30%),
+    linear-gradient(180deg,rgba(255,255,255,.05),rgba(0,0,0,.08)),
+    var(--panel);
+}
 .character-header{margin:0 44px 16px 0}
 .character-header h3{margin:0 0 5px}
 .character-header p{margin:0;color:var(--ink-dim);font-size:.86rem}
 .character-workbench{
   display:grid;
-  grid-template-columns:278px minmax(0,1fr);
-  gap:20px;
+  grid-template-columns:minmax(300px,380px) minmax(0,1fr);
+  gap:22px;
   align-items:start;
 }
 .character-preview{
   position:sticky;top:0;
   display:grid;
   justify-items:center;
-  gap:9px;
-  padding:15px;
+  gap:10px;
+  padding:16px;
   border:2px solid var(--border-strong);
-  border-radius:14px;
+  border-radius:24px;
   background:
-    radial-gradient(circle at 50% 22%,rgba(var(--accent-rgb),.22),transparent 42%),
-    linear-gradient(180deg,rgba(255,255,255,.045),rgba(0,0,0,.16)),var(--panel-2);
+    radial-gradient(circle at 50% 18%,rgba(var(--accent-rgb),.34),transparent 42%),
+    radial-gradient(circle at 18% 92%,rgba(var(--accent-2-rgb),.16),transparent 38%),
+    linear-gradient(180deg,rgba(255,255,255,.07),rgba(0,0,0,.20)),var(--panel-2);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.05),0 22px 54px rgba(0,0,0,.30);
 }
 .avatar-preview{
-  width:240px;
-  height:240px;
-  border-radius:12px;
-  border:2px solid rgba(var(--accent-rgb),.34);
-  box-shadow:inset 0 0 0 1px rgba(255,255,255,.04),0 16px 36px rgba(0,0,0,.32);
+  width:min(330px,100%);
+  height:330px;
+  border-radius:22px;
+  border:1px solid rgba(var(--accent-rgb),.42);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.06),0 18px 44px rgba(0,0,0,.34);
   overflow:hidden;
   background:#0b1020;
 }
@@ -1873,6 +1884,41 @@ body.lr-screen-shake { animation: lr-shake .25s ease-in-out }
 .character-preview-name{font-size:1.12rem;font-weight:700;color:var(--ink)}
 .character-preview-class{font-size:.76rem;color:var(--accent-2);text-transform:uppercase;letter-spacing:.12em}
 .character-preview-note{font-size:.72rem;color:var(--ink-dim);text-align:center}
+.model-badges{
+  width:100%;
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:7px;
+  margin-top:2px;
+}
+.model-badge{
+  min-width:0;
+  padding:7px 8px;
+  border:1px solid var(--border);
+  border-radius:12px;
+  background:rgba(255,255,255,.045);
+}
+.model-badge b{
+  display:block;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  color:var(--ink);
+  font-size:.72rem;
+}
+.model-badge span{
+  display:block;
+  color:var(--ink-mute);
+  font-size:.61rem;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+}
+.model-tip{
+  width:100%;
+  color:var(--ink-mute);
+  font-size:.68rem;
+  text-align:center;
+}
 .character-editor{
   display:grid;
   gap:12px;
@@ -1901,8 +1947,10 @@ body.lr-screen-shake { animation: lr-shake .25s ease-in-out }
 .character-pane{
   padding:12px;
   border:1px solid var(--border);
-  border-radius:12px;
-  background:rgba(0,0,0,.12);
+  border-radius:18px;
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.01)),
+    rgba(0,0,0,.12);
 }
 .character-pane-note{margin:0 0 10px;color:var(--ink-dim);font-size:.78rem}
 .appearance-controls{
@@ -1913,8 +1961,9 @@ body.lr-screen-shake { animation: lr-shake .25s ease-in-out }
   padding-right:5px;
 }
 .appearance-section{
-  display:grid;gap:9px;padding:11px;
-  border:1px solid var(--border);border-radius:10px;background:var(--panel-2);
+  display:grid;gap:9px;padding:12px;
+  border:1px solid var(--border);border-radius:16px;
+  background:linear-gradient(180deg,rgba(255,255,255,.045),rgba(255,255,255,.012)),var(--panel-2);
 }
 .appearance-section-title{
   font-size:.7rem;color:var(--accent-2);font-weight:700;text-transform:uppercase;letter-spacing:.1em;
@@ -1992,6 +2041,16 @@ body.lr-screen-shake { animation: lr-shake .25s ease-in-out }
 .minute-quick{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;margin:12px 0}
 .minute-quick button{padding:.45rem .25rem;font-size:.74rem}
 .minute-custom{display:flex;gap:8px;align-items:end;margin-top:8px}
+.session-edit-preview{
+  margin-top:12px;
+  padding:10px 12px;
+  border:1px solid var(--border);
+  border-radius:12px;
+  background:rgba(var(--accent-rgb),.08);
+  color:var(--ink-dim);
+  font-size:.82rem;
+}
+.session-edit-preview b{color:var(--accent-2)}
 /* v8.7.0: Recent Activity panel */
 .activity-head{margin-top:12px;font-size:.85rem;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.05em;}
 .activity-hint{font-size:.7rem;color:var(--ink-mute);text-transform:none;letter-spacing:0;margin-left:6px;}
@@ -2632,6 +2691,38 @@ html[data-layout="mobile"] .timer-display{font-size:clamp(4rem,8vw,6rem)}
   box-shadow:0 0 0 1px rgba(var(--accent-rgb),.25),0 18px 44px rgba(0,0,0,.22);
 }
 .variant-grid b{color:var(--ink);font-size:1rem}
+.color-choice-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(132px,1fr));
+  gap:8px;
+  margin-top:10px;
+}
+.color-choice-grid button{
+  min-height:54px;
+  display:flex;
+  align-items:center;
+  gap:9px;
+  text-align:left;
+  border-radius:16px;
+  padding:9px 10px;
+}
+.color-choice-grid button[aria-pressed="true"]{
+  border-color:rgba(var(--accent-rgb),.68);
+  background:linear-gradient(135deg,rgba(var(--accent-rgb),.18),rgba(var(--accent-2-rgb),.10));
+}
+.color-dot{
+  width:28px;
+  height:28px;
+  flex:0 0 auto;
+  border-radius:999px;
+  border:2px solid rgba(255,255,255,.22);
+  background:linear-gradient(135deg,var(--chip-a),var(--chip-b));
+  box-shadow:0 0 18px color-mix(in srgb,var(--chip-a) 34%,transparent);
+}
+.color-choice-grid b{display:block;font-size:.78rem;color:var(--ink)}
+.color-choice-grid span:not(.color-dot){display:block;font-size:.64rem;color:var(--ink-mute);text-transform:uppercase;letter-spacing:.08em}
+.color-inputs{display:flex;gap:8px;align-items:center}
+.color-inputs input[type="color"]{width:44px;height:36px;padding:2px;border-radius:10px}
 
 .encounter-stage{
   position:relative;
@@ -2691,9 +2782,14 @@ html[data-layout="mobile"] .timer-display{font-size:clamp(4rem,8vw,6rem)}
 .arena-model svg{width:100%;height:100%;display:block}
 .arena-hero .arena-model{animation:fhArenaHeroIdle 2.8s ease-in-out infinite}
 .arena-enemy .arena-model{animation:fhArenaEnemyIdle 3.2s ease-in-out infinite}
+.encounter-stage[data-combat="0"] .arena-enemy .arena-model{animation:fhArenaObjectiveFloat 3.4s ease-in-out infinite}
+.encounter-stage[data-combat="0"] .arena-vs{
+  color:var(--accent-2);
+  background:linear-gradient(135deg,rgba(var(--accent-rgb),.14),rgba(var(--accent-2-rgb),.09));
+}
 .encounter-stage[data-scene="fighting"] .arena-hero .arena-model{animation:fhArenaHeroStrike .82s ease-in-out infinite}
 .encounter-stage[data-scene="fighting"] .arena-enemy .arena-model{animation:fhArenaEnemyHit .82s ease-in-out infinite}
-.encounter-stage[data-scene="hunting"] .arena-enemy .arena-model{animation:fhArenaEnemyProwl 3.8s ease-in-out infinite}
+.encounter-stage[data-combat="1"][data-scene="hunting"] .arena-enemy .arena-model{animation:fhArenaEnemyProwl 3.8s ease-in-out infinite}
 .encounter-stage[data-scene="travelling"] .arena-hero .arena-model{animation:fhArenaTravel 1.05s ease-in-out infinite}
 .encounter-stage[data-scene="looting"] .arena-vs{animation:fhArenaLootPulse 1.4s ease-in-out infinite}
 .arena-name{
@@ -2739,6 +2835,7 @@ html[data-layout="mobile"] .timer-display{font-size:clamp(4rem,8vw,6rem)}
 @keyframes fhArenaScan{0%,55%{transform:translateX(-130%)}78%,100%{transform:translateX(130%)}}
 @keyframes fhArenaHeroIdle{0%,100%{transform:translateY(0) rotate(-1deg)}50%{transform:translateY(-3px) rotate(1deg)}}
 @keyframes fhArenaEnemyIdle{0%,100%{transform:translateY(0) scaleX(1)}50%{transform:translateY(-2px) scaleX(1.02)}}
+@keyframes fhArenaObjectiveFloat{0%,100%{transform:translateY(0) scale(.98)}50%{transform:translateY(-7px) scale(1.03)}}
 @keyframes fhArenaHeroStrike{0%,100%{transform:translateX(0) rotate(-2deg)}45%{transform:translateX(15px) rotate(8deg)}70%{transform:translateX(-3px) rotate(-4deg)}}
 @keyframes fhArenaEnemyHit{0%,100%{transform:translateX(0);filter:drop-shadow(0 16px 14px rgba(0,0,0,.28))}45%{transform:translateX(9px) rotate(4deg);filter:drop-shadow(0 0 18px rgba(255,125,143,.55))}70%{transform:translateX(-2px)}}
 @keyframes fhArenaEnemyProwl{0%,100%{transform:translateX(0)}50%{transform:translateX(-12px) scale(1.04)}}
@@ -3234,6 +3331,19 @@ html[data-layout="mobile"] .topbar .actions{order:3}
       <option value="split">Split Workstation</option>
       <option value="mobile">Mobile Stack</option>
     </select></div></div>
+    <div class="form-row"><label>Color vibe</label><div class="val"><select id="cfg-color">
+      <option value="mint">Mint focus</option>
+      <option value="sapphire">Sapphire</option>
+      <option value="violet">Violet</option>
+      <option value="rose">Rose</option>
+      <option value="amber">Amber</option>
+      <option value="mono">Mono calm</option>
+      <option value="custom">Custom</option>
+    </select></div></div>
+    <div class="form-row color-custom-row"><label>Custom accents</label><div class="val color-inputs">
+      <input type="color" id="cfg-accent" aria-label="Primary custom accent" value="#66e3c4">
+      <input type="color" id="cfg-accent2" aria-label="Secondary custom accent" value="#7aa7ff">
+    </div></div>
     <hr>
     <h4 style="margin:.25rem 0 .25rem;font-size:.82rem;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.1em">Reward rules</h4>
     <div class="form-row"><label title="Sessions shorter than this earn no XP, loot, or achievements">Minimum session length for rewards (minutes)</label><div class="val"><input type="number" id="cfg-min-reward" min="1" max="15" step="1"></div></div>
@@ -3404,6 +3514,37 @@ html[data-layout="mobile"] .topbar .actions{order:3}
   </div>
 </div>
 
+<div class="modal-backdrop" id="session-edit-modal" hidden>
+  <div class="modal minute-edit-modal session-edit-modal" role="dialog" aria-modal="true" aria-labelledby="session-edit-title">
+    <button class="close" data-close="session-edit-modal" aria-label="Close">✕</button>
+    <h3 id="session-edit-title">Edit session minutes</h3>
+    <div class="minute-task-name" id="session-edit-name">Focus session</div>
+    <div class="minute-edit-totals">
+      <div class="minute-edit-stat"><b id="session-edit-current">0m</b><span>Current</span></div>
+      <div class="minute-edit-stat"><b id="session-edit-new">0m</b><span>After edit</span></div>
+    </div>
+    <p class="muted" style="font-size:.8rem">Use the sign toggle for quick +/− corrections. This recalculates task minutes, daily totals, XP and eligible loot safely.</p>
+    <div class="minute-quick" aria-label="Quick session minute corrections">
+      <button type="button" data-session-delta="-30">-30</button>
+      <button type="button" data-session-delta="-15">-15</button>
+      <button type="button" data-session-delta="-5">-5</button>
+      <button type="button" data-session-delta="5">+5</button>
+      <button type="button" data-session-delta="15">+15</button>
+      <button type="button" data-session-delta="30">+30</button>
+    </div>
+    <div class="minute-custom">
+      <label>Custom correction (+/- minutes)
+        <div class="minute-custom-row">
+          <button type="button" class="sign-toggle" id="session-edit-sign" aria-label="Flip sign of session correction">+</button>
+          <input id="session-edit-delta" type="text" inputmode="numeric" pattern="-?[0-9]*" placeholder="e.g. 20 or -10">
+        </div>
+      </label>
+      <button type="button" class="primary" id="btn-session-edit-apply">Save edit</button>
+    </div>
+    <div class="session-edit-preview" id="session-edit-preview">No correction entered yet.</div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="task-switch-modal" hidden>
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="task-switch-title">
     <button class="close" data-close="task-switch-modal" aria-label="Close">✕</button>
@@ -3439,7 +3580,9 @@ html[data-layout="mobile"] .topbar .actions{order:3}
         <div class="avatar avatar-preview" id="character-avatar-preview" aria-hidden="true"></div>
         <div class="character-preview-name" id="character-preview-name">Hero</div>
         <div class="character-preview-class" id="character-preview-class">Knight</div>
-        <div class="character-preview-note">Live preview</div>
+        <div class="character-preview-note">Live 3D studio preview</div>
+        <div class="model-badges" id="character-model-badges" aria-label="Equipped model summary"></div>
+        <div class="model-tip">Drag the model to rotate. Gear, mounts and pets preview here.</div>
       </aside>
       <div class="character-editor">
         <div class="character-identity">
@@ -3480,6 +3623,17 @@ html[data-layout="mobile"] .topbar .actions{order:3}
       <button type="button" data-layout-choice="dock" data-layout-icon="✦"><b>Command Dock</b><span>Controls float on the right while the timer becomes the center stage.</span></button>
       <button type="button" data-layout-choice="split" data-layout-icon="⇄"><b>Split Workstation</b><span>Tasks pin to the left, timer/hero stay on the right, rewards span underneath.</span></button>
       <button type="button" data-layout-choice="mobile" data-layout-icon="▰"><b>Mobile Stack</b><span>Single-column flow with large touch navigation and less cramped controls.</span></button>
+    </div>
+    <hr>
+    <h4 style="margin:.25rem 0 .25rem;font-size:.82rem;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.1em">Color vibe</h4>
+    <div class="color-choice-grid" aria-label="App color selection">
+      <button type="button" data-color-choice="mint" style="--chip-a:#66e3c4;--chip-b:#8b9cff"><span class="color-dot"></span><b>Mint focus</b><span>clean + bright</span></button>
+      <button type="button" data-color-choice="sapphire" style="--chip-a:#38bdf8;--chip-b:#6366f1"><span class="color-dot"></span><b>Sapphire</b><span>cool command</span></button>
+      <button type="button" data-color-choice="violet" style="--chip-a:#a78bfa;--chip-b:#f0abfc"><span class="color-dot"></span><b>Violet</b><span>arcane studio</span></button>
+      <button type="button" data-color-choice="rose" style="--chip-a:#fb7185;--chip-b:#f9a8d4"><span class="color-dot"></span><b>Rose</b><span>warm energy</span></button>
+      <button type="button" data-color-choice="amber" style="--chip-a:#f59e0b;--chip-b:#fde68a"><span class="color-dot"></span><b>Amber</b><span>golden grind</span></button>
+      <button type="button" data-color-choice="mono" style="--chip-a:#94a3b8;--chip-b:#e2e8f0"><span class="color-dot"></span><b>Mono calm</b><span>low noise</span></button>
+      <button type="button" data-color-choice="custom" style="--chip-a:var(--accent);--chip-b:var(--accent-2)"><span class="color-dot"></span><b>Custom</b><span>settings colors</span></button>
     </div>
   </div>
 </div>
@@ -3605,6 +3759,7 @@ const DEFAULTS = {
   settings: {
     focusMin: 25, shortMin: 5, longMin: 15, cyclesBeforeLong: 4,
     autoStart: false, tick: false, chime: true, notif: false, theme: "dark", layout: "dashboard",
+    colorPreset: "mint", customAccent: "#66e3c4", customAccent2: "#7aa7ff",
     gameMode: false, gameModeGraceMs: 2500, /* v9: Game Mode — leaving the app mid-session resets the running timer (no credit) */
     /* v4 additions */
     minRewardMinutes: 5,
@@ -6243,7 +6398,15 @@ function openSessionEndEditTime(sessionId){
       <button type="button" data-delta="15">+15m</button>
       <button type="button" data-zero="1">Zero out</button>
     </div>
-    <!-- v9: removed the duplicate +/- adjuster. The exact-total field above plus the quick buttons cover both setting the total and nudging up/down. -->
+    <div class="minute-custom">
+      <label>Custom correction (+/- minutes)
+        <div class="minute-custom-row">
+          <button type="button" class="sign-toggle" id="xp-edit-sign" aria-label="Flip sign of session correction">+</button>
+          <input id="xp-edit-delta" type="text" inputmode="numeric" pattern="-?[0-9]*" placeholder="e.g. 20 or -10">
+        </div>
+      </label>
+      <button type="button" id="xp-edit-apply-delta">Apply correction</button>
+    </div>
 
     <div class="preview" id="xp-edit-preview"></div>
     <div class="err" id="xp-edit-err" hidden></div>
@@ -6297,7 +6460,35 @@ function openSessionEndEditTime(sessionId){
       err.hidden = true; refreshPreview();
     };
   });
-  /* v9: duplicate +/- delta adjuster removed (see note in the editor markup above). */
+  const deltaInput = editor.querySelector("#xp-edit-delta");
+  const deltaSign = editor.querySelector("#xp-edit-sign");
+  function refreshDeltaSign(){
+    if (!deltaInput || !deltaSign) return;
+    const v = String(deltaInput.value || "").trim();
+    deltaSign.textContent = v.startsWith("-") ? "−" : "+";
+  }
+  if (deltaSign && deltaInput){
+    deltaSign.addEventListener("click", ()=>{
+      const v = String(deltaInput.value || "").trim();
+      if (v.startsWith("-")) deltaInput.value = v.slice(1);
+      else if (v && v !== "0") deltaInput.value = "-" + v;
+      else deltaInput.value = deltaSign.textContent === "−" ? "" : "-";
+      refreshDeltaSign();
+      try { deltaInput.focus(); } catch(_){}
+    });
+    deltaInput.addEventListener("input", refreshDeltaSign);
+    editor.querySelector("#xp-edit-apply-delta")?.addEventListener("click", ()=>{
+      const d = Math.trunc(Number(deltaInput.value) || 0);
+      if (!d){ err.textContent = "Enter a non-zero correction."; err.hidden = false; return; }
+      input.value = clamp(clampInput() + d, 0, cap);
+      err.hidden = true;
+      refreshPreview();
+    });
+    deltaInput.addEventListener("keydown", e=>{
+      if (e.key === "Enter"){ e.preventDefault(); editor.querySelector("#xp-edit-apply-delta")?.click(); }
+    });
+    refreshDeltaSign();
+  }
   editor.querySelector("#xp-edit-cancel").onclick = ()=>{
     xpBreakdownEditing = false;
     const cached = showXpBreakdown._last;
@@ -9041,6 +9232,9 @@ function fillSettingsForm(){
   $("#cfg-class").value = state.hero.cls || "knight";
   $("#cfg-theme").value = s.theme || "dark";
   $("#cfg-layout").value = VALID_LAYOUTS.includes(s.layout) ? s.layout : "dashboard";
+  $("#cfg-color").value = VALID_COLOR_PRESETS.includes(s.colorPreset) ? s.colorPreset : "mint";
+  $("#cfg-accent").value = normalizeHexColor(s.customAccent, COLOR_PRESETS.custom.accent);
+  $("#cfg-accent2").value = normalizeHexColor(s.customAccent2, COLOR_PRESETS.custom.accent2);
   $("#cfg-min-reward").value = s.minRewardMinutes;
   $("#cfg-streak-cap").value = s.streakBonusCap;
   $("#cfg-combo-cap").value  = s.comboBonusCap;
@@ -9069,6 +9263,9 @@ function bindSettings(){
   bind("#cfg-class", e=>{ state.hero.cls = e.target.value; if (state.hero.appearance) state.hero.appearance.classKey = e.target.value; saveState(); renderHero(); renderAvatar(); });
   bind("#cfg-theme", e=>{ state.settings.theme = e.target.value; saveState(); applyTheme(); });
   bind("#cfg-layout", e=>setLayout(e.target.value));
+  bind("#cfg-color", e=>setColorPreset(e.target.value));
+  bind("#cfg-accent", e=>{ state.settings.customAccent = normalizeHexColor(e.target.value, COLOR_PRESETS.custom.accent); state.settings.colorPreset = "custom"; saveState(); applyTheme(); });
+  bind("#cfg-accent2", e=>{ state.settings.customAccent2 = normalizeHexColor(e.target.value, COLOR_PRESETS.custom.accent2); state.settings.colorPreset = "custom"; saveState(); applyTheme(); });
   bind("#cfg-min-reward", e=>{ state.settings.minRewardMinutes = clamp(parseInt(e.target.value||"5",10),1,15); saveState(); });
   bind("#cfg-streak-cap", e=>{ state.settings.streakBonusCap = clamp(parseInt(e.target.value||"30",10),0,200); saveState(); });
   bind("#cfg-combo-cap",  e=>{ state.settings.comboBonusCap  = clamp(parseInt(e.target.value||"50",10),0,200); saveState(); });
@@ -9508,27 +9705,103 @@ function fhArenaEnemySvg(enemy){
     <path d="M28 62 L16 70 M33 72 L27 84 M63 72 L69 84" stroke="${dark}" stroke-width="5" stroke-linecap="round"/>
   </svg>`;
 }
+function fhArenaObjectiveFor(adv){
+  const id = String(adv?.id || "Travel");
+  const map = {
+    Travel:   { id:"road",   name:"Open Road",     meta:"Route ready",    badge:"→", color:"#7dd3fc", caption:"moving toward" },
+    Rest:     { id:"camp",   name:"Safe Camp",     meta:"Recovery",       badge:"☾", color:"#fbbf24", caption:"settling beside" },
+    Hunt:     { id:"tracks", name:"Trail Signs",   meta:"Tracking only",  badge:"⌕", color:"#86efac", caption:"reading" },
+    Loot:     { id:"chest",  name:"Reward Cache",  meta:"Claim window",   badge:"✦", color:"#f59e0b", caption:"checking" },
+    Craft:    { id:"forge",  name:"Forge Bench",   meta:"Upgrade station",badge:"⚒", color:"#fb923c", caption:"working at" },
+    Meditate: { id:"orb",    name:"Focus Orb",     meta:"Calm channel",   badge:"◌", color:"#c4b5fd", caption:"breathing with" }
+  };
+  return map[id] || map.Travel;
+}
+function fhArenaObjectiveSvg(obj){
+  const c = obj.color || "#66e3c4";
+  const dark = "#0b1020";
+  const id = String(obj.id || "road");
+  if (id === "camp"){
+    return `<svg viewBox="0 0 96 96" role="img" aria-label="${escapeHtml(obj.name)} objective">
+      <ellipse cx="48" cy="84" rx="31" ry="7" fill="rgba(0,0,0,.22)"/>
+      <path d="M26 76 L38 47 M70 76 L58 47" stroke="#8b5a2b" stroke-width="6" stroke-linecap="round"/>
+      <path d="M42 74 Q36 58 48 44 Q60 58 54 74 Z" fill="${c}" stroke="${dark}" stroke-width="3"/>
+      <path d="M47 73 Q42 62 50 53 Q59 63 55 73 Z" fill="#fff7ad" opacity=".82"/>
+      <path d="M28 78 H68" stroke="#8b5a2b" stroke-width="6" stroke-linecap="round"/>
+    </svg>`;
+  }
+  if (id === "tracks"){
+    return `<svg viewBox="0 0 96 96" role="img" aria-label="${escapeHtml(obj.name)} objective">
+      <ellipse cx="48" cy="84" rx="30" ry="7" fill="rgba(0,0,0,.22)"/>
+      <path d="M18 69 Q34 50 55 41 Q70 35 82 26" fill="none" stroke="${c}" stroke-width="6" stroke-linecap="round" stroke-dasharray="4 9"/>
+      <g fill="${c}" stroke="${dark}" stroke-width="2">
+        <ellipse cx="31" cy="65" rx="7" ry="10" transform="rotate(-28 31 65)"/>
+        <ellipse cx="48" cy="54" rx="7" ry="10" transform="rotate(-28 48 54)"/>
+        <ellipse cx="66" cy="43" rx="7" ry="10" transform="rotate(-28 66 43)"/>
+      </g>
+      <circle cx="75" cy="24" r="7" fill="none" stroke="${c}" stroke-width="4"/>
+    </svg>`;
+  }
+  if (id === "chest"){
+    return `<svg viewBox="0 0 96 96" role="img" aria-label="${escapeHtml(obj.name)} objective">
+      <ellipse cx="48" cy="84" rx="30" ry="7" fill="rgba(0,0,0,.24)"/>
+      <path d="M22 44 Q22 27 48 27 Q74 27 74 44 V72 H22 Z" fill="${c}" stroke="${dark}" stroke-width="4" stroke-linejoin="round"/>
+      <path d="M22 46 H74 V72 H22 Z" fill="#7c4a1d" opacity=".72" stroke="${dark}" stroke-width="4"/>
+      <path d="M48 28 V72 M22 50 H74" stroke="#ffe8a3" stroke-width="4"/>
+      <rect x="41" y="51" width="14" height="12" rx="3" fill="#fff7ad" stroke="${dark}" stroke-width="3"/>
+      <path d="M34 22 L30 13 M61 22 L67 13 M48 19 V8" stroke="${c}" stroke-width="4" stroke-linecap="round"/>
+    </svg>`;
+  }
+  if (id === "forge"){
+    return `<svg viewBox="0 0 96 96" role="img" aria-label="${escapeHtml(obj.name)} objective">
+      <ellipse cx="48" cy="84" rx="31" ry="7" fill="rgba(0,0,0,.23)"/>
+      <path d="M23 61 H72 L62 75 H33 Z" fill="#475569" stroke="${dark}" stroke-width="4" stroke-linejoin="round"/>
+      <path d="M30 55 H66 V63 H30 Z" fill="${c}" stroke="${dark}" stroke-width="4"/>
+      <path d="M59 28 L76 45" stroke="#cbd5e1" stroke-width="8" stroke-linecap="round"/>
+      <rect x="46" y="22" width="18" height="12" rx="2" fill="${c}" stroke="${dark}" stroke-width="3" transform="rotate(42 55 28)"/>
+      <path d="M29 36 Q39 20 48 39 Q54 28 61 43 Q58 54 43 55 Q30 54 29 36Z" fill="#f97316" stroke="${dark}" stroke-width="3"/>
+    </svg>`;
+  }
+  if (id === "orb"){
+    return `<svg viewBox="0 0 96 96" role="img" aria-label="${escapeHtml(obj.name)} objective">
+      <ellipse cx="48" cy="84" rx="26" ry="7" fill="rgba(0,0,0,.20)"/>
+      <circle cx="48" cy="44" r="20" fill="${c}" stroke="${dark}" stroke-width="4"/>
+      <circle cx="48" cy="44" r="10" fill="#fff" opacity=".42"/>
+      <path d="M22 44 Q48 12 74 44 Q48 76 22 44Z" fill="none" stroke="${c}" stroke-width="4" opacity=".55"/>
+      <path d="M48 14 V5 M48 83 V73 M19 44 H9 M87 44 H77" stroke="${c}" stroke-width="4" stroke-linecap="round"/>
+    </svg>`;
+  }
+  return `<svg viewBox="0 0 96 96" role="img" aria-label="${escapeHtml(obj.name)} objective">
+    <ellipse cx="48" cy="84" rx="31" ry="7" fill="rgba(0,0,0,.22)"/>
+    <path d="M16 76 Q45 38 80 19" fill="none" stroke="${c}" stroke-width="9" stroke-linecap="round"/>
+    <path d="M23 72 Q49 45 74 25" fill="none" stroke="#fff" stroke-width="3" opacity=".42" stroke-dasharray="7 7"/>
+    <path d="M65 20 L82 18 L76 35" fill="none" stroke="${c}" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="28" cy="66" r="5" fill="${c}" stroke="${dark}" stroke-width="3"/>
+  </svg>`;
+}
 function renderEncounterStage(){
   const stage = $("#encounter-stage"); if (!stage || !state) return;
   const adv = currentAdventureSpec ? currentAdventureSpec() : { id:"Travel", label:"Travel", sym:"◇", scene:"travelling" };
   const scene = adv.scene || "resting";
-  const enemy = fhArenaEnemyFor(scene);
+  const combat = adv.id === "Fight" || scene === "fighting";
+  const target = combat ? fhArenaEnemyFor(scene) : fhArenaObjectiveFor(adv);
   const cls = CLASSES[state.hero?.cls] || CLASSES.knight;
   stage.setAttribute("data-scene", scene);
+  stage.setAttribute("data-combat", combat ? "1" : "0");
   const heroModel = $("#arena-hero-model"); if (heroModel) heroModel.innerHTML = fhArenaHeroSvg();
-  const enemyModel = $("#arena-enemy-model"); if (enemyModel) enemyModel.innerHTML = fhArenaEnemySvg(enemy);
+  const enemyModel = $("#arena-enemy-model"); if (enemyModel) enemyModel.innerHTML = combat ? fhArenaEnemySvg(target) : fhArenaObjectiveSvg(target);
   const heroName = $("#arena-hero-name"); if (heroName) heroName.textContent = state.hero?.name || "Hero";
   const heroMeta = $("#arena-hero-meta"); if (heroMeta) heroMeta.textContent = `${cls.name} · Lv ${state.hero?.level || 1}`;
-  const enemyName = $("#arena-enemy-name"); if (enemyName) enemyName.textContent = enemy.name;
-  const enemyMeta = $("#arena-enemy-meta"); if (enemyMeta) enemyMeta.textContent = `${enemy.boss ? "Boss · " : ""}Lv ${enemy.level || 1}`;
-  const vs = $("#arena-vs"); if (vs) vs.textContent = (scene === "looting") ? "✦" : (scene === "travelling" ? "→" : "VS");
+  const enemyName = $("#arena-enemy-name"); if (enemyName) enemyName.textContent = target.name;
+  const enemyMeta = $("#arena-enemy-meta"); if (enemyMeta) enemyMeta.textContent = combat ? `${target.boss ? "Boss · " : ""}Lv ${target.level || 1}` : target.meta;
+  const vs = $("#arena-vs"); if (vs) vs.textContent = combat ? "VS" : (target.badge || "✦");
   const caption = $("#arena-caption");
   if (caption){
     const running = !!state.timer?.running;
     const actionLabel = `${adv.sym || "◇"} ${adv.label || adv.id}`;
     caption.textContent = running
-      ? `${actionLabel}: ${scene === "fighting" ? "trading blows with" : scene === "hunting" ? "tracking" : scene === "looting" ? "checking rewards near" : scene === "travelling" ? "moving past" : "focusing beside"} ${enemy.name}.`
-      : `${actionLabel} ready — start a session and the encounter animates with your run.`;
+      ? (combat ? `${actionLabel}: trading blows with ${target.name}.` : `${actionLabel}: ${target.caption || "focusing with"} ${target.name}.`)
+      : `${actionLabel} ready — start a session and this scene animates with your run.`;
   }
 }
 function pickMonster(level){
@@ -9564,11 +9837,11 @@ function recordEncounter(monsterId, {silent=false} = {}){
 }
 function maybeRecordActionEncounter(){
   const a = currentAdventureActionId();
-  if (a !== "Fight" && a !== "Hunt") return null;
+  if (a !== "Fight") return null;
   const m = pickMonster(state.hero.level);
   if (!m) return null;
   recordEncounter(m[1], {silent:true});
-  logBattle(`${ACTION_BY_ID[a].sym} Encountered ${m[3]}.`, a === "Hunt" ? "loot" : "good");
+  logBattle(`${ACTION_BY_ID[a].sym} Encountered ${m[3]}.`, "good");
   return m;
 }
 function renderBestiary(){
@@ -10023,20 +10296,92 @@ function renderEditableSessionRows(){
     return`<div class="session-row ${r.edited?"edited":""}"><div class="ttl">${escapeHtml(task?.emoji||"⏱️")} ${escapeHtml(task?.name||r.action||"Focus")} <span class="muted">${escapeHtml(dt)}</span></div><div class="min">${r.minutes|0}m</div>${editable?`<button class="edit-btn" data-edit-session="${escapeHtml(r.id)}">Edit</button>`:`<span class="muted" style="font-size:.7rem">locked</span>`}</div>`;
   }).join("")}</div>`;
 }
+let sessionEditModalId = null;
+function sessionEditModalRecord(){
+  return (state.sessionsLog||[]).find(r=>r && r.id === sessionEditModalId) || null;
+}
+function signedSessionEditDelta(){
+  return Math.trunc(Number($("#session-edit-delta")?.value) || 0);
+}
+function setSessionEditDelta(delta){
+  const inp = $("#session-edit-delta");
+  if (!inp) return;
+  inp.value = String(delta || "");
+  refreshSessionEditSign();
+  renderSessionEditModal();
+}
+function refreshSessionEditSign(){
+  const btn = $("#session-edit-sign"), inp = $("#session-edit-delta");
+  if (!btn || !inp) return;
+  btn.textContent = String(inp.value || "").trim().startsWith("-") ? "−" : "+";
+}
+function openSessionEditModal(sessionId){
+  const rec = (state.sessionsLog||[]).find(r=>r && r.id === sessionId);
+  if (!canEditSessionRecord(rec)) return;
+  sessionEditModalId = sessionId;
+  const inp = $("#session-edit-delta");
+  if (inp) inp.value = "";
+  refreshSessionEditSign();
+  renderSessionEditModal();
+  openModal("session-edit-modal");
+}
+function renderSessionEditModal(){
+  const rec = sessionEditModalRecord();
+  const apply = $("#btn-session-edit-apply");
+  if (!rec){
+    if (apply) apply.disabled = true;
+    return;
+  }
+  const task = rec.taskId ? state.tasks.find(t=>t.id === rec.taskId) : null;
+  const current = Math.max(0, rec.minutes|0);
+  const cap = sessionEditCap(Math.max(current, rec.originalMinutes|0));
+  const delta = signedSessionEditDelta();
+  const next = clamp(current + delta, 0, cap);
+  const name = $("#session-edit-name");
+  const cur = $("#session-edit-current");
+  const n = $("#session-edit-new");
+  const preview = $("#session-edit-preview");
+  if (name) name.textContent = `${task?.emoji || "⏱️"} ${task?.name || rec.action || "Focus"} · ${rec.at ? new Date(rec.at).toLocaleString() : "session"}`.trim();
+  if (cur) cur.textContent = `${current}m`;
+  if (n) n.textContent = `${next}m`;
+  if (apply) apply.disabled = !delta || next === current;
+  if (preview){
+    if (!delta || next === current){
+      preview.innerHTML = `No correction entered. Safety max for this session is <b>${cap}m</b>.`;
+    } else {
+      const signed = delta > 0 ? `+${delta}` : `−${Math.abs(delta)}`;
+      const info = sessionEditXpPreview(rec, next);
+      preview.innerHTML = `Will apply <b>${signed}m</b> and save this session as <b>${next}m</b>. Awarded XP after edit: <b>${info.xpAfter} XP</b>.`;
+    }
+  }
+}
+function applySessionEditFromModal(){
+  const rec = sessionEditModalRecord();
+  if (!canEditSessionRecord(rec)) return;
+  const current = Math.max(0, rec.minutes|0);
+  const cap = sessionEditCap(Math.max(current, rec.originalMinutes|0));
+  const delta = signedSessionEditDelta();
+  const next = clamp(current + delta, 0, cap);
+  if (!delta || next === current){
+    toast("Enter a non-zero minute correction.", "warn");
+    return;
+  }
+  const result = applySessionEdit(rec.id, next);
+  if(!result.ok){
+    toast(`Edit not applied: ${result.reason}`, "warn");
+  } else if(result.clamped){
+    toast(`Capped to ${result.newMinutes}m (safety max ${result.newMinutesCap}m).`, "warn");
+  } else {
+    toast(`Session corrected: ${result.oldMinutes}m → ${result.newMinutes}m`, "good");
+  }
+  closeModal("session-edit-modal");
+  renderAnalytics();
+}
 function bindSessionEditButtons(host){
   if(!host)return;
   host.querySelectorAll("[data-edit-session]").forEach(btn=>{
     btn.onclick=()=>{
-      const rec=(state.sessionsLog||[]).find(r=>r&&r.id===btn.dataset.editSession);
-      if(!rec)return;
-      const editCap=sessionEditCap(Math.max(rec.minutes|0, rec.originalMinutes|0));
-      const ans=prompt(`Set minutes for this session (0–${editCap}). You can adjust it up or down.`,String(rec.minutes|0));
-      if(ans==null)return;
-      const result=applySessionEdit(rec.id,Number(ans));
-      if(!result.ok)toast(`Edit not applied: ${result.reason}`,"warn");
-      else if(result.clamped)toast(`Capped to ${result.newMinutes}m (safety max ${result.newMinutesCap}m) — your ${result.requested}m was out of range`,"warn");
-      else toast(`Session corrected to ${result.newMinutes}m`,"good");
-      renderAnalytics();
+      openSessionEditModal(btn.dataset.editSession);
     };
   });
 }
@@ -10102,6 +10447,16 @@ const THEME_LABELS = {
   dark:"Midnight", light:"Paper", auto:"Auto (system)",
   forest:"Forest", ocean:"Ocean", ember:"Sunset", cyber:"Neon", minimal:"Minimal"
 };
+const COLOR_PRESETS = {
+  mint:     { label:"Mint focus", accent:"#66e3c4", accent2:"#8b9cff" },
+  sapphire: { label:"Sapphire",   accent:"#38bdf8", accent2:"#6366f1" },
+  violet:   { label:"Violet",     accent:"#a78bfa", accent2:"#f0abfc" },
+  rose:     { label:"Rose",       accent:"#fb7185", accent2:"#f9a8d4" },
+  amber:    { label:"Amber",      accent:"#f59e0b", accent2:"#fde68a" },
+  mono:     { label:"Mono calm",  accent:"#94a3b8", accent2:"#e2e8f0" },
+  custom:   { label:"Custom",     accent:"#66e3c4", accent2:"#7aa7ff" }
+};
+const VALID_COLOR_PRESETS = Object.keys(COLOR_PRESETS);
 const VALID_LAYOUTS = ["dashboard","rail","deck","dock","split","mobile","focus","compact","zen","arcade","cockpit"];
 const PRIMARY_LAYOUTS = ["dashboard","rail","deck","dock","split","mobile"];
 const LAYOUT_LABELS = {
@@ -10117,6 +10472,43 @@ function applyTheme(){
   // Update the mobile <meta name="theme-color"> bar so the browser chrome blends in.
   const bg = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
   if (bg){ document.querySelectorAll('meta[name="theme-color"]').forEach(m=>m.setAttribute("content", bg)); }
+  applyColorPreset();
+}
+function normalizeHexColor(v, fallback){
+  const s = String(v || "").trim();
+  return /^#[0-9a-f]{6}$/i.test(s) ? s : fallback;
+}
+function hexToRgbTriplet(hex){
+  const h = normalizeHexColor(hex, "#8b9cff").slice(1);
+  const n = parseInt(h, 16);
+  return `${(n >> 16) & 255},${(n >> 8) & 255},${n & 255}`;
+}
+function applyColorPreset(){
+  if (!state || !state.settings) return;
+  let key = state.settings.colorPreset || "mint";
+  if (!VALID_COLOR_PRESETS.includes(key)) key = "mint";
+  const preset = COLOR_PRESETS[key] || COLOR_PRESETS.mint;
+  const accent = key === "custom" ? normalizeHexColor(state.settings.customAccent, preset.accent) : preset.accent;
+  const accent2 = key === "custom" ? normalizeHexColor(state.settings.customAccent2, preset.accent2) : preset.accent2;
+  const root = document.documentElement;
+  root.setAttribute("data-color", key);
+  root.style.setProperty("--accent", accent);
+  root.style.setProperty("--accent-2", accent2);
+  root.style.setProperty("--accent-rgb", hexToRgbTriplet(accent));
+  root.style.setProperty("--accent-2-rgb", hexToRgbTriplet(accent2));
+  $$("[data-color-choice]").forEach(b=>b.setAttribute("aria-pressed", b.dataset.colorChoice === key ? "true" : "false"));
+  const select = $("#cfg-color");
+  if (select && select.value !== key) select.value = key;
+  const a = $("#cfg-accent"), b = $("#cfg-accent2");
+  if (a && a.value !== normalizeHexColor(state.settings.customAccent, COLOR_PRESETS.custom.accent)) a.value = normalizeHexColor(state.settings.customAccent, COLOR_PRESETS.custom.accent);
+  if (b && b.value !== normalizeHexColor(state.settings.customAccent2, COLOR_PRESETS.custom.accent2)) b.value = normalizeHexColor(state.settings.customAccent2, COLOR_PRESETS.custom.accent2);
+}
+function setColorPreset(key){
+  if (!VALID_COLOR_PRESETS.includes(key)) return;
+  state.settings.colorPreset = key;
+  saveState();
+  applyTheme();
+  toast(`Color: ${COLOR_PRESETS[key].label}`);
 }
 function toggleTheme(){
   // Cycle through every preset (Auto sits at the end).
@@ -10377,6 +10769,19 @@ function renderCharacterPanel(){
       fh3dUpdate();
     }
   }
+  const badges = $("#character-model-badges");
+  if (badges){
+    const eq = state.hero.equipped || {};
+    const badgeRows = [
+      ["Hero", (CLASSES[state.hero.cls] || CLASSES.knight).name],
+      ["Weapon", eq.weapon?.lootId ? lootById(eq.weapon.lootId)?.[1] : "Unarmed"],
+      ["Armor", eq.armor?.lootId ? lootById(eq.armor.lootId)?.[1] : "Base armor"],
+      ["Mount", eq.mount?.lootId ? lootById(eq.mount.lootId)?.[1] : "On foot"],
+      ["Helmet", eq.helmet?.lootId ? lootById(eq.helmet.lootId)?.[1] : "Style helmet"],
+      ["Pet", eq.pet?.lootId ? lootById(eq.pet.lootId)?.[1] : "No pet"]
+    ];
+    badges.innerHTML = badgeRows.map(([label,value])=>`<div class="model-badge"><span>${escapeHtml(label)}</span><b>${escapeHtml(value || "None")}</b></div>`).join("");
+  }
   $$("[data-character-tab]").forEach(b=>b.setAttribute("aria-pressed", b.dataset.characterTab === selectedCharacterTab ? "true" : "false"));
   const lookPanel = $("#character-look-panel");
   const gearPanel = $("#character-gear-panel");
@@ -10538,7 +10943,23 @@ function bindDesignShell(){
   })();
   $("#btn-minute-stats")?.addEventListener("click", ()=>openModal("analytics-modal"));
   $("#btn-minute-ledger")?.addEventListener("click", ()=>{ closeModal("task-minutes-modal"); openProgressPanel("ledger"); });
+  $$("[data-session-delta]").forEach(b=>b.addEventListener("click", ()=>setSessionEditDelta((signedSessionEditDelta() || 0) + (Number(b.dataset.sessionDelta)||0))));
+  $("#btn-session-edit-apply")?.addEventListener("click", applySessionEditFromModal);
+  $("#session-edit-delta")?.addEventListener("input", ()=>{ refreshSessionEditSign(); renderSessionEditModal(); });
+  $("#session-edit-delta")?.addEventListener("keydown", e=>{ if (e.key === "Enter"){ e.preventDefault(); applySessionEditFromModal(); } });
+  $("#session-edit-sign")?.addEventListener("click", ()=>{
+    const inp = $("#session-edit-delta");
+    if (!inp) return;
+    const v = String(inp.value || "").trim();
+    if (v.startsWith("-")) inp.value = v.slice(1);
+    else if (v && v !== "0") inp.value = "-" + v;
+    else inp.value = $("#session-edit-sign")?.textContent === "−" ? "" : "-";
+    refreshSessionEditSign();
+    renderSessionEditModal();
+    try { inp.focus(); } catch(_){}
+  });
   $$("[data-layout-choice]").forEach(b=>b.addEventListener("click", ()=>{ setLayout(b.dataset.layoutChoice); if (b.closest("#variants-modal")) closeModal("variants-modal"); }));
+  $$("[data-color-choice]").forEach(b=>b.addEventListener("click", ()=>{ setColorPreset(b.dataset.colorChoice); }));
   $$(".app-nav [data-nav-target]").forEach(b=>b.addEventListener("click", ()=>scrollToSection(b.dataset.navTarget)));
   $$(".app-nav [data-nav-action='all-tasks']").forEach(b=>b.addEventListener("click", openAllTasksSheet));
   const claimSync = e=>setClaimMinutes(e.target.value);

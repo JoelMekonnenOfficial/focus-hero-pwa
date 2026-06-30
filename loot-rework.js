@@ -797,7 +797,9 @@
     var heroStats = lrEquippedStats(s.hero);
     var heroLevel = (s.hero && s.hero.level)|0 || 1;
     var baseHP = (s.hero && s.hero.hp)|0 || 100;
-    var combatActions = { Fight:true, Hunt:true };
+    /* v9.8: only the Fight action runs the combat/encounter engine. Hunt is a
+       quiet tracking source for hunt-tagged loot, not a mandatory animal fight. */
+    var combatActions = { Fight:true };
     var isCombat = !!combatActions[action];
     var encounters = [];
     var drops = [];

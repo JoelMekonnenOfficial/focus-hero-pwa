@@ -1,9 +1,9 @@
 /* ============================================================================
- * Focus Hero — FH3D v4 : realistic-heroic 3D character + per-creature mounts
+ * Focus Hero — FH3D v5 : polished 3D studio, class signatures, gear silhouettes
  * Pure renderer (reads a plain spec via FH3D.sync; never touches app state).
- * v4: realistic (non-chibi) proportions, clean connected geometry, PBR + IBL,
- * and PER-FAMILY mounts (bird=eagle, dragon, equine, feline, canine, skiff) so
- * the equipped creature actually matches.
+ * v5: keeps the realistic proportions/PBR base, then adds class-specific model
+ * signatures, distinct weapon silhouettes, aquatic/insect mounts, and a richer
+ * studio presentation so equipped gear/mounts read like actual model changes.
  * SPEC: { cls, className, palette, level, running,
  *   colors:{skin,hair,eye,armorMid,armorHigh,armorDark,accent,cloak},
  *   traits:{race,body,hair,helm,face,eyeShape},
@@ -12,7 +12,7 @@
 (function () {
   "use strict";
   var FH3D = (window.FH3D = window.FH3D || {});
-  FH3D.available = false; FH3D.version = "fh3d-4.0";
+  FH3D.available = false; FH3D.version = "fh3d-5.0";
   var THREE = window.THREE;
   function webglSupported(){ try{ if(!THREE) return false; var c=document.createElement("canvas"); return !!(c.getContext("webgl2")||c.getContext("webgl")||c.getContext("experimental-webgl")); }catch(e){ return false; } }
   function col(hex, fb){ try{ return new THREE.Color(hex||fb||"#888"); }catch(e){ return new THREE.Color(fb||"#888"); } }
@@ -82,6 +82,8 @@
     m.eyeWhite=s({ color:0xf6f9ff, roughness:0.3 });
     m.dark=s({ color:0x12161e, roughness:0.45 });
     m.mouth=s({ color:0x7a3b33, roughness:0.6 });
+    var energyC=col(c.accent,"#8b9cff");
+    m.energy=s({ color:energyC, roughness:0.22, metalness:0.12, emissive:energyC.clone().multiplyScalar(0.45), envMapIntensity:1.25, transparent:true, opacity:0.92 });
     return m;
   }
 
@@ -139,6 +141,7 @@
     addArmorGear(rig, spec, mats, torso, bw);
     addHelmetGear(headG, spec, mats, HR);
     addWeapon(rig.userData.armR, spec, mats);
+    addClassSignature(rig, torso, headG, spec, mats, bw, HR);
     return rig;
   }
   function makeLeg(mats){
@@ -198,14 +201,61 @@
 
   function gMetal(g,fb){ var m=new THREE.MeshStandardMaterial({ color:col(g&&g.metal,fb||"#cbd5e1"), roughness:0.28, metalness:0.9, envMapIntensity:1.25 }); R.disposables.push(m); return m; }
   function gGem(g,fb){ var c=col(g&&g.gem,fb||"#22d3ee"); var m=new THREE.MeshStandardMaterial({ color:c, roughness:0.12, metalness:0.1, emissive:c.clone().multiplyScalar(0.5) }); R.disposables.push(m); return m; }
+  function addClassSignature(rig, torso, headG, spec, mats, bw, HR){
+    var key=String(spec.cls||"knight").toLowerCase();
+    if (/monk/.test(key)){
+      var halo=M(new THREE.TorusGeometry(HR*1.22,0.012,8,36), mats.energy); halo.rotation.x=Math.PI/2; halo.position.y=HR*1.0; headG.add(halo);
+      var core=M(new THREE.TorusGeometry(0.26*bw,0.012,8,36), mats.energy); core.rotation.x=Math.PI/2; core.position.set(0,0.02,0.21*bw); torso.add(core);
+      [-1,1].forEach(function(sg){ var bead=M(new THREE.SphereGeometry(0.035,10,8), mats.energy); bead.position.set(0.27*sg,1.02,0.18); rig.add(bead); });
+    } else if (/alchemist/.test(key)){
+      var glass=new THREE.MeshStandardMaterial({ color:0x9ff3ff, roughness:0.08, metalness:0.0, transparent:true, opacity:0.62, emissive:0x164b5a, envMapIntensity:1.4 }); R.disposables.push(glass);
+      [-1,0,1].forEach(function(n){ var vial=M(new THREE.CylinderGeometry(0.026,0.026,0.16,10), glass); vial.position.set((n*0.07),-0.18,0.22*bw); vial.rotation.z=n*0.15; torso.add(vial); var cork=M(new THREE.CylinderGeometry(0.02,0.022,0.025,8), mats.leather); cork.position.set(n*0.07,-0.09,0.22*bw); torso.add(cork); });
+      var satchel=M(new THREE.BoxGeometry(0.16,0.13,0.08), mats.leather); satchel.position.set(-0.28*bw,1.04,0.08); rig.add(satchel);
+    } else if (/sentinel|knight|warrior/.test(key)){
+      var shield=M(new THREE.CylinderGeometry(0.22*bw,0.22*bw,0.055,6), mats.armorHi); shield.rotation.x=Math.PI/2; shield.rotation.z=Math.PI/6; shield.position.set(0,1.27,-0.28*bw); rig.add(shield);
+      var boss=M(new THREE.OctahedronGeometry(0.055,0), mats.trim); boss.position.set(0,1.27,-0.32*bw); rig.add(boss);
+    } else if (/shadow/.test(key)){
+      var cres=M(new THREE.TorusGeometry(0.2,0.018,8,36), mats.energy); cres.position.set(-0.18*bw,1.5,-0.08); cres.rotation.set(0.2,0.1,0.3); rig.add(cres);
+      var cut=M(new THREE.SphereGeometry(0.16,16,12), mats.dark); cut.position.set(-0.11*bw,1.53,-0.055); rig.add(cut);
+      var shard=M(new THREE.OctahedronGeometry(0.045,0), mats.energy); shard.position.set(0.25*bw,1.38,0.14); rig.add(shard);
+    } else if (/ranger|druid/.test(key)){
+      var quiver=M(new THREE.CylinderGeometry(0.055,0.065,0.42,10), mats.leather); quiver.position.set(-0.25*bw,1.25,-0.2); quiver.rotation.z=-0.35; rig.add(quiver);
+      for(var i=0;i<3;i++){ var arr=M(new THREE.CylinderGeometry(0.006,0.006,0.36,6), mats.trim); arr.position.set(-0.29*bw+i*0.026,1.45,-0.18); arr.rotation.z=-0.35; rig.add(arr); }
+    } else if (/cleric|mage|bard/.test(key)){
+      var sig=M(new THREE.TorusGeometry(HR*0.78,0.01,8,30), mats.energy); sig.position.set(0,HR*1.03,-0.02); sig.rotation.x=Math.PI/2; headG.add(sig);
+    }
+  }
+  function weaponKind(id){
+    id=String(id||"").toLowerCase();
+    if (/staff|scepter|orb|lute|quill/.test(id)) return "staff";
+    if (/hammer|pick|axe|cudgel/.test(id)) return "heavy";
+    if (/bow|boomerang|compass|trident/.test(id)) return "ranged";
+    if (/dagger|dual|blade|sword|shortsword|chronoblade|voidblade/.test(id)) return "blade";
+    return "blade";
+  }
   function addWeapon(armR, spec, mats){
     var w=spec.equipped&&spec.equipped.weapon; if(!armR||!w) return;
-    var metal=gMetal(w,"#dde7f2"), gem=gGem(w,"#9fd8ff"); var s=new THREE.Group();
-    var blade=M(new THREE.CylinderGeometry(0.016,0.04,0.56,4), metal); blade.position.y=0.36; blade.rotation.y=Math.PI/4; s.add(blade);
-    var tip=M(new THREE.ConeGeometry(0.04,0.12,4), metal); tip.position.y=0.68; tip.rotation.y=Math.PI/4; s.add(tip);
-    var guard=M(new THREE.BoxGeometry(0.2,0.035,0.04), mats.trim); guard.position.y=0.07; s.add(guard);
-    var grip=M(new THREE.CylinderGeometry(0.02,0.02,0.14,8), mats.leather); grip.position.y=-0.02; s.add(grip);
-    var pom=M(new THREE.SphereGeometry(0.035,10,8), gem); pom.position.y=-0.1; s.add(pom);
+    var metal=gMetal(w,"#dde7f2"), gem=gGem(w,"#9fd8ff"); var s=new THREE.Group(), kind=weaponKind(w.id);
+    var grip=M(new THREE.CylinderGeometry(0.02,0.02,0.16,8), mats.leather); grip.position.y=-0.02; s.add(grip);
+    if (kind==="staff"){
+      var staff=M(new THREE.CylinderGeometry(0.018,0.018,0.78,10), mats.leather); staff.position.y=0.28; s.add(staff);
+      var orb=M(new THREE.SphereGeometry(0.07,18,14), gem); orb.position.y=0.72; s.add(orb);
+      var halo=M(new THREE.TorusGeometry(0.09,0.008,8,26), metal); halo.position.y=0.72; halo.rotation.x=Math.PI/2; s.add(halo);
+    } else if (kind==="heavy"){
+      var haft=M(new THREE.CylinderGeometry(0.018,0.022,0.62,8), mats.leather); haft.position.y=0.25; s.add(haft);
+      var head=M(new THREE.BoxGeometry(0.18,0.12,0.11), metal); head.position.y=0.58; head.rotation.z=0.08; s.add(head);
+      var spike=M(new THREE.ConeGeometry(0.045,0.13,6), gem); spike.position.y=0.7; s.add(spike);
+    } else if (kind==="ranged"){
+      var bow=M(new THREE.TorusGeometry(0.22,0.012,8,32,Math.PI*1.22), metal); bow.position.y=0.36; bow.rotation.z=Math.PI/2.15; s.add(bow);
+      var string=M(new THREE.CylinderGeometry(0.004,0.004,0.52,5), mats.energy); string.position.y=0.36; string.position.x=-0.12; s.add(string);
+      var arrow=M(new THREE.CylinderGeometry(0.007,0.007,0.48,6), gem); arrow.position.y=0.36; arrow.rotation.z=Math.PI/2; s.add(arrow);
+    } else {
+      var blade=M(new THREE.CylinderGeometry(0.016,0.04,0.56,4), metal); blade.position.y=0.36; blade.rotation.y=Math.PI/4; s.add(blade);
+      var tip=M(new THREE.ConeGeometry(0.04,0.12,4), metal); tip.position.y=0.68; tip.rotation.y=Math.PI/4; s.add(tip);
+      var guard=M(new THREE.BoxGeometry(/dual|dagger/.test(String(w.id||""))?0.15:0.22,0.035,0.04), mats.trim); guard.position.y=0.07; s.add(guard);
+      if (/dual/.test(String(w.id||""))){ var off=blade.clone(); off.position.x=-0.055; off.position.y=0.3; off.scale.setScalar(0.72); s.add(off); }
+    }
+    var pom=M(new THREE.SphereGeometry(0.035,10,8), gem); pom.position.y=-0.11; s.add(pom);
     s.position.set(0,-0.66,0.04); s.rotation.x=-0.12; armR.add(s);
   }
   function addHelmetGear(headG, spec, mats, HR){
@@ -239,6 +289,8 @@
     var det=s({ color:col(cs[2]), roughness:0.32, metalness:0.5, emissive:col(cs[2]).multiplyScalar(0.12), envMapIntensity:1.0 });
     if (fam==="bird" || /eagle|hawk|owl|raven|phoenix|roc|falcon|wing/.test(id)) return buildBird(body,acc,det,s);
     if (fam==="dragon" || /dragon|wyrm|drake|wyvern/.test(id)) return buildDragon(body,acc,det,s);
+    if (fam==="aquatic" || /shark|dolphin|whale|jelly|serpent|turtle|croc|otter|tide|tides/.test(id)) return buildAquatic(body,acc,det,s,id);
+    if (fam==="insect" || /moth|beetle|mantis|spider|scorpion|bee|wasp/.test(id)) return buildInsect(body,acc,det,s,id);
     if (fam==="elemental" || id==="void_skiff" || /skiff|orb|elemental|spirit|wisp/.test(id)) return buildSkiff(acc,det);
     var panther=(fam==="feline"||/panther|cat|tiger|lion|lynx/.test(id));
     var wolf=(fam==="canine"||/wolf|hound|fox|dog/.test(id));
@@ -298,7 +350,37 @@
     var glow=M(new THREE.SphereGeometry(0.5,18,10,0,Math.PI*2,Math.PI*0.55,Math.PI*0.45), det); glow.position.y=0.4; glow.scale.set(1.3,1,0.7); g.add(glow);
     g.userData.skiff=true; return rideMeta(g, 0.72, true);
   }
+  function buildAquatic(body,acc,det,s,id){
+    var g=new THREE.Group(); var by=0.78; id=String(id||"").toLowerCase();
+    if (/jelly/.test(id)){
+      var bell=M(new THREE.SphereGeometry(0.36,22,14,0,Math.PI*2,0,Math.PI*0.58), body); bell.position.set(0,by+0.12,0); bell.scale.set(1,0.68,1); g.add(bell);
+      for(var j=0;j<7;j++){ var a=(j/7)*Math.PI*2; var ten=M(new THREE.CapsuleGeometry(0.018,0.42,4,8), det); ten.position.set(Math.cos(a)*0.2,by-0.17,Math.sin(a)*0.2); ten.rotation.z=Math.sin(a)*0.35; g.add(ten); }
+      return rideMeta(g, by+0.42, true);
+    }
+    var torso=M(new THREE.CapsuleGeometry(0.3,0.88,8,18), body); torso.rotation.z=Math.PI/2; torso.position.set(0,by,0); torso.scale.set(1,0.84,0.78); g.add(torso);
+    var nose=M(new THREE.ConeGeometry(0.22,0.34,14), body); nose.rotation.z=-Math.PI/2; nose.position.set(0.62,by,0); g.add(nose);
+    var tail=M(new THREE.ConeGeometry(0.18,0.48,4), acc); tail.rotation.z=Math.PI/2; tail.position.set(-0.7,by,0); g.add(tail);
+    [-1,1].forEach(function(sg){ var fin=M(new THREE.ConeGeometry(0.08,0.3,4), acc); fin.position.set(0.05,by-0.02,0.28*sg); fin.rotation.x=Math.PI/2*sg; g.add(fin); });
+    var top=M(new THREE.ConeGeometry(0.1,0.32,4), acc); top.position.set(-0.06,by+0.32,0); top.rotation.x=Math.PI; g.add(top);
+    if (/turtle/.test(id)){ var shell=M(new THREE.SphereGeometry(0.36,18,12,0,Math.PI*2,0,Math.PI*0.58), acc); shell.position.set(-0.02,by+0.1,0); shell.scale.set(1.1,0.56,0.9); g.add(shell); }
+    if (/croc/.test(id)){ for(var k=0;k<5;k++){ var sp=M(new THREE.ConeGeometry(0.035,0.12,5), det); sp.position.set(-0.38+k*0.17,by+0.25,0); sp.rotation.x=Math.PI; g.add(sp); } }
+    var saddle=M(new THREE.SphereGeometry(0.25,16,12,0,Math.PI*2,0,Math.PI*0.5), det); saddle.position.set(-0.05,by+0.29,0); saddle.scale.set(1,0.52,0.9); g.add(saddle);
+    return rideMeta(g, by+0.35, false);
+  }
+  function buildInsect(body,acc,det,s,id){
+    var g=new THREE.Group(); var by=0.78; id=String(id||"").toLowerCase();
+    [-0.35,0,0.35].forEach(function(x,idx){ var seg=M(new THREE.SphereGeometry(idx===1?0.28:0.24,18,12), idx===1?body:acc); seg.position.set(x,by,0); seg.scale.set(1,0.72,0.9); g.add(seg); });
+    for(var l=0;l<6;l++){ var side=l%2?1:-1, x=-0.32+Math.floor(l/2)*0.32; var leg=M(new THREE.CapsuleGeometry(0.025,0.48,4,8), body); leg.position.set(x,by-0.22,0.24*side); leg.rotation.x=0.9*side; leg.rotation.z=(l<2?0.5:l>3?-0.5:0); g.add(leg); }
+    if (/moth|bee|wasp/.test(id)){
+      g.userData.wing=[];
+      [-1,1].forEach(function(sg){ var wm=s({ color:col_mix(det), roughness:0.35, side:THREE.DoubleSide, transparent:true, opacity:0.58, emissive:col_mix(det) }); var wing=new THREE.Mesh(new THREE.PlaneGeometry(0.58,0.44,2,2), wm); R.disposables.push(wing.geometry); wing.castShadow=true; wing.position.set(0.03,by+0.26,0.22*sg); wing.rotation.set(0.25,0.62*sg,0.18*sg); g.add(wing); g.userData.wing.push(wing); });
+    }
+    if (/scorpion/.test(id)){ var tail=M(new THREE.CapsuleGeometry(0.045,0.52,5,10), det); tail.position.set(-0.55,by+0.25,0); tail.rotation.z=0.85; g.add(tail); var barb=M(new THREE.ConeGeometry(0.055,0.16,6), det); barb.position.set(-0.78,by+0.5,0); barb.rotation.z=0.55; g.add(barb); }
+    var saddle=M(new THREE.SphereGeometry(0.23,16,12,0,Math.PI*2,0,Math.PI*0.5), det); saddle.position.set(0.02,by+0.27,0); saddle.scale.set(1,0.52,0.9); g.add(saddle);
+    return rideMeta(g, by+0.33, false);
+  }
   function buildQuadruped(body,acc,det,s,id,panther,wolf){
+    id=String(id||"").toLowerCase();
     var g=new THREE.Group(); var by=0.86;
     var torso=M(new THREE.CapsuleGeometry(panther?0.28:0.32,0.66,8,16), body); torso.rotation.z=Math.PI/2; torso.position.set(0,by,0); torso.scale.set(1,1,0.84); g.add(torso);
     var chest=M(new THREE.SphereGeometry(0.32,16,14), body); chest.position.set(0.46,by,0); chest.scale.set(0.9,1,0.85); g.add(chest);
@@ -319,6 +401,7 @@
     var tail=M(new THREE.CapsuleGeometry(wolf?0.09:0.06,0.42,5,10), acc); tail.position.set(-0.8,by+0.02,0); tail.rotation.z=0.9; g.add(tail);
     var saddle=M(new THREE.SphereGeometry(0.27,16,12,0,Math.PI*2,0,Math.PI*0.5), det); saddle.position.set(-0.05,by+0.28,0); saddle.scale.set(1,0.55,0.95); g.add(saddle);
     if (/unicorn/.test(id)){ var horn=M(new THREE.ConeGeometry(0.045,0.34,12), det); horn.position.set(0.96,by+0.78,0); horn.rotation.z=-0.5; g.add(horn); }
+    if (/ram|bull|bison|yak|ox|rhino/.test(id)){ [-1,1].forEach(function(sg){ var horn2=M(new THREE.ConeGeometry(0.045,0.26,8), det); horn2.position.set(0.92,by+0.68,0.09*sg); horn2.rotation.set(0.2,0.4*sg,0.25); g.add(horn2); }); }
     if (/stag|deer|elk/.test(id)){ [-1,1].forEach(function(sg){ var a1=M(new THREE.CylinderGeometry(0.02,0.03,0.3,6), det); a1.position.set(0.8,by+0.86,0.08*sg); a1.rotation.z=0.3*sg; g.add(a1); var a2=M(new THREE.CylinderGeometry(0.014,0.02,0.18,6), det); a2.position.set(0.74,by+1.0,0.16*sg); a2.rotation.z=0.8*sg; g.add(a2); }); }
     return rideMeta(g, by+0.32, false);
   }
