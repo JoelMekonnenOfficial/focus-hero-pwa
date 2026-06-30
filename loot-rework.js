@@ -82,7 +82,15 @@
     phase_panther_reins:["Loot","Travel"],
     star_mote:          ["Loot","Meditate"],
     orbit_sprite:       ["Loot","Meditate"],
-    timekeeper_s_spark: ["Loot","Meditate","Fight","Hunt"]
+    timekeeper_s_spark: ["Loot","Meditate","Fight","Hunt"],
+    rusty_dagger:["Fight","Hunt","Craft"], cloth_cap:["Loot","Rest","Travel"], padded_tunic:["Craft","Rest","Loot"], old_pony:["Travel","Hunt"], field_mouse:["Loot","Meditate","Hunt"], focus_stone:["Meditate","Rest","Loot"],
+    iron_shortsword:["Fight","Craft","Hunt"], leather_helm:["Loot","Travel","Hunt"], studded_vest:["Craft","Fight","Rest"], pack_mule:["Travel","Loot","Hunt"], alley_cat:["Loot","Meditate","Travel"], focus_tonic:["Meditate","Rest","Craft"],
+    scholar_s_quill:["Meditate","Loot","Craft"], scholar_s_spectacles:["Meditate","Loot","Rest"], scholar_s_robe:["Meditate","Craft","Loot"],
+    prospector_s_pick:["Loot","Travel","Hunt"], lucky_hood:["Loot","Travel","Fight"], pacer_s_drum:["Travel","Rest","Fight"],
+    sure_foot_ram:["Travel","Hunt","Loot"], trash_panda:["Loot","Hunt","Travel"],
+    runed_warhammer:["Fight","Craft","Hunt"], helm_of_resolve:["Fight","Meditate","Loot"], coinweave_vest:["Loot","Craft","Travel"], endurance_crown:["Rest","Travel","Meditate"], trailguard_greaves:["Travel","Rest","Fight"], tiger_mount:["Hunt","Travel","Fight"], falcon_companion:["Hunt","Loot","Meditate"], pathfinder_s_compass:["Travel","Loot","Hunt"],
+    sword_of_momentum:["Fight","Hunt","Loot"], midas_gauntlet:["Loot","Travel","Craft"], aegis_of_flow:["Fight","Rest","Meditate"], lion_of_resolve:["Hunt","Travel","Fight"], phoenix_chick:["Meditate","Loot","Hunt"],
+    chronoblade:["Fight","Meditate","Loot"], eye_of_eternity:["Meditate","Loot","Fight"], astral_dragon:["Travel","Hunt","Loot"], celestial_phoenix:["Meditate","Loot","Hunt"], halo_of_mastery:["Meditate","Fight","Loot"]
   };
 
   /* Affix definitions — 12 stat lines that can roll on gear. */
@@ -952,7 +960,7 @@
       if (tmpl && !dk.autoSalvaged){
         var enemyName = dk.enemyId || "enemy";
         var actionTxt = (typeof window.equipToastAction === "function") ? window.equipToastAction(tmpl) : null;
-        _toast(tmpl[0] + " " + tmpl[1] + " (" + dk.rarity + ")" + (dk.fromMonsterTable ? " — from " + enemyName : ""), "good", actionTxt ? [actionTxt] : []);
+        _toast("✨ NEW! " + tmpl[0] + " " + tmpl[1] + " (" + dk.rarity + ")" + (dk.fromMonsterTable ? " — from " + enemyName : ""), "good", actionTxt ? [actionTxt] : []);
         if (["rare","epic","legendary","mythic"].indexOf(dk.rarity) >= 0 && typeof window.logLine === "function"){
           window.logLine("Loot: " + tmpl[1] + " (" + dk.rarity + ")" + (dk.pity && dk.pity.bumped ? " · pity bump" : ""));
         }
@@ -1056,6 +1064,12 @@
     var s = lrEnsureShape(_state());
     if (!s) return;
     var pityHtml = lrPityMeterHtml(s);
+    try {
+      var __owned = Object.keys((s.lootOwned)||{}).length;
+      var __total = (window.LOOT_TABLE||[]).length;
+      var __pct = __total ? Math.round(__owned/__total*100) : 0;
+      pityHtml = '<div style="font-size:.76rem;color:#cbd5e1;margin:2px 0 8px;font-weight:700">📚 Collection: ' + __owned + '/' + __total + ' found (' + __pct + '%)</div>' + pityHtml;
+    } catch(_){}
     var drops = Array.isArray(s.loot.drops) ? s.loot.drops.slice().reverse() : [];
     if (!drops.length){
       host.innerHTML = pityHtml + '<div class="fh-empty"><span class="ico">\U0001F381</span>No drops yet — finish a focus session to earn your first loot.</div>';

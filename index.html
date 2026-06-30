@@ -3334,7 +3334,46 @@ const LOOT_TABLE = [
   ["🐆","Phase Panther Reins","mythic",1,"mount"],
   ["💫","Star Mote","mythic",1,"pet"],
   ["🪐","Orbit Sprite","mythic",1,"pet"],
-  ["✨","Timekeeper's Spark","mythic",1,"none"]
+  ["✨","Timekeeper's Spark","mythic",1,"none"],
+  // --- v9.5 loot expansion: full gear progression across every slot + rarity ---
+  ["🔪","Rusty Dagger","common",14,"weapon"],
+  ["🧢","Cloth Cap","common",12,"helmet"],
+  ["🧥","Padded Tunic","common",12,"armor"],
+  ["🐴","Old Pony","common",8,"mount"],
+  ["🐁","Field Mouse","common",8,"pet"],
+  ["🪨","Focus Stone","common",16,"none"],
+  ["🗡️","Iron Shortsword","uncommon",12,"weapon"],
+  ["⛑️","Leather Helm","uncommon",10,"helmet"],
+  ["🦺","Studded Vest","uncommon",10,"armor"],
+  ["🫏","Pack Mule","uncommon",7,"mount"],
+  ["🐈","Alley Cat","uncommon",7,"pet"],
+  ["🧪","Focus Tonic","uncommon",10,"none"],
+  ["🪶","Scholar's Quill","rare",7,"weapon"],
+  ["👓","Scholar's Spectacles","rare",6,"helmet"],
+  ["🥼","Scholar's Robe","rare",6,"armor"],
+  ["⛏️","Prospector's Pick","rare",6,"weapon"],
+  ["🎩","Lucky Hood","rare",6,"helmet"],
+  ["🥁","Pacer's Drum","rare",6,"weapon"],
+  ["🦬","Sure-Foot Ram","rare",5,"mount"],
+  ["🦝","Trash Panda","rare",5,"pet"],
+  ["⚒️","Runed Warhammer","epic",4,"weapon"],
+  ["🪖","Helm of Resolve","epic",4,"helmet"],
+  ["🥋","Coinweave Vest","epic",3,"armor"],
+  ["👑","Endurance Crown","epic",3,"helmet"],
+  ["🦿","Trailguard Greaves","epic",3,"armor"],
+  ["🐅","Tiger Mount","epic",2,"mount"],
+  ["🦅","Falcon Companion","epic",2,"pet"],
+  ["🧭","Pathfinder's Compass","epic",3,"accessory"],
+  ["⚔️","Sword of Momentum","legendary",2,"weapon"],
+  ["🤲","Midas Gauntlet","legendary",2,"weapon"],
+  ["🛡️","Aegis of Flow","legendary",2,"armor"],
+  ["🦁","Lion of Resolve","legendary",1,"mount"],
+  ["🦚","Phoenix Chick","legendary",1,"pet"],
+  ["⚡","Chronoblade","mythic",1,"weapon"],
+  ["👁️","Eye of Eternity","mythic",1,"helmet"],
+  ["🐲","Astral Dragon","mythic",1,"mount"],
+  ["🦢","Celestial Phoenix","mythic",1,"pet"],
+  ["🌠","Halo of Mastery","mythic",1,"helmet"]
 ];
 const EQUIP_SLOTS = ["weapon","helmet","armor","mount","pet"];
 const TIER_RANK = { common:1, uncommon:2, rare:3, epic:4, legendary:5, mythic:6 };
@@ -3440,7 +3479,48 @@ const GEAR_EFFECTS = {
   ember_wyrmling:      { xpPct:10, label:"+10% XP" },
   wind_familiar:       { energySave:2, label:"-2 energy cost" },
   star_mote:           { xpPct:12, label:"+12% XP" },
-  orbit_sprite:        { coinPct:12, label:"+12% coins" }
+  orbit_sprite:        { coinPct:12, label:"+12% coins" },
+  rusty_dagger:        { xpPct:2,  label:"+2% XP" },
+  cloth_cap:           { xpPct:1,  label:"+1% XP" },
+  padded_tunic:        { energySave:1, label:"-1 energy cost" },
+  old_pony:            { coinPct:2, label:"+2% coins" },
+  field_mouse:         { coinPct:2, label:"+2% coins" },
+  iron_shortsword:     { xpPct:3,  label:"+3% XP" },
+  leather_helm:        { xpPct:2,  label:"+2% XP" },
+  studded_vest:        { energySave:2, label:"-2 energy cost" },
+  pack_mule:           { coinPct:4, label:"+4% coins" },
+  alley_cat:           { coinPct:3, label:"+3% coins" },
+  scholar_s_quill:     { xpPct:6,  label:"+6% XP" },
+  scholar_s_spectacles:{ xpPct:5,  label:"+5% XP" },
+  scholar_s_robe:      { xpPct:5,  label:"+5% XP" },
+  prospector_s_pick:   { coinPct:7, label:"+7% coins" },
+  lucky_hood:          { coinPct:6, label:"+6% coins" },
+  pacer_s_drum:        { energySave:2, label:"-2 energy cost" },
+  sure_foot_ram:       { coinPct:6, label:"+6% coins" },
+  trash_panda:         { coinPct:5, label:"+5% coins" },
+  runed_warhammer:     { xpPct:10, label:"+10% XP" },
+  helm_of_resolve:     { xpPct:9,  label:"+9% XP" },
+  coinweave_vest:      { coinPct:12, label:"+12% coins" },
+  endurance_crown:     { energySave:3, label:"-3 energy cost" },
+  trailguard_greaves:  { energySave:3, label:"-3 energy cost" },
+  tiger_mount:         { coinPct:10, label:"+10% coins" },
+  falcon_companion:    { xpPct:8,  label:"+8% XP" },
+  sword_of_momentum:   { xpPct:16, label:"+16% XP" },
+  midas_gauntlet:      { coinPct:18, label:"+18% coins" },
+  aegis_of_flow:       { energySave:4, xpPct:6, label:"-4 energy, +6% XP" },
+  lion_of_resolve:     { xpPct:12, coinPct:6, label:"+12% XP, +6% coins" },
+  phoenix_chick:       { xpPct:14, label:"+14% XP" },
+  chronoblade:         { xpPct:22, label:"+22% XP" },
+  eye_of_eternity:     { xpPct:20, label:"+20% XP" },
+  astral_dragon:       { coinPct:28, label:"+28% coins" },
+  celestial_phoenix:   { xpPct:18, coinPct:10, label:"+18% XP, +10% coins" },
+  halo_of_mastery:     { xpPct:25, label:"+25% XP" }
+};
+/* v9.5: item sets — equip multiple pieces for escalating bonuses (RPG-standard). */
+const ITEM_SETS = {
+  scholar:  { name:"Scholar's Regalia", items:["scholar_s_quill","scholar_s_spectacles","scholar_s_robe"], bonuses:{2:{xpPct:4,label:"+4% XP"},3:{xpPct:10,label:"+10% XP"}} },
+  treasure: { name:"Treasure Hunter",   items:["prospector_s_pick","lucky_hood","coinweave_vest"],       bonuses:{2:{coinPct:6,label:"+6% coins"},3:{coinPct:14,label:"+14% coins"}} },
+  marathon: { name:"Marathoner's Kit",  items:["pacer_s_drum","endurance_crown","trailguard_greaves"],   bonuses:{2:{energySave:2,label:"-2 energy"},3:{energySave:4,xpPct:5,label:"-4 energy, +5% XP"}} }
 };
 const ACHIEVEMENTS = [
   ["first_focus","First Focus","Complete 1 focus session","🥇",{sessions:1}],
@@ -5110,7 +5190,25 @@ function equippedStats(hero=state?.hero){
     totals.energySave += fx.energySave || 0;
     totals.effects.push(fx.label);
   }
-  totals.energySave = Math.min(7, totals.energySave);
+  /* v9.5: item-set bonuses */
+  totals.sets = [];
+  try {
+    const equippedIds = EQUIP_SLOTS.map(sl=>equipped[sl]&&equipped[sl].lootId).filter(Boolean);
+    for (const key in ITEM_SETS){
+      const set = ITEM_SETS[key];
+      const n = set.items.filter(id=>equippedIds.includes(id)).length;
+      let applied=null;
+      Object.keys(set.bonuses).map(Number).sort((a,b)=>a-b).forEach(tier=>{ if(n>=tier) applied=set.bonuses[tier]; });
+      if (applied){
+        totals.xpPct += applied.xpPct||0;
+        totals.coinPct += applied.coinPct||0;
+        totals.energySave += applied.energySave||0;
+        totals.effects.push(set.name+": "+applied.label);
+      }
+      if (n>0) totals.sets.push({ key, name:set.name, count:n, max:set.items.length, bonus:applied?applied.label:null });
+    }
+  } catch(_){}
+  totals.energySave = Math.min(9, totals.energySave);
   return totals;
 }
 function gearEffectText(id){
@@ -6210,8 +6308,9 @@ function renderGearSummary(){
     stats.coinPct ? `+${stats.coinPct}% coins` : "",
     stats.energySave ? `-${stats.energySave} energy cost` : ""
   ].filter(Boolean);
-  host.innerHTML = chips + (bonuses.length
-    ? `<div class="gear-bonuses">${bonuses.map(v=>`<span class="gear-bonus">${escapeHtml(v)}</span>`).join("")}</div>`
+  const setChips = (stats.sets||[]).filter(s=>s.count>0).map(s=>`<span class="gear-bonus" style="border-color:rgba(245,158,11,.45);color:var(--legend,#ffd76b)" title="Item set">${escapeHtml(s.name)} ${s.count}/${s.max}${s.bonus?" · "+escapeHtml(s.bonus):""}</span>`).join("");
+  host.innerHTML = chips + ((bonuses.length||setChips)
+    ? `<div class="gear-bonuses">${bonuses.map(v=>`<span class="gear-bonus">${escapeHtml(v)}</span>`).join("")}${setChips}</div>`
     : "");
 }
 const AVATAR_CLASS_ART = {
