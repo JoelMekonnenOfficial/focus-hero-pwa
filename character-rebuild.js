@@ -61,7 +61,11 @@
     cleric:  { label:"Cleric",  primary:"#F0E6C0", secondary:"#D4B45C", emblem:"chalice",weapon:"mace",  outfit:"robe"    },
     bard:    { label:"Bard",    primary:"#C04A7E", secondary:"#F8C8DC", emblem:"lute",   weapon:"lute",  outfit:"motley"  },
     druid:   { label:"Druid",   primary:"#5E8B3F", secondary:"#C8A36A", emblem:"leaf",   weapon:"staff", outfit:"woven"   },
-    knight:  { label:"Knight",  primary:"#465E80", secondary:"#E5E7EB", emblem:"shield", weapon:"sword", outfit:"plate"   }
+    knight:  { label:"Knight",  primary:"#465E80", secondary:"#E5E7EB", emblem:"shield", weapon:"sword", outfit:"plate"   },
+    monk:    { label:"Monk",    primary:"#F97316", secondary:"#FED7AA", emblem:"sun",    weapon:"wraps", outfit:"cloth"   },
+    alchemist:{ label:"Alchemist", primary:"#14B8A6", secondary:"#FDE047", emblem:"flask", weapon:"flask", outfit:"coat"  },
+    sentinel:{ label:"Sentinel", primary:"#0284C7", secondary:"#FCD34D", emblem:"tower", weapon:"shield", outfit:"plate"  },
+    shadowmancer:{ label:"Shadowmancer", primary:"#7C3AED", secondary:"#F472B6", emblem:"moon", weapon:"sickle", outfit:"robe" }
   };
 
   var CR_HAIR_STYLES = ["short","buzz","crop","wavy","curly","braids","ponytail","topknot","long_straight","long_curly","mohawk","spiked","bald","dreadlocks"];
@@ -244,7 +248,16 @@
     { id:"mount_pack_mule",     name:"Pack Mule",     sym:"🫏", family:"cattle", tier:"common",    effect:{ coinPct:6,  label:"+6% coins" } },
     { id:"mount_riding_boar",   name:"Riding Boar",   sym:"🐗", family:"forest", tier:"common",    effect:{ coinPct:5,  label:"+5% coins" } },
     { id:"mount_sheepdog",      name:"Herder Dog",    sym:"🐕", family:"wolf",   tier:"common",    effect:{ coinPct:4,  label:"+4% coins" } },
-    { id:"mount_riding_goat",   name:"Riding Goat",   sym:"🐐", family:"small",  tier:"common",    effect:{ coinPct:5,  label:"+5% coins" } }
+    { id:"mount_riding_goat",   name:"Riding Goat",   sym:"🐐", family:"small",  tier:"common",    effect:{ coinPct:5,  label:"+5% coins" } },
+    // v9.7 — extra visual mount chase targets.
+    { id:"mount_moon_moth",     name:"Moon Moth Glider", sym:"🦋", family:"insect", tier:"rare",      effect:{ xpPct:7,    label:"+7% XP" } },
+    { id:"mount_amber_raptor",  name:"Amber Raptor",     sym:"🦖", family:"reptile",tier:"rare",      effect:{ xpPct:8,    label:"+8% XP" } },
+    { id:"mount_chrome_rhino",  name:"Chrome Rhino",     sym:"🦏", family:"cattle", tier:"epic",      effect:{ energySave:3, coinPct:8, label:"-3 energy, +8% coins" } },
+    { id:"mount_reef_shark",    name:"Reef Shark Saddle",sym:"🦈", family:"aquatic",tier:"epic",      effect:{ coinPct:11, label:"+11% coins" } },
+    { id:"mount_neon_kitsune",  name:"Neon Kitsune",     sym:"🦊", family:"mythical",tier:"legendary",effect:{ xpPct:12, coinPct:12, label:"+12% XP, +12% coins" } },
+    { id:"mount_jade_cloud_drake", name:"Jade Cloud Drake", sym:"🐉", family:"dragon",tier:"legendary",effect:{ xpPct:14, coinPct:10, label:"+14% XP, +10% coins" } },
+    { id:"mount_glass_jelly",   name:"Glass Jelly Ray",  sym:"🪼", family:"aquatic",tier:"mythic",    effect:{ energySave:5, xpPct:12, label:"+12% XP, -5 energy" } },
+    { id:"mount_eclipse_pegasus", name:"Eclipse Pegasus", sym:"🦄", family:"mythical",tier:"mythic",  effect:{ xpPct:26, coinPct:12, label:"+26% XP, +12% coins" } }
   ];
 
   /* Index by tier for quick rolls. */
@@ -1068,7 +1081,7 @@
     var results = [];
     var add = function(name, ok, msg){ results.push({ name:name, ok:!!ok, msg:msg||"" }); };
     add("character: 11 species defined", Object.keys(CR_SPECIES).length === 11);
-    add("character: 8 classes defined", Object.keys(CR_CLASSES).length === 8);
+    add("character: 12 classes defined", Object.keys(CR_CLASSES).length === 12);
     add("character: 14 hair styles", CR_HAIR_STYLES.length === 14);
     add("character: 12 hair colors", Object.keys(CR_HAIR_COLORS).length === 12);
     add("character: 8 eye colors", Object.keys(CR_EYE_COLORS).length === 8);

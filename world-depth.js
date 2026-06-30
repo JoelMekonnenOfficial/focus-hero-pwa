@@ -552,7 +552,14 @@
     { tier:"t5", id:"minotaur_lord",    sym:"🐃", name:"Minotaur Lord",      level:32, hp:60, weak:["dmgPoison"], resist:["dmgPhys"], dmg:55, acc:0.88, biomes:["ember_wastes"], boss:true },
     { tier:"t5", id:"griffin_king",     sym:"🦅", name:"Griffin King",       level:40, hp:75, weak:["dmgArcane"], resist:[], dmg:60, acc:0.97, biomes:["frostpeak","astral_plains"], boss:true },
     { tier:"t5", id:"phoenix_eternal",  sym:"🔥", name:"Eternal Phoenix",    level:48, hp:90, weak:["dmgFrost"],  resist:["dmgFire","dmgArcane"], dmg:70, acc:0.95, biomes:["ember_wastes"], boss:true },
-    { tier:"t5", id:"kraken_deep",      sym:"🐙", name:"Kraken of the Deep", level:45, hp:90, weak:["dmgArcane"], resist:["dmgFrost","dmgPhys"], dmg:72, acc:0.92, biomes:["sunken_reef"], boss:true }
+    { tier:"t5", id:"kraken_deep",      sym:"🐙", name:"Kraken of the Deep", level:45, hp:90, weak:["dmgArcane"], resist:["dmgFrost","dmgPhys"], dmg:72, acc:0.92, biomes:["sunken_reef"], boss:true },
+    // v9.7 — extra arena-visible enemies.
+    { tier:"t2", id:"moss_goblin",      sym:"🟢", name:"Moss Goblin",        level:5,  hp:7,  weak:["dmgFire"],   resist:["dmgPoison"], dmg:10, acc:0.9,  biomes:["verdant_vale","shadowmoor"] },
+    { tier:"t3", id:"mirror_mimic",     sym:"🪞", name:"Mirror Mimic",       level:16, hp:18, weak:["dmgArcane"], resist:["dmgPhys"], dmg:27, acc:0.88, biomes:["verdant_vale","astral_plains"] },
+    { tier:"t3", id:"reef_shark",       sym:"🦈", name:"Reef Shark",         level:17, hp:18, weak:["dmgFire"],   resist:["dmgFrost"], dmg:29, acc:0.93, biomes:["sunken_reef"] },
+    { tier:"t4", id:"chrome_minotaur",  sym:"🐃", name:"Chrome Minotaur",    level:28, hp:36, weak:["dmgArcane"], resist:["dmgPhys"], dmg:44, acc:0.87, biomes:["ember_wastes","astral_plains"] },
+    { tier:"t4", id:"eclipse_assassin", sym:"🌘", name:"Eclipse Assassin",   level:30, hp:32, weak:["dmgFire"],   resist:["dmgArcane","dmgPhys"], dmg:48, acc:0.96, biomes:["shadowmoor","astral_plains"] },
+    { tier:"t5", id:"glass_jelly_queen",sym:"🪼", name:"Glass Jelly Queen",  level:42, hp:78, weak:["dmgArcane"], resist:["dmgFrost"], dmg:64, acc:0.9,  biomes:["sunken_reef","astral_plains"], boss:true }
   ];
 
   function wdAllEnemies(){

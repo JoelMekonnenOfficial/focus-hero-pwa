@@ -62,6 +62,10 @@
     bard:    { weaponName:"lute", shield:false, helm:"feather", accent:"pink" },
     druid:   { weaponName:"nature_staff", shield:false, helm:"antlers", accent:"earth" },
     knight:  { weaponName:"sword_shield", shield:true, helm:"plumed", accent:"blue" },
+    monk:    { weaponName:"focus_wraps", shield:false, helm:"none", accent:"gold" },
+    alchemist:{ weaponName:"catalyst_flask", shield:false, helm:"goggles", accent:"teal" },
+    sentinel:{ weaponName:"tower_shield", shield:true, helm:"plumed", accent:"cyan" },
+    shadowmancer:{ weaponName:"eclipse_sickle", shield:false, helm:"hood", accent:"violet" },
     /* v8.8: bard wasn't in v86 overlays — silently rendered as warrior. */
     bard:    { weaponName:"lute",         shield:false, helm:"feather", accent:"violet" }
   };
@@ -486,6 +490,11 @@
     } else if (overlay.helm === "hood"){
       // Rogue/Mage hood
       return '<g class="v86-helm"><path d="M' + (cw - rx - 4) + ' ' + (cy - ry * 0.2) + ' Q' + cw + ' ' + (cy - ry - 12) + ' ' + (cw + rx + 4) + ' ' + (cy - ry * 0.2) + ' L' + (cw + rx) + ' ' + (cy + ry * 0.1) + ' Q' + cw + ' ' + (cy - ry * 0.5) + ' ' + (cw - rx) + ' ' + (cy + ry * 0.1) + ' Z" fill="' + darken(klass.primary, 0.35) + '" stroke="#0B0814" stroke-width="1.4" opacity="0.92"/></g>';
+    } else if (overlay.helm === "goggles"){
+      return '<g class="v86-helm"><circle cx="' + (cw - rx * 0.38) + '" cy="' + (cy - ry * 0.05) + '" r="6" fill="none" stroke="' + klass.secondary + '" stroke-width="2.2"/>' +
+        '<circle cx="' + (cw + rx * 0.38) + '" cy="' + (cy - ry * 0.05) + '" r="6" fill="none" stroke="' + klass.secondary + '" stroke-width="2.2"/>' +
+        '<path d="M' + (cw - rx * 0.18) + ' ' + (cy - ry * 0.05) + ' H' + (cw + rx * 0.18) + '" stroke="' + klass.secondary + '" stroke-width="2"/>' +
+        '<path d="M' + (cw - rx - 2) + ' ' + (cy - ry * 0.12) + ' Q' + cw + ' ' + (cy - ry * 0.55) + ' ' + (cw + rx + 2) + ' ' + (cy - ry * 0.12) + '" fill="none" stroke="#0B0814" stroke-width="1.4"/></g>';
     } else if (overlay.helm === "feather"){
       // Bard feathered cap
       return '<g class="v86-helm"><path d="M' + (cw - rx + 4) + ' ' + (cy - ry * 0.45) + ' Q' + cw + ' ' + (cy - ry - 6) + ' ' + (cw + rx - 4) + ' ' + (cy - ry * 0.45) + ' L' + (cw + rx - 6) + ' ' + (cy - ry * 0.15) + ' L' + (cw - rx + 6) + ' ' + (cy - ry * 0.15) + ' Z" fill="' + klass.primary + '" stroke="#0B0814" stroke-width="1.3"/>' +
@@ -535,6 +544,22 @@
           // Shield in left hand
           '<path d="M' + (cw - 28 * ws - 8) + ' ' + (shoulderY + 14) + ' L' + (cw - 28 * ws + 8) + ' ' + (shoulderY + 14) + ' L' + (cw - 28 * ws + 6) + ' ' + (shoulderY + 38) + ' L' + (cw - 28 * ws) + ' ' + (shoulderY + 48) + ' L' + (cw - 28 * ws - 6) + ' ' + (shoulderY + 38) + ' Z" fill="' + klass.primary + '" stroke="#0B0814" stroke-width="1.5"/>' +
           '<circle cx="' + (cw - 28 * ws) + '" cy="' + (shoulderY + 28) + '" r="4" fill="' + klass.secondary + '"/></g>';
+      case "focus_wraps":
+        return '<g class="v86-weapon"><circle cx="' + rhX + '" cy="' + (hY + 16) + '" r="8" fill="' + klass.secondary + '" stroke="#0B0814" stroke-width="1.2"/>' +
+          '<circle cx="' + (cw - 28 * ws) + '" cy="' + (hY + 18) + '" r="8" fill="' + klass.secondary + '" stroke="#0B0814" stroke-width="1.2"/>' +
+          '<path d="M' + (rhX - 9) + ' ' + (hY + 16) + ' H' + (rhX + 9) + ' M' + (cw - 28 * ws - 9) + ' ' + (hY + 18) + ' H' + (cw - 28 * ws + 9) + '" stroke="#fff" stroke-width="1.4" opacity=".6"/></g>';
+      case "catalyst_flask":
+        return '<g class="v86-weapon"><line x1="' + rhX + '" y1="' + (hY - 2) + '" x2="' + rhX + '" y2="' + (hY + 40) + '" stroke="#5C3A1B" stroke-width="3"/>' +
+          '<path d="M' + (rhX - 9) + ' ' + (hY + 34) + ' L' + (rhX + 9) + ' ' + (hY + 34) + ' L' + (rhX + 13) + ' ' + (hY + 50) + ' Q' + rhX + ' ' + (hY + 60) + ' ' + (rhX - 13) + ' ' + (hY + 50) + ' Z" fill="' + klass.secondary + '" stroke="#0B0814" stroke-width="1.3"/>' +
+          '<circle cx="' + (rhX + 2) + '" cy="' + (hY + 46) + '" r="4" fill="#fff" opacity=".55"/></g>';
+      case "tower_shield":
+        return '<g class="v86-weapon"><path d="M' + (cw - 30 * ws - 12) + ' ' + (shoulderY + 6) + ' H' + (cw - 30 * ws + 12) + ' V' + (shoulderY + 52) + ' Q' + (cw - 30 * ws) + ' ' + (shoulderY + 68) + ' ' + (cw - 30 * ws - 12) + ' ' + (shoulderY + 52) + ' Z" fill="' + klass.primary + '" stroke="#0B0814" stroke-width="1.6"/>' +
+          '<path d="M' + (cw - 30 * ws) + ' ' + (shoulderY + 10) + ' V' + (shoulderY + 56) + ' M' + (cw - 30 * ws - 8) + ' ' + (shoulderY + 28) + ' H' + (cw - 30 * ws + 8) + '" stroke="' + klass.secondary + '" stroke-width="2"/>' +
+          '<rect x="' + (rhX - 1.5) + '" y="' + (hY - 36) + '" width="3" height="52" fill="#D6DAE3" stroke="#0B0814" stroke-width="1.1"/></g>';
+      case "eclipse_sickle":
+        return '<g class="v86-weapon"><line x1="' + rhX + '" y1="' + (hY - 2) + '" x2="' + rhX + '" y2="' + (hY + 52) + '" stroke="#3A2410" stroke-width="3.2"/>' +
+          '<path d="M' + rhX + ' ' + (hY - 12) + ' Q' + (rhX + 24) + ' ' + (hY - 12) + ' ' + (rhX + 17) + ' ' + (hY + 10) + ' Q' + (rhX + 9) + ' ' + (hY - 2) + ' ' + rhX + ' ' + (hY - 2) + ' Z" fill="#D6DAE3" stroke="#0B0814" stroke-width="1.4"/>' +
+          '<circle cx="' + (rhX + 10) + '" cy="' + (hY - 2) + '" r="3" fill="' + klass.secondary + '"/></g>';
       default:
         return "";
     }
@@ -631,7 +656,7 @@
     add("species: orc is tall and bulky", V86_SPECIES_PROFILES.orc.heightScale > 1.1 && V86_SPECIES_PROFILES.orc.widthScale > 1.2);
     add("species: goblin is small", V86_SPECIES_PROFILES.goblin.heightScale < 0.65);
     add("species: elf is slender", V86_SPECIES_PROFILES.elf.heightScale > 1.05 && V86_SPECIES_PROFILES.elf.stockiness < 0.9);
-    add("class overlays: 8 classes", Object.keys(V86_CLASS_OVERLAYS).length === 8);
+    add("class overlays: 12 classes", Object.keys(V86_CLASS_OVERLAYS).length === 12);
     add("class: warrior has shield + greatsword", V86_CLASS_OVERLAYS.warrior.shield === true && V86_CLASS_OVERLAYS.warrior.weaponName === "greatsword");
     add("class: mage has crystal staff + hood", V86_CLASS_OVERLAYS.mage.weaponName === "crystal_staff" && V86_CLASS_OVERLAYS.mage.helm === "hood");
     add("class: druid has antlers", V86_CLASS_OVERLAYS.druid.helm === "antlers");
