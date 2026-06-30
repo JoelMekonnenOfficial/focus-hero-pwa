@@ -90,7 +90,13 @@
     sure_foot_ram:["Travel","Hunt","Loot"], trash_panda:["Loot","Hunt","Travel"],
     runed_warhammer:["Fight","Craft","Hunt"], helm_of_resolve:["Fight","Meditate","Loot"], coinweave_vest:["Loot","Craft","Travel"], endurance_crown:["Rest","Travel","Meditate"], trailguard_greaves:["Travel","Rest","Fight"], tiger_mount:["Hunt","Travel","Fight"], falcon_companion:["Hunt","Loot","Meditate"], pathfinder_s_compass:["Travel","Loot","Hunt"],
     sword_of_momentum:["Fight","Hunt","Loot"], midas_gauntlet:["Loot","Travel","Craft"], aegis_of_flow:["Fight","Rest","Meditate"], lion_of_resolve:["Hunt","Travel","Fight"], phoenix_chick:["Meditate","Loot","Hunt"],
-    chronoblade:["Fight","Meditate","Loot"], eye_of_eternity:["Meditate","Loot","Fight"], astral_dragon:["Travel","Hunt","Loot"], celestial_phoenix:["Meditate","Loot","Hunt"], halo_of_mastery:["Meditate","Fight","Loot"]
+    chronoblade:["Fight","Meditate","Loot"], eye_of_eternity:["Meditate","Loot","Fight"], astral_dragon:["Travel","Hunt","Loot"], celestial_phoenix:["Meditate","Loot","Hunt"], halo_of_mastery:["Meditate","Fight","Loot"],
+    oak_cudgel:["Fight","Craft","Hunt"], worn_sandals:["Travel","Rest","Craft"], pond_turtle:["Rest","Loot","Meditate"], calm_tea:["Rest","Meditate","Loot"],
+    apprentice_hammer:["Craft","Fight","Hunt"], bard_s_lute:["Meditate","Loot","Rest"], hide_helm:["Hunt","Craft","Travel"], faithful_hound:["Hunt","Loot","Travel"], energy_draught:["Rest","Craft","Travel"],
+    boomerang_blade:["Hunt","Fight","Travel"], climber_s_harness:["Travel","Hunt","Rest"], badger_kit:["Hunt","Loot","Meditate"], steppe_horse:["Travel","Hunt","Loot"], golden_scepter:["Loot","Craft","Travel"], hearty_mead:["Rest","Loot","Travel"],
+    berserker_s_axe:["Fight","Hunt","Craft"], warhelm:["Fight","Craft","Hunt"], crown_of_coins:["Loot","Travel","Fight"], velvet_mantle:["Loot","Craft","Rest"], war_croc:["Hunt","Travel","Fight"], scorpion_familiar:["Hunt","Fight","Meditate"], frost_vial:["Craft","Meditate","Rest"], festival_charm:["Loot","Travel","Rest"],
+    bloodplate:["Fight","Hunt","Craft"], starcaller_staff:["Meditate","Loot","Fight"], seraph_wings:["Travel","Meditate","Loot"], frost_wyrmling:["Hunt","Loot","Travel"], hamsa_charm:["Loot","Meditate","Travel"],
+    voidblade:["Fight","Meditate","Loot"], bulwark_eternal:["Fight","Craft","Rest"], eternal_stag:["Travel","Hunt","Meditate"], trident_of_tides:["Fight","Travel","Loot"], solar_phoenix:["Meditate","Loot","Hunt"]
   };
 
   /* Affix definitions — 12 stat lines that can roll on gear. */

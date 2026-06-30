@@ -3373,7 +3373,41 @@ const LOOT_TABLE = [
   ["👁️","Eye of Eternity","mythic",1,"helmet"],
   ["🐲","Astral Dragon","mythic",1,"mount"],
   ["🦢","Celestial Phoenix","mythic",1,"pet"],
-  ["🌠","Halo of Mastery","mythic",1,"helmet"]
+  ["🌠","Halo of Mastery","mythic",1,"helmet"],
+  // --- v9.6 loot expansion #2: more gear, Berserker + Tycoon sets, more consumables ---
+  ["🪵","Oak Cudgel","common",13,"weapon"],
+  ["👟","Worn Sandals","common",11,"armor"],
+  ["🐢","Pond Turtle","common",7,"pet"],
+  ["🍵","Calm Tea","common",15,"none"],
+  ["🔨","Apprentice Hammer","uncommon",11,"weapon"],
+  ["🪕","Bard's Lute","uncommon",9,"weapon"],
+  ["👒","Hide Helm","uncommon",9,"helmet"],
+  ["🐕","Faithful Hound","uncommon",7,"pet"],
+  ["🧴","Energy Draught","uncommon",10,"none"],
+  ["🪃","Boomerang Blade","rare",6,"weapon"],
+  ["🧗","Climber's Harness","rare",6,"armor"],
+  ["🦡","Badger Kit","rare",5,"pet"],
+  ["🐎","Steppe Horse","rare",5,"mount"],
+  ["🪙","Golden Scepter","rare",6,"weapon"],
+  ["🍯","Hearty Mead","uncommon",9,"none"],
+  ["🪓","Berserker's Axe","epic",4,"weapon"],
+  ["🪖","Warhelm","epic",4,"helmet"],
+  ["👑","Crown of Coins","epic",3,"helmet"],
+  ["🧣","Velvet Mantle","epic",3,"armor"],
+  ["🐊","War Croc","epic",2,"mount"],
+  ["🦂","Scorpion Familiar","epic",2,"pet"],
+  ["🧊","Frost Vial","rare",5,"none"],
+  ["🎆","Festival Charm","epic",3,"none"],
+  ["🩸","Bloodplate","legendary",2,"armor"],
+  ["🌟","Starcaller Staff","legendary",2,"weapon"],
+  ["🪽","Seraph Wings","legendary",1,"mount"],
+  ["❄️","Frost Wyrmling","legendary",1,"pet"],
+  ["🪬","Hamsa Charm","legendary",1,"accessory"],
+  ["🌀","Voidblade","mythic",1,"weapon"],
+  ["🔰","Bulwark Eternal","mythic",1,"armor"],
+  ["🦌","Eternal Stag","mythic",1,"mount"],
+  ["🔱","Trident of Tides","mythic",1,"weapon"],
+  ["🌅","Solar Phoenix","mythic",1,"pet"]
 ];
 const EQUIP_SLOTS = ["weapon","helmet","armor","mount","pet"];
 const TIER_RANK = { common:1, uncommon:2, rare:3, epic:4, legendary:5, mythic:6 };
@@ -3514,13 +3548,42 @@ const GEAR_EFFECTS = {
   eye_of_eternity:     { xpPct:20, label:"+20% XP" },
   astral_dragon:       { coinPct:28, label:"+28% coins" },
   celestial_phoenix:   { xpPct:18, coinPct:10, label:"+18% XP, +10% coins" },
-  halo_of_mastery:     { xpPct:25, label:"+25% XP" }
+  halo_of_mastery:     { xpPct:25, label:"+25% XP" },
+  oak_cudgel:          { xpPct:2, label:"+2% XP" },
+  worn_sandals:        { energySave:1, label:"-1 energy cost" },
+  pond_turtle:         { coinPct:2, label:"+2% coins" },
+  apprentice_hammer:   { xpPct:3, label:"+3% XP" },
+  bard_s_lute:         { xpPct:3, label:"+3% XP" },
+  hide_helm:           { xpPct:2, label:"+2% XP" },
+  faithful_hound:      { xpPct:3, label:"+3% XP" },
+  boomerang_blade:     { xpPct:6, label:"+6% XP" },
+  climber_s_harness:   { energySave:2, label:"-2 energy cost" },
+  badger_kit:          { coinPct:5, label:"+5% coins" },
+  steppe_horse:        { coinPct:6, label:"+6% coins" },
+  golden_scepter:      { coinPct:7, label:"+7% coins" },
+  berserker_s_axe:     { xpPct:11, label:"+11% XP" },
+  warhelm:             { xpPct:9, label:"+9% XP" },
+  crown_of_coins:      { coinPct:11, label:"+11% coins" },
+  velvet_mantle:       { coinPct:11, label:"+11% coins" },
+  war_croc:            { coinPct:10, label:"+10% coins" },
+  scorpion_familiar:   { xpPct:8, label:"+8% XP" },
+  bloodplate:          { xpPct:8, energySave:2, label:"+8% XP, -2 energy" },
+  starcaller_staff:    { xpPct:16, label:"+16% XP" },
+  seraph_wings:        { xpPct:10, coinPct:8, label:"+10% XP, +8% coins" },
+  frost_wyrmling:      { coinPct:14, label:"+14% coins" },
+  voidblade:           { xpPct:24, label:"+24% XP" },
+  bulwark_eternal:     { energySave:5, xpPct:8, label:"-5 energy, +8% XP" },
+  eternal_stag:        { coinPct:30, label:"+30% coins" },
+  trident_of_tides:    { coinPct:26, label:"+26% coins" },
+  solar_phoenix:       { xpPct:20, label:"+20% XP" }
 };
 /* v9.5: item sets — equip multiple pieces for escalating bonuses (RPG-standard). */
 const ITEM_SETS = {
   scholar:  { name:"Scholar's Regalia", items:["scholar_s_quill","scholar_s_spectacles","scholar_s_robe"], bonuses:{2:{xpPct:4,label:"+4% XP"},3:{xpPct:10,label:"+10% XP"}} },
   treasure: { name:"Treasure Hunter",   items:["prospector_s_pick","lucky_hood","coinweave_vest"],       bonuses:{2:{coinPct:6,label:"+6% coins"},3:{coinPct:14,label:"+14% coins"}} },
-  marathon: { name:"Marathoner's Kit",  items:["pacer_s_drum","endurance_crown","trailguard_greaves"],   bonuses:{2:{energySave:2,label:"-2 energy"},3:{energySave:4,xpPct:5,label:"-4 energy, +5% XP"}} }
+  marathon: { name:"Marathoner's Kit",  items:["pacer_s_drum","endurance_crown","trailguard_greaves"],   bonuses:{2:{energySave:2,label:"-2 energy"},3:{energySave:4,xpPct:5,label:"-4 energy, +5% XP"}} },
+  berserker:{ name:"Berserker's Wrath", items:["berserker_s_axe","warhelm","bloodplate"], bonuses:{2:{xpPct:5,label:"+5% XP"},3:{xpPct:12,energySave:2,label:"+12% XP, -2 energy"}} },
+  tycoon:   { name:"Tycoon's Hoard",    items:["golden_scepter","crown_of_coins","velvet_mantle"], bonuses:{2:{coinPct:7,label:"+7% coins"},3:{coinPct:16,label:"+16% coins"}} }
 };
 const ACHIEVEMENTS = [
   ["first_focus","First Focus","Complete 1 focus session","🥇",{sessions:1}],
@@ -7734,6 +7797,13 @@ function renderActiveTaskRow(){
 function renderLoot(){
   const g = $("#loot-grid"); if (!g) return;
   g.innerHTML = "";
+  try {
+    const ownedN = LOOT_TABLE.filter(it=>(state.lootOwned[lootId(it)]||0)>0).length;
+    const hdr = document.createElement("div");
+    hdr.style.cssText = "grid-column:1/-1;font-size:.8rem;font-weight:700;color:var(--ink-dim);margin-bottom:6px";
+    hdr.textContent = "📚 Collection — " + ownedN + " / " + LOOT_TABLE.length + " found (" + Math.round(ownedN/LOOT_TABLE.length*100) + "%)";
+    g.appendChild(hdr);
+  } catch(_){}
   LOOT_TABLE.forEach(item=>{
     const id = lootId(item); const count = state.lootOwned[id]||0;
     const el = document.createElement("div");
