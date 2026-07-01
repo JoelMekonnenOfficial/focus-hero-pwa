@@ -3089,6 +3089,93 @@ html[data-layout="mobile"] .topbar .actions{order:3}
   .arena-caption{font-size:.66rem}
   .layout-switcher button{min-width:94px}
 }
+
+/* v9.8.4 — smooth graphics + real modular avatar affordances.
+   This sits at the end of the active polish block so old RPG/pixel rules cannot
+   leak into the current app unless a future sprite opts in deliberately. */
+body, img, canvas, svg, .hero-card .avatar, .avatar-preview, .arena-model svg,
+.stable-mount-svg, .cr-mount-preview-svg, .loot-item .sym, .ach .sym{
+  image-rendering:auto!important;
+}
+svg{shape-rendering:geometricPrecision}
+.hero-card .avatar,.avatar-preview{
+  background:
+    radial-gradient(circle at 50% 22%,rgba(var(--accent-rgb),.24),transparent 54%),
+    radial-gradient(circle at 58% 78%,rgba(var(--accent-2-rgb),.12),transparent 48%),
+    linear-gradient(180deg,rgba(255,255,255,.07),rgba(0,0,0,.16)),
+    var(--panel-2);
+}
+.character-modal{max-width:min(1220px,calc(100vw - 24px))}
+.character-workbench{grid-template-columns:minmax(320px,410px) minmax(0,1fr)}
+.character-preview{
+  border-width:1px;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.08),0 24px 64px rgba(0,0,0,.34);
+}
+.avatar-preview{
+  width:min(382px,100%);
+  height:382px!important;
+  border-radius:28px;
+  border-color:rgba(var(--accent-rgb),.52);
+}
+.model-badge{border-radius:14px;background:rgba(255,255,255,.055)}
+.model-badge b{font-size:.74rem}
+.equipment-slot{
+  position:relative;
+  border-radius:16px;
+  padding:10px 12px;
+  background:linear-gradient(145deg,rgba(255,255,255,.055),rgba(255,255,255,.018)),var(--panel-2);
+}
+.equipment-slot.equipped{
+  border-color:rgba(var(--accent-rgb),.48);
+  box-shadow:inset 4px 0 0 rgba(var(--accent-rgb),.65);
+}
+.equipment-slot.empty{opacity:.78}
+.equipment-slot .slot-state{
+  display:block;
+  margin-top:3px;
+  color:var(--ink-mute);
+  font-size:.61rem;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+}
+.equipment-picker{grid-template-columns:repeat(auto-fill,minmax(162px,1fr))}
+.equipment-card{
+  position:relative;
+  min-height:112px;
+  border-radius:16px;
+  background:
+    radial-gradient(circle at 92% 12%,rgba(var(--accent-rgb),.10),transparent 36%),
+    linear-gradient(145deg,rgba(255,255,255,.055),rgba(255,255,255,.018)),
+    var(--panel-2);
+}
+.equipment-card .model-note{
+  display:block;
+  margin-top:6px;
+  color:var(--ink-mute);
+  font-size:.63rem;
+  line-height:1.25;
+}
+.equipment-card.remove-equipment{
+  border-color:rgba(255,125,143,.46);
+  background:linear-gradient(145deg,rgba(255,125,143,.14),rgba(255,255,255,.02)),var(--panel-2);
+}
+.equipment-card.equipped::before{
+  content:"ON MODEL";
+  position:absolute;
+  right:8px;
+  top:8px;
+  padding:2px 6px;
+  border-radius:999px;
+  background:rgba(var(--accent-rgb),.16);
+  color:var(--accent-2);
+  font-size:.55rem;
+  font-weight:800;
+  letter-spacing:.07em;
+}
+@media (max-width:760px){
+  .character-workbench{grid-template-columns:1fr}
+  .avatar-preview{height:300px!important}
+}
 </style>
 <script src="three.min.js"></script>
 <script src="fh3d.js"></script>
@@ -7163,21 +7250,24 @@ function fh3dSpec(){
   let body = "balanced";
   if ((prof.widthScale||1) >= 1.18 || (prof.stockiness||1) >= 1.3) body = "broad";
   else if ((prof.heightScale||1) <= 0.95 && (prof.stockiness||1) <= 0.88) body = "lean";
+  const eq = (typeof avatarEquipment === "function") ? avatarEquipment() : {};
   const ov = OV[classKey] || {};
-  const helmPref = a.helm || ov.helm || "closed";
+  const helmPref = eq.helmet ? (a.helm || ov.helm || "closed") : (a.helm === "crest" ? "crest" : "open");
   const helm = (helmPref === "open" || helmPref === "none" || helmPref === "hood")
     ? "open"
     : (helmPref === "crest" ? "crest" : "closed");
-  const eq = (typeof avatarEquipment === "function") ? avatarEquipment() : {};
   const tierArt = (window.AVATAR_TIER_ART) || (typeof AVATAR_TIER_ART !== "undefined" ? AVATAR_TIER_ART : {});
-  const gearInfo = (g)=>{ if(!g) return null; const ts = tierArt[g.tier] || {}; return { id:g.id, tier:g.tier||"common", metal:ts.metal||"#cbd5e1", gem:ts.gem||"#22d3ee", glow:ts.glow||0 }; };
+  const gearInfo = (g)=>{ if(!g) return null; const ts = tierArt[g.tier] || {}; return {
+    id:g.id, tier:g.tier||"common", slot:g.slot||"", name:g.item?.[1] || g.id, sym:g.item?.[0] || "◇",
+    metal:ts.metal||"#cbd5e1", gem:ts.gem||"#22d3ee", glow:ts.glow||0
+  }; };
   return {
     cls: classKey, className: (kl.label || classKey),
     palette: [primary, fh3dLighten(primary,.28), fh3dDarken(primary,.45), secondary],
     level: (state.hero && state.hero.level) || 1,
     running: !!(state.timer && state.timer.running),
     colors:{ skin, hair, eye,
-      armorMid: primary, armorHigh: fh3dLighten(primary,.28), armorDark: fh3dDarken(primary,.45),
+      armorMid: primary, armorHigh: fh3dLighten(primary,.28), armorDark: fh3dDarken(primary,.45), outfit: fh3dDarken(primary,.2), leather:"#5b3d22",
       accent: secondary, cloak: kl.cape || primary || "#2563eb" },
     traits:{ race: speciesKey, body, hair: a.hair || "short", helm, face: a.face || "calm", eyeShape: a.eyeShape || "focused" },
     equipped:{ weapon: gearInfo(eq.weapon), helmet: gearInfo(eq.helmet), armor: gearInfo(eq.armor), pet: gearInfo(eq.pet) },
@@ -8317,7 +8407,9 @@ function currentAvatarScene(action, taskName){
   if (mode === "stopwatch") return "travelling";
   if (mode !== "focus" || action === "meditate") return "resting";
   if (isAvatarTravelTask(taskName, action)) return "travelling";
-  return "fighting";
+  if (action === "brush") return "crafting";
+  if (action === "lift") return "hunting";
+  return "resting";
 }
 function isAvatarTravelTask(name, action){
   const s = (name||"").toLowerCase();
@@ -10892,7 +10984,7 @@ function renderCharacterPanel(){
       ["Weapon", eq.weapon?.lootId ? lootById(eq.weapon.lootId)?.[1] : "Unarmed"],
       ["Armor", eq.armor?.lootId ? lootById(eq.armor.lootId)?.[1] : "Base armor"],
       ["Mount", eq.mount?.lootId ? lootById(eq.mount.lootId)?.[1] : "On foot"],
-      ["Helmet", eq.helmet?.lootId ? lootById(eq.helmet.lootId)?.[1] : "Style helmet"],
+      ["Helmet", eq.helmet?.lootId ? lootById(eq.helmet.lootId)?.[1] : "No head gear"],
       ["Pet", eq.pet?.lootId ? lootById(eq.pet.lootId)?.[1] : "No pet"]
     ];
     badges.innerHTML = badgeRows.map(([label,value])=>`<div class="model-badge"><span>${escapeHtml(label)}</span><b>${escapeHtml(value || "None")}</b></div>`).join("");
@@ -10911,9 +11003,11 @@ function renderCharacterPanel(){
       const item = eq?.lootId ? lootById(eq.lootId) : null;
       const b = document.createElement("button");
       b.type = "button";
-      b.className = "equipment-slot";
+      b.className = `equipment-slot ${item ? "equipped" : "empty"}`;
+      b.dataset.slot = slot;
       b.setAttribute("aria-pressed", selectedEquipSlot === slot ? "true" : "false");
-      b.innerHTML = `<span class="slot-label">${labels[slot]||slot}</span><span class="slot-name">${item ? `${item[0]} ${escapeHtml(item[1])}` : "Empty"}</span>`;
+      b.setAttribute("aria-label", `${labels[slot]||slot}: ${item ? item[1] : "empty"}`);
+      b.innerHTML = `<span class="slot-label">${labels[slot]||slot}</span><span class="slot-name">${item ? `${item[0]} ${escapeHtml(item[1])}` : "Empty"}</span><span class="slot-state">${item ? "Visible on model" : "No model piece"}</span>`;
       b.onclick = ()=>{ selectedEquipSlot = slot; renderCharacterPanel(); };
       slots.appendChild(b);
     });
@@ -10982,18 +11076,19 @@ function renderEquipmentPicker(){
   const host = $("#equipment-picker"); if (!host) return;
   ensureEquippedShape();
   const slot = selectedEquipSlot || "weapon";
+  const labels = { weapon:"Main hand", helmet:"Head gear", armor:"Body armor", mount:"Mount", pet:"Pet" };
   const items = LOOT_TABLE.filter(item=>lootSlot(item) === slot);
   host.innerHTML = "";
   if (state.hero.equipped[slot]?.lootId){
     const clear = document.createElement("button");
     clear.type = "button";
-    clear.className = "equipment-card";
-    clear.innerHTML = `<span class="sym">◇</span><span class="name">Empty ${escapeHtml(slot)}</span><span class="meta">remove current choice</span>`;
+    clear.className = "equipment-card remove-equipment";
+    clear.innerHTML = `<span class="sym">◇</span><span class="name">Remove ${escapeHtml(labels[slot] || slot)}</span><span class="meta">take this model piece off</span><span class="effect">The avatar updates immediately.</span>`;
     clear.onclick = ()=>clearEquipped(slot);
     host.appendChild(clear);
   }
   if (!items.length){
-    host.innerHTML = `<div class="muted">No ${slot} gear exists yet.</div>`;
+    host.insertAdjacentHTML("beforeend", `<div class="muted">No ${escapeHtml(labels[slot] || slot)} gear exists yet.</div>`);
     return;
   }
   items.forEach(item=>{
@@ -11004,7 +11099,8 @@ function renderEquipmentPicker(){
     b.type = "button";
     b.className = `equipment-card rar-${item[2]} ${owned ? "" : "locked"} ${equipped ? "equipped" : ""}`;
     b.disabled = !owned || equipped;
-    b.innerHTML = `<span class="sym">${item[0]}</span><span class="name">${escapeHtml(item[1])}</span><span class="meta">${item[2]} · ${owned ? "owned" : "locked"}</span><span class="effect">${escapeHtml(gearEffectText(id))}</span>`;
+    b.setAttribute("aria-label", `${owned ? "Equip" : "Locked"} ${item[1]} in ${labels[slot] || slot}`);
+    b.innerHTML = `<span class="sym">${item[0]}</span><span class="name">${escapeHtml(item[1])}</span><span class="meta">${item[2]} · ${owned ? (equipped ? "equipped" : "owned") : "locked"}</span><span class="effect">${escapeHtml(gearEffectText(id))}</span><span class="model-note">${owned ? (equipped ? "Currently on avatar" : "Adds/removes visible model gear") : "Earn or buy to unlock"}</span>`;
     b.onclick = ()=>setEquipped(slot, id, item[2]);
     host.appendChild(b);
   });
@@ -11380,6 +11476,45 @@ async function runSmokeTests(){
     const fallbackReady = !!svg && style?.display !== "none" && style?.visibility !== "hidden" && style?.opacity !== "0" && (box?.width || 0) >= 100 && (box?.height || 0) >= 100;
     const hasLegacy = !!document.querySelector("#avatar .v86-root,#avatar .v86-hero,#avatar .v86-body,#avatar [class*='v86']");
     add("Avatar: renders 3D model or visible fallback", !hasLegacy && (modelReady || fallbackReady));
+  }
+  {
+    const snapshot = deepClone(state);
+    const waitAvatar3D = () => new Promise(resolve => {
+      let tries = 0;
+      const wait = () => {
+        const av = document.querySelector("#avatar");
+        if (av?.getAttribute("data-fh3d-ready") === "1") setTimeout(resolve, 180);
+        else if (tries++ > 36) resolve();
+        else requestAnimationFrame(wait);
+      };
+      requestAnimationFrame(wait);
+    });
+    try {
+      state.hero.cls = "knight";
+      const ap = ensureHeroAppearanceShape();
+      Object.assign(ap, { race:"dwarf", species:"dwarf", body:"broad", hair:"braids", helm:"closed", face:"scar", armor:"steel", accent:"gold", cloak:"forest", classKey:"knight" });
+      Object.assign(state.lootOwned, { whetstone_blade:1, helm_of_resolve:1, moonplate_vest:1, wolf_reins:1, study_owl:1 });
+      setEquipped("weapon", "whetstone_blade", "rare");
+      setEquipped("helmet", "helm_of_resolve", "epic");
+      setEquipped("armor", "moonplate_vest", "epic");
+      setEquipped("mount", "wolf_reins", "epic");
+      setEquipped("pet", "study_owl", "epic");
+      renderAvatar();
+      await waitAvatar3D();
+      const gearedSig = window.FH3D?._R?.sig || "";
+      const gearedCanvas = document.querySelector("#avatar canvas.fh3d-canvas");
+      const gearedOk = ["whetstone_blade","helm_of_resolve","moonplate_vest","study_owl","wolf_reins"].every(id=>gearedSig.includes(id));
+      clearEquipped("weapon"); clearEquipped("helmet"); clearEquipped("armor"); clearEquipped("mount"); clearEquipped("pet");
+      renderAvatar();
+      await waitAvatar3D();
+      const clearedSig = window.FH3D?._R?.sig || "";
+      const bare = fh3dSpec();
+      const clearedOk = !bare.equipped.weapon && !bare.equipped.helmet && !bare.equipped.armor && !bare.equipped.pet && !bare.mount && bare.traits.helm !== "closed";
+      add("Avatar 3D: equipped gear changes/removes model pieces", !!gearedCanvas && gearedOk && gearedSig !== clearedSig && clearedOk);
+    } catch(e){
+      add("Avatar 3D: equipped gear changes/removes model pieces", false, e.message || String(e));
+    }
+    state = snapshot; saveState(); renderAll();
   }
   add("App-open tracking: totalAppOpenMs is number", typeof state.totalAppOpenMs === "number");
   add("App uptime: >24d formats without truncation", formatHMS(35*24*60*60*1000 + 3*60*60*1000 + 7*60*1000 + 11*1000) === "843:07:11");
