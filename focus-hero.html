@@ -1919,6 +1919,29 @@ body.lr-screen-shake { animation: lr-shake .25s ease-in-out }
   font-size:.68rem;
   text-align:center;
 }
+.character-preview-mode{
+  width:100%;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:6px;
+}
+.character-preview-mode button{
+  min-height:34px;
+  border-radius:12px;
+  border:1px solid var(--border);
+  background:rgba(255,255,255,.045);
+  color:var(--ink-dim);
+  font-size:.68rem;
+  font-weight:800;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+}
+.character-preview-mode button[aria-pressed="true"]{
+  border-color:rgba(var(--accent-rgb),.62);
+  background:linear-gradient(135deg,rgba(var(--accent-rgb),.24),rgba(var(--accent-2-rgb),.14));
+  color:var(--ink);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);
+}
 .character-editor{
   display:grid;
   gap:12px;
@@ -3178,7 +3201,7 @@ svg{shape-rendering:geometricPrecision}
 }
 </style>
 <script src="three.min.js"></script>
-<script src="fh3d.js"></script>
+<script src="fh3d.js?v=fh-2026-07-01-v9-8-6"></script>
 <script>
 /* v7.9: zoom-lock - block pinch + double-tap zoom; single-finger scroll stays. */
 (function(){
@@ -3698,8 +3721,12 @@ svg{shape-rendering:geometricPrecision}
         <div class="character-preview-name" id="character-preview-name">Hero</div>
         <div class="character-preview-class" id="character-preview-class">Knight</div>
         <div class="character-preview-note">Live 3D studio preview</div>
+        <div class="character-preview-mode" role="group" aria-label="Character preview mode">
+          <button type="button" data-character-preview="character" aria-pressed="true">Character only</button>
+          <button type="button" data-character-preview="loadout" aria-pressed="false">Full loadout</button>
+        </div>
         <div class="model-badges" id="character-model-badges" aria-label="Equipped model summary"></div>
-        <div class="model-tip">Drag the model to rotate. Gear, mounts and pets preview here.</div>
+        <div class="model-tip">Drag to rotate. Character-only hides mount and pet without changing your equipped items.</div>
       </aside>
       <div class="character-editor">
         <div class="character-identity">
@@ -7230,9 +7257,10 @@ function fh3dMountFor(eqMount){
   if (/stag|deer|elk/i.test(id)) m = { id:"astral_stag_tack", colors:["#4B5563","#A5F3FC","#67E8F9"] };
   return { id:id, family:fam, tier:eqMount.tier||"common", colors:m.colors };
 }
-function fh3dSpec(){
+function fh3dSpec(opts={}){
   try { ensureHeroAppearanceShape(); } catch(e){}
   try { ensureEquippedShape(); } catch(e){}
+  opts = opts || {};
   const a = (state.hero && state.hero.appearance) || {};
   const SP = window.CR_SPECIES || {}, CL = window.CR_CLASSES || {}, HC = window.CR_HAIR_COLORS || {}, EC = window.CR_EYE_COLORS || {};
   const PROF = window.V86_SPECIES_PROFILES || {}, OV = window.V86_CLASS_OVERLAYS || {};
@@ -7251,6 +7279,7 @@ function fh3dSpec(){
   if ((prof.widthScale||1) >= 1.18 || (prof.stockiness||1) >= 1.3) body = "broad";
   else if ((prof.heightScale||1) <= 0.95 && (prof.stockiness||1) <= 0.88) body = "lean";
   const eq = (typeof avatarEquipment === "function") ? avatarEquipment() : {};
+  const characterOnly = !!opts.characterOnly;
   const ov = OV[classKey] || {};
   const helmPref = eq.helmet ? (a.helm || ov.helm || "closed") : (a.helm === "crest" ? "crest" : "open");
   const helm = (helmPref === "open" || helmPref === "none" || helmPref === "hood")
@@ -7270,13 +7299,13 @@ function fh3dSpec(){
       armorMid: primary, armorHigh: fh3dLighten(primary,.28), armorDark: fh3dDarken(primary,.45), outfit: fh3dDarken(primary,.2), leather:"#5b3d22",
       accent: secondary, cloak: kl.cape || primary || "#2563eb" },
     traits:{ race: speciesKey, body, hair: a.hair || "short", helm, face: a.face || "calm", eyeShape: a.eyeShape || "focused" },
-    equipped:{ weapon: gearInfo(eq.weapon), helmet: gearInfo(eq.helmet), armor: gearInfo(eq.armor), pet: gearInfo(eq.pet) },
-    mount: fh3dMountFor(eq.mount || (state.hero.equipped && state.hero.equipped.mount))
+    equipped:{ weapon: gearInfo(eq.weapon), helmet: gearInfo(eq.helmet), armor: gearInfo(eq.armor), pet: characterOnly ? null : gearInfo(eq.pet) },
+    mount: characterOnly ? null : fh3dMountFor(eq.mount || (state.hero.equipped && state.hero.equipped.mount))
   };
 }
 function fhV98HeroCardSvg(opts={}){
   let spec = null;
-  try { spec = fh3dSpec(); } catch(_){ spec = null; }
+  try { spec = fh3dSpec(opts); } catch(_){ spec = null; }
   spec = spec || {};
   const colors = spec.colors || {};
   const clsKey = spec.cls || state.hero?.cls || "knight";
@@ -7348,7 +7377,7 @@ function fhV98HeroCardSvg(opts={}){
 }
 function fh3dUpdate(){
   if (window.FH3D && typeof FH3D.sync === "function"){
-    try { FH3D.sync(fh3dSpec()); } catch(e){ /* non-fatal: SVG fallback stays */ }
+    try { FH3D.sync(fh3dSpec(fh3dStudioOpen() ? characterPreviewFh3dOptions() : {})); } catch(e){ /* non-fatal: SVG fallback stays */ }
   }
 }
 function fh3dStudioOpen(){
@@ -10946,6 +10975,10 @@ function characterPortraitSvg(p, eq){
 }
 let selectedEquipSlot = "weapon";
 let selectedCharacterTab = "look";
+let characterPreviewMode = "character";
+function characterPreviewFh3dOptions(){
+  return { studio:true, characterOnly: characterPreviewMode !== "loadout" };
+}
 function openCharacterPanel(){
   selectedEquipSlot = selectedEquipSlot || "weapon";
   selectedCharacterTab = "look";
@@ -10965,7 +10998,7 @@ function renderCharacterPanel(){
   if (previewClass) previewClass.textContent = (CLASSES[state.hero.cls] || CLASSES.knight).name;
   const preview = $("#character-avatar-preview");
   if (preview){
-    preview.innerHTML = fhV98HeroCardSvg({ scene:"studio", running:false, studio:true });
+    preview.innerHTML = fhV98HeroCardSvg({ scene:"studio", running:false, ...characterPreviewFh3dOptions() });
     preview.setAttribute("data-avatar-version", "v98");
     preview.setAttribute("data-renderer", "svg");
     preview.removeAttribute("data-scene");
@@ -10982,7 +11015,7 @@ function renderCharacterPanel(){
     const badgeRows = [
       ["Hero", (CLASSES[state.hero.cls] || CLASSES.knight).name],
       ["Weapon", eq.weapon?.lootId ? lootById(eq.weapon.lootId)?.[1] : "Unarmed"],
-      ["Armor", eq.armor?.lootId ? lootById(eq.armor.lootId)?.[1] : "Base armor"],
+      ["Armor", eq.armor?.lootId ? lootById(eq.armor.lootId)?.[1] : "No body armor"],
       ["Mount", eq.mount?.lootId ? lootById(eq.mount.lootId)?.[1] : "On foot"],
       ["Helmet", eq.helmet?.lootId ? lootById(eq.helmet.lootId)?.[1] : "No head gear"],
       ["Pet", eq.pet?.lootId ? lootById(eq.pet.lootId)?.[1] : "No pet"]
@@ -10990,6 +11023,7 @@ function renderCharacterPanel(){
     badges.innerHTML = badgeRows.map(([label,value])=>`<div class="model-badge"><span>${escapeHtml(label)}</span><b>${escapeHtml(value || "None")}</b></div>`).join("");
   }
   $$("[data-character-tab]").forEach(b=>b.setAttribute("aria-pressed", b.dataset.characterTab === selectedCharacterTab ? "true" : "false"));
+  $$("[data-character-preview]").forEach(b=>b.setAttribute("aria-pressed", b.dataset.characterPreview === characterPreviewMode ? "true" : "false"));
   const lookPanel = $("#character-look-panel");
   const gearPanel = $("#character-gear-panel");
   if (lookPanel) lookPanel.hidden = selectedCharacterTab !== "look";
@@ -11122,6 +11156,10 @@ function bindDesignShell(){
   $("#btn-hero-studio")?.addEventListener("click", openCharacterPanel);
   $$("[data-character-tab]").forEach(b=>b.addEventListener("click", ()=>{
     selectedCharacterTab = b.dataset.characterTab === "gear" ? "gear" : "look";
+    renderCharacterPanel();
+  }));
+  $$("[data-character-preview]").forEach(b=>b.addEventListener("click", ()=>{
+    characterPreviewMode = b.dataset.characterPreview === "loadout" ? "loadout" : "character";
     renderCharacterPanel();
   }));
   $("#btn-variants")?.addEventListener("click", ()=>openModal("variants-modal"));
@@ -11818,16 +11856,41 @@ async function runSmokeTests(){
     state.hero.appearance.helm = "open";
     ensureEquippedShape();
     state.hero.equipped.weapon = null;
+    state.hero.equipped.helmet = null;
+    state.hero.equipped.armor = null;
+    state.hero.equipped.mount = null;
+    state.hero.equipped.pet = null;
+    const waitForAvatarReady = (selector) => new Promise(resolve => {
+      let tries = 0;
+      const wait = () => {
+        const el = document.querySelector(selector);
+        if (el?.getAttribute("data-fh3d-ready") === "1") setTimeout(resolve, 180);
+        else if (tries++ > 36) resolve();
+        else requestAnimationFrame(wait);
+      };
+      requestAnimationFrame(wait);
+    });
     renderAvatar();
-    const rendered = !!document.querySelector("#avatar .v81-face[data-race='elf'][data-hair='braids']");
-    const attached = !!document.querySelector("#avatar .v79-head .v81-face");
+    await waitForAvatarReady("#avatar");
+    const avatar3d = $("#avatar")?.getAttribute("data-renderer") === "3d" && $("#avatar")?.getAttribute("data-fh3d-ready") === "1" && !!document.querySelector("#avatar canvas.fh3d-canvas");
+    const avatarSvg = !!document.querySelector("#avatar .v81-face[data-race='elf'][data-hair='braids']");
+    const rendered = avatar3d || avatarSvg;
+    const attached = avatar3d || !!document.querySelector("#avatar .v79-head .v81-face");
     const studio = $("#character-title")?.textContent === "Character Studio" && !!$("#btn-hero-studio");
-    renderCharacterPanel();
-    const portrait = !!document.querySelector('#character-avatar-preview .fh82-portrait[data-race="elf"][data-hair="braids"][data-helm="open"]');
-    const noFakeWeapon = !document.querySelector("#character-avatar-preview .v82-equipped-weapon");
+    openCharacterPanel();
+    await waitForAvatarReady("#character-avatar-preview");
+    const preview = $("#character-avatar-preview");
+    const studio3d = preview?.getAttribute("data-renderer") === "3d" && preview?.getAttribute("data-fh3d-ready") === "1" && !!preview?.querySelector("canvas.fh3d-canvas");
+    const portraitSvg = !!document.querySelector('#character-avatar-preview .fh82-portrait[data-race="elf"][data-hair="braids"][data-helm="open"]');
+    const portrait = studio3d || portraitSvg;
+    const badges = Array.from(document.querySelectorAll("#character-model-badges .model-badge")).map(x=>x.textContent.trim().replace(/\s+/g,""));
+    const noFakeWeapon = !document.querySelector("#character-avatar-preview .v82-equipped-weapon")
+      && ["WeaponUnarmed","ArmorNobodyarmor","MountOnfoot","HelmetNoheadgear","PetNopet"].every(x=>badges.includes(x))
+      && document.querySelector('[data-character-preview="character"]')?.getAttribute("aria-pressed") === "true";
     add("v8.2: Character Studio is discoverable from Hero", studio);
     add("v8.2: character traits render attached to the animated head", rendered && attached);
     add("v8.2: Studio portrait reflects look without fake equipment", portrait && noFakeWeapon);
+    closeModal("character-modal");
     state = snap; saveState(); renderAll();
   }
   {
@@ -11839,7 +11902,18 @@ async function runSmokeTests(){
     const stats = equippedStats();
     const boosted = computeCoins(25, true) > computeCoins(25) && rewardXpTotal(100) > 100;
     renderAvatar();
-    const mounted = !!document.querySelector("#avatar .v81-mounted[data-mount='wolf_reins']");
+    await new Promise(resolve => {
+      let tries = 0;
+      const wait = () => {
+        const av = document.querySelector("#avatar");
+        if (av?.getAttribute("data-fh3d-ready") === "1") setTimeout(resolve, 180);
+        else if (tries++ > 36) resolve();
+        else requestAnimationFrame(wait);
+      };
+      requestAnimationFrame(wait);
+    });
+    const mounted3d = $("#avatar")?.getAttribute("data-renderer") === "3d" && !!document.querySelector("#avatar canvas.fh3d-canvas") && (window.FH3D?._R?.sig || "").includes("wolf_reins");
+    const mounted = mounted3d || !!document.querySelector("#avatar .v81-mounted[data-mount='wolf_reins']");
     add("v8.1: equipped rewards and mount display are active", stats.xpPct >= 12 && stats.coinPct >= 8 && boosted && mounted);
     state = snap; saveState(); renderAll();
   }
