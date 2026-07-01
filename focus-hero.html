@@ -2394,7 +2394,27 @@ button.danger:hover{background:rgba(220,38,38,.22);color:#fca5a5;}
 .fh3d-host{position:relative}
 .fh3d-canvas{position:absolute;inset:0;width:100%;height:100%;display:block;border-radius:inherit;z-index:3;cursor:grab;touch-action:pan-y}
 .fh3d-canvas:active{cursor:grabbing}
-.hero-card .avatar{width:116px;height:116px}
+.hero-card .avatar[data-avatar-version="v98"]{
+  width:136px;
+  height:136px;
+  border-radius:28px;
+  background:
+    radial-gradient(circle at 50% 20%,rgba(var(--accent-rgb),.28),transparent 54%),
+    linear-gradient(180deg,rgba(255,255,255,.065),rgba(0,0,0,.16)),
+    var(--panel-2);
+  border:1px solid rgba(var(--accent-rgb),.28);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.05),0 16px 36px rgba(0,0,0,.26);
+}
+.hero-card .avatar svg.fh98-hero-card-svg,
+#character-avatar-preview svg.fh98-hero-card-svg{
+  width:100%;
+  height:100%;
+  display:block;
+  image-rendering:auto;
+  shape-rendering:geometricPrecision;
+}
+#avatar[data-renderer="3d"] > svg.fh98-hero-card-svg,
+#character-avatar-preview[data-renderer="3d"] > svg.fh98-hero-card-svg{opacity:0}
 #character-avatar-preview{height:312px}
 @media (max-width:760px){ #character-avatar-preview{height:264px} }
 
@@ -3663,6 +3683,9 @@ html[data-layout="mobile"] .topbar .actions{order:3}
  * ================================================================ -->
 <script>
 "use strict";
+/* v9.8.1: the v8 character helper scripts are still loaded for catalog/options
+   compatibility, but they must not reclaim the visible hero renderer. */
+window.FH_V98_AVATAR_LOCK = true;
 /* v7.9 build marker - session-time editor now accepts UPWARD corrections, not
    just reductions. The old elapsed-time clamp is removed and replaced with an
    absolute safety cap (8h, or 2x the original elapsed). XP, task minutes,
@@ -7148,6 +7171,78 @@ function fh3dSpec(){
     mount: fh3dMountFor(eq.mount || (state.hero.equipped && state.hero.equipped.mount))
   };
 }
+function fhV98HeroCardSvg(opts={}){
+  let spec = null;
+  try { spec = fh3dSpec(); } catch(_){ spec = null; }
+  spec = spec || {};
+  const colors = spec.colors || {};
+  const clsKey = spec.cls || state.hero?.cls || "knight";
+  const cls = CLASSES[clsKey] || CLASSES.knight || { name:"Hero" };
+  const c = {
+    skin: colors.skin || "#d99b73",
+    hair: colors.hair || "#332117",
+    eye: colors.eye || "#7fe9ff",
+    mid: colors.armorMid || "#465e80",
+    hi: colors.armorHigh || "#9fb5d8",
+    dark: colors.armorDark || "#172033",
+    accent: colors.accent || "#66e3c4",
+    cloak: colors.cloak || "#2563eb"
+  };
+  const eq = (typeof avatarEquipment === "function") ? avatarEquipment() : {};
+  const mount = spec.mount || null;
+  const weaponId = String(eq.weapon?.id || spec.equipped?.weapon?.id || "");
+  const scene = opts.scene || currentAdventureSpec?.().scene || "resting";
+  const mounted = !!mount;
+  const bgA = c.accent, bgB = c.hi;
+  const weapon = /staff|scepter|orb|lute|quill/i.test(weaponId)
+    ? `<g class="fh98-weapon"><path d="M116 100 L128 42" stroke="${c.accent}" stroke-width="5" stroke-linecap="round"/><circle cx="130" cy="37" r="9" fill="${c.eye}" stroke="#08111f" stroke-width="3"/><path d="M121 50 Q131 57 139 49" fill="none" stroke="${c.hi}" stroke-width="2"/></g>`
+    : /hammer|pick|axe|cudgel/i.test(weaponId)
+      ? `<g class="fh98-weapon"><path d="M116 102 L126 55" stroke="#6b4527" stroke-width="6" stroke-linecap="round"/><rect x="119" y="45" width="26" height="14" rx="3" fill="${c.hi}" stroke="#08111f" stroke-width="3" transform="rotate(18 132 52)"/></g>`
+      : `<g class="fh98-weapon"><path d="M116 103 L130 50" stroke="${c.hi}" stroke-width="5" stroke-linecap="round"/><path d="M130 50 L137 32 L140 53 Z" fill="${c.hi}" stroke="#08111f" stroke-width="3"/><path d="M110 91 L130 96" stroke="${c.accent}" stroke-width="5" stroke-linecap="round"/></g>`;
+  const classSig = /monk/i.test(clsKey)
+    ? `<circle cx="80" cy="48" r="27" fill="none" stroke="${c.accent}" stroke-width="3" opacity=".55"/><circle cx="80" cy="48" r="33" fill="none" stroke="${c.eye}" stroke-width="1.5" opacity=".35"/>`
+    : /alchemist/i.test(clsKey)
+      ? `<g><rect x="55" y="96" width="8" height="18" rx="4" fill="${c.eye}" opacity=".78"/><rect x="70" y="96" width="8" height="18" rx="4" fill="${c.accent}" opacity=".78"/><rect x="85" y="96" width="8" height="18" rx="4" fill="${c.hi}" opacity=".78"/></g>`
+      : /shadow/i.test(clsKey)
+        ? `<path d="M45 42 A28 28 0 1 0 45 99 A19 28 0 1 1 45 42" fill="${c.accent}" opacity=".28"/>`
+        : /sentinel|knight|warrior/i.test(clsKey)
+          ? `<path d="M47 81 L39 103 Q48 121 62 126 Q77 118 82 103 L75 81 Z" fill="${c.hi}" stroke="#08111f" stroke-width="3" opacity=".86"/>`
+          : /ranger|druid/i.test(clsKey)
+            ? `<path d="M47 47 Q31 52 30 70 Q50 70 54 50 Z" fill="${c.accent}" opacity=".5"/><path d="M110 47 Q130 52 130 70 Q110 70 106 50 Z" fill="${c.accent}" opacity=".5"/>`
+            : `<circle cx="80" cy="43" r="23" fill="none" stroke="${c.accent}" stroke-width="2.5" opacity=".46"/>`;
+  const mountSvg = mounted ? `<g class="fh98-mount">
+      <ellipse cx="80" cy="124" rx="50" ry="10" fill="rgba(0,0,0,.28)"/>
+      <path d="M36 111 Q50 82 91 88 Q125 91 130 112 Q113 124 81 124 Q51 123 36 111Z" fill="${mount.colors?.[0] || c.dark}" stroke="#08111f" stroke-width="4"/>
+      <path d="M97 89 Q112 65 127 85 Q119 101 105 101Z" fill="${mount.colors?.[1] || c.hi}" stroke="#08111f" stroke-width="3"/>
+      <path d="M49 115 L42 134 M70 119 L68 138 M102 119 L106 137 M123 112 L132 129" stroke="${mount.colors?.[2] || c.accent}" stroke-width="5" stroke-linecap="round"/>
+    </g>` : `<ellipse cx="80" cy="132" rx="42" ry="9" fill="rgba(0,0,0,.28)"/>`;
+  return `<svg class="fh98-hero-card-svg" data-avatar-version="v98" data-class="${escapeHtml(clsKey)}" data-scene="${escapeHtml(scene)}" viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${escapeHtml(cls.name || "Hero")} v9 model">
+    <defs>
+      <radialGradient id="fh98Bg" cx="50%" cy="18%" r="78%"><stop stop-color="${bgB}" stop-opacity=".42"/><stop offset=".48" stop-color="${bgA}" stop-opacity=".16"/><stop offset="1" stop-color="#07111f"/></radialGradient>
+      <linearGradient id="fh98Armor" x1="0" x2="1" y1="0" y2="1"><stop stop-color="${c.hi}"/><stop offset="1" stop-color="${c.mid}"/></linearGradient>
+    </defs>
+    <rect width="160" height="160" rx="28" fill="url(#fh98Bg)"/>
+    <path d="M10 126 Q44 111 78 124 Q116 108 150 126 V160 H10Z" fill="${c.dark}" opacity=".28"/>
+    ${mountSvg}
+    <g class="fh98-hero" transform="${mounted ? "translate(0 -18)" : "translate(0 0)"}">
+      ${classSig}
+      <path d="M54 117 L61 79 Q80 62 99 79 L106 117 Q92 128 80 128 Q68 128 54 117Z" fill="${c.cloak}" opacity=".66"/>
+      <path d="M55 116 L64 78 Q80 65 96 78 L105 116 Q93 126 80 126 Q67 126 55 116Z" fill="url(#fh98Armor)" stroke="#08111f" stroke-width="4" stroke-linejoin="round"/>
+      <path d="M63 85 Q80 94 97 85 L93 106 Q80 114 67 106Z" fill="${c.dark}" opacity=".42"/>
+      <path d="M61 116 L58 137 M99 116 L103 137" stroke="${c.dark}" stroke-width="8" stroke-linecap="round"/>
+      <circle cx="80" cy="56" r="19" fill="${c.skin}" stroke="#08111f" stroke-width="4"/>
+      <path d="M61 56 Q80 33 99 56 Q94 44 80 39 Q66 44 61 56Z" fill="${c.hair}" stroke="#08111f" stroke-width="2"/>
+      <circle cx="73" cy="58" r="3.2" fill="${c.eye}"/><circle cx="87" cy="58" r="3.2" fill="${c.eye}"/>
+      <path d="M73 69 Q80 74 87 69" fill="none" stroke="#5a2d23" stroke-width="2.5" stroke-linecap="round"/>
+      <path d="M47 85 Q55 76 65 81" fill="none" stroke="${c.hi}" stroke-width="8" stroke-linecap="round"/>
+      <path d="M113 84 Q105 75 95 81" fill="none" stroke="${c.hi}" stroke-width="8" stroke-linecap="round"/>
+      <path d="M63 104 H97" stroke="${c.accent}" stroke-width="5" stroke-linecap="round"/>
+      <circle cx="80" cy="91" r="7" fill="${c.accent}" stroke="#08111f" stroke-width="3"/>
+      ${weapon}
+    </g>
+    <text x="80" y="151" text-anchor="middle" fill="${c.accent}" font-family="system-ui, sans-serif" font-size="9" font-weight="800" letter-spacing="1.4">${escapeHtml(String(cls.name || "HERO").toUpperCase())}</text>
+  </svg>`;
+}
 function fh3dUpdate(){
   if (window.FH3D && typeof FH3D.sync === "function"){
     try { FH3D.sync(fh3dSpec()); } catch(e){ /* non-fatal: SVG fallback stays */ }
@@ -9581,18 +9676,21 @@ function renderAvatar(){
   const adv = currentAdventureSpec();
   const running = !!(state.timer && state.timer.running);
   const scene = adv ? adv.scene : currentAvatarScene(taskAction, taskName);
-  const svg = pixelAvatarSvg(cls.name, taskAction, scene, avatarClassSpec(clsKey, cls.palette), avatarEquipment());
+  const svg = fhV98HeroCardSvg({ scene, running, home:true });
   const av = $("#avatar");
   if (av){
     av.innerHTML = svg;
+    av.setAttribute("data-avatar-version", "v98");
+    av.setAttribute("data-renderer", "svg");
     av.setAttribute("data-action", adv ? adv.id.toLowerCase() : taskAction);
     av.setAttribute("data-running", running ? "1" : "0");
     av.setAttribute("data-scene", scene);
-    // v8.8.1: 3D overlay on the home Hero card (SVG remains as fallback underneath)
+    // v9.8.1: 3D is the primary renderer; SVG is only the new v9 fallback.
     if (window.FH3D && typeof FH3D.attachHome === "function"){
       if (!FH3D._wired){ FH3D._wired = true; if (FH3D.wireModal) FH3D.wireModal("character-modal","character-avatar-preview","avatar"); }
       if (!fh3dStudioOpen()) FH3D.attachHome(av);
       fh3dUpdate();
+      av.setAttribute("data-renderer", FH3D.available ? "3d" : "svg");
     }
   }
 }
@@ -9602,6 +9700,7 @@ function refreshAvatarRunningState(){
   av.setAttribute("data-running", state.timer && state.timer.running ? "1" : "0");
   av.setAttribute("data-action", adv.id.toLowerCase());
   av.setAttribute("data-scene", adv.scene);
+  if (av.getAttribute("data-renderer") === "3d") fh3dUpdate();
 }
 function fhArenaHash(str){
   str = String(str || "");
@@ -10761,12 +10860,15 @@ function renderCharacterPanel(){
   if (previewClass) previewClass.textContent = (CLASSES[state.hero.cls] || CLASSES.knight).name;
   const preview = $("#character-avatar-preview");
   if (preview){
-    preview.innerHTML = characterPortraitSvg(avatarClassSpec(state.hero.cls, null), avatarEquipment());
+    preview.innerHTML = fhV98HeroCardSvg({ scene:"studio", running:false, studio:true });
+    preview.setAttribute("data-avatar-version", "v98");
+    preview.setAttribute("data-renderer", "svg");
     preview.removeAttribute("data-scene");
     // v8.8.1: large drag-to-rotate 3D preview in Character Studio
     if (window.FH3D && typeof FH3D.attachStudio === "function"){
       if (fh3dStudioOpen()) FH3D.attachStudio(preview);
       fh3dUpdate();
+      preview.setAttribute("data-renderer", FH3D.available ? "3d" : "svg");
     }
   }
   const badges = $("#character-model-badges");

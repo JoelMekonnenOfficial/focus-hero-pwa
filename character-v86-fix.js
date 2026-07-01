@@ -579,6 +579,7 @@
     var tries = 0;
     var doInstall = function(){
       tries++;
+      if (window.FH_V98_AVATAR_LOCK) return;
       if (typeof window.pixelAvatarSvg !== "function" || typeof window.characterPortraitSvg !== "function"){
         if (tries < 80) setTimeout(doInstall, 120);
         return;

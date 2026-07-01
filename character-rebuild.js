@@ -1006,6 +1006,7 @@
   /* ---------- PORTRAIT OVERRIDE ---------- */
 
   function crInstallPortraitOverride(){
+    if (window.FH_V98_AVATAR_LOCK) return;
     if (typeof window.characterPortraitSvg !== "function"){
       setTimeout(crInstallPortraitOverride, 100);
       return;
