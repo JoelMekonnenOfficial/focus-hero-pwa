@@ -1,5 +1,5 @@
 /* ============================================================================
- * Focus Hero — FH3D v7.4 : clean studio preview + tailored anatomy renderer
+ * Focus Hero — FH3D v8.0 : mesh avatar model kit renderer
  * Pure renderer (reads a plain spec via FH3D.sync; never touches app state).
  * v5: keeps the realistic proportions/PBR base, then adds class-specific model
  * signatures, distinct weapon silhouettes, aquatic/insect mounts, and a richer
@@ -12,7 +12,7 @@
 (function () {
   "use strict";
   var FH3D = (window.FH3D = window.FH3D || {});
-  FH3D.available = false; FH3D.version = "fh3d-7.4";
+  FH3D.available = false; FH3D.version = "fh3d-8.0"; FH3D.engine = "mesh-avatar-modelkit-v1";
   var THREE = window.THREE;
   function webglSupported(){ try{ if(!THREE) return false; var c=document.createElement("canvas"); return !!(c.getContext("webgl2")||c.getContext("webgl")||c.getContext("experimental-webgl")); }catch(e){ return false; } }
   function col(hex, fb){ try{ return new THREE.Color(hex||fb||"#888"); }catch(e){ return new THREE.Color(fb||"#888"); } }
@@ -108,6 +108,191 @@
     var energyC=col(c.accent,"#8b9cff");
     m.energy=s({ color:energyC, roughness:0.22, metalness:0.12, emissive:energyC.clone().multiplyScalar(0.45), envMapIntensity:1.25, transparent:true, opacity:0.92 });
     return m;
+  }
+
+  /* ===================== AVATAR MODEL KIT (mesh-first, no puppet shell) ===================== */
+  function loftGeometry(rings, seg){
+    seg=seg||28;
+    var pos=[], idx=[];
+    rings.forEach(function(r){
+      var twist=r.twist||0, x=r.x||0, z=r.z||0;
+      for(var i=0;i<seg;i++){
+        var a=(i/seg)*Math.PI*2+twist;
+        pos.push(x+Math.cos(a)*(r.rx||0.1), r.y||0, z+Math.sin(a)*(r.rz||r.rx||0.1));
+      }
+    });
+    for(var j=0;j<rings.length-1;j++){
+      var a0=j*seg, b0=(j+1)*seg;
+      for(var k=0;k<seg;k++){
+        var n=(k+1)%seg;
+        idx.push(a0+k,b0+k,a0+n, a0+n,b0+k,b0+n);
+      }
+    }
+    var bottomCenter=pos.length/3, br=rings[0]; pos.push(br.x||0,br.y||0,br.z||0);
+    for(var bi=0;bi<seg;bi++) idx.push(bottomCenter,bi,(bi+1)%seg);
+    var topCenter=pos.length/3, tr=rings[rings.length-1], topBase=(rings.length-1)*seg; pos.push(tr.x||0,tr.y||0,tr.z||0);
+    for(var ti=0;ti<seg;ti++) idx.push(topCenter,topBase+(ti+1)%seg,topBase+ti);
+    var g=new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(pos,3));
+    g.setIndex(idx); g.computeVertexNormals();
+    return g;
+  }
+  function Loft(rings, mat, seg){ return M(loftGeometry(rings, seg||28), mat); }
+  function Ball(rx, ry, rz, mat, x, y, z, seg){
+    var m=M(new THREE.SphereGeometry(1, seg||28, Math.max(12, Math.floor((seg||28)*0.7))), mat, x||0, y||0, z||0);
+    m.scale.set(rx,ry,rz); return m;
+  }
+  function Capsule(rad, len, mat, x, y, z, sx, sz, seg){
+    var m=M(new THREE.CapsuleGeometry(rad, len, 10, seg||24), mat, x||0, y||0, z||0);
+    m.scale.set(sx||1,1,sz||1); return m;
+  }
+  function panel(w,h,d,mat,x,y,z,rx,ry,rz){
+    var m=M(new THREE.BoxGeometry(w,h,d), mat, x||0, y||0, z||0);
+    m.rotation.set(rx||0,ry||0,rz||0); return m;
+  }
+  function buildHeroModelKit(spec){
+    var mats=makeMats(spec), t=spec.traits||{}, eq=spec.equipped||{}, rig=new THREE.Group();
+    rig.userData.modelKit="mesh-avatar-modelkit-v1";
+    var hasArmor=!!eq.armor, hasHelmet=!!eq.helmet, build=t.body||"balanced";
+    var bw=build==="broad"?1.08:build==="lean"?0.86:0.96, slim=build==="lean"?0.92:1.0;
+    var HIPY=0.88, sx=0.272*bw;
+
+    var legL=mkLeg(mats, hasArmor, -1, bw, slim); legL.position.set(-0.135*bw,HIPY,0); rig.add(legL);
+    var legR=mkLeg(mats, hasArmor, 1, bw, slim); legR.position.set(0.135*bw,HIPY,0); rig.add(legR);
+    rig.userData.legL=legL; rig.userData.legR=legR;
+
+    var pelvis=Loft([
+      {y:0.78,rx:0.12*bw,rz:0.08},{y:0.86,rx:0.22*bw,rz:0.12},{y:0.96,rx:0.18*bw,rz:0.1},{y:1.02,rx:0.13*bw,rz:0.075}
+    ], hasArmor?mats.armorDk:mats.clothDk, 28); rig.add(pelvis);
+
+    var torso=new THREE.Group(); torso.position.y=1.12; rig.add(torso); rig.userData.torso=torso;
+    var bodyMat=hasArmor?mats.armor:mats.cloth;
+    var torsoMesh=Loft([
+      {y:-0.34,rx:0.145*bw,rz:0.075},
+      {y:-0.18,rx:0.165*bw,rz:0.088},
+      {y:0.06,rx:0.195*bw,rz:0.104},
+      {y:0.25,rx:0.212*bw,rz:0.108},
+      {y:0.38,rx:0.18*bw,rz:0.086}
+    ], bodyMat, 34); torso.add(torsoMesh);
+    if(hasArmor){
+      var plate=Loft([{y:-0.18,rx:0.12*bw,rz:0.012,z:0.118},{y:0.06,rx:0.17*bw,rz:0.018,z:0.128},{y:0.26,rx:0.14*bw,rz:0.014,z:0.12}], mats.armorHi, 28); torso.add(plate);
+      torso.add(panel(0.018,0.43,0.02,mats.trim,0,0.02,0.155));
+    } else {
+      var jacketL=Loft([{y:-0.3,rx:0.045*bw,rz:0.009,x:-0.055*bw,z:0.12},{y:0.1,rx:0.078*bw,rz:0.012,x:-0.06*bw,z:0.133},{y:0.34,rx:0.056*bw,rz:0.011,x:-0.044*bw,z:0.124}], mats.clothHi, 18); torso.add(jacketL);
+      var jacketR=jacketL.clone(); jacketR.position.x=0.11*bw; torso.add(jacketR);
+      torso.add(CBetween([0,-0.27,0.151],[0,0.25,0.15],0.0045,mats.leather,6));
+      torso.add(CBetween([-0.075*bw,0.3,0.132],[0,0.18,0.156],0.006,mats.clothDk,8));
+      torso.add(CBetween([0.075*bw,0.3,0.132],[0,0.18,0.156],0.006,mats.clothDk,8));
+      var hood=Loft([{y:0.28,rx:0.14*bw,rz:0.028,z:-0.09},{y:0.42,rx:0.12*bw,rz:0.04,z:-0.065}], mats.clothDk, 24); torso.add(hood);
+      var pendant=Ball(0.018,0.022,0.012,mats.trim,0,0.12,0.168,14); torso.add(pendant);
+    }
+    var belt=Loft([{y:-0.305,rx:0.172*bw,rz:0.084},{y:-0.26,rx:0.18*bw,rz:0.09}], mats.leather, 30); torso.add(belt);
+    torso.add(panel(0.052,0.042,0.022,mats.trim,0,-0.282,0.106));
+
+    var neck=Capsule(0.052,0.12,mats.skin,0,1.44,0,1.0,0.92,18); rig.add(neck);
+    var headG=new THREE.Group(); headG.position.y=1.61; rig.add(headG); rig.userData.headG=headG;
+    mkHead(headG, mats, spec, t, hasHelmet);
+
+    var armL=mkArm(mats, hasArmor, -1, bw); armL.position.set(-sx,1.335,0); armL.rotation.z=-0.035; rig.add(armL);
+    var armR=mkArm(mats, hasArmor, 1, bw); armR.position.set(sx,1.335,0); armR.rotation.z=0.035; rig.add(armR);
+    rig.userData.armL=armL; rig.userData.armR=armR;
+
+    if(hasArmor) addModelKitArmor(rig, torso, mats, spec, bw);
+    if(hasHelmet) addModelKitHelmet(headG, mats, spec, 0.158);
+    addModelKitClassAccent(rig, torso, headG, spec, mats, bw);
+    addWeapon(rig.userData.armR, spec, mats);
+    return rig;
+  }
+  function mkLeg(mats, armored, side, bw, slim){
+    var g=new THREE.Group();
+    var thigh=Loft([{y:0,rx:0.066*slim,rz:0.055},{y:-0.18,rx:0.082*slim,rz:0.06},{y:-0.42,rx:0.064*slim,rz:0.05}], armored?mats.armorDk:mats.cloth, 24);
+    thigh.position.x=0.008*side; thigh.rotation.z=-0.035*side; g.add(thigh);
+    var knee=Ball(0.055,0.04,0.048,armored?mats.armorHi:mats.clothDk,0.022*side,-0.47,0.014,18); g.add(knee);
+    var shin=Loft([{y:-0.5,rx:0.064*slim,rz:0.048},{y:-0.72,rx:0.055*slim,rz:0.042},{y:-0.94,rx:0.043*slim,rz:0.038}], armored?mats.armor:mats.clothDk, 24);
+    shin.position.x=0.032*side; shin.rotation.z=0.02*side; g.add(shin);
+    if(!armored) g.add(CBetween([0.038*side,-0.55,0.054],[0.046*side,-0.9,0.056],0.0035,mats.clothHi,6));
+    else g.add(panel(0.056,0.25,0.024,mats.armorHi,0.04*side,-0.72,0.066,0,0,0.02*side));
+    var shoe=Loft([{y:-0.99,rx:0.052,rz:0.076,z:0.04},{y:-1.045,rx:0.07,rz:0.11,z:0.08}], mats.boot, 22);
+    shoe.position.x=0.052*side; shoe.rotation.z=0.015*side; g.add(shoe);
+    g.add(panel(0.13,0.017,0.21,mats.leather,0.052*side,-1.066,0.09,0,0,0.015*side));
+    g.userData.thigh=thigh; return g;
+  }
+  function mkArm(mats, armored, side, bw){
+    var g=new THREE.Group();
+    g.add(Ball(0.048,0.038,0.052,armored?mats.armor:mats.clothHi,0,0,0,22));
+    var upper=Loft([{y:-0.03,rx:0.047,rz:0.048},{y:-0.22,rx:0.052,rz:0.048},{y:-0.42,rx:0.041,rz:0.04}], armored?mats.armor:mats.cloth, 26);
+    upper.position.x=0.02*side; upper.rotation.z=0.045*side; g.add(upper);
+    g.add(Ball(0.041,0.035,0.038,armored?mats.armorHi:mats.clothDk,0.045*side,-0.46,0.012,16));
+    var fore=Loft([{y:-0.49,rx:0.042,rz:0.039},{y:-0.64,rx:0.039,rz:0.036},{y:-0.79,rx:0.033,rz:0.032}], armored?mats.armorDk:mats.cloth, 26);
+    fore.position.x=0.074*side; fore.rotation.z=-0.03*side; g.add(fore);
+    g.add(CBetween([0.06*side,-0.77,0.035],[0.115*side,-0.78,0.034],0.007,armored?mats.trim:mats.leather,8));
+    var hand=Ball(0.042,0.052,0.034,mats.skin,0.1*side,-0.855,0.042,16); g.add(hand);
+    [-0.023,-0.008,0.008,0.023].forEach(function(off){ var f=Capsule(0.0055,0.048,mats.skin,0.108*side+off*side,-0.905,0.058,1,0.8,6); f.rotation.z=-0.06*side; g.add(f); });
+    var thumb=Capsule(0.006,0.046,mats.skin,0.065*side,-0.875,0.062,1,0.8,6); thumb.rotation.z=0.55*side; g.add(thumb);
+    if(armored) g.add(panel(0.042,0.19,0.025,mats.armorHi,0.08*side,-0.64,0.068,0,0,-0.03*side));
+    else g.add(CBetween([0.042*side,-0.16,0.056],[0.076*side,-0.6,0.062],0.003,mats.clothHi,6));
+    g.userData.hand=hand; return g;
+  }
+  function mkHead(headG, mats, spec, t, hasHelmet){
+    var HR=0.158, race=t.race||"human";
+    headG.add(Ball(HR*0.86,HR*1.02,HR*0.86,mats.skin,0,0.005,0,30));
+    headG.add(Ball(HR*0.58,HR*0.44,HR*0.68,mats.skin,0,-0.092,0.03,22));
+    var z=HR*0.82, ex=0.052, eyeR=t.eyeShape==="round"?0.022:t.eyeShape==="sharp"?0.016:0.019;
+    [-1,1].forEach(function(sg){
+      headG.add(Ball(0.024,0.012,0.008,mats.eyeWhite,ex*sg,0.022,z,16));
+      headG.add(Ball(eyeR*0.56,eyeR*0.5,0.006,mats.eye,ex*sg,0.016,z+0.01,14));
+      headG.add(panel(0.05,0.007,0.01,mats.hair,ex*sg,0.073,z*0.96,0,0,-0.08*sg));
+      var cheek=Ball(0.02,0.011,0.01,mats.skin,0.052*sg,-0.054,z*0.94,12); headG.add(cheek);
+    });
+    var nose=Loft([{y:0.012,rx:0.008,rz:0.005,z:z+0.01},{y:-0.034,rx:0.014,rz:0.018,z:z+0.026}], mats.skin, 10); headG.add(nose);
+    var mouth=(t.face==="smile")?M(new THREE.TorusGeometry(0.03,0.004,8,16,Math.PI), mats.mouth):panel(0.04,0.005,0.01,mats.mouth,0,-0.092,z*0.94);
+    if(t.face==="smile"){ mouth.rotation.z=Math.PI; mouth.position.set(0,-0.092,z*0.94); } headG.add(mouth);
+    if(/elf|fae|sprite/.test(race)){ [-1,1].forEach(function(sg){ var ear=M(new THREE.ConeGeometry(0.04,0.15,8), mats.skin); ear.position.set(HR*0.82*sg,0.045,0); ear.rotation.set(0,0.22*sg,-Math.PI/2*sg); headG.add(ear); }); }
+    else { [-1,1].forEach(function(sg){ headG.add(Ball(0.024,0.04,0.02,mats.skin,HR*0.83*sg,-0.01,0,12)); }); }
+    if(/orc|goblin/.test(race)){ [-1,1].forEach(function(sg){ var tusk=M(new THREE.ConeGeometry(0.014,0.055,6), mats.eyeWhite); tusk.position.set(0.045*sg,-0.125,z*0.86); tusk.rotation.x=Math.PI; headG.add(tusk); }); }
+    if(/demon/.test(race)){ [-1,1].forEach(function(sg){ var horn=M(new THREE.ConeGeometry(0.035,0.14,8), mats.trim); horn.position.set(0.092*sg,HR*0.9,-0.045); horn.rotation.z=-0.3*sg; headG.add(horn); }); }
+    if(!hasHelmet) mkHairModelKit(headG, t.hair||"short", mats.hair, HR);
+  }
+  function mkHairModelKit(headG, style, hairMat, HR){
+    if(style==="shaved"||style==="bald") return;
+    var cap=Ball(HR*0.92,HR*0.38,HR*0.9,hairMat,0,HR*0.43,-0.012,30); cap.scale.y*=0.72; headG.add(cap);
+    if(style==="mohawk"){ var mh=Capsule(0.025,HR*0.82,hairMat,0,HR*0.55,-0.02,1,0.7,10); mh.rotation.x=-0.12; headG.add(mh); return; }
+    [-0.08,-0.04,0.005,0.05,0.087].forEach(function(x,i){
+      var l=Capsule(0.01+(i%2)*0.003,HR*(0.15+(i%3)*0.035),hairMat,x,HR*(0.2-(i%2)*0.018),HR*0.79,1,0.7,8);
+      l.rotation.x=-0.18; l.rotation.z=(x<0?0.05:-0.05); headG.add(l);
+    });
+    if(/long/.test(style)){ var back=Loft([{y:-HR*0.05,rx:HR*0.55,rz:HR*0.18,z:-HR*0.62},{y:-HR*0.6,rx:HR*0.45,rz:HR*0.14,z:-HR*0.55}], hairMat, 24); headG.add(back); }
+    if(/braid/.test(style)){ [-1,1].forEach(function(sg){ var br=Capsule(0.026,HR*0.78,hairMat,HR*0.82*sg,-HR*0.26,0.02,1,0.8,8); br.rotation.z=0.05*sg; headG.add(br); }); }
+  }
+  function addModelKitArmor(rig, torso, mats, spec, bw){
+    var g=spec.equipped&&spec.equipped.armor; if(!g) return;
+    var metal=gMetal(g,"#dde7f2"), gem=gGem(g,"#9fd8ff"), txt=gText(g), light=/leather|hide|vest|mantle|robe/.test(txt)&&!/plate|war/.test(txt);
+    var mat=light?gCloth(g,"#64748b"):metal;
+    torso.add(Loft([{y:-0.2,rx:0.13*bw,rz:0.014,z:0.155},{y:0.05,rx:0.18*bw,rz:0.018,z:0.17},{y:0.3,rx:0.15*bw,rz:0.015,z:0.155}], mat, 28));
+    torso.add(Ball(0.042,0.052,0.018,gem,0,0.085,0.188,16));
+    [-1,1].forEach(function(sg){
+      torso.add(panel(0.032,0.34,0.026,light?mats.leather:mats.trim,0.095*sg,-0.02,0.184,0,0,0.22*sg));
+      var sh=Ball(0.12*bw,0.06,0.08,mat,0.34*sg,1.33,0.02,18); rig.add(sh);
+      var vam=Capsule(0.052,0.24,mat,0.36*sg,0.83,0.08,1,0.86,12); vam.rotation.z=-0.28*sg; rig.add(vam);
+      var gr=Capsule(0.054,0.28,mat,0.13*sg,0.25,0.05,1,0.86,12); rig.add(gr);
+    });
+  }
+  function addModelKitHelmet(headG, mats, spec, HR){
+    var g=spec.equipped&&spec.equipped.helmet; if(!g) return;
+    var metal=gMetal(g,"#f6cb6e"), gem=gGem(g,"#38bdf8"), txt=gText(g);
+    if(/hood|hide|leather/.test(txt)){
+      headG.add(Ball(HR*0.98,HR*0.74,HR*0.96,gCloth(g,"#475569"),0,HR*0.18,-0.02,26));
+      return;
+    }
+    headG.add(Ball(HR*0.94,HR*0.52,HR*0.94,metal,0,HR*0.45,-0.02,26));
+    headG.add(CBetween([-HR*0.72,HR*0.1,HR*0.78],[HR*0.72,HR*0.1,HR*0.78],0.014,metal,8));
+    headG.add(Ball(0.036,0.044,0.02,gem,0,HR*0.74,HR*0.28,12));
+  }
+  function addModelKitClassAccent(rig, torso, headG, spec, mats, bw){
+    var key=String(spec.cls||"knight").toLowerCase();
+    if(/monk/.test(key)){ var halo=M(new THREE.TorusGeometry(0.19,0.008,8,36), mats.energy); halo.position.set(0,1.78,-0.04); halo.rotation.x=Math.PI/2; rig.add(halo); }
+    else if(/mage|cleric|bard|shadow/.test(key)){ var sig=M(new THREE.TorusGeometry(0.13,0.006,8,32), mats.energy); sig.position.set(0,0.12,0.19*bw); sig.rotation.x=Math.PI/2; torso.add(sig); }
+    else if(/ranger|druid/.test(key)){ var strap=CBetween([-0.16*bw,0.3,-0.02],[0.16*bw,-0.28,0.13],0.012,mats.leather,8); torso.add(strap); }
   }
 
   /* ===================== HERO (heroic-realistic ~6 heads) ===================== */
@@ -547,10 +732,10 @@
     if(R.mountGroup){ R.root.remove(R.mountGroup); disposeGroup(R.mountGroup); }
     if(R.petGroup){ R.root.remove(R.petGroup); disposeGroup(R.petGroup); }
     flush(); R.heroRig=R.mountGroup=R.petGroup=null;
-    var hero=buildHero(spec); addOutlines(hero); var mount=spec.mount?buildMount(spec):null; if(mount) addOutlines(mount); var pet=buildPet(spec); R.mounted=!!mount;
+    var hero=buildHeroModelKit(spec); addOutlines(hero); var mount=spec.mount?buildMount(spec):null; if(mount) addOutlines(mount); var pet=buildPet(spec); R.mounted=!!mount;
     if(mount){ R.root.add(mount); R.mountGroup=mount; applyMountedPose(hero, mount); if(R.mode==="studio" && mount.userData.previewYaw!==undefined){ R.yaw=mount.userData.previewYaw; R.targetYaw=mount.userData.previewYaw; }
       if(R.pedestal) R.pedestal.visible=false;
-    } else { hero.position.y=0; if(R.pedestal) R.pedestal.visible=R.mode!=="studio"; }
+    } else { hero.position.y=0; if(R.pedestal) R.pedestal.visible=false; }
     R.root.add(hero); R.heroRig=hero; if(pet){ R.root.add(pet); R.petGroup=pet; } frame();
   }
   function applyMountedPose(hero, mount){
@@ -577,7 +762,7 @@
   function attach(container, mode){ if(!container) return; if(!FH3D.available){ if(!initEngine()) return; }
     var canvas=R.renderer.domElement; try{ if(getComputedStyle(container).position==="static") container.style.position="relative"; }catch(e){}
     if(canvas.parentNode!==container) container.appendChild(canvas); R.container=container; R.mode=mode||"home"; if(R.mode==="studio"){ R.yaw=0; R.targetYaw=0; R.autoSpin=false; } else if(!R.dragging){ R.autoSpin=true; }
-    if(R.pedestal) R.pedestal.visible = R.mode!=="studio" && !R.mounted;
+    if(R.pedestal) R.pedestal.visible = false;
     container.classList.add("fh3d-host"); container.setAttribute("data-fh3d-ready","0"); resize(); frame(); observe(container); startLoop(); }
   FH3D.attachHome=function(el){ attach(el,"home"); }; FH3D.attachStudio=function(el){ attach(el,"studio"); }; FH3D.detachStudio=function(h){ if(h) attach(h,"home"); };
   function resize(){ if(!R.container||!R.renderer) return; var w=R.container.clientWidth||120,h=R.container.clientHeight||120; R.renderer.setSize(w,h,false); R.camera.aspect=w/h; R.camera.updateProjectionMatrix(); }
