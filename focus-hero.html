@@ -2407,14 +2407,20 @@ button.danger:hover{background:rgba(220,38,38,.22);color:#fca5a5;}
 }
 .hero-card .avatar svg.fh98-hero-card-svg,
 #character-avatar-preview svg.fh98-hero-card-svg{
+  position:relative;
+  z-index:4;
   width:100%;
   height:100%;
   display:block;
   image-rendering:auto;
   shape-rendering:geometricPrecision;
+  pointer-events:none;
 }
-#avatar[data-renderer="3d"] > svg.fh98-hero-card-svg,
-#character-avatar-preview[data-renderer="3d"] > svg.fh98-hero-card-svg{opacity:0}
+.hero-card .avatar[data-renderer="3d"] .fh3d-canvas,
+#character-avatar-preview[data-renderer="3d"] .fh3d-canvas{
+  z-index:2;
+  opacity:.62;
+}
 #character-avatar-preview{height:312px}
 @media (max-width:760px){ #character-avatar-preview{height:264px} }
 
@@ -11346,8 +11352,12 @@ async function runSmokeTests(){
   }
   {
     renderAvatar();
-    const ok = !!document.querySelector("#avatar svg[viewBox='0 0 120 120']");
-    add("Avatar: renders 120x120 detailed SVG", ok);
+    const svg = document.querySelector("#avatar svg.fh98-hero-card-svg[data-avatar-version='v98']");
+    const box = svg?.getBoundingClientRect?.();
+    const style = svg ? getComputedStyle(svg) : null;
+    const hasLegacy = !!document.querySelector("#avatar .v86-root,#avatar .v86-hero,#avatar .v86-body,#avatar [class*='v86']");
+    const ok = !!svg && !hasLegacy && style?.display !== "none" && style?.visibility !== "hidden" && style?.opacity !== "0" && (box?.width || 0) >= 100 && (box?.height || 0) >= 100;
+    add("Avatar: renders visible v9 hero SVG", ok);
   }
   add("App-open tracking: totalAppOpenMs is number", typeof state.totalAppOpenMs === "number");
   add("App uptime: >24d formats without truncation", formatHMS(35*24*60*60*1000 + 3*60*60*1000 + 7*60*1000 + 11*1000) === "843:07:11");
