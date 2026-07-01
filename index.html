@@ -11,10 +11,12 @@
 <meta name="description" content="Focus Hero - a private, flexible focus dashboard with timers, tasks, rewards, analytics, durable offline saves, and encrypted cloud sync.">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png">
-<link rel="icon" href="icon-192.png">
+<link rel="icon" href="focus-hero-logo.svg" type="image/svg+xml">
+<link rel="alternate icon" href="icon-192.png">
 <title>Focus Hero</title>
 <style>
 /* ================================================================
+ * Focus Hero v9.8.9 - real app logo + live focus minute adjustments wired into XP/loot math
  * Focus Hero v9.8.8 - durable 180-day app/session logs + session history tab + avatar battery mode + loot/store expansion
  * Focus Hero v8.8.3 - realistic 3D character + per-creature mounts (Three.js) on v8.8.0 - + dramatic character fix + egg system
  *                    - v8.8.0 NEW: real per-family mount sprites + 2-frame walk cycle for ALL 15 families.
@@ -133,7 +135,8 @@ hr{border:none;border-top:1px solid var(--border);margin:1rem 0}
 .app{max-width:1180px;margin:0 auto;padding:24px 20px 120px;display:grid;gap:20px;grid-template-columns:1.1fr 1fr;align-items:start;touch-action:pan-y}
 header.topbar{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .brand{display:flex;align-items:center;gap:12px}
-.brand .logo{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:grid;place-items:center;color:white;font-weight:800;box-shadow:var(--shadow)}
+.brand .logo{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:grid;place-items:center;color:white;font-weight:800;box-shadow:var(--shadow);overflow:hidden}
+.brand .logo img{display:block;width:100%;height:100%;object-fit:cover}
 .brand h1{font-size:1.15rem;margin:0;letter-spacing:.3px}
 .brand .sub{font-size:.78rem;color:var(--ink-dim)}
 .topbar .actions{display:flex;gap:8px;flex-wrap:wrap}
@@ -153,6 +156,13 @@ header.topbar{grid-column:1/-1;display:flex;align-items:center;justify-content:s
 .mode-tabs button{padding:.4rem .75rem;font-size:.85rem;border-radius:999px}
 .mode-tabs button[aria-pressed="true"]{background:var(--panel-2);border-color:var(--accent)}
 .timer-display{font-family:var(--mono);font-size:clamp(4rem,15vw,8rem);font-weight:700;text-align:center;letter-spacing:-.02em;margin:.35rem 0;line-height:1;text-shadow:0 6px 40px rgba(var(--accent-rgb),.25)}
+.live-adjust{margin:8px auto 10px;max-width:520px;border:1px solid var(--border);border-radius:14px;background:rgba(255,255,255,.035);padding:8px 10px}
+.live-adjust[hidden]{display:none!important}
+.live-adjust-head{display:flex;justify-content:space-between;gap:10px;align-items:center;font-size:.72rem;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:7px}
+.live-adjust-head b{color:var(--accent);font-size:.78rem}
+.live-adjust-controls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.live-adjust-controls button{padding:.48rem .35rem;font-size:.78rem;border-radius:10px}
+.live-adjust-preview{margin-top:7px;font-size:.76rem;color:var(--ink-dim);line-height:1.35;text-align:center}
 .progress{height:6px;background:var(--panel-2);border-radius:999px;overflow:hidden}
 .progress > div{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2));transition:width .3s linear}
 .timer-controls{display:flex;gap:10px;justify-content:center;margin-top:14px;flex-wrap:wrap}
@@ -562,6 +572,7 @@ header.topbar{
   box-shadow:inset 0 0 0 2px rgba(255,255,255,.08),4px 4px 0 rgba(0,0,0,.42);
   text-shadow:2px 2px 0 #000;
 }
+.brand .logo img{border-radius:calc(var(--radius) - 2px)}
 .brand h1,.brand .sub,.card h2,.level-badge,.pill,button,input,select,textarea{letter-spacing:0}
 .brand h1{font-size:1.05rem;text-transform:uppercase;color:var(--legend);text-shadow:2px 2px 0 #000}
 .brand .sub{color:var(--ink-dim)}
@@ -2558,6 +2569,7 @@ header.topbar{
   box-shadow:0 12px 36px rgba(0,8,22,.22);
 }
 .brand .logo{width:42px;height:42px;border:0;border-radius:13px;background:linear-gradient(135deg,var(--accent),var(--accent-2));box-shadow:0 9px 26px rgba(var(--accent-rgb),.22);font-family:var(--font);letter-spacing:-.04em}
+.brand .logo img{border-radius:13px}
 .brand h1{font-size:1.12rem;letter-spacing:-.02em}.brand .sub{font-size:.76rem;color:var(--ink-dim)}
 .topbar .actions{display:flex;justify-content:flex-end;gap:6px;flex-wrap:wrap}
 .topbar .actions button{min-height:38px;padding:.48rem .7rem;font-size:.78rem}
@@ -3249,7 +3261,7 @@ svg{shape-rendering:geometricPrecision}
 <div class="app" role="main" id="app">
   <header class="topbar">
     <div class="brand">
-      <div class="logo" aria-hidden="true">FH</div>
+      <div class="logo" aria-hidden="true"><img src="focus-hero-logo.svg" alt=""></div>
       <div>
       <h1>Focus Hero</h1>
         <div class="sub" id="tagline">Make time visible. Keep momentum.</div>
@@ -3288,6 +3300,16 @@ svg{shape-rendering:geometricPrecision}
       <div class="timer-display" id="timer-display" role="timer" aria-live="polite" aria-atomic="true">25:00</div>
       <div id="game-mode-badge" class="game-mode-badge" hidden aria-live="polite" style="text-align:center">🔒 Locked In</div>
       <button type="button" id="btn-lockedin-reset" hidden style="display:block;width:fit-content;margin:6px auto 0;padding:6px 14px;border-radius:999px;font-size:.76rem;font-weight:700;background:rgba(255,122,138,.16);color:#ff9aa7;border:1px solid rgba(255,122,138,.5);cursor:pointer">🔁 I slipped — reset run</button>
+      <div class="live-adjust" id="live-adjust" hidden aria-live="polite">
+        <div class="live-adjust-head"><span>Adjust live focus</span><b id="live-adjust-planned">25m planned</b></div>
+        <div class="live-adjust-controls" role="group" aria-label="Adjust live focus minutes">
+          <button type="button" data-live-delta="-15">−15m</button>
+          <button type="button" data-live-delta="-5">−5m</button>
+          <button type="button" data-live-delta="5">+5m</button>
+          <button type="button" data-live-delta="15">+15m</button>
+        </div>
+        <div class="live-adjust-preview" id="live-adjust-preview">XP and loot preview updates with the planned time.</div>
+      </div>
       <div class="encounter-stage" id="encounter-stage" data-scene="resting" aria-label="Animated focus encounter">
         <div class="arena-skyline" aria-hidden="true"></div>
         <div class="arena-row">
@@ -3958,6 +3980,8 @@ const DEFAULTS = {
   },
   timer: { mode: "focus", endAt: 0, pausedAt: 0, running: false, msLeft: 25*60*1000,
            activeTaskId: null, activeTaskNameAtStart: null,
+           // v9.8.9: live focus duration edits. plannedMs is the current target length for this run.
+           plannedMs: 0, liveAdjustedAt: 0,
            // v4.1: stopwatch fields
            swStartedAt: 0, swAccumulatedMs: 0, swSessionStartedAt: 0,
            // v4.2.1: stopwatch laps — array of {at, elapsedMs, splitMs}
@@ -5491,6 +5515,81 @@ function playChime(isBreak){
 function modeMinutes(mode){
   return mode==="short" ? state.settings.shortMin : mode==="long" ? state.settings.longMin : state.settings.focusMin;
 }
+const LIVE_FOCUS_MAX_MINUTES = 24 * 60;
+function modeDefaultMs(mode){
+  return Math.max(1, modeMinutes(mode)|0) * 60_000;
+}
+function clearLiveFocusPlan(){
+  if (!state || !state.timer) return;
+  state.timer.plannedMs = 0;
+  state.timer.liveAdjustedAt = 0;
+}
+function focusPlannedMs(){
+  const planned = Number(state.timer?.plannedMs || 0);
+  if (state.timer?.mode === "focus" && planned > 0) return planned;
+  return modeDefaultMs("focus");
+}
+function focusRemainingMs(){
+  if (!state.timer || state.timer.mode !== "focus") return 0;
+  if (state.timer.running) return Math.max(0, (state.timer.endAt || 0) - now());
+  return Math.max(0, Number(state.timer.msLeft || 0));
+}
+function focusElapsedMs(){
+  if (!state.timer || state.timer.mode !== "focus") return 0;
+  return clamp(focusPlannedMs() - focusRemainingMs(), 0, focusPlannedMs());
+}
+function focusPlannedMinutes(){
+  return Math.max(1, Math.round(focusPlannedMs() / 60_000));
+}
+function ensureFocusPlanForRun(baseMs){
+  if (!state.timer || state.timer.mode !== "focus") return;
+  const base = Math.max(0, Number(baseMs || 0));
+  const standard = modeDefaultMs("focus");
+  const existing = Number(state.timer.plannedMs || 0);
+  const isPartialResume = existing > 0 && base > 0 && base < existing;
+  state.timer.plannedMs = isPartialResume ? existing : (base || standard);
+  state.timer.liveAdjustedAt = state.timer.liveAdjustedAt || 0;
+}
+function liveRewardPreview(minutes){
+  const tk = todayKey();
+  const comboPriorCount = state.combo?.date === tk ? (state.combo.count|0) : 0;
+  const streakPreview = state.lastFocusDate === tk ? (state.streak|0) : Math.max(1, state.streak|0);
+  const xp = computeXpBreakdown(minutes, { comboCount: comboPriorCount, streakDays: streakPreview, settings: state.settings });
+  const rarities = Array.from(allowedRaritiesForMinutes(minutes));
+  const rarity = rarities.length ? rarities[rarities.length - 1] : "none";
+  return { xp, rarity };
+}
+function liveFocusCanAdjust(){
+  if (!state.timer || state.timer.mode !== "focus") return false;
+  if (pendingClaim) return false;
+  const standard = modeDefaultMs("focus");
+  return !!(state.timer.running || (state.timer.msLeft > 0 && state.timer.msLeft < (state.timer.plannedMs || standard)));
+}
+function adjustLiveFocusMinutes(deltaMin){
+  deltaMin = Math.round(Number(deltaMin) || 0);
+  if (!deltaMin || !liveFocusCanAdjust()) return { ok:false, reason:"inactive" };
+  const oldPlan = focusPlannedMs();
+  const remaining = focusRemainingMs();
+  const elapsed = clamp(oldPlan - remaining, 0, oldPlan);
+  const minPlan = Math.max(60_000, Math.ceil(elapsed / 60_000) * 60_000);
+  const maxPlan = LIVE_FOCUS_MAX_MINUTES * 60_000;
+  const requested = oldPlan + deltaMin * 60_000;
+  const nextPlan = clamp(requested, minPlan, maxPlan);
+  const nextRemaining = Math.max(0, nextPlan - elapsed);
+  state.timer.plannedMs = nextPlan;
+  state.timer.liveAdjustedAt = now();
+  if (state.timer.running) state.timer.endAt = now() + nextRemaining;
+  else state.timer.msLeft = nextRemaining;
+  saveState();
+  renderTimer();
+  logLine(`Live focus adjusted: ${Math.round(oldPlan/60000)}m → ${Math.round(nextPlan/60000)}m planned`);
+  if (requested !== nextPlan){
+    toast(`Live session capped at ${Math.round(nextPlan/60000)}m planned.`, "warn");
+  } else {
+    toast(`Live focus now ${Math.round(nextPlan/60000)}m planned.`, "info");
+  }
+  return { ok:true, before:oldPlan, after:nextPlan, requested };
+}
 function isStopwatch(){ return state.timer.mode === "stopwatch"; }
 /* v4.1: pure helper — total elapsed ms for stopwatch state. Testable. */
 function stopwatchElapsedMs(timer, nowMs){
@@ -5524,6 +5623,7 @@ function setMode(mode, {resetRun=true}={}){
     state.timer.running = false;
     state.timer.endAt = 0;
     state.timer.pausedAt = 0;
+    clearLiveFocusPlan();
     if (mode === "stopwatch"){
       // entering stopwatch: keep prior unfinalised elapsed unless reset explicitly
       state.timer.msLeft = 0;
@@ -5563,6 +5663,7 @@ function startTimer(){
     return;
   }
   const base = state.timer.msLeft > 0 ? state.timer.msLeft : modeMinutes(state.timer.mode)*60*1000;
+  if (state.timer.mode === "focus") ensureFocusPlanForRun(base);
   state.timer.endAt = now() + base;
   state.timer.running = true;
   state.timer.pausedAt = 0;
@@ -5586,6 +5687,7 @@ function startTimer(){
      task name. */
   if (state.timer.mode === "focus") logBattle(`Hero focuses on ${currentSessionTaskLabel()}.`, "switch");
   renderActiveTaskRow();
+  renderTimer();
   renderActionPicker(); renderAvatar(); ensureBurstInterval(true);
   $("#btn-start").textContent = "Pause";
   requestNotifPermIfNeeded();
@@ -5629,6 +5731,7 @@ function resetTimer(){
     state.timer.swLaps = [];
     state.timer.activeTaskId = null;
     state.timer.activeTaskNameAtStart = null;
+    clearLiveFocusPlan();
     saveState(); renderTimer(); renderActiveTaskRow(); renderSwLaps();
     $("#btn-start").textContent = "Start";
     stopKeepalive(); releaseWakeLock();
@@ -5639,6 +5742,7 @@ function resetTimer(){
   state.timer.msLeft = modeMinutes(state.timer.mode)*60*1000;
   state.timer.activeTaskId = null;
   state.timer.activeTaskNameAtStart = null;
+  clearLiveFocusPlan();
   saveState(); renderTimer(); renderActiveTaskRow();
   $("#btn-start").textContent = "Start";
   stopKeepalive(); releaseWakeLock();
@@ -5663,7 +5767,7 @@ function isCancelableSession(){
     return !!(state.timer.running || (state.timer.swAccumulatedMs|0) > 0);
   }
   if (state.timer.mode !== "focus") return false;
-  const fullMs = modeMinutes(state.timer.mode) * 60 * 1000;
+  const fullMs = focusPlannedMs();
   return !!(state.timer.running || (state.timer.msLeft > 0 && state.timer.msLeft < fullMs));
 }
 function cancelSession(opts){
@@ -5691,6 +5795,7 @@ function cancelSession(opts){
     // Reset countdown to the full mode duration — back to pre-session "ready".
     state.timer.msLeft = modeMinutes(state.timer.mode) * 60 * 1000;
   }
+  clearLiveFocusPlan();
   // Clear the active task pointer so the next start re-snapshots.
   state.timer.activeTaskId = null;
   state.timer.activeTaskNameAtStart = null;
@@ -5855,6 +5960,7 @@ function startFocusClaim(wasMode, plannedMinutes){
   state.timer.running = false;
   state.timer.endAt = 0;
   state.timer.msLeft = 0;
+  clearLiveFocusPlan();
   saveState();
   renderTimer(); renderActiveTaskRow(); refreshCancelButtonVisibility();
   openClaimModal();
@@ -5988,7 +6094,7 @@ function commitFocusTimerSession(claim, minutes){
 }
 function completeSession(){
   const wasMode = state.timer.mode;
-  const minutes = modeMinutes(wasMode);
+  const minutes = wasMode === "focus" ? focusPlannedMinutes() : modeMinutes(wasMode);
   state.timer.running = false;
   state.timer.endAt = 0;
   state.timer.msLeft = 0;
@@ -7197,10 +7303,42 @@ function renderSwLaps(){
     `<div class="sw-laps-head"><span>Laps · last ${laps.length}</span><span>split · total</span></div>`+
     `<ol>${items.join("")}</ol>`;
 }
+function renderLiveAdjust(){
+  const root = $("#live-adjust");
+  if (!root) return;
+  const visible = liveFocusCanAdjust();
+  root.hidden = !visible;
+  if (!visible) return;
+  const planned = focusPlannedMinutes();
+  const remaining = focusRemainingMs();
+  const elapsed = focusElapsedMs();
+  const minPlan = Math.max(1, Math.ceil(elapsed / 60_000));
+  const preview = liveRewardPreview(planned);
+  const floor = Math.max(1, state.settings.minRewardMinutes|0 || 5);
+  const rarityText = preview.rarity === "none" ? "no loot roll" : `${preview.rarity} ceiling`;
+  const plannedEl = $("#live-adjust-planned");
+  if (plannedEl) plannedEl.textContent = `${planned}m planned`;
+  const text = $("#live-adjust-preview");
+  if (text){
+    text.textContent = planned < floor
+      ? `${fmtTime(remaining)} left · below ${floor}m reward floor · no XP/loot`
+      : `${fmtTime(remaining)} left · full claim preview: +${preview.xp.total} XP · ${rarityText}`;
+  }
+  $$("[data-live-delta]", root).forEach(btn=>{
+    const d = Number(btn.dataset.liveDelta || 0);
+    btn.disabled = (d < 0 && planned <= minPlan) || (d > 0 && planned >= LIVE_FOCUS_MAX_MINUTES);
+    btn.title = d < 0 && planned <= minPlan
+      ? "Already at the lowest safe planned time for elapsed progress"
+      : d > 0 && planned >= LIVE_FOCUS_MAX_MINUTES
+        ? "Live focus cap is 24h"
+        : `Adjust planned focus by ${d} minutes`;
+  });
+}
 function renderTimer(){
   try { updateGameModeIndicator(); } catch(_){}
   const display = $("#timer-display");
   if (isStopwatch()){
+    renderLiveAdjust();
     const elapsed = stopwatchElapsedMs(state.timer, now());
     display.textContent = fmtTimeLong(elapsed);
     display.classList.remove("critical");
@@ -7220,13 +7358,15 @@ function renderTimer(){
   else left = state.timer.msLeft;
   display.textContent = fmtTime(left);
   display.classList.toggle("critical", state.timer.running && state.timer.mode === "focus" && left > 0 && left <= 60_000);
-  const total = modeMinutes(state.timer.mode)*60*1000;
+  const total = state.timer.mode === "focus" ? focusPlannedMs() : modeMinutes(state.timer.mode)*60*1000;
   const pct = 100 - (left/total*100);
   $("#progress-bar").style.width = `${clamp(pct,0,100)}%`;
   // title
   const modeLbl = state.timer.mode==="focus"?"Focus":state.timer.mode==="short"?"Break":"Long";
   document.title = `${fmtTime(left)} · ${modeLbl} — Focus Hero`;
-  $("#btn-start").textContent = state.timer.running ? "Pause" : (state.timer.msLeft < modeMinutes(state.timer.mode)*60*1000 && state.timer.msLeft>0 ? "Resume" : "Start");
+  const defaultMs = state.timer.mode === "focus" ? focusPlannedMs() : modeMinutes(state.timer.mode)*60*1000;
+  $("#btn-start").textContent = state.timer.running ? "Pause" : (state.timer.msLeft < defaultMs && state.timer.msLeft>0 ? "Resume" : "Start");
+renderLiveAdjust();
 refreshAvatarRunningState();
 renderEncounterStage();
 refreshCancelButtonVisibility();
@@ -11459,6 +11599,7 @@ function bindTimer(){
   $("#btn-skip").onclick = ()=>skipTimer();
   const stopLog = $("#btn-stop-log"); if (stopLog) stopLog.onclick = ()=>finalizeStopwatch();
   const lap = $("#btn-lap"); if (lap) lap.onclick = ()=>lapStopwatch();
+  $$("[data-live-delta]").forEach(b=>b.addEventListener("click", ()=>adjustLiveFocusMinutes(parseInt(b.dataset.liveDelta, 10)||0)));
   // v7.3: Cancel button is the zero-credit abort path. Distinct from Reset, which
   // already silently drops elapsed time but has no confirm + no awareness counter.
   const cancelBtn = $("#btn-cancel-session"); if (cancelBtn) cancelBtn.onclick = ()=>cancelSession();
@@ -11603,6 +11744,7 @@ const __FocusHero = {
   cancelSession, isCancelableSession,
   /* v7.7: post-session claim and customization */
   startFocusClaim, confirmSessionClaim, commitFocusTimerSession,
+  adjustLiveFocusMinutes, focusPlannedMinutes, focusPlannedMs, liveFocusCanAdjust,
   setEquipped, clearEquipped, setHeroAppearance, ensureHeroAppearanceShape,
   fmtTimeLong,
   /* v4.2: emergency recovery — call from DevTools console.
@@ -11646,6 +11788,35 @@ async function runSmokeTests(){
     add("XP: streak 7d adds 7% at 25m", x.streakPct === 7 && x.streakBonus === 4, `got streakBonus=${x.streakBonus}`);
   }
   {
+    const mark = document.querySelector(".brand .logo img");
+    const text = (document.querySelector(".brand .logo")?.textContent || "").trim();
+    add("Brand: real symbol logo replaces FH initials", !!mark && /focus-hero-logo\.svg/.test(mark.getAttribute("src") || "") && text === "");
+  }
+  {
+    const snapshot = deepClone(state);
+    const t = createTask({ name:"LiveAdjustTask", emoji:"⏳" });
+    state.timer.mode = "focus";
+    state.timer.running = false;
+    state.timer.endAt = 0;
+    state.timer.msLeft = 25 * 60_000;
+    state.timer.activeTaskId = t.id;
+    state.timer.activeTaskNameAtStart = t.name;
+    startTimer();
+    const started = state.timer.running && focusPlannedMinutes() === 25;
+    const up = adjustLiveFocusMinutes(15);
+    const plannedUp = focusPlannedMinutes() === 40;
+    const down = adjustLiveFocusMinutes(-30);
+    const plannedDown = focusPlannedMinutes() === 10;
+    const xp10 = computeXpBreakdown(10, { comboCount:0, streakDays:Math.max(1,state.streak|0), settings:state.settings });
+    completeSession();
+    const claimOk = pendingClaim && pendingClaim.plannedMinutes === 10;
+    const inputOk = ($("#claim-minutes")?.max === "10") && ($("#claim-minutes")?.value === "10");
+    const previewOk = ($("#claim-preview")?.textContent || "").includes(`+${xp10.total} XP`);
+    pendingClaim = null; closeModal("claim-modal");
+    add("Live focus edit: planned minutes drive claim + XP preview", started && up.ok && plannedUp && down.ok && plannedDown && claimOk && inputOk && previewOk);
+    state = snapshot; saveState(); renderAll();
+  }
+  {
     const snapshot = deepClone(state);
     const t1 = createTask({ name:"SmokeTestTask", emoji:"🧪" });
     const created = !!t1 && t1.name === "SmokeTestTask";
@@ -11687,6 +11858,19 @@ async function runSmokeTests(){
   }
   {
     renderAvatar();
+    const readAvatarReady = () => {
+      const av = document.querySelector("#avatar");
+      const svg = document.querySelector("#avatar svg.fh98-hero-card-svg[data-avatar-version='v98']");
+      const box = svg?.getBoundingClientRect?.();
+      const style = svg ? getComputedStyle(svg) : null;
+      const canvas = document.querySelector("#avatar canvas.fh3d-canvas");
+      const canvasStyle = canvas ? getComputedStyle(canvas) : null;
+      const canvasBox = canvas?.getBoundingClientRect?.();
+      const modelReady = av?.getAttribute("data-renderer") === "3d" && av?.getAttribute("data-fh3d-ready") === "1" && !!canvas && canvasStyle?.opacity !== "0" && (canvasBox?.width || 0) >= 100 && (canvasBox?.height || 0) >= 100;
+      const fallbackReady = !!svg && style?.display !== "none" && style?.visibility !== "hidden" && style?.opacity !== "0" && (box?.width || 0) >= 100 && (box?.height || 0) >= 100;
+      const hasLegacy = !!document.querySelector("#avatar .v86-root,#avatar .v86-hero,#avatar .v86-body,#avatar [class*='v86']");
+      return { modelReady, fallbackReady, hasLegacy };
+    };
     await new Promise(resolve => {
       let tries = 0;
       const wait = () => {
@@ -11697,17 +11881,13 @@ async function runSmokeTests(){
       };
       requestAnimationFrame(wait);
     });
-    const av = document.querySelector("#avatar");
-    const svg = document.querySelector("#avatar svg.fh98-hero-card-svg[data-avatar-version='v98']");
-    const box = svg?.getBoundingClientRect?.();
-    const style = svg ? getComputedStyle(svg) : null;
-    const canvas = document.querySelector("#avatar canvas.fh3d-canvas");
-    const canvasStyle = canvas ? getComputedStyle(canvas) : null;
-    const canvasBox = canvas?.getBoundingClientRect?.();
-    const modelReady = av?.getAttribute("data-renderer") === "3d" && av?.getAttribute("data-fh3d-ready") === "1" && !!canvas && canvasStyle?.opacity !== "0" && (canvasBox?.width || 0) >= 100 && (canvasBox?.height || 0) >= 100;
-    const fallbackReady = !!svg && style?.display !== "none" && style?.visibility !== "hidden" && style?.opacity !== "0" && (box?.width || 0) >= 100 && (box?.height || 0) >= 100;
-    const hasLegacy = !!document.querySelector("#avatar .v86-root,#avatar .v86-hero,#avatar .v86-body,#avatar [class*='v86']");
-    add("Avatar: renders 3D model or visible fallback", !hasLegacy && (modelReady || fallbackReady));
+    let ready = readAvatarReady();
+    if (!ready.modelReady && !ready.fallbackReady) {
+      renderAvatar();
+      await new Promise(resolve => setTimeout(resolve, 900));
+      ready = readAvatarReady();
+    }
+    add("Avatar: renders 3D model or visible fallback", !ready.hasLegacy && (ready.modelReady || ready.fallbackReady));
   }
   {
     const snapshot = deepClone(state);
