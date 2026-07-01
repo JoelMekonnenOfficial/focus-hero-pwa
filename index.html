@@ -2390,9 +2390,10 @@ button.danger:hover{background:rgba(220,38,38,.22);color:#fca5a5;}
 .store-item.rar-legendary{ border-color:var(--legend); }
 .store-item.rar-mythic{ border-color:var(--myth); }
 
-/* ===== v8.8.1: 3D character (FH3D) — canvas overlays the SVG fallback ===== */
+/* ===== v8.8.1: 3D character (FH3D) — WebGL model primary, SVG only fallback ===== */
 .fh3d-host{position:relative}
-.fh3d-canvas{position:absolute;inset:0;width:100%;height:100%;display:block;border-radius:inherit;z-index:3;cursor:grab;touch-action:pan-y}
+.fh3d-canvas{position:absolute;inset:0;width:100%;height:100%;display:block;border-radius:inherit;z-index:5;cursor:grab;touch-action:pan-y;opacity:0;transition:opacity .18s ease}
+.fh3d-host[data-fh3d-ready="1"] .fh3d-canvas{opacity:1}
 .fh3d-canvas:active{cursor:grabbing}
 .hero-card .avatar[data-avatar-version="v98"]{
   width:136px;
@@ -2418,8 +2419,11 @@ button.danger:hover{background:rgba(220,38,38,.22);color:#fca5a5;}
 }
 .hero-card .avatar[data-renderer="3d"] .fh3d-canvas,
 #character-avatar-preview[data-renderer="3d"] .fh3d-canvas{
-  z-index:2;
-  opacity:.62;
+  z-index:5;
+}
+.hero-card .avatar[data-renderer="3d"][data-fh3d-ready="1"] > svg.fh98-hero-card-svg,
+#character-avatar-preview[data-renderer="3d"][data-fh3d-ready="1"] > svg.fh98-hero-card-svg{
+  opacity:0;
 }
 #character-avatar-preview{height:312px}
 @media (max-width:760px){ #character-avatar-preview{height:264px} }
@@ -7160,7 +7164,10 @@ function fh3dSpec(){
   if ((prof.widthScale||1) >= 1.18 || (prof.stockiness||1) >= 1.3) body = "broad";
   else if ((prof.heightScale||1) <= 0.95 && (prof.stockiness||1) <= 0.88) body = "lean";
   const ov = OV[classKey] || {};
-  const helm = (ov.helm === "open" || ov.helm === "none" || ov.helm === "hood" || !ov.helm) ? "open" : "crest";
+  const helmPref = a.helm || ov.helm || "closed";
+  const helm = (helmPref === "open" || helmPref === "none" || helmPref === "hood")
+    ? "open"
+    : (helmPref === "crest" ? "crest" : "closed");
   const eq = (typeof avatarEquipment === "function") ? avatarEquipment() : {};
   const tierArt = (window.AVATAR_TIER_ART) || (typeof AVATAR_TIER_ART !== "undefined" ? AVATAR_TIER_ART : {});
   const gearInfo = (g)=>{ if(!g) return null; const ts = tierArt[g.tier] || {}; return { id:g.id, tier:g.tier||"common", metal:ts.metal||"#cbd5e1", gem:ts.gem||"#22d3ee", glow:ts.glow||0 }; };
@@ -11352,12 +11359,27 @@ async function runSmokeTests(){
   }
   {
     renderAvatar();
+    await new Promise(resolve => {
+      let tries = 0;
+      const wait = () => {
+        const av = document.querySelector("#avatar");
+        if (av?.getAttribute("data-fh3d-ready") === "1") setTimeout(resolve, 260);
+        else if (tries++ > 24) resolve();
+        else requestAnimationFrame(wait);
+      };
+      requestAnimationFrame(wait);
+    });
+    const av = document.querySelector("#avatar");
     const svg = document.querySelector("#avatar svg.fh98-hero-card-svg[data-avatar-version='v98']");
     const box = svg?.getBoundingClientRect?.();
     const style = svg ? getComputedStyle(svg) : null;
+    const canvas = document.querySelector("#avatar canvas.fh3d-canvas");
+    const canvasStyle = canvas ? getComputedStyle(canvas) : null;
+    const canvasBox = canvas?.getBoundingClientRect?.();
+    const modelReady = av?.getAttribute("data-renderer") === "3d" && av?.getAttribute("data-fh3d-ready") === "1" && !!canvas && canvasStyle?.opacity !== "0" && (canvasBox?.width || 0) >= 100 && (canvasBox?.height || 0) >= 100;
+    const fallbackReady = !!svg && style?.display !== "none" && style?.visibility !== "hidden" && style?.opacity !== "0" && (box?.width || 0) >= 100 && (box?.height || 0) >= 100;
     const hasLegacy = !!document.querySelector("#avatar .v86-root,#avatar .v86-hero,#avatar .v86-body,#avatar [class*='v86']");
-    const ok = !!svg && !hasLegacy && style?.display !== "none" && style?.visibility !== "hidden" && style?.opacity !== "0" && (box?.width || 0) >= 100 && (box?.height || 0) >= 100;
-    add("Avatar: renders visible v9 hero SVG", ok);
+    add("Avatar: renders 3D model or visible fallback", !hasLegacy && (modelReady || fallbackReady));
   }
   add("App-open tracking: totalAppOpenMs is number", typeof state.totalAppOpenMs === "number");
   add("App uptime: >24d formats without truncation", formatHMS(35*24*60*60*1000 + 3*60*60*1000 + 7*60*1000 + 11*1000) === "843:07:11");
