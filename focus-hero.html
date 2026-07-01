@@ -15,6 +15,7 @@
 <title>Focus Hero</title>
 <style>
 /* ================================================================
+ * Focus Hero v9.8.8 - durable 180-day app/session logs + session history tab + avatar battery mode + loot/store expansion
  * Focus Hero v8.8.3 - realistic 3D character + per-creature mounts (Three.js) on v8.8.0 - + dramatic character fix + egg system
  *                    - v8.8.0 NEW: real per-family mount sprites + 2-frame walk cycle for ALL 15 families.
  *                                 Each family distinct silhouette; per-breed palette overrides.
@@ -2090,6 +2091,31 @@ body.lr-screen-shake { animation: lr-shake .25s ease-in-out }
 .activity-currency{border-left:2px solid var(--legend);}
 .activity-mount{border-left:2px solid var(--epic);}
 .activity-egg{border-left:2px solid var(--myth);}
+.session-history-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:10px}
+.session-history-card{border:1px solid var(--border);background:rgba(255,255,255,.04);border-radius:12px;padding:9px 10px}
+.session-history-card span{display:block;font-size:.68rem;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-mute)}
+.session-history-card b{display:block;margin-top:3px;font-size:1.05rem;color:var(--ink)}
+.session-history-list{display:flex;flex-direction:column;gap:6px;max-height:540px;overflow:auto;-webkit-overflow-scrolling:touch}
+.session-history-row{display:grid;grid-template-columns:minmax(116px,.8fr) minmax(150px,1.3fr) minmax(70px,.55fr) minmax(70px,.55fr) minmax(90px,.7fr) auto;gap:8px;align-items:center;border:1px solid var(--border);background:rgba(255,255,255,.035);border-radius:12px;padding:8px}
+.session-history-date{font-family:var(--mono);font-size:.72rem;color:var(--ink-dim)}
+.session-history-task{min-width:0}
+.session-history-task b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.session-history-task span,.session-history-meta{font-size:.72rem;color:var(--ink-dim)}
+.session-history-pill{display:inline-flex;align-items:center;justify-content:center;min-height:22px;border-radius:999px;border:1px solid var(--border);padding:1px 8px;font-size:.72rem;color:var(--ink-dim);background:rgba(0,0,0,.12)}
+.session-history-pill.rewarded{border-color:rgba(var(--accent-rgb),.45);color:var(--accent)}
+.session-history-pill.edited{border-color:rgba(244,191,104,.55);color:var(--warn)}
+.session-history-actions button{padding:3px 8px;font-size:.72rem;border-radius:8px}
+.app-log-meta{display:flex;justify-content:space-between;gap:8px;align-items:center;margin:-2px 0 8px;font-size:.74rem;color:var(--ink-mute)}
+.app-log{max-height:260px;overflow:auto;font-size:.85rem;color:var(--ink-dim);font-family:var(--mono);line-height:1.45}
+.app-log-line{padding:3px 0;border-bottom:1px dotted rgba(255,255,255,.08)}
+.app-log-line:last-child{border-bottom:none}
+.app-log-line.err{color:var(--bad)}
+.app-log-time{color:var(--ink-mute)}
+@media (max-width:760px){
+  .session-history-row{grid-template-columns:1fr auto;gap:5px}
+  .session-history-date,.session-history-task,.session-history-meta{grid-column:1 / -1}
+  .session-history-actions{justify-self:end}
+}
 /* v8.6.4: sign-toggle pill for delta inputs (iOS keypad has no minus key) */
 .minute-custom-row{display:flex;gap:6px;align-items:center;}
 .sign-toggle{min-width:34px;padding:.45rem .5rem;font-size:.95rem;font-weight:600;line-height:1;
@@ -3201,7 +3227,7 @@ svg{shape-rendering:geometricPrecision}
 }
 </style>
 <script src="three.min.js"></script>
-<script src="fh3d.js?v=fh-2026-07-01-v9-8-7"></script>
+<script src="fh3d.js?v=fh-2026-07-01-v9-8-8"></script>
 <script>
 /* v7.9: zoom-lock - block pinch + double-tap zoom; single-finger scroll stays. */
 (function(){
@@ -3387,6 +3413,7 @@ svg{shape-rendering:geometricPrecision}
         <button role="tab" data-tab="ach" aria-pressed="false">Achievements</button>
         <button role="tab" data-tab="store" aria-pressed="false">🪙 Store</button>
         <button role="tab" data-tab="ledger" aria-pressed="false">📒 Ledger</button>
+        <button role="tab" data-tab="sessions" aria-pressed="false">🗂️ Sessions</button>
         <button role="tab" data-tab="heat" aria-pressed="false">Heatmap</button>
       </div>
       <div id="tab-loot" class="tab-panel"><div id="loot-grid" class="loot-grid"></div></div>
@@ -3401,6 +3428,7 @@ svg{shape-rendering:geometricPrecision}
       <div id="tab-ach" class="tab-panel" hidden><div id="ach-grid" class="ach-grid"></div></div>
       <div id="tab-store" class="tab-panel" hidden><div id="store-panel"></div></div>
       <div id="tab-ledger" class="tab-panel" hidden><div id="ledger-panel"></div></div>
+      <div id="tab-sessions" class="tab-panel" hidden><div id="sessions-panel"></div></div>
       <div id="tab-heat" class="tab-panel" hidden>
         <div class="muted" style="font-size:.8rem;margin-bottom:6px">Last 14 weeks · darker = more focus minutes</div>
         <div class="heatmap" id="heatmap"></div>
@@ -3409,7 +3437,8 @@ svg{shape-rendering:geometricPrecision}
 
     <div class="card" id="section-log" aria-labelledby="log-heading">
       <h2 id="log-heading">Log</h2>
-      <div id="log" style="max-height:260px;overflow:auto;font-size:.85rem;color:var(--ink-dim)"></div>
+      <div class="app-log-meta"><span>Saved locally for 180 days</span><span id="log-count">0 entries</span></div>
+      <div id="log" class="app-log"></div>
     </div>
   </section>
 </div>
@@ -3470,6 +3499,11 @@ svg{shape-rendering:geometricPrecision}
       <option value="dock">Command Dock</option>
       <option value="split">Split Workstation</option>
       <option value="mobile">Mobile Stack</option>
+    </select></div></div>
+    <div class="form-row"><label>Avatar renderer <span class="hint">Use 2D battery saver on phone if 3D drains too much.</span></label><div class="val"><select id="cfg-avatar-renderer">
+      <option value="auto">Auto battery-aware</option>
+      <option value="3d">3D model</option>
+      <option value="2d">2D battery saver</option>
     </select></div></div>
     <div class="form-row"><label>Color vibe</label><div class="val"><select id="cfg-color">
       <option value="mint">Mint focus</option>
@@ -3858,7 +3892,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const STORAGE_KEY     = "focusHero.v4.state";
 const LEGACY_KEYS     = ["focusHero.v3.state", "focusHero.v2.state", "focusHero.v1.state"];
 const BC_KEY          = "focusHero.v4";
-const DATA_VERSION    = 14;
+const DATA_VERSION    = 15;
 const PBKDF2_ITERATIONS = 100_000;
 const AES_KEY_LENGTH = 256;
 const SALT_BYTES = 16;
@@ -3918,6 +3952,7 @@ const DEFAULTS = {
     lastAutoBackup: null,
     lastManualBackup: null,
     designVariant: "command",
+    avatarRenderer: "auto",
     characterPatchVersion: 2,
     e2eEncryption: true
   },
@@ -3949,7 +3984,8 @@ const DEFAULTS = {
   history: {},
   sessionHistory: {},
   sessionsLog: [],
-  activityLog: [],   /* v8.7.0: append-only universal change log (cap 500) */
+  appLog: [],        /* v9.8.8: durable visible Log card entries, retained 180d */
+  activityLog: [],   /* v8.7.0: append-only universal change log (retained 180d) */
   battleLog: [],
   adventure: { action:"Travel", actionMin:{ Travel:0, Rest:0, Hunt:0, Loot:0, Fight:0, Craft:0, Meditate:0 }, actionsTriedSinceV76:{} },
   bestiary: {},
@@ -3987,6 +4023,72 @@ const DEFAULTS = {
     lastSyncError: null, lastErrorLoggedAt: 0, lastSuccessfulSyncAt: 0
   }
 };
+
+const LOG_RETENTION_DAYS = 180;
+const LOG_RETENTION_MS = LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+const APP_LOG_CAP = 10000;
+const SESSION_LOG_CAP = 10000;
+const ACTIVITY_LOG_CAP = 10000;
+const BATTLE_LOG_CAP = 5000;
+const VALID_AVATAR_RENDERERS = ["auto","3d","2d"];
+
+function retainedCutoffMs(days=LOG_RETENTION_DAYS){
+  return Date.now() - Math.max(1, days|0) * 24 * 60 * 60 * 1000;
+}
+function entryTimeMs(e){
+  if (!e || typeof e !== "object") return 0;
+  const at = Number(e.at);
+  if (Number.isFinite(at) && at > 0) return at;
+  const ts = e.timestamp || e.date || e.time;
+  if (ts){
+    const parsed = Date.parse(ts);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  return 0;
+}
+function pruneTimedEntries(list, opts={}){
+  const cap = Math.max(1, opts.cap || APP_LOG_CAP);
+  const cutoff = Date.now() - (opts.ms || LOG_RETENTION_MS);
+  const arr = Array.isArray(list) ? list.filter(e=>e && typeof e === "object") : [];
+  const kept = arr.filter(e=>{
+    const t = entryTimeMs(e);
+    return !t || t >= cutoff;
+  }).sort((a,b)=>(entryTimeMs(a)||0)-(entryTimeMs(b)||0));
+  return kept.length > cap ? kept.slice(-cap) : kept;
+}
+function sessionLogKey(s){
+  if (!s || typeof s !== "object") return "";
+  if (s.id) return "id:" + String(s.id);
+  return [s.at||s.timestamp||"", s.type||"", s.source||"", s.minutes||0, s.taskId||"", s.action||""].join("|");
+}
+function activityLogKey(a){
+  if (!a || typeof a !== "object") return "";
+  if (a.id) return "id:" + String(a.id);
+  return [a.at||a.timestamp||"", a.category||"", a.action||"", a.sessionId||"", a.taskId||"", a.delta||""].join("|");
+}
+function appLogKey(e){
+  if (!e || typeof e !== "object") return "";
+  if (e.id) return "id:" + String(e.id);
+  return [e.at||e.timestamp||"", e.text||"", e.isErr ? 1 : 0].join("|");
+}
+function mergeTimedEntries(a, b, opts={}){
+  const keyFn = opts.keyFn || appLogKey;
+  const seen = new Set();
+  const merged = [];
+  for (const e of (Array.isArray(a) ? a : []).concat(Array.isArray(b) ? b : [])){
+    if (!e || typeof e !== "object") continue;
+    const key = keyFn(e);
+    if (key && seen.has(key)) continue;
+    if (key) seen.add(key);
+    merged.push(deepClone(e));
+  }
+  return pruneTimedEntries(merged, opts);
+}
+function taskLabelById(taskId){
+  if (!taskId || !Array.isArray(state?.tasks)) return "";
+  const t = state.tasks.find(x=>x && x.id === taskId);
+  return t ? `${t.emoji || ""} ${t.name || "(unnamed)"}`.trim() : "";
+}
 
 /* -------- classes, titles, loot, achievements, daily templates -------- */
 const CLASSES = {
@@ -4141,7 +4243,20 @@ const LOOT_TABLE = [
   ["👁️","Little Watcher","legendary",1,"pet"],
   ["🏺","Focus Reliquary","legendary",1,"accessory"],
   ["💎","Luck Prism","mythic",1,"accessory"],
-  ["🌗","Eclipse Blade","mythic",1,"weapon"]
+  ["🌗","Eclipse Blade","mythic",1,"weapon"],
+  // --- v9.8.8 retention + reward polish: more visible XP/coin/energy paths ---
+  ["📓","Session Archivist's Codex","rare",5,"helmet"],
+  ["🧥","Offline Runner Coat","rare",5,"armor"],
+  ["🪄","Pitymeter Wand","epic",3,"weapon"],
+  ["🧭","Syncfinder Compass","epic",3,"accessory"],
+  ["🐐","Highland Ibex","rare",4,"mount"],
+  ["🦦","River Otter Squire","rare",4,"pet"],
+  ["🛡️","Battery Ward","epic",3,"armor"],
+  ["👑","Crown of Deep Work","legendary",1,"helmet"],
+  ["🐉","Azure Focus Drake","legendary",1,"mount"],
+  ["🦉","Archive Owl","legendary",1,"pet"],
+  ["🗡️","No-Signal Saber","mythic",1,"weapon"],
+  ["🦊","Aurora Kitsune","mythic",1,"mount"]
 ];
 const EQUIP_SLOTS = ["weapon","helmet","armor","mount","pet"];
 const TIER_RANK = { common:1, uncommon:2, rare:3, epic:4, legendary:5, mythic:6 };
@@ -4327,7 +4442,19 @@ const GEAR_EFFECTS = {
   little_watcher:      { xpPct:13, label:"+13% XP" },
   focus_reliquary:     { xpPct:15, energySave:2, label:"+15% XP, -2 energy" },
   luck_prism:          { coinPct:24, label:"+24% coins" },
-  eclipse_blade:       { xpPct:24, coinPct:8, label:"+24% XP, +8% coins" }
+  eclipse_blade:       { xpPct:24, coinPct:8, label:"+24% XP, +8% coins" },
+  session_archivist_s_codex: { xpPct:7, label:"+7% XP" },
+  offline_runner_coat: { energySave:3, label:"-3 energy cost" },
+  pitymeter_wand:      { xpPct:11, label:"+11% XP" },
+  syncfinder_compass:  { coinPct:13, label:"+13% coins" },
+  highland_ibex:       { energySave:2, coinPct:6, label:"-2 energy, +6% coins" },
+  river_otter_squire:  { coinPct:7, label:"+7% coins" },
+  battery_ward:        { energySave:5, label:"-5 energy cost" },
+  crown_of_deep_work:  { xpPct:18, label:"+18% XP" },
+  azure_focus_drake:   { xpPct:16, coinPct:8, label:"+16% XP, +8% coins" },
+  archive_owl:         { xpPct:14, label:"+14% XP" },
+  no_signal_saber:     { xpPct:26, energySave:2, label:"+26% XP, -2 energy" },
+  aurora_kitsune:      { xpPct:20, coinPct:14, label:"+20% XP, +14% coins" }
 };
 /* v9.5: item sets — equip multiple pieces for escalating bonuses (RPG-standard). */
 const ITEM_SETS = {
@@ -5126,6 +5253,17 @@ function migrate(raw){
       }
     }
   }
+  if (!Array.isArray(s.sessionsLog)) s.sessionsLog = [];
+  if (!Array.isArray(s.appLog)) s.appLog = [];
+  if (!Array.isArray(s.activityLog)) s.activityLog = [];
+  if (!Array.isArray(s.battleLog)) s.battleLog = [];
+  s.sessionsLog = pruneTimedEntries(s.sessionsLog, { cap: SESSION_LOG_CAP });
+  s.appLog = pruneTimedEntries(s.appLog, { cap: APP_LOG_CAP });
+  s.activityLog = pruneTimedEntries(s.activityLog, { cap: ACTIVITY_LOG_CAP });
+  s.battleLog = pruneTimedEntries(s.battleLog, { cap: BATTLE_LOG_CAP });
+  if (!VALID_AVATAR_RENDERERS.includes(String(s.settings.avatarRenderer || "auto"))){
+    s.settings.avatarRenderer = "auto";
+  }
   if (s.longestStreak < s.streak) s.longestStreak = s.streak;
   return s;
 }
@@ -5238,15 +5376,37 @@ function scheduleSave(){
 }
 
 /* -------- event bus helpers -------- */
-function logLine(text, isErr){
+function renderLog(){
   const L = $("#log"); if (!L) return;
-  const d = document.createElement("div");
-  const t = new Date().toLocaleTimeString();
-  d.textContent = `[${t}] ${text}`;
-  if (isErr) d.style.color = "var(--bad)";
-  L.prepend(d);
-  while (L.childNodes.length > 200) L.lastChild.remove();
-  state.sessionsLog = (state.sessionsLog||[]).slice(-40);
+  const countEl = $("#log-count");
+  const entries = pruneTimedEntries(state?.appLog || [], { cap: APP_LOG_CAP }).slice(-300).reverse();
+  if (countEl){
+    const total = Array.isArray(state?.appLog) ? state.appLog.length : 0;
+    countEl.textContent = `${total} entr${total === 1 ? "y" : "ies"}`;
+  }
+  if (!entries.length){
+    L.innerHTML = `<div class="app-log-line"><span class="app-log-time">[--:--]</span> No saved log entries yet.</div>`;
+    return;
+  }
+  L.innerHTML = entries.map(e=>{
+    const t = entryTimeMs(e);
+    const d = t ? new Date(t) : new Date();
+    const stamp = d.toLocaleString([], { month:"short", day:"numeric", hour:"2-digit", minute:"2-digit" });
+    return `<div class="app-log-line${e.isErr ? " err" : ""}"><span class="app-log-time">[${escapeHtml(stamp)}]</span> ${escapeHtml(e.text || "")}</div>`;
+  }).join("");
+}
+function logLine(text, isErr){
+  if (!Array.isArray(state.appLog)) state.appLog = [];
+  state.appLog.push({
+    id: (typeof uid === "function") ? uid() : String(Date.now()) + Math.random().toString(36).slice(2,8),
+    at: (typeof now === "function") ? now() : Date.now(),
+    timestamp: new Date().toISOString(),
+    text: String(text || ""),
+    isErr: !!isErr
+  });
+  state.appLog = pruneTimedEntries(state.appLog, { cap: APP_LOG_CAP });
+  renderLog();
+  try { scheduleSave(); } catch(_){}
 }
 function toast(msg, kind="", actions=[]){
   const wrap = $("#toasts");
@@ -5273,7 +5433,7 @@ function battleTime(ts=now()){
 function logBattle(text, kind=""){
   if (!state.battleLog || !Array.isArray(state.battleLog)) state.battleLog = [];
   state.battleLog.push({ at: now(), text: String(text||""), kind });
-  if (state.battleLog.length > 80) state.battleLog = state.battleLog.slice(-80);
+  state.battleLog = pruneTimedEntries(state.battleLog, { cap: BATTLE_LOG_CAP });
   renderBattleLog();
 }
 function currentSessionTaskLabel(){
@@ -5637,6 +5797,7 @@ function finalizeStopwatch(){
   const sessionRecord = buildSessionLogRecordV76({
     id: earnedRewards ? __lrSwSessId : undefined,
     type:"focus", source:"stopwatch", minutes, taskId: state.timer.activeTaskId||null,
+    taskName: taskLabel,
     xpBreakdown: xp, rewarded: earnedRewards, comboPriorCount:0, streakBefore,
     streakForCalc: state.streak, comboApplied:0,
     dailyFocusApplied: earnedRewards ? 1 : 0,
@@ -5803,6 +5964,7 @@ function commitFocusTimerSession(claim, minutes){
   const sessionRecord = buildSessionLogRecordV76({
     id: earnedRewards ? __lrSessId : undefined,
     type:"focus", source:"timer", minutes, taskId: claim.taskId||null,
+    taskName: taskLabel,
     xpBreakdown: xp, rewarded: earnedRewards, comboPriorCount, streakBefore,
     streakForCalc: state.streak,
     comboApplied: earnedRewards ? 1 : 0,
@@ -5913,9 +6075,10 @@ function allowedRaritiesForMinutes(minutes){
   return out;
 }
 function pushSessionLog(entry){
-  state.sessionsLog = (state.sessionsLog||[]); state.sessionsLog.push(entry);
-  /* v8.9.0: was 60, ~6h of heavy use. Raised to 500 (~30d). */
-  if (state.sessionsLog.length > 500) state.sessionsLog.shift();
+  state.sessionsLog = (state.sessionsLog||[]);
+  state.sessionsLog.push(entry);
+  /* v9.8.8: retain at least 30 days; configured for 180d with high cap. */
+  state.sessionsLog = pruneTimedEntries(state.sessionsLog, { cap: SESSION_LOG_CAP });
   /* v8.7.0: mirror to activityLog */
   try { if (typeof logActivity === "function") logActivity({ category:"session", action: entry.rewarded ? "session_complete" : "session_below_floor", sessionId: entry.id || null, taskId: entry.taskId || null, after: { minutes: entry.minutes|0, xp: (entry.xpBreakdown && entry.xpBreakdown.total)|0 }, source: entry.source || "session" }); } catch(_){}
 }
@@ -6488,7 +6651,13 @@ function renderXpBreakdown(xp, meta){
     if (xp.comboBonus > 0) rows.push(`<div class="row"><span class="xp-pill combo">combo ×${xp.comboCount+1} (+${xp.comboPct}%)</span><span>+${xp.comboBonus} XP</span></div>`);
     if (xp.streakBonus > 0) rows.push(`<div class="row"><span class="xp-pill streak">streak ${xp.streakDays}d (+${xp.streakPct}%)</span><span>+${xp.streakBonus} XP</span></div>`);
     if (meta.lootItem) rows.push(`<div class="row"><span>${meta.lootItem[0]} ${escapeHtml(meta.lootItem[1])}</span><span class="rar rar-${meta.lootItem[2]}">${meta.lootItem[2]}</span></div>`);
-    rows.push(`<div class="row"><span>Total</span><span>+${xp.total} XP</span></div>`);
+    const awarded = Number(meta.xpAwarded || 0);
+    if (awarded > 0 && awarded !== xp.total){
+      rows.push(`<div class="row"><span>Rules total</span><span>+${xp.total} XP</span></div>`);
+      rows.push(`<div class="row"><span class="xp-pill combo">gear / boost awarded</span><span>+${awarded} XP</span></div>`);
+    } else {
+      rows.push(`<div class="row"><span>Total</span><span>+${xp.total} XP</span></div>`);
+    }
   }
   const canEdit = !!(rec && canEditSessionRecord(rec));
   /* v8.x: surface a "Battle Report" button when the session produced encounters. */
@@ -6986,8 +7155,9 @@ function renderAll(){
   renderTimer(); renderHero(); renderQuests(); renderDaily(); if (typeof fhRenderDailyHoursCard === "function") fhRenderDailyHoursCard();
   renderLoot(); renderCompanions(); renderAchievements(); renderHeatmap(); renderTopMeta();
   renderModeTabs(); renderAvatar(); renderEncounterStage(); renderTasks(); renderActiveTaskRow();
-  renderStatStrip(); renderBattleLog(); renderBackupLast(); renderSecurityPanel();
+  renderStatStrip(); renderBattleLog(); renderLog(); renderBackupLast(); renderSecurityPanel();
   renderSwLaps(); renderActionPicker(); renderBestiary(); renderAllTasksSheet(); renderCharacterPanel();
+  if ($("#tab-sessions") && !$("#tab-sessions").hidden) renderSessionHistoryPanel();
   /* v8.x LOOT REWORK — new panels (defined in loot-rework.js). */
   if (typeof window.renderDropsPanel === "function") window.renderDropsPanel();
   if (typeof window.renderForgePanel === "function") window.renderForgePanel();
@@ -9248,19 +9418,12 @@ function mergeRemoteState(local, remote){
   out.timer = deepClone(local.timer);
   const tk = todayKey();
   if (remote.combo?.date === tk && (remote.combo.count||0) > (local.combo?.count||0)) out.combo = deepClone(remote.combo);
-  const allSess = [...(local.sessionsLog||[]), ...(remote.sessionsLog||[])];
-  const seen = new Set();
-  out.sessionsLog = allSess.filter(s=>{ const k = `${s.at}|${s.type}|${s.minutes}`; if (seen.has(k)) return false; seen.add(k); return true; })
-    .sort((a,b)=>(a.at||0)-(b.at||0)).slice(-60);
-  const allBattle = [...(local.battleLog||[]), ...(remote.battleLog||[])];
-  const seenBattle = new Set();
-  out.battleLog = allBattle.filter(e=>{
-    if (!e || !e.text) return false;
-    const k = `${e.at}|${e.text}`;
-    if (seenBattle.has(k)) return false;
-    seenBattle.add(k);
-    return true;
-  }).sort((a,b)=>(a.at||0)-(b.at||0)).slice(-80);
+  out.sessionsLog = mergeTimedEntries(local.sessionsLog, remote.sessionsLog, { cap: SESSION_LOG_CAP, keyFn: sessionLogKey });
+  out.battleLog = mergeTimedEntries(local.battleLog, remote.battleLog, {
+    cap: BATTLE_LOG_CAP,
+    keyFn: e=>e && e.text ? `${e.at || ""}|${e.text}|${e.kind || ""}` : ""
+  });
+  out.appLog = mergeTimedEntries(local.appLog, remote.appLog, { cap: APP_LOG_CAP, keyFn: appLogKey });
   /* v8.0: additive coin/store/edit-log merge. Coins are spendable, so the
      balance is NEVER max()'d - the monotonic earned & spent counters merge
      and the balance is derived, so a spend on one device is not undone. */
@@ -9273,6 +9436,7 @@ function mergeRemoteState(local, remote){
     unlockedThemes: Array.from(new Set([...((local.store&&local.store.unlockedThemes)||[]), ...((remote.store&&remote.store.unlockedThemes)||[])]))
   };
   out.editLog = mergeEditLog(local.editLog, remote.editLog);
+  out.activityLog = mergeTimedEntries(local.activityLog, remote.activityLog, { cap: ACTIVITY_LOG_CAP, keyFn: activityLogKey });
   /* v8.x LOOT REWORK — additive merge rules. */
   var __LR_R = ["common","uncommon","rare","epic","legendary","mythic"];
   var __LR_CAP = 200;
@@ -9461,6 +9625,9 @@ function fillSettingsForm(){
   $("#cfg-class").value = state.hero.cls || "knight";
   $("#cfg-theme").value = s.theme || "dark";
   $("#cfg-layout").value = VALID_LAYOUTS.includes(s.layout) ? s.layout : "dashboard";
+  const renderer = avatarRendererPreference();
+  const rendererSel = $("#cfg-avatar-renderer");
+  if (rendererSel) rendererSel.value = renderer;
   $("#cfg-color").value = VALID_COLOR_PRESETS.includes(s.colorPreset) ? s.colorPreset : "mint";
   $("#cfg-accent").value = normalizeHexColor(s.customAccent, COLOR_PRESETS.custom.accent);
   $("#cfg-accent2").value = normalizeHexColor(s.customAccent2, COLOR_PRESETS.custom.accent2);
@@ -9492,6 +9659,14 @@ function bindSettings(){
   bind("#cfg-class", e=>{ state.hero.cls = e.target.value; if (state.hero.appearance) state.hero.appearance.classKey = e.target.value; saveState(); renderHero(); renderAvatar(); });
   bind("#cfg-theme", e=>{ state.settings.theme = e.target.value; saveState(); applyTheme(); });
   bind("#cfg-layout", e=>setLayout(e.target.value));
+  bind("#cfg-avatar-renderer", e=>{
+    const next = VALID_AVATAR_RENDERERS.includes(e.target.value) ? e.target.value : "auto";
+    state.settings.avatarRenderer = next;
+    saveState();
+    renderAvatar();
+    renderCharacterPanel();
+    toast(next === "2d" ? "Avatar: 2D battery saver" : next === "3d" ? "Avatar: 3D model" : "Avatar: auto battery-aware", "info");
+  });
   bind("#cfg-color", e=>setColorPreset(e.target.value));
   bind("#cfg-accent", e=>{ state.settings.customAccent = normalizeHexColor(e.target.value, COLOR_PRESETS.custom.accent); state.settings.colorPreset = "custom"; saveState(); applyTheme(); });
   bind("#cfg-accent2", e=>{ state.settings.customAccent2 = normalizeHexColor(e.target.value, COLOR_PRESETS.custom.accent2); state.settings.colorPreset = "custom"; saveState(); applyTheme(); });
@@ -9748,9 +9923,11 @@ function runSessionRewardPipeline(action, minutes, sessionId){
 function buildSessionLogRecordV76(meta){
   meta = meta || {};
   const xpTotal = meta.rewarded && meta.xpBreakdown ? (meta.xpBreakdown.total|0) : (meta.xp|0);
+  const taskName = meta.taskName || taskLabelById(meta.taskId) || null;
   return {
     at: meta.at || now(), id: meta.id || uid(), type: meta.type, source: meta.source || null,
     minutes: meta.minutes|0, originalMinutes: meta.minutes|0, taskId: meta.taskId || null,
+    taskName,
     action: meta.action || currentAdventureActionId(),
     xp: meta.rewarded ? xpTotal : 0, originalXp: meta.rewarded ? xpTotal : 0,
     rewarded: !!meta.rewarded, originalRewarded: !!meta.rewarded,
@@ -9802,6 +9979,22 @@ function renderActionPicker(){
     slot.innerHTML = state.timer?.running ? `<span class="adv-status-pill"><span class="dot"></span>${a.sym} ${a.label}</span>` : "";
   }
 }
+function avatarRendererPreference(){
+  const pref = String(state?.settings?.avatarRenderer || "auto").toLowerCase();
+  return VALID_AVATAR_RENDERERS.includes(pref) ? pref : "auto";
+}
+function fhShouldUse3d(){
+  const pref = avatarRendererPreference();
+  if (pref === "2d") return false;
+  if (pref === "3d") return true;
+  try {
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return false;
+  } catch(_){}
+  try {
+    if (navigator.connection && navigator.connection.saveData) return false;
+  } catch(_){}
+  return true;
+}
 function renderAvatar(){
   const clsKey = state.hero.cls || "knight";
   const cls = CLASSES[clsKey] || CLASSES.knight;
@@ -9819,8 +10012,8 @@ function renderAvatar(){
     av.setAttribute("data-action", adv ? adv.id.toLowerCase() : taskAction);
     av.setAttribute("data-running", running ? "1" : "0");
     av.setAttribute("data-scene", scene);
-    // v9.8.1: 3D is the primary renderer; SVG is only the new v9 fallback.
-    if (window.FH3D && typeof FH3D.attachHome === "function"){
+    // v9.8.8: 3D remains available, with a 2D battery-saver override.
+    if (fhShouldUse3d() && window.FH3D && typeof FH3D.attachHome === "function"){
       if (!FH3D._wired){ FH3D._wired = true; if (FH3D.wireModal) FH3D.wireModal("character-modal","character-avatar-preview","avatar"); }
       if (!fh3dStudioOpen()) FH3D.attachHome(av);
       fh3dUpdate();
@@ -10781,6 +10974,7 @@ function bindTabs(){
       host.querySelectorAll(".tab-panel[id^='tab-']").forEach(p=>{ p.hidden = p.id !== `tab-${tab}`; });
       if (tab === "store" && typeof renderStore === "function") renderStore();
       if (tab === "ledger" && typeof renderLedger === "function") renderLedger();
+      if (tab === "sessions" && typeof renderSessionHistoryPanel === "function") renderSessionHistoryPanel();
       if (tab === "forge" && typeof window.renderForgePanel === "function") window.renderForgePanel();
       if (tab === "drops" && typeof window.renderDropsPanel === "function") window.renderDropsPanel();
     });
@@ -11002,8 +11196,8 @@ function renderCharacterPanel(){
     preview.setAttribute("data-avatar-version", "v98");
     preview.setAttribute("data-renderer", "svg");
     preview.removeAttribute("data-scene");
-    // v8.8.1: large drag-to-rotate 3D preview in Character Studio
-    if (window.FH3D && typeof FH3D.attachStudio === "function"){
+    // v9.8.8: large drag-to-rotate 3D preview unless 2D battery saver is active.
+    if (fhShouldUse3d() && window.FH3D && typeof FH3D.attachStudio === "function"){
       if (fh3dStudioOpen()) FH3D.attachStudio(preview);
       fh3dUpdate();
       preview.setAttribute("data-renderer", FH3D.available ? "3d" : "svg");
@@ -11497,8 +11691,8 @@ async function runSmokeTests(){
       let tries = 0;
       const wait = () => {
         const av = document.querySelector("#avatar");
-        if (av?.getAttribute("data-fh3d-ready") === "1") setTimeout(resolve, 260);
-        else if (tries++ > 24) resolve();
+        if (av?.getAttribute("data-fh3d-ready") === "1") setTimeout(resolve, 360);
+        else if (tries++ > 72) resolve();
         else requestAnimationFrame(wait);
       };
       requestAnimationFrame(wait);
@@ -11758,14 +11952,14 @@ async function runSmokeTests(){
       && migrated.store && Array.isArray(migrated.store.boosts) && Array.isArray(migrated.editLog);
     add("v8: v7.9 migration remains zero-data-loss", noLoss && added);
   }
-  { /* edit-log entry shape + 100-cap */
+  { /* edit-log entry shape + 1000-cap */
     const snap = deepClone(state.editLog||[]);
     state.editLog = [];
     appendEditLog({taskName:"Reading", before:40, after:55, source:"ledger"});
     const e = state.editLog[state.editLog.length-1];
     const okShape = e && e.delta===15 && e.before===40 && e.after===55 && typeof e.id==="string";
-    for (let i=0;i<140;i++) appendEditLog({taskName:"x", before:0, after:1, source:"ledger"});
-    add("v8: editLog entry shape + 100-cap", okShape && state.editLog.length===100);
+    for (let i=0;i<1040;i++) appendEditLog({taskName:"x", before:0, after:1, source:"ledger"});
+    add("v8: editLog entry shape + 1000-cap", okShape && state.editLog.length===1000);
     state.editLog = snap; saveState();
   }
   { /* Time Ledger recalc + negative clamp */
@@ -11829,7 +12023,7 @@ async function runSmokeTests(){
       store:{purchased:["gear:dualblade"], boosts:[], unlockedThemes:[]}
     };
     const m10 = migrate(deepClone(v80));
-    const ok = m10.dataVersion===10 && m10.totalFocusMin===3210 && m10.coins===123
+    const ok = m10.dataVersion===DATA_VERSION && m10.totalFocusMin===3210 && m10.coins===123
       && m10.coinsEarned===200 && m10.coinsSpent===77 && m10.editLog.length===1
       && m10.hero.appearance.armor==="crimson" && m10.hero.appearance.race==="human"
       && Array.isArray(m10.hero.cosmetics.mount);
@@ -11957,9 +12151,10 @@ async function boot(){
         clearCloudRetryTimer();
         cloudPull({reason:"reconnect"}).then(()=>cloudPush({reason:"reconnect"})).catch(()=>{});
       }
+      try { logLine("Back online — syncing queued progress."); } catch(_){}
       try { toast("📶 Back online — syncing your progress…", "info"); } catch(_){}
     });
-    window.addEventListener("offline", ()=>{ clearCloudRetryTimer(); try { toast("✈️ Offline — sessions still save on this device and sync when you reconnect.", "info"); } catch(_){} });
+    window.addEventListener("offline", ()=>{ clearCloudRetryTimer(); try { logLine("Offline mode — sessions still save locally and sync when reconnected."); } catch(_){} try { toast("✈️ Offline — sessions still save on this device and sync when you reconnect.", "info"); } catch(_){} });
     document.addEventListener("visibilitychange", ()=>{ if (!document.hidden && state.sync.enabled && !cloudPushInFlight) cloudPull().catch(()=>{}); });
     scheduleCloudRetry();
     handleUrlActions();
@@ -12130,7 +12325,7 @@ window.fhConfettiBurst = function(rarity){
   } catch(_){}
 };
 
-/* v8.7.0 universal activity log. Append-only. Cap 500 entries. Pushes
+/* v8.7.0 universal activity log. Append-only, retained 180d. Pushes
    to both state.activityLog (new schema) AND, when category==="edit",
    the legacy state.editLog so the existing Recent Edits UI keeps working
    for users who only know that view. */
@@ -12152,8 +12347,7 @@ function logActivity(entry){
     note:   entry.note || null
   };
   state.activityLog.push(e);
-  /* v8.9.0: was 500, filled in hours. Raised to 5000 (~30d). */
-  if (state.activityLog.length > 5000) state.activityLog = state.activityLog.slice(-5000);
+  state.activityLog = pruneTimedEntries(state.activityLog, { cap: ACTIVITY_LOG_CAP });
   return e;
 }
 function appendEditLog(entry){
@@ -12276,8 +12470,10 @@ function applyTaskTimeAdjustment(taskId, deltaMin){
 /* --- coin store catalog --- */
 const STORE_PRICE_BY_RARITY = { common:30, uncommon:75, rare:180, epic:400, legendary:900, mythic:2000 };
 const STORE_CONSUMABLES = [
+  { id:"boost_xp_25_long", name:"Steady Focus Boost", sym:"🧠", desc:"+25% XP for 3 hours",      price:120, boost:{ kind:"xp", mult:1.25, durationMs:3*60*60*1000 } },
   { id:"boost_xp_50",  name:"XP Boost",         sym:"⚡", desc:"+50% XP for 1 hour",      price:150, boost:{ kind:"xp", mult:1.5, durationMs:60*60*1000 } },
-  { id:"boost_xp_100", name:"Greater XP Boost", sym:"🔥", desc:"+100% XP for 30 minutes", price:250, boost:{ kind:"xp", mult:2.0, durationMs:30*60*1000 } }
+  { id:"boost_xp_100", name:"Greater XP Boost", sym:"🔥", desc:"+100% XP for 30 minutes", price:250, boost:{ kind:"xp", mult:2.0, durationMs:30*60*1000 } },
+  { id:"boost_xp_150", name:"Deep Work Catalyst", sym:"💠", desc:"+150% XP for 20 minutes", price:420, boost:{ kind:"xp", mult:2.5, durationMs:20*60*1000 } }
 ];
 function storeGearItems(){
   return LOOT_TABLE.filter(it=>isEquippableSlot(it[4])).map(it=>({
@@ -12332,6 +12528,73 @@ function renderCoinHud(){
 }
 
 /* --- Time Ledger panel --- */
+function sessionHistoryTaskLabel(rec){
+  if (!rec || typeof rec !== "object") return "No task";
+  if (rec.taskName) return String(rec.taskName);
+  const live = taskLabelById(rec.taskId);
+  if (live) return live;
+  return rec.taskId ? "Task unavailable" : "No task";
+}
+function sessionHistoryDateLabel(at){
+  const t = Number(at) || Date.parse(at || "");
+  if (!Number.isFinite(t) || t <= 0) return "Unknown";
+  const d = new Date(t);
+  return d.toLocaleString([], { month:"short", day:"numeric", hour:"2-digit", minute:"2-digit" });
+}
+function renderSessionHistoryPanel(){
+  const host = document.getElementById("sessions-panel");
+  if (!host) return;
+  const all = pruneTimedEntries(state.sessionsLog || [], { cap: SESSION_LOG_CAP });
+  const focus = all.filter(r=>r && r.type === "focus").sort((a,b)=>(entryTimeMs(b)||0)-(entryTimeMs(a)||0));
+  const cutoff30 = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const last30 = focus.filter(r=>!entryTimeMs(r) || entryTimeMs(r) >= cutoff30);
+  const sum = (arr, fn)=>arr.reduce((a,x)=>a + (Number(fn(x)) || 0), 0);
+  const min30 = sum(last30, r=>r.minutes|0);
+  const xp30 = sum(last30, r=>r.xp || r.xpBreakdown?.total || 0);
+  const rewarded30 = last30.filter(r=>r.rewarded).length;
+  const fmt = (typeof formatHours === "function") ? formatHours : (m=>`${m|0}m`);
+  const cards = [
+    ["30d sessions", String(last30.length)],
+    ["30d time", fmt(min30)],
+    ["30d XP", String(xp30)],
+    ["Rewarded", String(rewarded30)]
+  ].map(([label,value])=>`<div class="session-history-card"><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b></div>`).join("");
+  const rows = focus.slice(0, 300).map(rec=>{
+    const task = sessionHistoryTaskLabel(rec);
+    const mins = Math.max(0, rec.minutes|0);
+    const xp = rec.rewarded ? Math.max(0, (rec.xp || rec.xpBreakdown?.total || 0)|0) : 0;
+    const source = rec.source === "stopwatch" ? "Stopwatch" : rec.source === "timer" ? "Timer" : (rec.source || rec.type || "Session");
+    const action = rec.action || "Focus";
+    const loot = rec.loot ? `${rec.loot.rarity || ""} ${rec.loot.id || ""}`.trim() : "No loot";
+    const pillCls = rec.edited ? " edited" : rec.rewarded ? " rewarded" : "";
+    const pillText = rec.edited ? "edited" : rec.rewarded ? "rewarded" : "logged";
+    const edit = (typeof canEditSessionRecord === "function" && canEditSessionRecord(rec))
+      ? `<button type="button" data-session-history-edit="${escapeHtml(rec.id)}">Edit</button>`
+      : "";
+    return `<div class="session-history-row">
+      <div class="session-history-date">${escapeHtml(sessionHistoryDateLabel(rec.at))}</div>
+      <div class="session-history-task"><b>${escapeHtml(task)}</b><span>${escapeHtml(source)} · ${escapeHtml(action)}</span></div>
+      <div class="session-history-meta">${mins}m</div>
+      <div class="session-history-meta">+${xp} XP</div>
+      <div class="session-history-meta">${escapeHtml(loot)}</div>
+      <div class="session-history-actions"><span class="session-history-pill${pillCls}">${pillText}</span>${edit}</div>
+    </div>`;
+  }).join("");
+  host.innerHTML = `
+    <div class="ledger-intro">Session history is saved locally and included in cloud sync. Retention: ${LOG_RETENTION_DAYS} days, capped at ${SESSION_LOG_CAP.toLocaleString()} records.</div>
+    <div class="session-history-summary">${cards}</div>
+    <div class="activity-head">Recent sessions <span class="activity-hint">showing ${Math.min(focus.length,300)} of ${focus.length}</span></div>
+    <div class="session-history-list">${rows || `<div class="ledger-empty">No sessions logged yet.</div>`}</div>`;
+  if (!host.dataset.bound){
+    host.dataset.bound = "1";
+    host.addEventListener("click", ev=>{
+      const btn = ev.target.closest("button[data-session-history-edit]");
+      if (!btn) return;
+      openSessionEditModal(btn.getAttribute("data-session-history-edit"));
+    });
+  }
+}
+
 function renderLedger(){
   const host = document.getElementById("ledger-panel");
   if (!host) return;
@@ -12676,7 +12939,7 @@ function openEmojiPicker(taskIdOrOpts, anchor){
 
 /* --- progression sub-tabs (overrides the original; adds store + ledger) --- */
 function bindTabs(){
-  const KEYS = ["loot","quests-v85","world","vault","stable","mounts","pets","drops","forge","ach","store","ledger","bestiary","heat"];
+  const KEYS = ["loot","quests-v85","world","vault","stable","mounts","pets","drops","forge","ach","store","ledger","sessions","bestiary","heat"];
   $$(".tabs button[role='tab']").forEach(b=>{
     b.addEventListener("click", ()=>{
       const tab = b.dataset.tab;
@@ -12684,6 +12947,7 @@ function bindTabs(){
       KEYS.forEach(k=>{ const p = $(`#tab-${k}`); if (!p) return; p.hidden = (k !== tab); });
       if (tab === "store")  { try{renderStore();}  catch(_){} }
       if (tab === "ledger") { try{renderLedger();} catch(_){} }
+      if (tab === "sessions") { try{renderSessionHistoryPanel();} catch(_){} }
       if (tab === "drops" && typeof window.renderDropsPanel === "function") { try{window.renderDropsPanel();} catch(_){} }
       if (tab === "forge" && typeof window.renderForgePanel === "function") { try{window.renderForgePanel();} catch(_){} }
       if (tab === "stable" && typeof window.crRenderStable === "function") { try{window.crRenderStable();} catch(_){} }
