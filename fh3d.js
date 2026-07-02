@@ -47,7 +47,7 @@
       key.shadow.mapSize.set(2048,2048); key.shadow.camera.near=1; key.shadow.camera.far=20; key.shadow.camera.left=-3; key.shadow.camera.right=3; key.shadow.camera.top=3.8; key.shadow.camera.bottom=-2; key.shadow.bias=-0.0008; key.shadow.normalBias=0.03; scene.add(key);
       var fill = new THREE.DirectionalLight(0x8fb6ff, 0.6); fill.position.set(-4,2.2,2.2); scene.add(fill);
       var rim = new THREE.DirectionalLight(0xdcecff, 1.85); rim.position.set(-1.2,3.4,-4.4); scene.add(rim);
-      var kick = new THREE.DirectionalLight(0xffd9a8, 0.5); kick.position.set(2.4,0.8,-3.2); scene.add(kick);
+      var kick = new THREE.DirectionalLight(0xffd9a8, 0.68); kick.position.set(2.4,0.8,-3.2); scene.add(kick);
       var root = new THREE.Group(); scene.add(root);
       var ped = new THREE.Group();
       var pedMat = new THREE.MeshStandardMaterial({ color:0x1b2436, roughness:0.55, metalness:0.3, envMapIntensity:0.8 });
@@ -55,6 +55,7 @@
       var lip = new THREE.Mesh(new THREE.TorusGeometry(0.92,0.022,12,64), new THREE.MeshStandardMaterial({ color:0x3d4f78, roughness:0.3, metalness:0.65, envMapIntensity:1.15 })); lip.rotation.x=HPI; lip.position.y=0.004; ped.add(lip);
       var auraMat = new THREE.MeshBasicMaterial({ color:0x22d3ee, transparent:true, opacity:0.0, blending:THREE.AdditiveBlending, depthWrite:false });
       var aura = new THREE.Mesh(new THREE.TorusGeometry(0.99,0.014,10,64), auraMat); aura.rotation.x=HPI; aura.position.y=0.012; ped.add(aura); R.auraRing=aura;
+      var glowDisc=new THREE.Mesh(new THREE.CircleGeometry(0.86,48), new THREE.MeshBasicMaterial({ color:0x3d5a9e, transparent:true, opacity:0.16, blending:THREE.AdditiveBlending, depthWrite:false })); glowDisc.rotation.x=-HPI; glowDisc.position.y=0.002; ped.add(glowDisc);
       var floor = new THREE.Mesh(new THREE.CircleGeometry(2.6,48), new THREE.ShadowMaterial({ opacity:0.36 })); floor.rotation.x=-HPI; floor.receiveShadow=true; ped.add(floor);
       root.add(ped); R.pedestal = ped;
       R.renderer=renderer; R.scene=scene; R.camera=camera; R.root=root; R.initialized=true; FH3D.available=true;
@@ -166,10 +167,10 @@
     var armorTex=makeDetailTexture(31,"#777","rgba(255,255,255,.14)"), clothTex=makeDetailTexture(59,"#555","rgba(255,255,255,.06)"), skinTex=makeDetailTexture(71,"#999",null,false);
     m.skin=s({ color:col(c.skin,"#e7b48c"), roughness:0.62, metalness:0.0, envMapIntensity:0.5, bumpMap:skinTex, bumpScale:0.003 });
     m.skinDk=s({ color:darken(c.skin||"#e7b48c",0.07), roughness:0.66, metalness:0.0, envMapIntensity:0.45 });
-    m.cloth=s({ color:col(c.outfit||c.armorDark,"#26334d"), roughness:0.86, metalness:0.02, envMapIntensity:0.4, bumpMap:clothTex, bumpScale:0.014 });
+    m.cloth=s({ color:col(c.outfit||c.armorDark,"#26334d"), roughness:0.82, metalness:0.03, envMapIntensity:0.5, bumpMap:clothTex, bumpScale:0.016 });
     m.clothHi=s({ color:lighten(c.outfit||c.armorMid||"#334155",0.14), roughness:0.8, metalness:0.03, envMapIntensity:0.46, bumpMap:clothTex, bumpScale:0.012 });
     m.clothDk=s({ color:darken(c.outfit||c.armorDark||"#172033",0.09), roughness:0.9, metalness:0.02, envMapIntensity:0.34, bumpMap:clothTex, bumpScale:0.014 });
-    m.armor=s({ color:col(c.armorMid,"#465e80"), roughness:0.34, metalness:0.68, envMapIntensity:1.1, bumpMap:armorTex, bumpScale:0.01 });
+    m.armor=s({ color:col(c.armorMid,"#465e80"), roughness:0.3, metalness:0.72, envMapIntensity:1.18, bumpMap:armorTex, bumpScale:0.01 });
     m.armorHi=s({ color:col(c.armorHigh,"#7e97bd"), roughness:0.26, metalness:0.78, envMapIntensity:1.25, bumpMap:armorTex, bumpScale:0.008 });
     m.armorDk=s({ color:col(c.armorDark,"#22304a"), roughness:0.45, metalness:0.55, envMapIntensity:0.9, bumpMap:armorTex, bumpScale:0.012 });
     m.trim=s({ color:col(c.accent,"#f6cb6e"), roughness:0.24, metalness:0.9, envMapIntensity:1.35 });
@@ -210,6 +211,13 @@
     if(/goblin/.test(race)){ p.scaleY=0.8; p.thick*=0.92; p.HR=0.165; }
     if(/orc/.test(race)){ p.scaleY=1.04; p.thick*=1.12; p.shoulderW*=1.08; }
     if(/fae/.test(race)){ p.scaleY=0.94; p.thick*=0.86; }
+    /* bake vertical scale into the joint plan (uniform transforms only — no shear) */
+    var sy=p.scaleY||1;
+    if(sy!==1){
+      p.hipY*=sy; p.waistY*=sy; p.chestY*=sy; p.shoulderY*=sy; p.neckY*=sy; p.headY*=sy;
+      var wf=(sy+2)/3; p.shoulderW*=wf; p.hipW*=wf; p.legSpread*=wf; p.thick*=wf;
+    }
+    p.sy=sy; p.scaleY=null;
     return p;
   }
   function classKit(cls){
@@ -252,10 +260,16 @@
       bg.add(Ball(0.045*th,0.032,0.05,mats.boot,0,-0.055,0.115,14)); /* toe cap */
       bg.add(panel(0.105*th,0.02,0.2,mats.leather,0,-0.083,0.045));
       bg.add(torus(0.056*th,0.009,mats.leather,0,0.06,0,HPI,0,0)); /* cuff strap */
+      bg.add(panel(0.05*th,0.03,0.02,mats.leatherHi,0,-0.083,-0.055)); /* heel block */
+      bg.add(Ball(0.006,0.006,0.004,mats.trim,0.02*side,0.045,0.058,6));
+      bg.add(Ball(0.006,0.006,0.004,mats.trim,-0.02*side,0.02,0.06,6));
+      /* kneepad for every kit */
+      kneeG.add(Loft([{y:-0.02,rx:0.052*th,rz:0.05,z:0.02},{y:0.03,rx:0.058*th,rz:0.054,z:0.018},{y:0.06,rx:0.048*th,rz:0.044,z:0.014}],(kit==="plate")?mats.armorHi:mats.leather,14));
       if(kit==="plate"){ kneeG.add(panel(0.07*th,0.16,0.02,mats.armorHi,0.02*side,-0.22,0.055,0.06,0,0.03*side)); }
       g.userData.upper=null;
       return g;
     }
+    kneeY*=P.sy||1; ankleY*=P.sy||1;
     var legL=mkLegAt(-1), legR=mkLegAt(1); rig.add(legL); rig.add(legR);
     rig.userData.legL=legL; rig.userData.legR=legR;
 
@@ -297,16 +311,20 @@
         g.add(Loft([{y:-0.34,rx:0.048*th,rz:0.044,x:0.058*side},{y:-0.45,rx:0.066*th,rz:0.058,x:0.068*side}],mats.cloth,16));
       }
       g.add(torus(0.037*th,0.008,(kit==="plate")?mats.trim:mats.leather,wrist[0],wrist[1]+0.015,wrist[2],HPI*0.94,0,0));
+      g.add(torus(0.048*th,0.007,(kit==="plate")?mats.armorDk:mats.leatherHi,elbow[0],elbow[1]+0.045,elbow[2]-0.004,HPI*0.9,0,0.1*side));
+      g.add(Ball(0.008,0.008,0.006,mats.trim,0.012*side,-0.015,0.055,6));
       /* hand at wrist */
       var hand=new THREE.Group(); hand.position.set(wrist[0],wrist[1],wrist[2]);
       var palm=Ball(0.035,0.048,0.026,mats.skin,0.006*side,-0.035,0.006,16); hand.add(palm);
       for(var f=0;f<4;f++){
         var fx=(-0.018+f*0.013)*1.0;
-        var fing=seg3([fx*side,-0.062,0.012],[fx*side,-0.098,0.028],0.0068,0.0058,mats.skin,10);
-        hand.add(fing);
-        hand.add(joint([fx*side,-0.1,0.03],0.006,mats.skin));
+        hand.add(seg3([fx*side,-0.055,0.01],[fx*side,-0.082,0.024],0.0068,0.006,mats.skin,10));
+        hand.add(joint([fx*side,-0.083,0.025],0.0062,mats.skin));
+        hand.add(seg3([fx*side,-0.083,0.025],[fx*side,-0.102,0.03],0.0058,0.005,mats.skin,8));
+        hand.add(joint([fx*side,-0.104,0.031],0.005,mats.skin));
       }
-      var thumb=seg3([-0.028*side,-0.04,0.016],[-0.044*side,-0.062,0.038],0.008,0.0065,mats.skin,10); hand.add(thumb);
+      var thumb=seg3([-0.028*side,-0.038,0.018],[-0.046*side,-0.058,0.04],0.008,0.0062,mats.skin,10); hand.add(thumb);
+      hand.add(joint([-0.047*side,-0.06,0.041],0.006,mats.skin));
       g.add(hand); g.userData.hand=hand;
       return g;
     }
@@ -330,7 +348,6 @@
     addHelmetGear(headG, spec, mats, P.HR);
     addWeapon(rig, spec, mats, P);
     addClassSignature(rig, torso, headG, spec, mats, P, th, kit);
-    if(P.scaleY){ rig.scale.y=P.scaleY; rig.scale.x=rig.scale.z=(P.scaleY+1)/2; }
     rig.userData.plan=P;
     return rig;
   }
@@ -516,7 +533,9 @@
     var shRel=P.shoulderY-P.waistY, chestRel=P.chestY-P.waistY;
     /* belt with buckle — everyone */
     torso.add(Loft([{y:-0.005,rx:0.132*th,rz:0.088},{y:0.045,rx:0.138*th,rz:0.092}],mats.leather,30));
-    torso.add(panel(0.05,0.04,0.02,mats.trim,0,0.02,0.098));
+    torso.add(panel(0.044,0.036,0.018,mats.trim,0,0.02,0.097));
+    [-1,1].forEach(function(sg){ torso.add(Ball(0.008,0.008,0.006,mats.trim,0.09*th*sg,0.02,0.075,6)); });
+    if(kit==="leathers"||kit==="shade"||kit==="wraps"){ torso.add(panel(0.052,0.06,0.03,mats.leatherHi,0.1*th,-0.045,0.07,0.08,0,-0.05)); torso.add(panel(0.05,0.016,0.032,mats.leather,0.1*th,-0.02,0.072,0.08,0,-0.05)); }
     if(kit==="plate"){
       /* cuirass front plate w/ center ridge */
       torso.add(Loft([{y:0.06,rx:0.118*th,rz:0.02,z:0.092},{y:chestRel,rx:0.155*th,rz:0.028,z:0.1},{y:shRel-0.05,rx:0.135*th,rz:0.022,z:0.09}],mats.armorHi,26));
@@ -864,7 +883,7 @@
   }
   function addClassSignature(rig, torso, headG, spec, mats, P, th, kit){
     var key=String(spec.cls||"knight").toLowerCase(), shRel=P.shoulderY-P.waistY;
-    if(/monk/.test(key)){ var halo=torus(0.17,0.007,mats.energy,0,P.headY+P.HR*1.5,-0.02,HPI*0.94,0,0); rig.add(halo); }
+    if(/monk/.test(key)){ /* headwear only comes from equipped items */ }
     else if(/alchemist/.test(key)){
       var glass=new THREE.MeshStandardMaterial({ color:0x9ff3ff, roughness:0.08, transparent:true, opacity:0.6, emissive:0x11434f, envMapIntensity:1.4 }); R.disposables.push(glass);
       [-1,0,1].forEach(function(n){ torso.add(seg3([n*0.055,0.04,0.1],[n*0.055,0.11,0.104],0.016,0.014,glass,8)); torso.add(Ball(0.012,0.01,0.012,mats.leather,n*0.055,0.115,0.104,6)); });
@@ -884,9 +903,7 @@
         for(var s3=0;s3<4;s3++){ lu.add(seg3([-0.01+s3*0.0068,-0.04,0.031],[-0.01+s3*0.0068,0.27,0.022],0.001,0.001,mats.eyeWhite,3)); }
         rig.add(lu);
       }
-      var hat=Loft([{y:0,rx:P.HR*1.15,rz:P.HR*1.1},{y:0.02,rx:P.HR*0.95,rz:P.HR*0.9},{y:0.1,rx:P.HR*0.72,rz:P.HR*0.68},{y:0.14,rx:P.HR*0.3,rz:P.HR*0.3}],mats.clothHi,20);
-      hat.position.y=P.headY+P.HR*0.62; hat.rotation.z=-0.1; rig.add(hat);
-      var feather=cone(0.02,0.16,mats.trimGlow,P.HR*0.9,P.headY+P.HR*0.95,-0.02,0,0,-2.2,4); feather.scale.z=0.3; rig.add(feather);
+      /* no class hat — headwear only comes from equipped items */
     }
     else if(/ranger|druid|hunter/.test(key)){
       if(!(spec.equipped&&spec.equipped.weapon&&/bow/.test(gText(spec.equipped.weapon)))){
@@ -1291,7 +1308,7 @@
   }
   function applyMountedPose(hero, mount){
     var ud=mount.userData||{}, stand=!!ud.stand, sc=stand?(ud.riderScale||0.86):(ud.riderScale||0.8);
-    hero.scale.setScalar(sc); if(hero.userData.plan&&hero.userData.plan.scaleY){ hero.scale.y=sc*hero.userData.plan.scaleY; }
+    hero.scale.setScalar(sc); /* uniform only — non-uniform scale shears rotated limbs */
     hero.rotation.set(stand?0:-0.04,0,0);
     var P=hero.userData.plan||{hipY:0.94};
     var baseY = stand ? (ud.seatY||0.62) : ((ud.seatY||1.2)-P.hipY*sc+0.0+(ud.riderYOffset||0));
@@ -1365,7 +1382,7 @@
         /* blink */
         R.blinkT-=dt; if(R.blinkT<=0){ R.blinkPhase=0.14; R.blinkT=2.2+Math.random()*3.2; }
         if(R.blinkPhase>0){ R.blinkPhase-=dt; var k=Math.max(0,R.blinkPhase)/0.14, open=Math.abs(k-0.5)*2;
-          var lids=ud.headG.userData.lids||[]; for(var li=0;li<lids.length;li++){ lids[li].scale.y=1+(1-open)*2.6; lids[li].position.y=(0.148*0.12)+0.019-(1-open)*0.012; } }
+          var lids=ud.headG.userData.lids||[]; for(var li=0;li<lids.length;li++){ lids[li].scale.y=1+(1-open)*1.5; lids[li].position.y=(0.148*0.12)+0.022-(1-open)*0.01; } }
       }
       if(!R.mounted){
         var runsw=R.running?Math.sin(t*5.2):0;

@@ -1,3 +1,11 @@
+## v9.9.2 - limb-shear fix, honest headwear, custom live minutes, detail pass
+
+- Fixed the "stretched limbs": goblin/dwarf/orc/fae body scaling used a non-uniform rig scale which sheared rotated limbs (worst while mounted/running). Race proportions are now baked into the joint plan; all transforms stay uniform.
+- Headwear is honest: class hats/halos removed - a crown appears on your head only when you actually equip one. (Back-slung lutes, quivers, beads etc. stay.)
+- Live session adjuster now takes CUSTOM minutes: +/- toggle, a minutes box, Apply (or press Enter). Same safe path as the -15/-5/+5/+15 buttons, same caps.
+- Detail pass: articulated two-segment fingers with knuckles + thumb tip, kneepads on every outfit, boot heels and lace studs, elbow straps, belt side-studs, hip pouch on leathers/rogue/wraps, softer blink, brighter warm kick light, richer armor/cloth response, under-hero glow disc.
+- Renderer + additive UI only; no data, sync, minutes or session logic touched. sw.js BUILD_ID -> fh-2026-07-02-v9-9-2.
+
 ## v9.9.0 - FH3D "Atelier": sculpted 3D hero, gear you can see, rebuilt mounts
 
 - Ground-up remodel of the 3D character renderer (`fh3d.js`, FH3D v9 "atelier-v1"): joint-anchored rig (shoulders/elbows/wrists/hips/knees all connect - no more floating pieces), sculpted head with real eyes (iris/pupil/catchlight/blinking lids), brows, shaped nose/mouth per face trait, and proper 6.5-head heroic proportions.

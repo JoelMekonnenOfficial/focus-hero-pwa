@@ -3240,7 +3240,7 @@ svg{shape-rendering:geometricPrecision}
 }
 </style>
 <script src="three.min.js"></script>
-<script src="fh3d.js?v=fh-2026-07-02-v9-9-1"></script>
+<script src="fh3d.js?v=fh-2026-07-02-v9-9-2"></script>
 <script>
 /* v7.9: zoom-lock - block pinch + double-tap zoom; single-finger scroll stays. */
 (function(){
@@ -3308,6 +3308,11 @@ svg{shape-rendering:geometricPrecision}
           <button type="button" data-live-delta="-5">−5m</button>
           <button type="button" data-live-delta="5">+5m</button>
           <button type="button" data-live-delta="15">+15m</button>
+          <span id="live-custom-wrap" style="display:inline-flex;gap:4px;align-items:center">
+            <button type="button" id="live-custom-sign" aria-label="Toggle add or subtract" style="min-width:34px">+</button>
+            <input type="number" id="live-custom-min" min="1" max="1440" step="1" placeholder="min" inputmode="numeric" aria-label="Custom minutes" style="width:62px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.18);border-radius:8px;color:inherit;padding:4px 6px;font:inherit">
+            <button type="button" id="live-custom-apply">Apply</button>
+          </span>
         </div>
         <div class="live-adjust-preview" id="live-adjust-preview">XP and loot preview updates with the planned time.</div>
       </div>
@@ -11659,6 +11664,20 @@ function bindTimer(){
   const stopLog = $("#btn-stop-log"); if (stopLog) stopLog.onclick = ()=>finalizeStopwatch();
   const lap = $("#btn-lap"); if (lap) lap.onclick = ()=>lapStopwatch();
   $$("[data-live-delta]").forEach(b=>b.addEventListener("click", ()=>adjustLiveSessionMinutes(parseInt(b.dataset.liveDelta, 10)||0)));
+  // v9.9.2: custom +/- minutes on the live session adjuster
+  (function(){
+    const sign=$("#live-custom-sign"), val=$("#live-custom-min"), go=$("#live-custom-apply");
+    if(!sign||!val||!go) return;
+    sign.addEventListener("click", ()=>{ sign.textContent = sign.textContent.trim()==="+" ? "\u2212" : "+"; });
+    const apply=()=>{
+      const n=Math.floor(Math.abs(Number(val.value)||0));
+      if(!n) return;
+      adjustLiveSessionMinutes(sign.textContent.trim()==="+" ? n : -n);
+      val.value="";
+    };
+    go.addEventListener("click", apply);
+    val.addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); apply(); } });
+  })();
   // v7.3: Cancel button is the zero-credit abort path. Distinct from Reset, which
   // already silently drops elapsed time but has no confirm + no awareness counter.
   const cancelBtn = $("#btn-cancel-session"); if (cancelBtn) cancelBtn.onclick = ()=>cancelSession();
