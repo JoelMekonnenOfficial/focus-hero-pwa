@@ -1330,7 +1330,10 @@
   function attach(container, mode){ if(!container) return; if(!FH3D.available){ if(!initEngine()) return; }
     var canvas=R.renderer.domElement; try{ if(getComputedStyle(container).position==="static") container.style.position="relative"; }catch(e){}
     if(canvas.parentNode!==container) container.appendChild(canvas); R.container=container; R.mode=mode||"home";
-    if(R.mode==="studio"){ R.yaw=0; R.targetYaw=0; R.autoSpin=false; } else if(!R.dragging){ R.autoSpin=true; }
+    if(R.mode==="studio"){
+      var pv=(R.mounted&&R.mountGroup&&R.mountGroup.userData.previewYaw!==undefined)?R.mountGroup.userData.previewYaw:0;
+      R.yaw=pv; R.targetYaw=pv; R.autoSpin=false;
+    } else if(!R.dragging){ R.autoSpin=true; }
     container.classList.add("fh3d-host"); container.setAttribute("data-fh3d-ready","0"); resize(); frame(); observe(container); renderOnce(); startLoop(); }
   FH3D.attachHome=function(el){ attach(el,"home"); }; FH3D.attachStudio=function(el){ attach(el,"studio"); }; FH3D.detachStudio=function(h){ if(h) attach(h,"home"); };
   function resize(){ if(!R.container||!R.renderer) return; var w=R.container.clientWidth||120,h=R.container.clientHeight||120; R.renderer.setSize(w,h,false); R.camera.aspect=w/h; R.camera.updateProjectionMatrix(); }
