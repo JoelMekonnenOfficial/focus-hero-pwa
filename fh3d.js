@@ -24,7 +24,7 @@
 
   var R = { renderer:null, scene:null, camera:null, env:null, root:null, heroRig:null, mountGroup:null, petGroup:null, pedestal:null, auraRing:null, auraDust:null,
     disposables:[], raf:0, last:0, clock:0, yaw:0, targetYaw:0, pitch:0, targetPitch:0, dist:0, targetDist:0, autoSpin:true, dragging:false, lastPointerX:0, lastPointerY:0,
-    mode:"home", mounted:false, running:false, scene:"resting", lookY:1.0, sig:"", container:null, ro:null, io:null, initialized:false, reduced:false,
+    mode:"home", mounted:false, running:false, actScene:"resting", lookY:1.0, sig:"", container:null, ro:null, io:null, initialized:false, reduced:false,
     blinkT:2.2, blinkPhase:0, lids:null, jawPulse:0, pose:{}, sceneT:0 };
   try { R.reduced = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches); } catch(e){}
 
@@ -1351,7 +1351,7 @@
     cam.lookAt(0,R.lookY,0);
   }
   FH3D.sync=function(spec){ if(!FH3D.available){ if(!initEngine()) return; } if(!spec) return; R.running=!!spec.running;
-    var sc=String(spec.scene||"resting"); if(sc!==R.scene){ R.scene=sc; R.sceneT=0; }
+    var sc=String(spec.scene||"resting"); if(sc!==R.actScene){ R.actScene=sc; R.sceneT=0; }
     try{ var sg=specSig(spec); if(sg!==R.sig){ R.sig=sg; rebuild(spec); } renderOnce(); startLoop(); }catch(e){ console.warn("[FH3D] sync failed:",e); } };
   function renderOnce(){
     /* guarantee a visible frame + ready flag even before rAF fires (background tabs) */
@@ -1400,7 +1400,7 @@
       aRx:-Math.sin(t*1.5)*0.02, aRz:-0.07-Math.sin(t*1.3)*0.004, aRe:0.12,
       lLx:0, lLz:0, lLk:0.02, lRx:0, lRz:0, lRk:0.02,
       bob:Math.sin(t*1.9)*0.011*k };
-    var s=R.scene;
+    var s=R.actScene;
     if(s==="travelling"){
       var ws=R.running?5.2:2.4, sw=Math.sin(t*ws), swAbs=Math.abs(sw);
       var la=(R.running?0.5:0.26)*robeK;
