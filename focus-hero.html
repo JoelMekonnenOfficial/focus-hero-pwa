@@ -16,6 +16,7 @@
 <title>Focus Hero</title>
 <style>
 /* ================================================================
+ * Focus Hero v9.8.10 - live minute controls now cover Stopwatch sessions too
  * Focus Hero v9.8.9 - real app logo + live focus minute adjustments wired into XP/loot math
  * Focus Hero v9.8.8 - durable 180-day app/session logs + session history tab + avatar battery mode + loot/store expansion
  * Focus Hero v8.8.3 - realistic 3D character + per-creature mounts (Three.js) on v8.8.0 - + dramatic character fix + egg system
@@ -3301,8 +3302,8 @@ svg{shape-rendering:geometricPrecision}
       <div id="game-mode-badge" class="game-mode-badge" hidden aria-live="polite" style="text-align:center">🔒 Locked In</div>
       <button type="button" id="btn-lockedin-reset" hidden style="display:block;width:fit-content;margin:6px auto 0;padding:6px 14px;border-radius:999px;font-size:.76rem;font-weight:700;background:rgba(255,122,138,.16);color:#ff9aa7;border:1px solid rgba(255,122,138,.5);cursor:pointer">🔁 I slipped — reset run</button>
       <div class="live-adjust" id="live-adjust" hidden aria-live="polite">
-        <div class="live-adjust-head"><span>Adjust live focus</span><b id="live-adjust-planned">25m planned</b></div>
-        <div class="live-adjust-controls" role="group" aria-label="Adjust live focus minutes">
+        <div class="live-adjust-head"><span id="live-adjust-title">Adjust live session</span><b id="live-adjust-planned">25m planned</b></div>
+        <div class="live-adjust-controls" role="group" aria-label="Adjust live session minutes">
           <button type="button" data-live-delta="-15">−15m</button>
           <button type="button" data-live-delta="-5">−5m</button>
           <button type="button" data-live-delta="5">+5m</button>
@@ -5550,9 +5551,10 @@ function ensureFocusPlanForRun(baseMs){
   state.timer.plannedMs = isPartialResume ? existing : (base || standard);
   state.timer.liveAdjustedAt = state.timer.liveAdjustedAt || 0;
 }
-function liveRewardPreview(minutes){
+function liveRewardPreview(minutes, opts){
+  opts = opts || {};
   const tk = todayKey();
-  const comboPriorCount = state.combo?.date === tk ? (state.combo.count|0) : 0;
+  const comboPriorCount = opts.stopwatch ? 0 : (state.combo?.date === tk ? (state.combo.count|0) : 0);
   const streakPreview = state.lastFocusDate === tk ? (state.streak|0) : Math.max(1, state.streak|0);
   const xp = computeXpBreakdown(minutes, { comboCount: comboPriorCount, streakDays: streakPreview, settings: state.settings });
   const rarities = Array.from(allowedRaritiesForMinutes(minutes));
@@ -5589,6 +5591,36 @@ function adjustLiveFocusMinutes(deltaMin){
     toast(`Live focus now ${Math.round(nextPlan/60000)}m planned.`, "info");
   }
   return { ok:true, before:oldPlan, after:nextPlan, requested };
+}
+function liveStopwatchCanAdjust(){
+  if (!state.timer || !isStopwatch()) return false;
+  if (pendingClaim) return false;
+  return !!(state.timer.running || (state.timer.swAccumulatedMs|0) > 0);
+}
+function adjustLiveStopwatchMinutes(deltaMin){
+  deltaMin = Math.round(Number(deltaMin) || 0);
+  if (!deltaMin || !liveStopwatchCanAdjust()) return { ok:false, reason:"inactive" };
+  const oldElapsed = stopwatchElapsedMs(state.timer, now());
+  const maxElapsed = LIVE_FOCUS_MAX_MINUTES * 60_000;
+  const requested = oldElapsed + deltaMin * 60_000;
+  const nextElapsed = Math.round(clamp(requested, 0, maxElapsed));
+  state.timer.swAccumulatedMs = nextElapsed;
+  if (state.timer.running) state.timer.swStartedAt = now();
+  else state.timer.swStartedAt = 0;
+  saveState();
+  renderTimer();
+  const beforeMin = Math.floor(oldElapsed / 60_000);
+  const afterMin = Math.floor(nextElapsed / 60_000);
+  logLine(`Live stopwatch adjusted: ${beforeMin}m → ${afterMin}m credited`);
+  if (requested !== nextElapsed){
+    toast(`Stopwatch credited time capped at ${afterMin}m.`, "warn");
+  } else {
+    toast(`Stopwatch now credits ${afterMin}m.`, "info");
+  }
+  return { ok:true, before:oldElapsed, after:nextElapsed, requested };
+}
+function adjustLiveSessionMinutes(deltaMin){
+  return isStopwatch() ? adjustLiveStopwatchMinutes(deltaMin) : adjustLiveFocusMinutes(deltaMin);
 }
 function isStopwatch(){ return state.timer.mode === "stopwatch"; }
 /* v4.1: pure helper — total elapsed ms for stopwatch state. Testable. */
@@ -7306,19 +7338,45 @@ function renderSwLaps(){
 function renderLiveAdjust(){
   const root = $("#live-adjust");
   if (!root) return;
-  const visible = liveFocusCanAdjust();
+  const stopwatchMode = isStopwatch();
+  const visible = stopwatchMode ? liveStopwatchCanAdjust() : liveFocusCanAdjust();
   root.hidden = !visible;
   if (!visible) return;
+  const titleEl = $("#live-adjust-title");
+  const plannedEl = $("#live-adjust-planned");
+  const text = $("#live-adjust-preview");
+  const floor = Math.max(1, state.settings.minRewardMinutes|0 || 5);
+  if (stopwatchMode){
+    const elapsed = stopwatchElapsedMs(state.timer, now());
+    const credited = Math.floor(elapsed / 60_000);
+    const preview = liveRewardPreview(credited, { stopwatch:true });
+    const rarityText = preview.rarity === "none" ? "no loot roll" : `${preview.rarity} ceiling`;
+    if (titleEl) titleEl.textContent = "Adjust live stopwatch";
+    if (plannedEl) plannedEl.textContent = `${credited}m credited`;
+    if (text){
+      text.textContent = credited < floor
+        ? `${fmtTimeLong(elapsed)} elapsed · ${credited}m credited · below ${floor}m reward floor · no XP/loot`
+        : `${fmtTimeLong(elapsed)} elapsed · log preview: +${preview.xp.total} XP · ${rarityText}`;
+    }
+    $$("[data-live-delta]", root).forEach(btn=>{
+      const d = Number(btn.dataset.liveDelta || 0);
+      btn.disabled = (d < 0 && elapsed <= 0) || (d > 0 && credited >= LIVE_FOCUS_MAX_MINUTES);
+      btn.title = d < 0 && elapsed <= 0
+        ? "Already at 0 credited minutes"
+        : d > 0 && credited >= LIVE_FOCUS_MAX_MINUTES
+          ? "Live stopwatch cap is 24h"
+          : `Adjust credited stopwatch time by ${d} minutes`;
+    });
+    return;
+  }
   const planned = focusPlannedMinutes();
   const remaining = focusRemainingMs();
   const elapsed = focusElapsedMs();
   const minPlan = Math.max(1, Math.ceil(elapsed / 60_000));
   const preview = liveRewardPreview(planned);
-  const floor = Math.max(1, state.settings.minRewardMinutes|0 || 5);
   const rarityText = preview.rarity === "none" ? "no loot roll" : `${preview.rarity} ceiling`;
-  const plannedEl = $("#live-adjust-planned");
+  if (titleEl) titleEl.textContent = "Adjust live focus";
   if (plannedEl) plannedEl.textContent = `${planned}m planned`;
-  const text = $("#live-adjust-preview");
   if (text){
     text.textContent = planned < floor
       ? `${fmtTime(remaining)} left · below ${floor}m reward floor · no XP/loot`
@@ -11599,7 +11657,7 @@ function bindTimer(){
   $("#btn-skip").onclick = ()=>skipTimer();
   const stopLog = $("#btn-stop-log"); if (stopLog) stopLog.onclick = ()=>finalizeStopwatch();
   const lap = $("#btn-lap"); if (lap) lap.onclick = ()=>lapStopwatch();
-  $$("[data-live-delta]").forEach(b=>b.addEventListener("click", ()=>adjustLiveFocusMinutes(parseInt(b.dataset.liveDelta, 10)||0)));
+  $$("[data-live-delta]").forEach(b=>b.addEventListener("click", ()=>adjustLiveSessionMinutes(parseInt(b.dataset.liveDelta, 10)||0)));
   // v7.3: Cancel button is the zero-credit abort path. Distinct from Reset, which
   // already silently drops elapsed time but has no confirm + no awareness counter.
   const cancelBtn = $("#btn-cancel-session"); if (cancelBtn) cancelBtn.onclick = ()=>cancelSession();
@@ -11744,7 +11802,8 @@ const __FocusHero = {
   cancelSession, isCancelableSession,
   /* v7.7: post-session claim and customization */
   startFocusClaim, confirmSessionClaim, commitFocusTimerSession,
-  adjustLiveFocusMinutes, focusPlannedMinutes, focusPlannedMs, liveFocusCanAdjust,
+  adjustLiveSessionMinutes, adjustLiveFocusMinutes, adjustLiveStopwatchMinutes,
+  focusPlannedMinutes, focusPlannedMs, liveFocusCanAdjust, liveStopwatchCanAdjust,
   setEquipped, clearEquipped, setHeroAppearance, ensureHeroAppearanceShape,
   fmtTimeLong,
   /* v4.2: emergency recovery — call from DevTools console.
@@ -11814,6 +11873,28 @@ async function runSmokeTests(){
     const previewOk = ($("#claim-preview")?.textContent || "").includes(`+${xp10.total} XP`);
     pendingClaim = null; closeModal("claim-modal");
     add("Live focus edit: planned minutes drive claim + XP preview", started && up.ok && plannedUp && down.ok && plannedDown && claimOk && inputOk && previewOk);
+    state = snapshot; saveState(); renderAll();
+  }
+  {
+    const snapshot = deepClone(state);
+    state.timer.mode = "stopwatch";
+    state.timer.running = true;
+    state.timer.endAt = 0;
+    state.timer.msLeft = 0;
+    state.timer.swAccumulatedMs = 10 * 60_000;
+    state.timer.swStartedAt = now();
+    state.timer.swSessionStartedAt = now();
+    renderTimer();
+    const visible = !$("#live-adjust")?.hidden && ($("#live-adjust-title")?.textContent || "").includes("stopwatch");
+    const up = adjustLiveSessionMinutes(5);
+    const upMinutes = stopwatchMinutes(state.timer, now()) === 15;
+    const upPreview = ($("#live-adjust-preview")?.textContent || "").includes(`+${computeXpBreakdown(15, { comboCount:0, streakDays:Math.max(1,state.streak|0), settings:state.settings }).total} XP`);
+    const down = adjustLiveSessionMinutes(-7);
+    const downMinutes = stopwatchMinutes(state.timer, now()) === 8;
+    const beforeTotal = state.totalFocusMin|0;
+    finalizeStopwatch();
+    const loggedMinutes = (state.totalFocusMin|0) === beforeTotal + 8;
+    add("Live stopwatch edit: credited minutes drive final XP/loot math", visible && up.ok && upMinutes && upPreview && down.ok && downMinutes && loggedMinutes);
     state = snapshot; saveState(); renderAll();
   }
   {
