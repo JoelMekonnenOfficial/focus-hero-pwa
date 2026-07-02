@@ -1390,6 +1390,38 @@ button.primary{
 .loot-inspector .li-actions button:disabled{opacity:.45;cursor:not-allowed}
 
 .battle-report{max-width:600px}
+/* ===== v10 additions ===== */
+html{touch-action:manipulation}
+.daily-recap{margin-top:10px;border:1px solid var(--border);border-radius:14px;padding:10px 12px;background:rgba(255,255,255,.03)}
+.daily-recap h3{margin:0 0 6px;font-size:.9rem}
+.daily-recap .dr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:8px}
+.daily-recap .dr-cell{background:rgba(0,0,0,.16);border-radius:10px;padding:7px 9px;text-align:center}
+.daily-recap .dr-cell b{display:block;font-size:1.02rem}
+.daily-recap .dr-cell span{font-size:.66rem;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.06em}
+.daily-recap .dr-loot{margin-top:8px;font-size:.78rem;color:var(--ink-dim)}
+.session-history-actions .session-del{font-size:.7rem;padding:2px 8px;border-radius:8px;color:#ff9d9d;border:1px solid rgba(255,120,120,.4);background:rgba(255,80,80,.08)}
+.session-exact-row{display:flex;gap:8px;align-items:center;margin-top:10px}
+.session-exact-row input{flex:1;min-width:0}
+.session-danger-row{display:flex;justify-content:flex-end;margin-top:12px}
+.task-quickstart-row{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;text-align:left;border-radius:10px;background:var(--panel-2)}
+/* v10: the 2D avatar performs the current action too (mirrors FH3D scenes) */
+@keyframes fh98Walk{0%,100%{transform:translateY(0) rotate(-1deg)}50%{transform:translateY(-4px) rotate(1.4deg)}}
+@keyframes fh98Swing{0%{transform:rotate(6deg)}45%{transform:rotate(-38deg)}60%{transform:rotate(14deg)}100%{transform:rotate(6deg)}}
+@keyframes fh98Breathe{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(1.6px) scale(1.012)}}
+@keyframes fh98Float{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+@keyframes fh98Rummage{0%,100%{transform:rotate(0) translateY(0)}30%{transform:rotate(-5deg) translateY(2.5px)}60%{transform:rotate(4deg) translateY(1px)}}
+@keyframes fh98Hammer{0%,55%{transform:rotate(-30deg)}70%{transform:rotate(18deg)}100%{transform:rotate(-30deg)}}
+.hero-card .avatar svg.fh98-hero-card-svg .fh98-hero{transform-origin:80px 118px;animation:fh98Breathe 3.2s ease-in-out infinite}
+.hero-card .avatar[data-scene="travelling"] svg.fh98-hero-card-svg .fh98-hero{animation:fh98Walk 1.15s ease-in-out infinite}
+.hero-card .avatar[data-scene="travelling"][data-running="1"] svg.fh98-hero-card-svg .fh98-hero{animation-duration:.55s}
+.hero-card .avatar[data-scene="fighting"] svg.fh98-hero-card-svg .fh98-weapon{transform-origin:112px 96px;animation:fh98Swing 1.4s ease-in-out infinite}
+.hero-card .avatar[data-scene="fighting"][data-running="1"] svg.fh98-hero-card-svg .fh98-weapon{animation-duration:.8s}
+.hero-card .avatar[data-scene="crafting"] svg.fh98-hero-card-svg .fh98-weapon{transform-origin:112px 96px;animation:fh98Hammer 1.5s ease-in-out infinite}
+.hero-card .avatar[data-scene="meditating"] svg.fh98-hero-card-svg .fh98-hero{animation:fh98Float 3.6s ease-in-out infinite}
+.hero-card .avatar[data-scene="looting"] svg.fh98-hero-card-svg .fh98-hero{animation:fh98Rummage 1.6s ease-in-out infinite}
+.hero-card .avatar[data-scene="hunting"] svg.fh98-hero-card-svg .fh98-hero{animation:fh98Walk 2.2s ease-in-out infinite}
+.hero-card .avatar[data-scene="resting"] svg.fh98-hero-card-svg .fh98-hero{animation:fh98Breathe 4.2s ease-in-out infinite}
+@media (prefers-reduced-motion: reduce){ .hero-card .avatar svg.fh98-hero-card-svg .fh98-hero, .hero-card .avatar svg.fh98-hero-card-svg .fh98-weapon{animation:none!important} }
 .battle-report-body{display:flex;flex-direction:column;gap:8px;max-height:520px;overflow-y:auto}
 .br-encounter{
   display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:.6rem .7rem;
@@ -3240,7 +3272,7 @@ svg{shape-rendering:geometricPrecision}
 }
 </style>
 <script src="three.min.js"></script>
-<script src="fh3d.js?v=fh-2026-07-02-v9-9-3"></script>
+<script src="fh3d.js?v=fh-2026-07-02-v10-0-0"></script>
 <script>
 /* v7.9: zoom-lock - block pinch + double-tap zoom; single-finger scroll stays. */
 (function(){
@@ -3251,12 +3283,9 @@ svg{shape-rendering:geometricPrecision}
   document.addEventListener("touchmove", function(e){
     if (e.touches && e.touches.length > 1 && e.cancelable) e.preventDefault();
   }, { passive:false });
-  var lastTap = 0;
-  document.addEventListener("touchend", function(e){
-    var now = Date.now();
-    if (now - lastTap <= 300 && e.cancelable) e.preventDefault();
-    lastTap = now;
-  }, { passive:false });
+  /* v10: double-tap zoom is now suppressed with CSS touch-action:manipulation.
+     The old blanket touchend preventDefault killed the click of the second of
+     two fast taps (e.g. tapping +5 twice), which read as "glitchy gestures". */
 })();
 </script>
 <div class="app" role="main" id="app">
@@ -3357,7 +3386,6 @@ svg{shape-rendering:geometricPrecision}
         <span>•</span>
         <span>Combo: <b id="combo-count">0</b></span>
       </div>
-      <div class="battle-log" id="battle-log" data-expanded="0" role="button" tabindex="0" aria-label="Battle log"></div>
       <div class="stat-strip" id="stat-strip">
         <span>Focused time: <b id="stat-focus-total">0h</b></span>
         <span title="Visible time while the app has been open across all sessions (live counter)">App uptime: <b id="stat-open-total">0:00:00</b></span>
@@ -3465,6 +3493,7 @@ svg{shape-rendering:geometricPrecision}
 
     <div class="card" id="section-log" aria-labelledby="log-heading">
       <h2 id="log-heading">Log</h2>
+      <div class="daily-recap" id="daily-recap" hidden></div>
       <div class="app-log-meta"><span>Saved locally for 180 days</span><span id="log-count">0 entries</span></div>
       <div id="log" class="app-log"></div>
     </div>
@@ -3743,7 +3772,16 @@ svg{shape-rendering:geometricPrecision}
       </label>
       <button type="button" class="primary" id="btn-session-edit-apply">Save edit</button>
     </div>
+    <div class="session-exact-row">
+      <label style="flex:1">Or set the exact total
+        <input id="session-edit-exact" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="e.g. 90 = this session counts as 90m">
+      </label>
+      <button type="button" id="btn-session-edit-exact">Set total</button>
+    </div>
     <div class="session-edit-preview" id="session-edit-preview">No correction entered yet.</div>
+    <div class="session-danger-row">
+      <button type="button" class="danger" id="btn-session-edit-delete" title="Permanently delete this session and reverse its stats">🗑 Delete whole session</button>
+    </div>
   </div>
 </div>
 
@@ -4586,7 +4624,20 @@ const ACHIEVEMENTS_V76 = [
   ["secret_palindrome","Looking Glass","silver","🪞","A task that reads the same both ways.",{hidden:true,secretKey:"palindrome"}],
   ["secret_pi","Slice of π","gold","🥧","Complete a session at exactly 3:14.",{hidden:true,secretKey:"pi"}],
   ["secret_silentnight","Silent Night","gold","❄️","Focus on the longest nights of the year.",{hidden:true,secretKey:"silentnight"}],
-  ["secret_meta","Recursion","mythic","♾️","Sometimes the achievement is the seeker.",{hidden:true,secretKey:"meta"}]
+  ["secret_meta","Recursion","mythic","♾️","Sometimes the achievement is the seeker.",{hidden:true,secretKey:"meta"}],
+  /* v10: new tier spread - every one is checkable from existing stats */
+  ["tasks_5","Full Quiver","silver","🗂️","Create five tasks.",{tasksCreated:5}],
+  ["quests_25","Questmaster","gold","📜","Complete 25 quests.",{quests:25}],
+  ["combo_4","Chain Lightning","silver","⛓️","4-session combo in one day.",{combo:4}],
+  ["streak_14","Fortnight of Fire","silver","🔥","14-day focus streak.",{streak:14}],
+  ["streak_50","Half-Century","gold","🏵️","50-day focus streak.",{streak:50}],
+  ["level_75","Mythmaker","platinum","🗿","Reach hero level 75.",{level:75}],
+  ["day_360","Six-Hour Day","gold","☀️","6+ focused hours in a single day.",{dayMin:360}],
+  ["session_240","Ultramarathon","platinum","🏔️","Complete a single 4-hour session.",{maxSessionMin:240}],
+  ["loot_50","Packrat","silver","🎒","Own 50 pieces of loot.",{lootCount:50}],
+  ["loot_150","Dragon's Hoard","gold","🐉","Own 150 pieces of loot.",{lootCount:150}],
+  ["coins_1000","First Fortune","silver","🪙","Earn 1,000 lifetime coins.",{coinsEarned:1000}],
+  ["coins_10000","Tycoon","gold","💰","Earn 10,000 lifetime coins.",{coinsEarned:10000}]
 ];
 const MONSTERS = [
   ["t1","slime","🟢","Verdant Slime",1,1,["common"]],
@@ -6408,6 +6459,9 @@ function createTask({ name, emoji, pinned=false } = {}){
   // Make it the active task unless one is already set
   if (!state.activeTaskId) state.activeTaskId = t.id;
   saveState(); renderTasks(); renderActiveTaskRow();
+  /* v10: achievements react to the creation itself (fixes "Create a task"
+     staying locked until the next completed session). */
+  try { checkAchievements(); } catch(_){}
   return t;
 }
 function pickRandomEmoji(){
@@ -6723,29 +6777,52 @@ function bindGameModeWatch(){
    (Focus/Tasks/Hero/Rewards). Guarded so it never fights horizontal scrollers,
    sliders, the tab strip, inputs, modals, or normal vertical scrolling. */
 function bindSwipeGestures(){
+  /* v10: rebuilt. Fixes every "fires when it shouldn't" path:
+     - rotating the 3D hero no longer switches tabs (.fh3d-canvas excluded)
+     - swipes that start on any horizontally-scrollable strip are ignored
+     - swiping inside an open sheet never switches tabs; instead a firm
+       left-to-right swipe CLOSES that sheet (same as tapping the X)
+     - a swipe must be fast, long and decisively horizontal to count
+     - small haptic tick confirms a recognized gesture */
   const NAV = ["section-focus","section-tasks","section-hero","section-progress","section-log"];
-  let sx=0, sy=0, st=0, ok=false;
+  let sx=0, sy=0, st=0, ok=false, inModal=null;
   function curIdx(){
     let best=0, bd=Infinity;
     for (let i=0;i<NAV.length;i++){ const el=document.getElementById(NAV[i]); if(!el) continue; const r=el.getBoundingClientRect(); const d=Math.abs(r.top-70); if(d<bd){bd=d;best=i;} }
     return best;
   }
+  function scrollableX(el){
+    for (let n=el; n && n!==document.body; n=n.parentElement){
+      if (n.scrollWidth - n.clientWidth > 8) return true;
+    }
+    return false;
+  }
+  function buzz(ms){ try{ if (navigator.vibrate) navigator.vibrate(ms||10); }catch(_){} }
   document.addEventListener("touchstart", e=>{
-    if (e.touches.length!==1){ ok=false; return; }
-    const t=e.touches[0];
-    if (t.target && t.target.closest && t.target.closest("input[type='range'], .tabs, [role='tablist'], .mode-tabs, select, textarea, .modal-backdrop")){ ok=false; return; }
+    ok=false; inModal=null;
+    if (e.touches.length!==1) return;
+    const t=e.touches[0], el=t.target;
+    if (!el || !el.closest) return;
+    if (el.closest("input, select, textarea, [contenteditable], .fh3d-canvas, .tabs, [role='tablist'], .mode-tabs, .sw-laps, .heatmap")) return;
+    const back=el.closest(".modal-backdrop:not([hidden])");
+    if (back){ inModal=back; }
+    else if (scrollableX(el)) return;
     sx=t.clientX; sy=t.clientY; st=Date.now(); ok=true;
   }, { passive:true });
   document.addEventListener("touchend", e=>{
     if (!ok) return; ok=false;
     const t=e.changedTouches[0]; if(!t) return;
     const dx=t.clientX-sx, dy=t.clientY-sy, dt=Date.now()-st;
-    if (dt>700) return;
-    if (Math.abs(dx)>70 && Math.abs(dx) > Math.abs(dy)*1.7){
-      const i=curIdx();
-      const n = dx<0 ? Math.min(NAV.length-1, i+1) : Math.max(0, i-1);
-      if (n!==i){ try{ scrollToSection(NAV[n]); }catch(_){} }
+    if (dt>650) return;
+    const horizontal = Math.abs(dx)>76 && Math.abs(dx) > Math.abs(dy)*2.1;
+    if (!horizontal) return;
+    if (inModal){
+      if (dx>0 && inModal.id){ try{ closeModal(inModal.id); buzz(12); }catch(_){} }
+      return;
     }
+    const i=curIdx();
+    const n = dx<0 ? Math.min(NAV.length-1, i+1) : Math.max(0, i-1);
+    if (n!==i){ try{ scrollToSection(NAV[n]); buzz(10); }catch(_){} }
   }, { passive:true });
 }
 /* v9: QUICK-START STOPWATCH — one tap to begin an open-ended session
@@ -6762,7 +6839,54 @@ function quickStartStopwatch(){
 }
 function bindQuickStart(){
   const qs = document.getElementById("btn-quick-stopwatch");
-  if (qs) qs.onclick = ()=>quickStartStopwatch();
+  if (qs) qs.onclick = ()=>openTaskQuickStart(()=>quickStartStopwatch());
+  /* v10: the main Start button also offers the picker when starting FRESH
+     (never when resuming/pausing) - fewer taps than switching tasks first. */
+  const bs = document.getElementById("btn-start");
+  if (bs && !bs._qsWrapped){
+    bs._qsWrapped = true;
+    const orig = bs.onclick;
+    bs.onclick = (e)=>{
+      let fresh = false;
+      try {
+        fresh = !state.timer.running && (
+          (isStopwatch() && !(state.timer.swAccumulatedMs|0)) ||
+          (!isStopwatch() && state.timer.mode === "focus" && !(state.timer.msLeft > 0)));
+      } catch(_){ fresh = false; }
+      if (fresh){ openTaskQuickStart(()=>{ if (orig) orig.call(bs, e); else startTimer(); }); return; }
+      if (orig) orig.call(bs, e); else startTimer();
+    };
+  }
+}
+/* v10: pick the task at the moment you start - one sheet, one tap, and the
+   session begins immediately. Skips itself when there is nothing to choose. */
+function openTaskQuickStart(startFn){
+  try {
+    const tasks = (state.tasks||[]).filter(t=>t);
+    if (tasks.length < 2){
+      if (tasks.length === 1 && state.activeTaskId !== tasks[0].id) setActiveTask(tasks[0].id);
+      startFn(); return;
+    }
+    const root = $("#task-switch-body"); if (!root){ startFn(); return; }
+    const title = $("#task-switch-title"); if (title) title.textContent = "Start focusing on…";
+    const currentId = state.activeTaskId;
+    const cur = state.tasks.find(t=>t.id===currentId) || null;
+    root.innerHTML = "";
+    const go = document.createElement("button");
+    go.type = "button"; go.className = "task-quickstart-row";
+    go.innerHTML = "<span>▶</span><span class=\"name\">Start now" + (cur ? " · " + escapeHtml(cur.name) : "") + "</span><span class=\"meta\">current</span>";
+    go.onclick = ()=>{ closeModal("task-switch-modal"); if (title) title.textContent = "Switch Task"; startFn(); };
+    root.appendChild(go);
+    tasks.slice().sort((a,b)=>(b.lastUsedAt||0)-(a.lastUsedAt||0)).forEach(t=>{
+      if (cur && t.id === cur.id) return;
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "task-quickstart-row";
+      b.innerHTML = "<span>" + escapeHtml(t.emoji||"•") + "</span><span class=\"name\">" + escapeHtml(t.name||"(unnamed)") + "</span><span class=\"meta\">" + formatHours(t.totalFocusMin||0) + "</span>";
+      b.onclick = ()=>{ setActiveTask(t.id); closeModal("task-switch-modal"); if (title) title.textContent = "Switch Task"; startFn(); };
+      root.appendChild(b);
+    });
+    openModal("task-switch-modal");
+  } catch(e){ console.warn("quick start picker failed", e); startFn(); }
 }
 /* H:MM:SS counter format (e.g. 12:04:37) */
 function formatHMS(ms){
@@ -7299,6 +7423,7 @@ function renderAll(){
   renderLoot(); renderCompanions(); renderAchievements(); renderHeatmap(); renderTopMeta();
   renderModeTabs(); renderAvatar(); renderEncounterStage(); renderTasks(); renderActiveTaskRow();
   renderStatStrip(); renderBattleLog(); renderLog(); renderBackupLast(); renderSecurityPanel();
+  try { renderDailyRecap(); } catch(_){}
   renderSwLaps(); renderActionPicker(); renderBestiary(); renderAllTasksSheet(); renderCharacterPanel();
   if ($("#tab-sessions") && !$("#tab-sessions").hidden) renderSessionHistoryPanel();
   /* v8.x LOOT REWORK — new panels (defined in loot-rework.js). */
@@ -7677,12 +7802,22 @@ function fh3dSpec(opts={}){
       if (characterOnly) return null;
       const inStudio = (typeof fh3dStudioOpen === "function") && fh3dStudioOpen();
       if (!inStudio){
-        /* v9.9.3: on the home card the mount only appears while actually travelling */
-        const scene = document.querySelector(".encounter-stage")?.dataset?.scene || "resting";
-        if (scene !== "travel") return null;
+        /* v10: home-card mount only appears while actually travelling.
+           (v9.9.3 compared against "travel" but scene names are "travelling",
+           so the equipped mount never rendered on the home card - fixed.) */
+        const scene = document.querySelector(".encounter-stage")?.dataset?.scene
+          || ((typeof currentAdventureSpec === "function" && currentAdventureSpec()) || {}).scene || "resting";
+        if (!/^travel/.test(scene)) return null;
       }
       return fh3dMountFor(eq.mount || (state.hero.equipped && state.hero.equipped.mount));
-    })()
+    })(),
+    /* v10: current action + live state drive the FH3D action-animation engine */
+    scene: (function(){ try {
+        if ((typeof fh3dStudioOpen === "function") && fh3dStudioOpen()) return "resting";
+        const adv = (typeof currentAdventureSpec === "function") ? currentAdventureSpec() : null;
+        return (adv && adv.scene) || "resting";
+      } catch(_){ return "resting"; } })(),
+    running: !!(state.timer && state.timer.running)
   };
 }
 function fhV98HeroCardSvg(opts={}){
@@ -10016,6 +10151,47 @@ function fmtMin(min){
   const h = Math.floor(min/60), r = min%60;
   return r === 0 ? `${h}h` : `${h}h ${r}m`;
 }
+/* ===== v10: Daily Recap - a per-day summary of what the hero earned ===== */
+function daySummary(dk){
+  const recs=(state.sessionsLog||[]).filter(r=>r&&r.type==="focus"&&todayKey(new Date(r.at||0))===dk);
+  const minutes=recs.reduce((a,r)=>a+(r.minutes|0),0);
+  const xp=recs.reduce((a,r)=>a+(r.rewarded?(r.xp|0):0),0);
+  const loot=recs.filter(r=>r.loot).length;
+  const byTask={};
+  recs.forEach(r=>{ const n=r.taskName||r.action||"Focus"; byTask[n]=(byTask[n]||0)+(r.minutes|0); });
+  let top=null; Object.keys(byTask).forEach(n=>{ if(!top||byTask[n]>byTask[top]) top=n; });
+  const histMin=(state.history&&state.history[dk])|0;
+  return { day:dk, sessions:recs.length, minutes, histMinutes:Math.max(minutes,histMin), xp, loot, topTask:top };
+}
+function renderDailyRecap(){
+  const host=document.getElementById("daily-recap"); if(!host) return;
+  const s=daySummary(todayKey());
+  if(!s.sessions && !s.histMinutes){ host.hidden=true; return; }
+  host.hidden=false;
+  host.innerHTML=`<h3>📅 Today so far</h3>
+    <div class="dr-grid">
+      <div class="dr-cell"><b>${s.histMinutes}m</b><span>Focused</span></div>
+      <div class="dr-cell"><b>${s.sessions}</b><span>Sessions</span></div>
+      <div class="dr-cell"><b>+${s.xp}</b><span>XP</span></div>
+      <div class="dr-cell"><b>${s.loot}</b><span>Loot</span></div>
+      <div class="dr-cell"><b>${state.streak|0}d</b><span>Streak</span></div>
+    </div>
+    ${s.topTask?`<div class="dr-loot">Most focused: <b>${escapeHtml(s.topTask)}</b></div>`:""}`;
+}
+function maybeShowYesterdayRecap(){
+  try{
+    const today=todayKey();
+    if(localStorage.getItem("fh_lastRecapDay")===today) return;
+    localStorage.setItem("fh_lastRecapDay", today);
+    const y=new Date(); y.setDate(y.getDate()-1);
+    const yk=todayKey(y);
+    const s=daySummary(yk);
+    const mins=Math.max(s.minutes,(state.history&&state.history[yk])|0);
+    if(!s.sessions && !mins) return;
+    toast(`📜 Yesterday: ${mins}m focused · ${s.sessions} session${s.sessions===1?"":"s"} · +${s.xp} XP${s.loot?` · ${s.loot} loot`:""}`,"info");
+    logLine(`Daily recap ${yk}: ${mins}m, ${s.sessions} sessions, +${s.xp} XP, ${s.loot} loot drops.`);
+  }catch(_){}
+}
 function renderAnalytics(){
   const host = $("#analytics-body"); if (!host) return;
   const weekKeys = new Set(weekKeysLocal());
@@ -10559,6 +10735,7 @@ function _achCtx(){
     maxSessionMin: maxSession,
     dayCount, everyAction, slotSet, rarityFull,
     bestiaryPct: bestiaryPercent(),
+    coinsEarned: state.coinsEarned|0,
     perfectWeek: computePerfectStreakDays(),
     ironWill: computeIronWillStreak()
   };
@@ -10580,6 +10757,7 @@ function _condMet(cond,c){
   if(cond.slotSet)return !!c.slotSet;
   if(cond.rarityFull)return !!c.rarityFull;
   if(cond.bestiaryPct!=null)return c.bestiaryPct>=cond.bestiaryPct;
+  if(cond.coinsEarned!=null)return c.coinsEarned>=cond.coinsEarned;
   if(cond.perfectWeek!=null)return c.perfectWeek>=cond.perfectWeek;
   if(cond.ironWill!=null)return c.ironWill>=cond.ironWill;
   return false;
@@ -10598,6 +10776,7 @@ function _condProgress(cond,c){
   if(cond.maxSessionMin!=null)return[c.maxSessionMin,cond.maxSessionMin];
   if(cond.dayCount!=null)return[c.dayCount,cond.dayCount];
   if(cond.bestiaryPct!=null)return[c.bestiaryPct,cond.bestiaryPct];
+  if(cond.coinsEarned!=null)return[c.coinsEarned,cond.coinsEarned];
   if(cond.perfectWeek!=null)return[c.perfectWeek,cond.perfectWeek];
   if(cond.ironWill!=null)return[c.ironWill,cond.ironWill];
   return null;
@@ -10993,6 +11172,34 @@ function renderSessionEditModal(){
       preview.innerHTML = `Will apply <b>${signed}m</b> and save this session as <b>${next}m</b>. Awarded XP after edit: <b>${info.xpAfter} XP</b>.`;
     }
   }
+}
+/* v10: set a session's EXACT total (not just +/- deltas). Same safe path. */
+function applySessionExactFromModal(){
+  const rec = sessionEditModalRecord();
+  if (!canEditSessionRecord(rec)) return;
+  const raw = Math.floor(Number($("#session-edit-exact")?.value));
+  if (!isFinite(raw) || raw < 0){ toast("Enter the exact total minutes (0 or more).", "warn"); return; }
+  if (raw === (rec.minutes|0)){ toast("Session already counts as " + raw + "m.", "info"); return; }
+  const result = applySessionEdit(rec.id, raw);
+  if(!result.ok){
+    toast(`Edit not applied: ${result.reason}`, "warn");
+  } else if(result.clamped){
+    toast(`Capped to ${result.newMinutes}m (safety max ${result.newMinutesCap}m).`, "warn");
+  } else {
+    toast(`Session set: ${result.oldMinutes}m → ${result.newMinutes}m`, "good");
+  }
+  closeModal("session-edit-modal");
+  renderAll();
+}
+function deleteSessionFromModal(){
+  const rec = sessionEditModalRecord();
+  if (!rec) return;
+  const when = rec.at ? new Date(rec.at).toLocaleString() : "unknown time";
+  if (!confirm("Delete this session?\n\n" + (rec.taskName||rec.action||"Focus") + " — " + (rec.minutes|0) + "m (" + when + ")\n\nIts minutes, XP and loot are reversed everywhere. This cannot be undone.")) return;
+  const res = deleteSessionRecord(rec.id);
+  closeModal("session-edit-modal");
+  if (res && res.ok){ toast("Session deleted — its stats were reversed.", "good"); renderAll(); }
+  else toast("Could not delete: " + ((res&&res.reason)||"unknown"), "warn");
 }
 function applySessionEditFromModal(){
   const rec = sessionEditModalRecord();
@@ -11601,6 +11808,8 @@ function bindDesignShell(){
   $("#btn-minute-ledger")?.addEventListener("click", ()=>{ closeModal("task-minutes-modal"); openProgressPanel("ledger"); });
   $$("[data-session-delta]").forEach(b=>b.addEventListener("click", ()=>setSessionEditDelta((signedSessionEditDelta() || 0) + (Number(b.dataset.sessionDelta)||0))));
   $("#btn-session-edit-apply")?.addEventListener("click", applySessionEditFromModal);
+  $("#btn-session-edit-exact")?.addEventListener("click", applySessionExactFromModal);
+  $("#btn-session-edit-delete")?.addEventListener("click", deleteSessionFromModal);
   $("#session-edit-delta")?.addEventListener("input", ()=>{ refreshSessionEditSign(); renderSessionEditModal(); });
   $("#session-edit-delta")?.addEventListener("keydown", e=>{ if (e.key === "Enter"){ e.preventDefault(); applySessionEditFromModal(); } });
   $("#session-edit-sign")?.addEventListener("click", ()=>{
@@ -12424,6 +12633,10 @@ async function boot(){
     bindTasks(); bindQuests(); bindTimer(); bindBattleLog(); bindKeys(); bindMultiTab(); bindSecretAchievementListeners();
     $("#btn-theme").onclick = toggleTheme;
     renderAll();
+    /* v10: retro-check achievements every boot - anything already earned
+       (existing tasks, owned loot, streaks...) unlocks immediately. */
+    try { checkAchievements(); } catch(_){}
+    try { renderDailyRecap(); maybeShowYesterdayRecap(); } catch(_){}
     renderSyncStatus();
     ensureTickInterval();
     bindAppOpenTracking();
@@ -12749,12 +12962,44 @@ function applyTaskTimeAdjustment(taskId, deltaMin){
   const xpDelta = ledgerXpForMinutes(d);
   if (d > 0) addXpQuiet(xpDelta);
   else if (xpDelta > 0) removeXpQuiet(xpDelta);
-  if (d > 0) addDailyProgressForSession(day, "minutes", d);
+  var __dailyApplied = 0;
+  if (d > 0) __dailyApplied = addDailyProgressForSession(day, "minutes", d) || 0;
   else if (removedToday > 0) rollbackDailyProgressForSession(day, "minutes", removedToday);
+  /* v10: minutes added in the edit tab now feed the SAME reward pipeline as a
+     live session - they earn XP (applied above) AND roll loot, and the session
+     record they create participates in clawback if those minutes are later
+     edited down. Logged user minutes are never modified here beyond the
+     requested delta itself. */
+  var __ledgerLoot = null;
+  if (d > 0){
+    try {
+      const __floor = Math.max(1, state.settings.minRewardMinutes|0 || 5);
+      if (d >= __floor && typeof runSessionRewardPipeline === "function"){
+        const __lid = "ledger_" + Date.now() + "_" + Math.floor(Math.random()*1e6);
+        const __run = runSessionRewardPipeline(currentAdventureActionId(), d, __lid) || {};
+        __ledgerLoot = __run.legacyItem || null;
+        const __xpB = computeXpBreakdown(d, { comboCount:0, streakDays:0, settings: state.settings });
+        if (typeof buildSessionLogRecordV76 === "function" && typeof pushSessionLog === "function"){
+          pushSessionLog(buildSessionLogRecordV76({
+            id: __lid, type:"focus", source:"ledger", minutes:d,
+            taskId: task.id, taskName: task.name, xpBreakdown: __xpB,
+            rewarded:true, comboPriorCount:0, streakBefore:state.streak|0,
+            streakForCalc:state.streak|0, comboApplied:0,
+            dailyFocusApplied:0, dailyMinApplied:__dailyApplied, extendedStreak:false,
+            lootItem:__ledgerLoot, achievementsUnlockedHere:[], action: currentAdventureActionId()
+          }));
+        }
+        const __extra = (__run.drops||[]).length > 1 ? " +" + ((__run.drops||[]).length - 1) + " more" : "";
+        if (__ledgerLoot) toast("Loot from logged time: " + __ledgerLoot[1] + " (" + __ledgerLoot[2] + ")" + __extra, "good");
+        else toast("+" + d + "m logged - loot dice rolled, nothing dropped this time.", "info");
+        if (typeof checkAchievements === "function") checkAchievements();
+      }
+    } catch(__e){ console.warn("ledger reward pipeline failed", __e); }
+  }
   const after = task.totalFocusMin|0;
   appendEditLog({ taskName: task.name, before: before, after: after, source:"ledger" });
   saveState(); renderAll();
-  return { ok:true, delta:d, before:before, after:after, requested:__requested, clamped:__capClamped };
+  return { ok:true, delta:d, before:before, after:after, requested:__requested, clamped:__capClamped, loot:__ledgerLoot };
 }
 
 /* --- coin store catalog --- */
@@ -12858,8 +13103,9 @@ function renderSessionHistoryPanel(){
     const loot = rec.loot ? `${rec.loot.rarity || ""} ${rec.loot.id || ""}`.trim() : "No loot";
     const pillCls = rec.edited ? " edited" : rec.rewarded ? " rewarded" : "";
     const pillText = rec.edited ? "edited" : rec.rewarded ? "rewarded" : "logged";
-    const edit = (typeof canEditSessionRecord === "function" && canEditSessionRecord(rec))
-      ? `<button type="button" data-session-history-edit="${escapeHtml(rec.id)}">Edit</button>`
+    const editable = (typeof canEditSessionRecord === "function" && canEditSessionRecord(rec));
+    const edit = editable
+      ? `<button type="button" data-session-history-edit="${escapeHtml(rec.id)}">Edit</button><button type="button" class="session-del" data-session-history-del="${escapeHtml(rec.id)}" title="Delete this whole session and reverse its stats">🗑</button>`
       : "";
     return `<div class="session-history-row">
       <div class="session-history-date">${escapeHtml(sessionHistoryDateLabel(rec.at))}</div>
@@ -12878,6 +13124,17 @@ function renderSessionHistoryPanel(){
   if (!host.dataset.bound){
     host.dataset.bound = "1";
     host.addEventListener("click", ev=>{
+      const del = ev.target.closest("button[data-session-history-del]");
+      if (del){
+        const rec = (state.sessionsLog||[]).find(r=>r && r.id === del.getAttribute("data-session-history-del"));
+        if (!rec) return;
+        const when = rec.at ? new Date(rec.at).toLocaleString() : "unknown time";
+        if (!confirm("Delete this session?\n\n" + (rec.taskName||rec.action||"Focus") + " — " + (rec.minutes|0) + "m (" + when + ")\n\nIts minutes, XP and loot are reversed everywhere. This cannot be undone.")) return;
+        const res = deleteSessionRecord(rec.id);
+        if (res && res.ok){ toast("Session deleted — its stats were reversed.", "good"); renderAll(); }
+        else toast("Could not delete: " + ((res&&res.reason)||"unknown"), "warn");
+        return;
+      }
       const btn = ev.target.closest("button[data-session-history-edit]");
       if (!btn) return;
       openSessionEditModal(btn.getAttribute("data-session-history-edit"));

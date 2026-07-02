@@ -1,3 +1,35 @@
+# v10.0.0 — 2026-07-02
+
+**FH3D "Forge" — the hero actually DOES things now**
+- Ground-up animation engine: Rest sits by the fire, Travel walks (or rides), Fight swings the equipped weapon (bow draws, staff casts, duals alternate, unarmed boxes), Hunt stalks/aims, Craft kneels and hammers, Meditate floats cross-legged, Loot rummages. Live sessions run at full energy; idle plays a calm version.
+- Fully articulated arms (shoulder→elbow→hand) and legs (hip→knee) — animations can never stretch or shear geometry.
+- De-chibi proportions: human ≈7.4 head-heights; every race keeps identity via frame, not balloon heads. Builds (lean/balanced/broad) are far more visible; eye shapes/faces amplified; scars and smiles readable.
+- Fixed: equipped mount never showed on the home card (scene name mismatch). Mount appears while travelling, as designed.
+
+**Focus & flow**
+- Battle log card removed from the timer card (post-session Battle Report stays).
+- Start & ⏱️ Stopwatch now offer a one-tap task picker when you have 2+ tasks — pick and it starts instantly ("Start now" keeps the current task).
+
+**Minutes → rewards**
+- Minutes added in the edit tab now roll loot through the same pipeline as live sessions (and create a clawback-eligible session record). XP was already granted; loot completes it.
+- Session editor: set an EXACT total for any session (not just ± deltas) and delete a whole session (fully reversing minutes/XP/loot) — from the Sessions tab or the editor sheet.
+
+**Every day**
+- Daily Recap card (Log section): today's minutes, sessions, XP, loot, streak, top task — plus a "Yesterday" recap toast on your first open each day.
+
+**Achievements**
+- "Create a task" (and friends) retro-unlock at boot and on creation — no more earned-but-locked.
+- 12 new achievements: Full Quiver, Questmaster, Chain Lightning, Fortnight of Fire, Half-Century, Mythmaker, Six-Hour Day, Ultramarathon, Packrat, Dragon's Hoard, First Fortune, Tycoon.
+
+**Gestures (rebuilt)**
+- Rotating the 3D hero no longer switches tabs; swipes on scrollable strips are ignored; fast double-taps no longer eat button presses (CSS-level zoom suppression instead of a blanket preventDefault).
+- Swipe left/right between sections with a haptic tick; swipe right inside any open sheet to close it.
+
+**Offline**
+- Service worker now serves versioned assets (fh3d.js?v=…) from the precache when offline — 3D no longer requires a connection. Everything still saves to this device instantly and syncs when a connection returns.
+
+**Data integrity** — logged minutes and history untouched, as always. All edits/deletes go through the existing safe adjustment paths with previews, caps, clawback and pre-delete backups.
+
 ## v9.9.3 - arm proportions on short races, action-aware mount, calmer idle, bigger minutes box
 
 - Fixed remaining "stretched limbs": arm bone lengths now scale with race height (goblin/dwarf arms were staying human-length after the v9.9.2 shear fix). Hands scale down to match.

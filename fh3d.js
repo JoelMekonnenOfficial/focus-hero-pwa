@@ -13,7 +13,7 @@
 (function () {
   "use strict";
   var FH3D = (window.FH3D = window.FH3D || {});
-  FH3D.available = false; FH3D.version = "fh3d-9.0"; FH3D.engine = "atelier-v1";
+  FH3D.available = false; FH3D.version = "fh3d-10.0"; FH3D.engine = "forge-v1";
   var THREE = window.THREE;
   function webglSupported(){ try{ if(!THREE) return false; var c=document.createElement("canvas"); return !!(c.getContext("webgl2")||c.getContext("webgl")||c.getContext("experimental-webgl")); }catch(e){ return false; } }
   function col(hex, fb){ try{ return new THREE.Color(hex||fb||"#888"); }catch(e){ return new THREE.Color(fb||"#888"); } }
@@ -24,8 +24,8 @@
 
   var R = { renderer:null, scene:null, camera:null, env:null, root:null, heroRig:null, mountGroup:null, petGroup:null, pedestal:null, auraRing:null, auraDust:null,
     disposables:[], raf:0, last:0, clock:0, yaw:0, targetYaw:0, pitch:0, targetPitch:0, dist:0, targetDist:0, autoSpin:true, dragging:false, lastPointerX:0, lastPointerY:0,
-    mode:"home", mounted:false, running:false, lookY:1.0, sig:"", container:null, ro:null, io:null, initialized:false, reduced:false,
-    blinkT:2.2, blinkPhase:0, lids:null, jawPulse:0 };
+    mode:"home", mounted:false, running:false, scene:"resting", lookY:1.0, sig:"", container:null, ro:null, io:null, initialized:false, reduced:false,
+    blinkT:2.2, blinkPhase:0, lids:null, jawPulse:0, pose:{}, sceneT:0 };
   try { R.reduced = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches); } catch(e){}
 
   /* ---------------- engine ---------------- */
@@ -201,16 +201,20 @@
   /* ================= CHARACTER — joint-anchored sculpt ================= */
   /* Proportions (unit ~ meters). Feet at y=0. */
   function bodyPlan(build, race){
-    var p={ hipY:0.94, waistY:1.12, chestY:1.38, shoulderY:1.535, neckY:1.60, headY:1.76, HR:0.148,
+    /* v10 "Forge": heroic, de-chibi proportions. Human reads ~7.4 head-heights
+       (headY+HR = 1.90, head diameter 2*HR = 0.256). Races keep their identity
+       through frame + limb character, not balloon heads. */
+    var p={ hipY:0.98, waistY:1.16, chestY:1.42, shoulderY:1.575, neckY:1.65, headY:1.815, HR:0.128,
       shoulderW:0.205, hipW:0.128, legSpread:0.115, armLen:0.565, legLift:0 };
-    if(build==="broad"){ p.shoulderW=0.245; p.hipW=0.15; p.legSpread=0.135; p.thick=1.18; }
-    else if(build==="lean"){ p.shoulderW=0.185; p.hipW=0.115; p.legSpread=0.105; p.thick=0.88; }
+    if(build==="broad"){ p.shoulderW=0.255; p.hipW=0.152; p.legSpread=0.138; p.thick=1.24; }
+    else if(build==="lean"){ p.shoulderW=0.178; p.hipW=0.11; p.legSpread=0.102; p.thick=0.82; }
     else p.thick=1.0;
     race=String(race||"");
-    if(/dwarf/.test(race)){ p.scaleY=0.82; p.thick*=1.22; p.shoulderW*=1.12; p.HR=0.172; }
-    if(/goblin/.test(race)){ p.scaleY=0.8; p.thick*=0.92; p.HR=0.165; }
-    if(/orc/.test(race)){ p.scaleY=1.04; p.thick*=1.12; p.shoulderW*=1.08; }
-    if(/fae/.test(race)){ p.scaleY=0.94; p.thick*=0.86; }
+    if(/dwarf/.test(race)){ p.scaleY=0.82; p.thick*=1.24; p.shoulderW*=1.14; p.HR=0.138; }
+    if(/goblin/.test(race)){ p.scaleY=0.79; p.thick*=0.9; p.HR=0.132; }
+    if(/orc/.test(race)){ p.scaleY=1.05; p.thick*=1.14; p.shoulderW*=1.1; p.HR=0.131; }
+    if(/fae/.test(race)){ p.scaleY=0.94; p.thick*=0.84; p.HR=0.122; }
+    if(/elf/.test(race)){ p.scaleY=1.03; p.thick*=0.92; p.HR=0.124; }
     /* bake vertical scale into the joint plan (uniform transforms only — no shear) */
     var sy=p.scaleY||1;
     if(sy!==1){
@@ -297,25 +301,30 @@
 
     /* ---- arms (shoulder → elbow → wrist chains, relaxed pose) ---- */
     function mkArmAt(side){
+      /* v10: fully articulated - shoulder group -> elbowG subgroup -> hand.
+         Rotating the shoulder or bending elbowG can never stretch geometry,
+         because every piece lives inside the joint it belongs to. */
       var g=new THREE.Group(); g.position.set(P.shoulderW*side,P.shoulderY,0);
       var sleeves=(kit==="plate")?mats.armor:(kit==="robe")?mats.clothHi:(kit==="shade")?mats.clothDk:(kit==="doublet")?mats.clothHi:mats.cloth;
       var asy=P.sy||1;
-      var elbow=[0.05*side,-0.26*asy,0.025], wrist=[0.068*side,-0.475*asy,0.095];
+      var elbow=[0.05*side,-0.27*asy,0.02];
+      var wristRel=[0.016*side,-0.225*asy,0.075]; /* wrist relative to the elbow pivot */
       g.add(joint([0,0,0],0.072*th,(kit==="plate")?mats.armorHi:sleeves,1.0)); /* deltoid */
       g.add(seg3([0,0,0],elbow,0.062*th,0.047*th,sleeves,20));
-      g.add(joint(elbow,0.046*th,(kit==="plate")?mats.armorHi:sleeves));
-      g.add(seg3(elbow,wrist,0.045*th,0.034*th,(kit==="plate")?mats.armorDk:sleeves,20));
+      var elbowG=new THREE.Group(); elbowG.position.set(elbow[0],elbow[1],elbow[2]); g.add(elbowG); g.userData.elbow=elbowG;
+      elbowG.add(joint([0,0,0],0.046*th,(kit==="plate")?mats.armorHi:sleeves));
+      elbowG.add(seg3([0,0,0],wristRel,0.045*th,0.034*th,(kit==="plate")?mats.armorDk:sleeves,20));
       if(kit==="leathers"||kit==="shade"){ /* bracer */
-        g.add(seg3([elbow[0]+0.008*side,elbow[1]-0.08,elbow[2]+0.016],[wrist[0],wrist[1]+0.02,wrist[2]-0.008],0.043*th,0.037*th,mats.leather,14));
+        elbowG.add(seg3([wristRel[0]*0.35,wristRel[1]*0.35,wristRel[2]*0.35],[wristRel[0]*0.96,wristRel[1]*0.96,wristRel[2]*0.96],0.043*th,0.037*th,mats.leather,14));
       }
       if(kit==="robe"){ /* hanging sleeve cuff */
-        g.add(Loft([{y:-0.34,rx:0.048*th,rz:0.044,x:0.058*side},{y:-0.45,rx:0.066*th,rz:0.058,x:0.068*side}],mats.cloth,16));
+        elbowG.add(Loft([{y:wristRel[1]*0.55,rx:0.048*th,rz:0.044,x:wristRel[0]*0.55},{y:wristRel[1]*0.98,rx:0.066*th,rz:0.058,x:wristRel[0]*0.98}],mats.cloth,16));
       }
-      g.add(torus(0.037*th,0.008,(kit==="plate")?mats.trim:mats.leather,wrist[0],wrist[1]+0.015,wrist[2],HPI*0.94,0,0));
-      g.add(torus(0.048*th,0.007,(kit==="plate")?mats.armorDk:mats.leatherHi,elbow[0],elbow[1]+0.045,elbow[2]-0.004,HPI*0.9,0,0.1*side));
+      elbowG.add(torus(0.037*th,0.008,(kit==="plate")?mats.trim:mats.leather,wristRel[0],wristRel[1]+0.015,wristRel[2],HPI*0.94,0,0));
+      elbowG.add(torus(0.048*th,0.007,(kit==="plate")?mats.armorDk:mats.leatherHi,0,0.045,-0.004,HPI*0.9,0,0.1*side));
       g.add(Ball(0.008,0.008,0.006,mats.trim,0.012*side,-0.015,0.055,6));
-      /* hand at wrist */
-      var hand=new THREE.Group(); hand.position.set(wrist[0],wrist[1],wrist[2]); hand.scale.setScalar(0.82+0.18*asy);
+      /* hand at the wrist, inside the elbow group */
+      var hand=new THREE.Group(); hand.position.set(wristRel[0],wristRel[1],wristRel[2]); hand.scale.setScalar(0.82+0.18*asy);
       var palm=Ball(0.035,0.048,0.026,mats.skin,0.006*side,-0.035,0.006,16); hand.add(palm);
       for(var f=0;f<4;f++){
         var fx=(-0.018+f*0.013)*1.0;
@@ -326,7 +335,7 @@
       }
       var thumb=seg3([-0.028*side,-0.038,0.018],[-0.046*side,-0.058,0.04],0.008,0.0062,mats.skin,10); hand.add(thumb);
       hand.add(joint([-0.047*side,-0.06,0.041],0.006,mats.skin));
-      g.add(hand); g.userData.hand=hand;
+      elbowG.add(hand); g.userData.hand=hand;
       return g;
     }
     var armL=mkArmAt(-1), armR=mkArmAt(1);
@@ -367,14 +376,14 @@
     if(/orc|dwarf/.test(race)) headG.add(Ball(HR*0.5,HR*0.3,HR*0.34,mats.skin,0,-HR*0.5,HR*0.22,18)); /* heavy jaw */
     var fz=HR*0.78; /* face plane z */
     /* --- eyes with sockets, lids, catchlight --- */
-    var ex=HR*0.33, ey=HR*0.12, eyeS=t.eyeShape==="round"?1.14:t.eyeShape==="sharp"?0.85:1.0;
+    var ex=HR*0.33, ey=HR*0.12, eyeS=t.eyeShape==="round"?1.3:t.eyeShape==="sharp"?0.72:1.0;
     var lids=[];
     [-1,1].forEach(function(sg){
       headG.add(Ball(0.033*eyeS,0.026*eyeS,0.013,mats.eyeWhite,ex*sg,ey,fz,18));
       headG.add(Ball(0.017*eyeS,0.018*eyeS,0.008,mats.eye,ex*sg,ey-0.002,fz+0.012,14));
       headG.add(Ball(0.0075,0.008,0.005,mats.pupil,ex*sg,ey-0.002,fz+0.019,10));
       headG.add(Ball(0.0032,0.0032,0.002,mats.eyeWhite,ex*sg+0.007,ey+0.006,fz+0.022,8));
-      var lid=Ball(0.034*eyeS,0.0085,0.015,mats.skinDk,ex*sg,ey+0.026,fz+0.003,14); lids.push(lid); headG.add(lid);
+      var lid=Ball(0.034*eyeS,0.0085,0.015,mats.skinDk,ex*sg,ey+0.026,fz+0.003,14); lid.userData.baseY=ey+0.026; lids.push(lid); headG.add(lid);
       headG.add(Ball(0.03*eyeS,0.005,0.012,mats.skinDk,ex*sg,ey-0.024,fz+0.001,12));
       /* brow */
       var brow=seg3([ex*sg-0.027*sg,ey+0.054,fz+0.012],[ex*sg+0.03*sg,ey+0.046+(t.face==="scar"?0.01:0),fz+0.006],0.009,0.006,mats.hair,10);
@@ -404,11 +413,12 @@
     if(beast&&!liz){ /* muzzle already carries the expression */
       if(face==="warpaint"){ [-1,1].forEach(function(sg){ headG.add(panel(0.016,HR*0.5,0.008,mats.trimGlow,HR*0.42*sg,ey+0.02,fz*0.8,0,0,0.12*sg)); }); }
     } else if(face==="smile"){
-      headG.add(torus(0.032,0.0052,mats.mouth,0,my+0.012,fz*0.94,0,0,Math.PI,Math.PI));
-      [-1,1].forEach(function(sg){ headG.add(Ball(0.012,0.008,0.007,mats.skinDk,0.042*sg,my+0.02,fz*0.9,10)); });
+      headG.add(torus(0.042,0.006,mats.mouth,0,my+0.016,fz*0.94,0,0,Math.PI,Math.PI));
+      [-1,1].forEach(function(sg){ headG.add(Ball(0.015,0.01,0.008,mats.skinDk,0.05*sg,my+0.024,fz*0.9,10)); });
     } else if(face==="scar"){
       headG.add(panel(0.042,0.0055,0.01,mats.mouth,0.004,my,fz*0.94,0,0,-0.06));
-      var scar=seg3([HR*0.34,ey+0.09,fz*0.9],[HR*0.14,my+0.03,fz*0.96],0.004,0.004,mats.mouth,6); headG.add(scar);
+      var scar=seg3([HR*0.36,ey+0.12,fz*0.88],[HR*0.12,my+0.02,fz*0.96],0.0065,0.0065,mats.mouth,6); headG.add(scar);
+      [-0.25,0,0.25].forEach(function(o){ headG.add(panel(0.02,0.004,0.006,mats.mouth,HR*0.24+o*0.02,ey+0.06+o*HR*0.28,fz*0.93,0,0,1.15)); });
     } else if(face==="warpaint"){
       headG.add(panel(0.04,0.006,0.01,mats.mouth,0,my,fz*0.94));
       [-1,1].forEach(function(sg){
@@ -694,9 +704,10 @@
     return s;
   }
   function addWeapon(rig, spec, mats, P){
-    var w=spec.equipped&&spec.equipped.weapon; if(!w) return;
+    var w=spec.equipped&&spec.equipped.weapon; if(!w){ rig.userData.weaponKind="none"; return; }
     var armR=rig.userData.armR, armL=rig.userData.armL; if(!armR) return;
     var metal=gMetal(w,"#dde7f2"), gem=gGem(w,"#9fd8ff"), kind=weaponKind(gText(w));
+    rig.userData.weaponKind=kind;
     var handR=armR.userData.hand, handL=armL&&armL.userData.hand;
     function grip(group, hand, rx){
       var side=(hand===handL)?-1:1;
@@ -1293,7 +1304,7 @@
     if(R.heroRig){ R.root.remove(R.heroRig); disposeGroup(R.heroRig); }
     if(R.mountGroup){ R.root.remove(R.mountGroup); disposeGroup(R.mountGroup); }
     if(R.petGroup){ R.root.remove(R.petGroup); disposeGroup(R.petGroup); }
-    flush(); R.heroRig=R.mountGroup=R.petGroup=null; R.floaters=[];
+    flush(); R.heroRig=R.mountGroup=R.petGroup=null; R.floaters=[]; R.pose={};
     var hero=buildHeroModelKit(spec);
     var mount=spec.mount?buildMount(spec):null;
     var pet=buildPet(spec); R.mounted=!!mount;
@@ -1319,8 +1330,8 @@
     if(!stand){
       if(hero.userData.legL){ hero.userData.legL.rotation.set(-0.95,0.1,0.78); if(hero.userData.legL.userData.knee) hero.userData.legL.userData.knee.rotation.x=1.4; }
       if(hero.userData.legR){ hero.userData.legR.rotation.set(-0.95,-0.1,-0.78); if(hero.userData.legR.userData.knee) hero.userData.legR.userData.knee.rotation.x=1.4; }
-      if(hero.userData.armL){ hero.userData.armL.rotation.set(0.5,0,0.14); }
-      if(hero.userData.armR){ hero.userData.armR.rotation.set(0.5,0,-0.14); }
+      if(hero.userData.armL){ hero.userData.armL.rotation.set(0.5,0,0.14); if(hero.userData.armL.userData.elbow) hero.userData.armL.userData.elbow.rotation.x=-0.4; }
+      if(hero.userData.armR){ hero.userData.armR.rotation.set(0.5,0,-0.14); if(hero.userData.armR.userData.elbow) hero.userData.armR.userData.elbow.rotation.x=-0.4; }
       if(hero.userData.torso){ hero.userData.torso.rotation.x=0.05; }
     } else {
       if(hero.userData.legL) hero.userData.legL.rotation.z=0.12;
@@ -1340,6 +1351,7 @@
     cam.lookAt(0,R.lookY,0);
   }
   FH3D.sync=function(spec){ if(!FH3D.available){ if(!initEngine()) return; } if(!spec) return; R.running=!!spec.running;
+    var sc=String(spec.scene||"resting"); if(sc!==R.scene){ R.scene=sc; R.sceneT=0; }
     try{ var sg=specSig(spec); if(sg!==R.sig){ R.sig=sg; rebuild(spec); } renderOnce(); startLoop(); }catch(e){ console.warn("[FH3D] sync failed:",e); } };
   function renderOnce(){
     /* guarantee a visible frame + ready flag even before rAF fires (background tabs) */
@@ -1368,6 +1380,149 @@
   }
   function startLoop(){ if(R.raf) return; if(document.hidden) return; R.last=performance.now(); R.raf=requestAnimationFrame(tick); }
   function stopLoop(){ if(R.raf){ cancelAnimationFrame(R.raf); R.raf=0; } }
+
+  /* ============ v10 action animation engine ============
+     Every focus action plays a real, readable animation. Targets are computed
+     per-frame (oscillators live inside the targets) and the applied pose is
+     damped toward them, so switching actions cross-fades instead of popping.
+     All motion is pure joint rotation + root translation - geometry can never
+     stretch or shear. */
+  function easeOut(x){ return 1-Math.pow(1-Math.max(0,Math.min(1,x)),3); }
+  function scenePose(t, ud){
+    var k=R.running?1:0.4;             /* live session = full energy */
+    var robeK=ud.robed?0.3:1;          /* long robes limit leg articulation */
+    var plan=ud.plan||{hipY:0.98};
+    var wk=ud.weaponKind||"none";
+    /* baseline: relaxed stand */
+    var P={ rigY:0, rigZ:0, torsoX:Math.sin(t*1.9)*0.008*k, torsoY:Math.sin(t*0.9)*0.012*k,
+      headX:Math.sin(t*1.1)*0.012*k, headY:Math.sin(t*0.62)*0.035*k,
+      aLx:Math.sin(t*1.5)*0.02, aLz:0.07+Math.sin(t*1.3)*0.004, aLe:0.12,
+      aRx:-Math.sin(t*1.5)*0.02, aRz:-0.07-Math.sin(t*1.3)*0.004, aRe:0.12,
+      lLx:0, lLz:0, lLk:0.02, lRx:0, lRz:0, lRk:0.02,
+      bob:Math.sin(t*1.9)*0.011*k };
+    var s=R.scene;
+    if(s==="travelling"){
+      var ws=R.running?5.2:2.4, sw=Math.sin(t*ws), swAbs=Math.abs(sw);
+      var la=(R.running?0.5:0.26)*robeK;
+      P.lLx=-sw*la; P.lRx=sw*la;
+      P.lLk=Math.max(0.04,-sw)*0.85*robeK; P.lRk=Math.max(0.04,sw)*0.85*robeK;
+      P.aLx=sw*(R.running?0.45:0.22); P.aRx=-sw*(R.running?0.45:0.22);
+      P.aLe=0.3+swAbs*0.2; P.aRe=0.3+swAbs*0.2;
+      P.torsoX=0.06+(R.running?0.07:0.02); P.bob=swAbs*(R.running?0.032:0.012);
+      P.headY=Math.sin(t*0.5)*0.06;
+    } else if(s==="resting"){
+      /* sit on the ground, arms over knees, slow deep breath */
+      P.rigY=-(plan.hipY-0.14);
+      P.lLx=-1.32*robeK-(ud.robed?0.25:0); P.lRx=-1.32*robeK-(ud.robed?0.25:0);
+      P.lLz=0.3*robeK; P.lRz=-0.3*robeK; P.lLk=1.12*robeK+(ud.robed?0.3:0); P.lRk=1.12*robeK+(ud.robed?0.3:0);
+      P.aLx=-0.5; P.aRx=-0.5; P.aLz=0.16; P.aRz=-0.16; P.aLe=0.85; P.aRe=0.85;
+      P.torsoX=0.1+Math.sin(t*1.05)*0.02; P.headX=0.08+Math.sin(t*1.05)*0.015; P.headY=Math.sin(t*0.4)*0.05;
+      P.bob=Math.sin(t*1.05)*0.006;
+    } else if(s==="fighting"){
+      /* staggered stance + weapon-aware attack cycle */
+      P.lLx=-0.2; P.lLz=0.1*robeK; P.lLk=0.24*robeK; P.lRx=0.26; P.lRz=-0.1*robeK; P.lRk=0.34*robeK;
+      P.torsoX=0.1; P.headX=0.04; P.headY=0;
+      var cyc=R.running?1.5:2.6, p=(t%cyc)/cyc;
+      if(wk==="bow"){
+        /* nock, draw, hold, loose */
+        P.aLx=-1.28; P.aLz=0.1; P.aLe=0.12;
+        var d=p<0.45?easeOut(p/0.45):(p<0.7?1:(p<0.78?1-easeOut((p-0.7)/0.08):0));
+        P.aRx=-1.05*d-0.15; P.aRe=0.35+d*0.95; P.torsoY=-0.28*d;
+      } else if(wk==="staff"||wk==="wand"||wk==="orb"||wk==="tome"){
+        /* gather, thrust cast */
+        var c=p<0.55?easeOut(p/0.55):(p<0.7?1:1-easeOut((p-0.7)/0.3));
+        P.aRx=-0.3-c*1.05; P.aRe=1.05-c*0.75; P.aRz=-0.12;
+        P.aLx=-0.45*c; P.aLe=0.9; P.aLz=0.2;
+        P.torsoY=0.16*c; P.rigZ=0.04*c;
+      } else if(wk==="dual"||wk==="dagger"){
+        var pA=(t%1.1)/1.1, pB=((t+0.55)%1.1)/1.1;
+        var slash=function(q){ return q<0.4?-easeOut(q/0.4)*1.35-0.2:(q<0.55?0.35:-0.2); };
+        P.aRx=slash(pA); P.aRe=0.55+Math.max(0,Math.sin(pA*Math.PI))*0.5;
+        P.aLx=slash(pB); P.aLe=0.55+Math.max(0,Math.sin(pB*Math.PI))*0.5; P.aLz=0.18;
+        P.torsoY=Math.sin(t*5.7)*0.12; P.bob=Math.abs(Math.sin(t*5.7))*0.012;
+      } else if(wk==="none"){
+        /* unarmed: guard + jab cross */
+        var j=(t%1.2)/1.2;
+        P.aLx=-0.95; P.aLe=1.25; P.aLz=0.28;
+        P.aRx=j<0.25?-0.95-easeOut(j/0.25)*0.45:(j<0.4?-0.35:-0.95);
+        P.aRe=j<0.4?0.35:1.25; P.aRz=-0.28;
+        P.torsoY=j<0.4?0.2:0.05; P.bob=Math.abs(Math.sin(t*4.6))*0.01;
+      } else {
+        /* melee swing: windup high, strike through, recover */
+        var w2=p<0.42?easeOut(p/0.42):0, st2=(p>=0.42&&p<0.56)?easeOut((p-0.42)/0.14):0, rec=p>=0.56?easeOut((p-0.56)/0.44):0;
+        if(p<0.42){ P.aRx=-0.2-w2*1.55; P.aRe=0.35+w2*0.85; }
+        else if(p<0.56){ P.aRx=-1.75+st2*2.1; P.aRe=1.2-st2*0.75; }
+        else { P.aRx=0.35-0.55*rec; P.aRe=0.45-0.1*rec; }
+        P.aLx=-0.6; P.aLe=1.05; P.aLz=0.22; /* guard */
+        P.torsoY=(p<0.42)?(-w2*0.22):(p<0.56?(-0.22+st2*0.62):(0.4-0.58*rec));
+        P.rigZ=st2*0.06; P.bob=st2*0.02;
+      }
+    } else if(s==="hunting"){
+      /* low stalk; with a bow: aim-and-loose */
+      P.rigY=-0.07; P.torsoX=0.26; P.headX=0.1;
+      P.lLx=-0.32; P.lRx=-0.32; P.lLk=0.5*robeK; P.lRk=0.5*robeK; P.lLz=0.08; P.lRz=-0.08;
+      if(wk==="bow"){
+        P.aLx=-1.22; P.aLz=0.1; P.aLe=0.12;
+        var hp=(t%3.0)/3.0, hd=hp<0.4?easeOut(hp/0.4):(hp<0.75?1:(hp<0.82?1-easeOut((hp-0.75)/0.07):0));
+        P.aRx=-1.0*hd-0.15; P.aRe=0.3+hd*1.0; P.torsoY=-0.3*hd; P.headY=-0.12*hd;
+      } else {
+        var step=Math.sin(t*2.2);
+        P.lLx=-0.32+step*0.16*robeK; P.lRx=-0.32-step*0.16*robeK;
+        P.aLx=-0.4; P.aLe=0.7; P.aRx=-0.45; P.aRe=0.75;
+        P.headY=Math.sin(t*0.7)*0.32; P.bob=Math.abs(step)*0.008;
+      }
+    } else if(s==="crafting"){
+      var craftCyc=R.running?0.95:1.6;
+      var hp2=(t%craftCyc)/craftCyc;
+      var raise=hp2<0.55?easeOut(hp2/0.55):0, strike=(hp2>=0.55&&hp2<0.68)?easeOut((hp2-0.55)/0.13):0;
+      if(ud.robed){ /* standing tinker for robes */
+        P.torsoX=0.2; P.headX=0.32;
+        P.aLx=-0.7; P.aLe=1.0; P.aLz=0.2;
+      } else { /* kneel: left knee down, right foot planted */
+        P.rigY=-(plan.hipY*0.42);
+        P.lLx=-1.5; P.lLk=1.55; P.lLz=0.12;
+        P.lRx=-0.72; P.lRk=1.28; P.lRz=-0.14;
+        P.torsoX=0.3; P.headX=0.4;
+        P.aLx=-0.72; P.aLe=0.95; P.aLz=0.18; /* steadying the work */
+      }
+      if(hp2<0.55){ P.aRx=-0.5-raise*1.0; P.aRe=0.5+raise*0.7; }
+      else if(hp2<0.68){ P.aRx=-1.5+strike*1.35; P.aRe=1.2-strike*0.55; }
+      else { P.aRx=-0.15-easeOut((hp2-0.68)/0.32)*0.35; P.aRe=0.65; }
+      P.bob=strike*0.012;
+    } else if(s==="meditating"){
+      /* cross-legged, gently floating */
+      P.rigY=-(plan.hipY-0.2)+0.1+Math.sin(t*1.1)*0.035;
+      P.lLx=-1.5*robeK-(ud.robed?0.4:0); P.lRx=-1.5*robeK-(ud.robed?0.4:0);
+      P.lLz=0.55*robeK; P.lRz=-0.55*robeK; P.lLk=2.0*robeK+(ud.robed?0.5:0); P.lRk=2.0*robeK+(ud.robed?0.5:0);
+      P.aLx=-0.32; P.aRx=-0.32; P.aLz=0.3; P.aRz=-0.3; P.aLe=1.3; P.aRe=1.3;
+      P.torsoX=0.02+Math.sin(t*0.9)*0.02; P.headX=Math.sin(t*0.9)*0.02; P.headY=0;
+      P.bob=0;
+    } else if(s==="looting"){
+      /* crouched, hands rummaging */
+      P.rigY=-(plan.hipY*0.34);
+      P.lLx=-0.92; P.lRx=-0.92; P.lLk=1.3*robeK+(ud.robed?0.2:0); P.lRk=1.3*robeK+(ud.robed?0.2:0);
+      P.lLz=0.12; P.lRz=-0.12;
+      P.torsoX=0.46; P.headX=0.4+((Math.sin(t*0.55)>0.92)?-0.5:0); P.headY=Math.sin(t*0.8)*0.12;
+      var rum=t*(R.running?3.6:2.4);
+      P.aLx=-0.62+Math.sin(rum+Math.PI)*0.28; P.aLe=0.85+Math.sin(rum*1.3)*0.2; P.aLz=0.2;
+      P.aRx=-0.72+Math.sin(rum)*0.3; P.aRe=0.9+Math.sin(rum*1.3+1)*0.22; P.aRz=-0.2;
+      P.bob=0;
+    }
+    return P;
+  }
+  function applyPose(h, ud, t, dt){
+    var tgt=scenePose(t, ud);
+    var pose=R.pose, a=1-Math.exp(-dt*9);
+    for(var key in tgt){ if(pose[key]===undefined) pose[key]=tgt[key]; else pose[key]+=(tgt[key]-pose[key])*a; }
+    var tb=ud.torsoBaseY||1.16, hb=ud.headBaseY||1.815;
+    h.position.y=pose.rigY+pose.bob; h.position.z=pose.rigZ;
+    if(ud.torso){ ud.torso.position.y=tb+pose.bob*0.4; ud.torso.rotation.x=pose.torsoX; ud.torso.rotation.y=pose.torsoY; }
+    if(ud.headG){ ud.headG.position.y=hb+pose.bob*0.5; ud.headG.rotation.x=pose.headX; ud.headG.rotation.y=pose.headY; }
+    if(ud.armL){ ud.armL.rotation.x=pose.aLx; ud.armL.rotation.z=pose.aLz; if(ud.armL.userData.elbow) ud.armL.userData.elbow.rotation.x=-Math.max(0,pose.aLe); }
+    if(ud.armR){ ud.armR.rotation.x=pose.aRx; ud.armR.rotation.z=pose.aRz; if(ud.armR.userData.elbow) ud.armR.userData.elbow.rotation.x=-Math.max(0,pose.aRe); }
+    if(ud.legL){ ud.legL.rotation.x=pose.lLx; ud.legL.rotation.z=pose.lLz; if(ud.legL.userData.knee) ud.legL.userData.knee.rotation.x=Math.max(0,pose.lLk); }
+    if(ud.legR){ ud.legR.rotation.x=pose.lRx; ud.legR.rotation.z=pose.lRz; if(ud.legR.userData.knee) ud.legR.userData.knee.rotation.x=Math.max(0,pose.lRk); }
+  }
   function tick(now){
     R.raf=requestAnimationFrame(tick); var dt=Math.min(0.05,(now-R.last)/1000); R.last=now; R.clock+=dt; var t=R.clock;
     if(R.reduced){ if(R.renderer&&R.scene&&R.camera){ try{ R.renderer.render(R.scene,R.camera); if(R.container){ R.container.setAttribute("data-fh3d-ready","1"); R.container.classList.add("fh3d-ready"); } }catch(e){ stopLoop(); } } return; }
@@ -1375,31 +1530,23 @@
     R.yaw+=(R.targetYaw-R.yaw)*Math.min(1,dt*8); if(R.root) R.root.rotation.y=R.yaw;
     R.pitch+=((R.targetPitch||0)-R.pitch)*Math.min(1,dt*8);
     if(R.targetDist){ R.dist+=(R.targetDist-R.dist)*Math.min(1,dt*8); R.camera.position.set(0,1.16+R.pitch*0.6,R.dist); R.camera.lookAt(0,R.lookY,0); }
-    var sp=R.running?2.1:1.0, amp=R.running?1.5:1.0;
-    if(R.heroRig){ var h=R.heroRig, ud=h.userData, bob=Math.sin(t*1.9*sp)*0.011*amp;
-      var tb=ud.torsoBaseY||1.12, hb=ud.headBaseY||1.76;
-      var idleK=R.running?1:0.35;
-      if(ud.torso){ ud.torso.position.y=tb+bob*idleK; ud.torso.rotation.y=Math.sin(t*0.9)*0.012*idleK; if(!ud.mounted) ud.torso.rotation.x=Math.sin(t*1.9*sp)*0.008*idleK; }
-      if(ud.headG){ ud.headG.position.y=hb+bob*1.15*idleK; ud.headG.rotation.y=Math.sin(t*0.62)*0.035*idleK; ud.headG.rotation.x=Math.sin(t*1.1)*0.012*idleK;
+    if(R.heroRig){ var h=R.heroRig, ud=h.userData;
+      R.sceneT+=dt;
+      if(!R.mounted){
+        applyPose(h, ud, t, dt);
+      } else {
+        /* riding: relaxed rein-holding sway (pose machine resumes on foot) */
+        if(ud.armL){ ud.armL.rotation.x=0.55+Math.sin(t*1.1)*0.02; if(ud.armL.userData.elbow) ud.armL.userData.elbow.rotation.x=-0.4; }
+        if(ud.armR){ ud.armR.rotation.x=0.55-Math.sin(t*1.1)*0.02; if(ud.armR.userData.elbow) ud.armR.userData.elbow.rotation.x=-0.4; }
+        if(ud.headG){ ud.headG.rotation.y=Math.sin(t*0.62)*0.03; ud.headG.rotation.x=Math.sin(t*1.1)*0.012; }
+      }
+      if(ud.headG){
         /* blink */
         R.blinkT-=dt; if(R.blinkT<=0){ R.blinkPhase=0.14; R.blinkT=2.2+Math.random()*3.2; }
         if(R.blinkPhase>0){ R.blinkPhase-=dt; var k=Math.max(0,R.blinkPhase)/0.14, open=Math.abs(k-0.5)*2;
-          var lids=ud.headG.userData.lids||[]; for(var li=0;li<lids.length;li++){ lids[li].scale.y=1+(1-open)*1.5; lids[li].position.y=(0.148*0.12)+0.022-(1-open)*0.01; } }
+          var lids=ud.headG.userData.lids||[]; for(var li=0;li<lids.length;li++){ var ld=lids[li]; ld.scale.y=1+(1-open)*1.5; ld.position.y=(ld.userData.baseY||0.04)-(1-open)*0.01; } }
       }
-      if(!R.mounted){
-        var runsw=R.running?Math.sin(t*5.2):0;
-        if(ud.armL){ ud.armL.rotation.x=(R.running?runsw*0.5:Math.sin(t*1.5)*0.02); ud.armL.rotation.z=0.07+Math.sin(t*1.3)*0.004; }
-        if(ud.armR){ ud.armR.rotation.x=(R.running?-runsw*0.5:-Math.sin(t*1.5)*0.02); ud.armR.rotation.z=-0.07-Math.sin(t*1.3)*0.004; }
-        var legAmp=ud.robed?0.12:0.45;
-        if(ud.legL) ud.legL.rotation.x=R.running?-runsw*legAmp:0;
-        if(ud.legR) ud.legR.rotation.x=R.running?runsw*legAmp:0;
-        if(R.running) h.position.y=Math.abs(Math.sin(t*5.2))*0.035;
-        else if(!ud.mounted) h.position.y=0;
-      } else {
-        if(ud.armL) ud.armL.rotation.x=0.55+Math.sin(t*1.1)*0.02;
-        if(ud.armR) ud.armR.rotation.x=0.55-Math.sin(t*1.1)*0.02;
-      }
-      if(ud.cloak){ ud.cloak.rotation.x=Math.sin(t*1.25)*0.04+(R.running?0.14:0.03); }
+      if(ud.cloak){ ud.cloak.rotation.x=Math.sin(t*1.25)*0.04+(R.running?0.14:0.03)+Math.max(0,(R.pose&&R.pose.torsoX)||0)*0.5; }
       if(ud.tail){ ud.tail.rotation.y=Math.sin(t*1.6)*0.25; ud.tail.rotation.x=Math.sin(t*1.1)*0.06; }
       if(ud.wings){ for(var wi=0;wi<ud.wings.length;wi++){ var sgn=wi===0?-1:1; ud.wings[wi].rotation.y=0.5*sgn+Math.sin(t*6+wi)*0.25*sgn; } }
       if(ud.headG&&ud.headG.userData.halo){ ud.headG.userData.halo.rotation.z=t*0.6; ud.headG.userData.halo.position.y=0.148*1.45+Math.sin(t*1.8)*0.008; }

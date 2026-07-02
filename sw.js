@@ -14,7 +14,7 @@
  * deliberately invisible to users — the only place a version-looking string
  * lives is in the cache name in DevTools.
  */
-const BUILD_ID    = "fh-2026-07-02-v9-9-3";
+const BUILD_ID    = "fh-2026-07-02-v10-0-0";
 const CACHE_NAME  = `focus-hero-${BUILD_ID}`;
 const PRECACHE = [
   "./",
@@ -88,7 +88,7 @@ self.addEventListener("fetch", event => {
         return fresh; // non-ok response — still return it
       } catch (_) {
         // Offline. Fall back to whichever cached HTML we have.
-        const cached = await cache.match(req)
+        const cached = await cache.match(req, { ignoreSearch:true })
           || await cache.match("./focus-hero.html")
           || await cache.match("./");
         return cached || new Response("Offline", { status: 503 });
@@ -100,7 +100,9 @@ self.addEventListener("fetch", event => {
   // Cache-first for static assets (icons, manifest, etc.).
   event.respondWith((async () => {
     const cache = await caches.open(CACHE_NAME);
-    const cached = await cache.match(req);
+    /* ignoreSearch: versioned URLs (fh3d.js?v=...) must still hit the
+       precached asset when offline - without this, 3D was network-only. */
+    const cached = await cache.match(req, { ignoreSearch:true });
     if (cached) return cached;
     try {
       const resp = await fetch(req);
