@@ -3240,7 +3240,7 @@ svg{shape-rendering:geometricPrecision}
 }
 </style>
 <script src="three.min.js"></script>
-<script src="fh3d.js?v=fh-2026-07-01-v9-8-8"></script>
+<script src="fh3d.js?v=fh-2026-07-02-v9-9-0"></script>
 <script>
 /* v7.9: zoom-lock - block pinch + double-tap zoom; single-finger scroll stays. */
 (function(){
@@ -9056,7 +9056,8 @@ function renderLoot(){
     const equipped = isEquippableSlot(slot) && state.hero.equipped[slot]?.lootId === id;
     el.className = "loot-item rar-" + item[2] + (count? " owned":" locked") + (equipped ? " equipped" : "");
     el.title = `${item[1]} — ${item[2]}${count?` · owned ×${count}`:" — not yet"}`;
-    el.innerHTML = `<div class="sym">${item[0]}</div><div class="name">${escapeHtml(item[1])}</div><div class="rar">${item[2]}${count?` · ×${count}`:""}</div>`;
+    const slotIcon = {weapon:"\u2694\uFE0F", helmet:"\uD83E\uDE96", armor:"\uD83D\uDEE1\uFE0F", mount:"\uD83D\uDC0E", pet:"\uD83D\uDC3E"}[slot];
+    el.innerHTML = `<div class="sym">${item[0]}</div><div class="name">${escapeHtml(item[1])}</div><div class="rar">${item[2]}${count?` · ×${count}`:""}</div>${isEquippableSlot(slot)?`<div class="rar" style="opacity:.72;font-size:.62rem">${slotIcon||"\uD83E\uDDCD"} shows on hero</div>`:""}`;
     if (count && isEquippableSlot(slot)){
       const b = document.createElement("button");
       b.type = "button";
@@ -11433,7 +11434,7 @@ function renderCharacterPanel(){
       b.dataset.slot = slot;
       b.setAttribute("aria-pressed", selectedEquipSlot === slot ? "true" : "false");
       b.setAttribute("aria-label", `${labels[slot]||slot}: ${item ? item[1] : "empty"}`);
-      b.innerHTML = `<span class="slot-label">${labels[slot]||slot}</span><span class="slot-name">${item ? `${item[0]} ${escapeHtml(item[1])}` : "Empty"}</span><span class="slot-state">${item ? "Visible on model" : "No model piece"}</span>`;
+      b.innerHTML = `<span class="slot-label">${labels[slot]||slot}</span><span class="slot-name">${item ? `${item[0]} ${escapeHtml(item[1])}` : "Empty"}</span><span class="slot-state">${item ? "\u2713 On your hero" : "Empty \u2014 equip to show on hero"}</span>`;
       b.onclick = ()=>{ selectedEquipSlot = slot; renderCharacterPanel(); };
       slots.appendChild(b);
     });

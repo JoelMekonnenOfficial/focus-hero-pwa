@@ -1,3 +1,16 @@
+## v9.9.0 - FH3D "Atelier": sculpted 3D hero, gear you can see, rebuilt mounts
+
+- Ground-up remodel of the 3D character renderer (`fh3d.js`, FH3D v9 "atelier-v1"): joint-anchored rig (shoulders/elbows/wrists/hips/knees all connect - no more floating pieces), sculpted head with real eyes (iris/pupil/catchlight/blinking lids), brows, shaped nose/mouth per face trait, and proper 6.5-head heroic proportions.
+- Race kits for all 11 species: elf/fae ears + fae glass wings & antennae, goblin fan ears + snaggletooth, orc underbite tusks + heavy brow, dwarf stout build + braided beard + bigger head, undead pale glow-eyed gaunt look, demon swept horns + spade tail, beastfolk cat/wolf muzzles + ears + tails + whiskers, lizardfolk snout + crest fins + thick tail.
+- Per-class outfit sets so classes read at a glance: plate (cuirass/pauldrons/tassets/greaves), mage-cleric robes (skirt/mantle/rune trim), bard doublet + feathered hat + lute, rogue-shadow dark wraps + face mask, ranger-druid studded leathers + hood + quiver, monk-alchemist wraps + beads/vials.
+- Equipped gear now truly shows on the model, gripped in hand: swords/greatswords/daggers/dual blades/axes/hammers/spears/scythes/bows(+quiver)/staves/wands/orbs/lutes/tomes; crowns/circlets/hoods/greathelms/halos on the head (light headgear keeps your hair); armor overlays with tier-tinted metal + gem; pets are shaped familiars (fox/dragonling/owl/wisp/slime/golem) that orbit and flap.
+- Rarity aura: the pedestal ring tints and glows with your best equipped tier.
+- Mounts rebuilt with real anatomy, saddle, bridle and reins - horse/unicorn/pegasus/stag, wolf, panther, eagle-griffin with layered feather wings, dragon with bat-wing membranes + horned reptile skull, skiff, aquatic and insect families - and the hero actually sits astride with bent knees, hands to the reins.
+- Studio quality-of-life: drag to orbit now includes slight pitch, mouse-wheel zoom in Character Studio, idle breathing/blink/tail/wing animation, jog cycle while a session runs, `prefers-reduced-motion` respected.
+- Reliability: FH3D renders a first frame synchronously on attach/sync so the 3D view (and its ready-flag) comes up even in background tabs; SVG fallback still kicks in when WebGL is unavailable.
+- Gear tab labels clarified ("Empty - equip to show on hero" / "On your hero"); loot codex now tags equippable items with a "shows on hero" badge per slot.
+- Pure renderer swap + tiny UI strings only: no gameplay, data, sync, minutes or session logic touched. `sw.js` BUILD_ID -> `fh-2026-07-02-v9-9-0`.
+
 ## v8.8.3 - realistic 3D character, per-creature mounts, edit ±
 
 - Character rebuilt with realistic (non-chibi) proportions + toon outlines on a lighter stage so it reads as a deliberate stylized 3D game render (FH3D v4).

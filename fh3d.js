@@ -1,28 +1,34 @@
 /* ============================================================================
- * Focus Hero — FH3D v8.0 : mesh avatar model kit renderer
+ * Focus Hero — FH3D v9.0 "Atelier" : sculpted avatar renderer
  * Pure renderer (reads a plain spec via FH3D.sync; never touches app state).
- * v5: keeps the realistic proportions/PBR base, then adds class-specific model
- * signatures, distinct weapon silhouettes, aquatic/insect mounts, and a richer
- * studio presentation so equipped gear/mounts read like actual model changes.
+ * Ground-up remodel over the v8 model kit: joint-anchored rig (no floating
+ * pieces), sculpted head/face with lids+brows, race kits for all 11 species,
+ * per-class outfit sets, gripped weapons with distinct silhouettes, tier
+ * auras, rebuilt mounts & pets. Same public API + spec contract as v8:
  * SPEC: { cls, className, palette, level, running,
- *   colors:{skin,hair,eye,armorMid,armorHigh,armorDark,accent,cloak},
+ *   colors:{skin,hair,eye,armorMid,armorHigh,armorDark,outfit,leather,accent,cloak},
  *   traits:{race,body,hair,helm,face,eyeShape},
  *   equipped:{weapon,helmet,armor,pet}, mount:null|{id,family,tier,colors} }
  * ==========================================================================*/
 (function () {
   "use strict";
   var FH3D = (window.FH3D = window.FH3D || {});
-  FH3D.available = false; FH3D.version = "fh3d-8.0"; FH3D.engine = "mesh-avatar-modelkit-v1";
+  FH3D.available = false; FH3D.version = "fh3d-9.0"; FH3D.engine = "atelier-v1";
   var THREE = window.THREE;
   function webglSupported(){ try{ if(!THREE) return false; var c=document.createElement("canvas"); return !!(c.getContext("webgl2")||c.getContext("webgl")||c.getContext("experimental-webgl")); }catch(e){ return false; } }
   function col(hex, fb){ try{ return new THREE.Color(hex||fb||"#888"); }catch(e){ return new THREE.Color(fb||"#888"); } }
   function darken(hex,a){ var c=col(hex); c.offsetHSL(0,0,-a); return c; }
   function lighten(hex,a){ var c=col(hex); c.offsetHSL(0,0,a); return c; }
+  function mix(a,b,t){ var c=col(a); c.lerp(col(b),t); return c; }
+  var TAU=Math.PI*2, HPI=Math.PI/2;
 
-  var R = { renderer:null, scene:null, camera:null, env:null, root:null, heroRig:null, mountGroup:null, petGroup:null, pedestal:null,
-    disposables:[], raf:0, last:0, clock:0, yaw:0, targetYaw:0, autoSpin:true, dragging:false, lastPointerX:0,
-    mode:"home", mounted:false, running:false, lookY:1.0, sig:"", container:null, ro:null, io:null, initialized:false };
+  var R = { renderer:null, scene:null, camera:null, env:null, root:null, heroRig:null, mountGroup:null, petGroup:null, pedestal:null, auraRing:null, auraDust:null,
+    disposables:[], raf:0, last:0, clock:0, yaw:0, targetYaw:0, pitch:0, targetPitch:0, dist:0, targetDist:0, autoSpin:true, dragging:false, lastPointerX:0, lastPointerY:0,
+    mode:"home", mounted:false, running:false, lookY:1.0, sig:"", container:null, ro:null, io:null, initialized:false, reduced:false,
+    blinkT:2.2, blinkPhase:0, lids:null, jawPulse:0 };
+  try { R.reduced = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches); } catch(e){}
 
+  /* ---------------- engine ---------------- */
   function initEngine(){
     if (R.initialized) return true; if (!webglSupported()) return false;
     try {
@@ -30,24 +36,26 @@
       renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
       renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       if ("outputColorSpace" in renderer) renderer.outputColorSpace = THREE.SRGBColorSpace;
-      renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.06;
       var cs = renderer.domElement.style; cs.position="absolute"; cs.left="0"; cs.top="0"; cs.width="100%"; cs.height="100%"; cs.display="block"; cs.borderRadius="inherit"; cs.touchAction="pan-y";
       renderer.domElement.className = "fh3d-canvas"; renderer.domElement.setAttribute("aria-hidden","true");
-      var scene = new THREE.Scene(); scene.background = makeBackdrop("#8aa0c9","#1c2538");
+      var scene = new THREE.Scene(); scene.background = makeBackdrop();
       R.env = makeEnv(renderer); scene.environment = R.env;
       var camera = new THREE.PerspectiveCamera(30, 1, 0.1, 100); camera.position.set(0,1.3,4.6);
-      var hemi = new THREE.HemisphereLight(0xd6e6ff, 0x2a2d36, 0.82); scene.add(hemi);
-      var key = new THREE.DirectionalLight(0xfff3df, 2.15); key.position.set(3.2,5.2,4.1); key.castShadow=true;
-      key.shadow.mapSize.set(2048,2048); key.shadow.camera.near=1; key.shadow.camera.far=20; key.shadow.camera.left=-3; key.shadow.camera.right=3; key.shadow.camera.top=3.6; key.shadow.camera.bottom=-2; key.shadow.bias=-0.0008; key.shadow.normalBias=0.028; scene.add(key);
-      var fill = new THREE.DirectionalLight(0x9fc2ff, 0.72); fill.position.set(-4,2.4,1.8); scene.add(fill);
-      var rim = new THREE.DirectionalLight(0xe3f0ff, 1.55); rim.position.set(-1.5,3.1,-4.3); scene.add(rim);
+      var hemi = new THREE.HemisphereLight(0xcfe0ff, 0x232733, 0.75); scene.add(hemi);
+      var key = new THREE.DirectionalLight(0xfff1dd, 2.3); key.position.set(2.8,5.4,3.6); key.castShadow=true;
+      key.shadow.mapSize.set(2048,2048); key.shadow.camera.near=1; key.shadow.camera.far=20; key.shadow.camera.left=-3; key.shadow.camera.right=3; key.shadow.camera.top=3.8; key.shadow.camera.bottom=-2; key.shadow.bias=-0.0008; key.shadow.normalBias=0.03; scene.add(key);
+      var fill = new THREE.DirectionalLight(0x8fb6ff, 0.6); fill.position.set(-4,2.2,2.2); scene.add(fill);
+      var rim = new THREE.DirectionalLight(0xdcecff, 1.85); rim.position.set(-1.2,3.4,-4.4); scene.add(rim);
+      var kick = new THREE.DirectionalLight(0xffd9a8, 0.5); kick.position.set(2.4,0.8,-3.2); scene.add(kick);
       var root = new THREE.Group(); scene.add(root);
       var ped = new THREE.Group();
-      var pedMat = new THREE.MeshStandardMaterial({ color:0x29354f, roughness:0.6, metalness:0.25, envMapIntensity:0.7 });
-      var pedTop = new THREE.MeshStandardMaterial({ color:0x3c4f7e, roughness:0.35, metalness:0.4, envMapIntensity:1.0 });
-      var disc = new THREE.Mesh(new THREE.CylinderGeometry(0.85,0.98,0.13,56), pedMat); disc.position.y=-0.065; disc.receiveShadow=true; ped.add(disc);
-      var ring = new THREE.Mesh(new THREE.TorusGeometry(0.83,0.032,10,56), pedTop); ring.rotation.x=Math.PI/2; ring.position.y=0.006; ped.add(ring);
-      var floor = new THREE.Mesh(new THREE.CircleGeometry(2.4,48), new THREE.ShadowMaterial({ opacity:0.34 })); floor.rotation.x=-Math.PI/2; floor.receiveShadow=true; ped.add(floor);
+      var pedMat = new THREE.MeshStandardMaterial({ color:0x1b2436, roughness:0.55, metalness:0.3, envMapIntensity:0.8 });
+      var disc = new THREE.Mesh(new THREE.CylinderGeometry(0.92,1.04,0.1,64), pedMat); disc.position.y=-0.052; disc.receiveShadow=true; ped.add(disc);
+      var lip = new THREE.Mesh(new THREE.TorusGeometry(0.92,0.022,12,64), new THREE.MeshStandardMaterial({ color:0x3d4f78, roughness:0.3, metalness:0.65, envMapIntensity:1.15 })); lip.rotation.x=HPI; lip.position.y=0.004; ped.add(lip);
+      var auraMat = new THREE.MeshBasicMaterial({ color:0x22d3ee, transparent:true, opacity:0.0, blending:THREE.AdditiveBlending, depthWrite:false });
+      var aura = new THREE.Mesh(new THREE.TorusGeometry(0.99,0.014,10,64), auraMat); aura.rotation.x=HPI; aura.position.y=0.012; ped.add(aura); R.auraRing=aura;
+      var floor = new THREE.Mesh(new THREE.CircleGeometry(2.6,48), new THREE.ShadowMaterial({ opacity:0.36 })); floor.rotation.x=-HPI; floor.receiveShadow=true; ped.add(floor);
       root.add(ped); R.pedestal = ped;
       R.renderer=renderer; R.scene=scene; R.camera=camera; R.root=root; R.initialized=true; FH3D.available=true;
       wirePointer(renderer.domElement);
@@ -55,674 +63,1210 @@
       return true;
     } catch(e){ console.warn("[FH3D] init failed:", e); FH3D.available=false; return false; }
   }
-  function makeBackdrop(inner, outer){ var c=document.createElement("canvas"); c.width=c.height=256; var g=c.getContext("2d"); var gr=g.createRadialGradient(128,90,16,128,150,240); gr.addColorStop(0,inner); gr.addColorStop(1,outer); g.fillStyle=gr; g.fillRect(0,0,256,256); var t=new THREE.CanvasTexture(c); if("colorSpace" in t) t.colorSpace=THREE.SRGBColorSpace; return t; }
-  function makeEnv(renderer){ try{ var pmrem=new THREE.PMREMGenerator(renderer); var c=document.createElement("canvas"); c.width=128; c.height=64; var g=c.getContext("2d"); var gr=g.createLinearGradient(0,0,0,64); gr.addColorStop(0,"#e8f0ff"); gr.addColorStop(0.5,"#8ea4c8"); gr.addColorStop(0.5,"#444c5e"); gr.addColorStop(1,"#1f242f"); g.fillStyle=gr; g.fillRect(0,0,128,64); g.fillStyle="rgba(255,247,225,0.95)"; g.beginPath(); g.arc(34,16,11,0,7); g.fill(); var tex=new THREE.CanvasTexture(c); tex.mapping=THREE.EquirectangularReflectionMapping; var rt=pmrem.fromEquirectangular(tex); tex.dispose(); pmrem.dispose(); return rt.texture; }catch(e){ return null; } }
-  function makeDetailTexture(seed, base, line){
-    var c=document.createElement("canvas"); c.width=c.height=128; var g=c.getContext("2d");
-    g.fillStyle=base||"#777"; g.fillRect(0,0,128,128);
-    var s=seed||17; function rnd(){ s=(s*1664525+1013904223)>>>0; return s/4294967296; }
-    for(var i=0;i<1500;i++){ var v=80+(rnd()*95|0); g.fillStyle="rgba("+v+","+v+","+v+","+(0.035+rnd()*0.045)+")"; g.fillRect(rnd()*128,rnd()*128,1+rnd()*2,1+rnd()*2); }
-    g.strokeStyle=line||"rgba(255,255,255,.12)"; g.lineWidth=1;
-    for(var y=12;y<128;y+=18){ g.beginPath(); g.moveTo(0,y+(rnd()*4-2)); g.lineTo(128,y+(rnd()*4-2)); g.stroke(); }
-    for(var x=18;x<128;x+=24){ g.beginPath(); g.moveTo(x+(rnd()*4-2),0); g.lineTo(x+(rnd()*4-2),128); g.stroke(); }
-    var t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(2,2); if("colorSpace" in t) t.colorSpace=THREE.SRGBColorSpace; R.disposables.push(t); return t;
+  function makeBackdrop(){
+    var c=document.createElement("canvas"); c.width=c.height=512; var g=c.getContext("2d");
+    var gr=g.createRadialGradient(256,190,30,256,290,470);
+    gr.addColorStop(0,"#5a6f9e"); gr.addColorStop(0.55,"#2c3a5c"); gr.addColorStop(1,"#131a2b");
+    g.fillStyle=gr; g.fillRect(0,0,512,512);
+    var s=99; function rnd(){ s=(s*1664525+1013904223)>>>0; return s/4294967296; }
+    for(var i=0;i<90;i++){ var x=rnd()*512,y=rnd()*400,r2=rnd()*1.4+0.3,a=rnd()*0.35+0.08;
+      g.fillStyle="rgba(210,225,255,"+a.toFixed(2)+")"; g.beginPath(); g.arc(x,y,r2,0,TAU); g.fill(); }
+    var t=new THREE.CanvasTexture(c); if("colorSpace" in t) t.colorSpace=THREE.SRGBColorSpace; return t;
+  }
+  function makeEnv(renderer){ try{ var pmrem=new THREE.PMREMGenerator(renderer); var c=document.createElement("canvas"); c.width=256; c.height=128; var g=c.getContext("2d");
+    var gr=g.createLinearGradient(0,0,0,128); gr.addColorStop(0,"#f2f6ff"); gr.addColorStop(0.42,"#93a9cf"); gr.addColorStop(0.55,"#3c4459"); gr.addColorStop(1,"#171c28"); g.fillStyle=gr; g.fillRect(0,0,256,128);
+    g.fillStyle="rgba(255,244,214,0.95)"; g.beginPath(); g.arc(66,30,20,0,TAU); g.fill();
+    g.fillStyle="rgba(160,200,255,0.5)"; g.beginPath(); g.arc(198,44,13,0,TAU); g.fill();
+    var tex=new THREE.CanvasTexture(c); tex.mapping=THREE.EquirectangularReflectionMapping; var rt=pmrem.fromEquirectangular(tex); tex.dispose(); pmrem.dispose(); return rt.texture; }catch(e){ return null; } }
+  function makeDetailTexture(seed, base, line, grid){
+    try{
+      var c=document.createElement("canvas"); c.width=c.height=128; var g=c.getContext("2d");
+      g.fillStyle=base||"#777"; g.fillRect(0,0,128,128);
+      var s=seed||17; function rnd(){ s=(s*1664525+1013904223)>>>0; return s/4294967296; }
+      for(var i=0;i<1200;i++){ var v=80+(rnd()*95|0); g.fillStyle="rgba("+v+","+v+","+v+","+(0.03+rnd()*0.04)+")"; g.fillRect(rnd()*128,rnd()*128,1+rnd()*2,1+rnd()*2); }
+      if(grid!==false){ g.strokeStyle=line||"rgba(255,255,255,.1)"; g.lineWidth=1;
+        for(var y=14;y<128;y+=20){ g.beginPath(); g.moveTo(0,y+(rnd()*4-2)); g.lineTo(128,y+(rnd()*4-2)); g.stroke(); }
+      }
+      var t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(2,2); if("colorSpace" in t) t.colorSpace=THREE.SRGBColorSpace; R.disposables.push(t); return t;
+    }catch(e){ return null; }
   }
 
+  /* ---------------- geometry helpers ---------------- */
   function M(geo, mat, x, y, z){ var m=new THREE.Mesh(geo, mat); if(x!==undefined) m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true; R.disposables.push(geo); return m; }
-  function CBetween(a, b, r, mat, seg){
-    var av=new THREE.Vector3(a[0],a[1],a[2]), bv=new THREE.Vector3(b[0],b[1],b[2]), mid=av.clone().add(bv).multiplyScalar(0.5), dir=bv.clone().sub(av), len=dir.length()||0.001;
-    var mesh=M(new THREE.CylinderGeometry(r||0.01,r||0.01,len,seg||8), mat);
-    mesh.position.copy(mid); mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), dir.normalize());
-    return mesh;
-  }
-  var OUTLINE_MAT = new THREE.MeshBasicMaterial({ color:0x101827, side:THREE.BackSide, transparent:true, opacity:0.14, depthWrite:false });
-  function addOutlines(group, scale){
-    // Keep the model clean and PBR-lit. The older outline shell made the hero read
-    // like a flat cartoon cutout, especially in Character Studio.
-    return;
-  }
-  function disposeGroup(g){ if(!g) return; g.traverse(function(o){ if(o.geometry && !o.userData._ol) o.geometry.dispose(); }); }
-  function flush(){ for(var i=0;i<R.disposables.length;i++){ try{ R.disposables[i].dispose(); }catch(e){} } R.disposables.length=0; }
-
-  function makeMats(spec){
-    var c=spec.colors, m={};
-    function s(o){ var mt=new THREE.MeshStandardMaterial(o); R.disposables.push(mt); return mt; }
-    var armorTex=makeDetailTexture(31,"#777","rgba(255,255,255,.16)"), darkTex=makeDetailTexture(43,"#555","rgba(255,255,255,.09)"), clothTex=makeDetailTexture(59,"#444","rgba(255,255,255,.08)"), skinTex=makeDetailTexture(71,"#999","rgba(255,255,255,.04)");
-    m.skin=s({ color:col(c.skin,"#e7b48c"), roughness:0.72, metalness:0.0, envMapIntensity:0.4, bumpMap:skinTex, bumpScale:0.004 });
-    m.cloth=s({ color:col(c.outfit||c.armorDark,"#26334d"), roughness:0.84, metalness:0.02, envMapIntensity:0.36, bumpMap:clothTex, bumpScale:0.02 });
-    m.clothHi=s({ color:lighten(c.outfit||c.armorMid||"#334155",0.16), roughness:0.78, metalness:0.03, envMapIntensity:0.42, bumpMap:clothTex, bumpScale:0.016 });
-    m.clothDk=s({ color:darken(c.outfit||c.armorDark||"#172033",0.08), roughness:0.88, metalness:0.02, envMapIntensity:0.3, bumpMap:clothTex, bumpScale:0.02 });
-    m.armor=s({ color:col(c.armorMid,"#465e80"), roughness:0.36, metalness:0.62, envMapIntensity:1.05, bumpMap:armorTex, bumpScale:0.014 });
-    m.armorHi=s({ color:col(c.armorHigh,"#7e97bd"), roughness:0.28, metalness:0.72, envMapIntensity:1.2, bumpMap:armorTex, bumpScale:0.012 });
-    m.armorDk=s({ color:col(c.armorDark,"#22304a"), roughness:0.48, metalness:0.5, envMapIntensity:0.85, bumpMap:darkTex, bumpScale:0.016 });
-    m.trim=s({ color:col(c.accent,"#f6cb6e"), roughness:0.28, metalness:0.85, envMapIntensity:1.3 });
-    m.cloak=s({ color:col(c.cloak,"#3a5a9c"), roughness:0.86, metalness:0.0, envMapIntensity:0.35, side:THREE.DoubleSide, bumpMap:clothTex, bumpScale:0.018 });
-    m.hair=s({ color:col(c.hair,"#3a2417"), roughness:0.76, metalness:0.04, envMapIntensity:0.42, bumpMap:darkTex, bumpScale:0.01 });
-    m.boot=s({ color:col(c.leather||"#4a3324"), roughness:0.72, metalness:0.08, bumpMap:clothTex, bumpScale:0.012 });
-    m.leather=s({ color:col(c.leather||"#5b3d22"), roughness:0.8, metalness:0.1, bumpMap:clothTex, bumpScale:0.01 });
-    var eyeC=col(c.eye,"#6cc6ff");
-    m.eye=s({ color:eyeC, roughness:0.18, emissive:eyeC.clone().multiplyScalar(0.2) });
-    m.eyeWhite=s({ color:0xf6f9ff, roughness:0.3 });
-    m.dark=s({ color:0x12161e, roughness:0.45 });
-    m.mouth=s({ color:0x7a3b33, roughness:0.6 });
-    var energyC=col(c.accent,"#8b9cff");
-    m.energy=s({ color:energyC, roughness:0.22, metalness:0.12, emissive:energyC.clone().multiplyScalar(0.45), envMapIntensity:1.25, transparent:true, opacity:0.92 });
-    return m;
-  }
-
-  /* ===================== AVATAR MODEL KIT (mesh-first, no puppet shell) ===================== */
   function loftGeometry(rings, seg){
     seg=seg||28;
     var pos=[], idx=[];
     rings.forEach(function(r){
-      var twist=r.twist||0, x=r.x||0, z=r.z||0;
-      for(var i=0;i<seg;i++){
-        var a=(i/seg)*Math.PI*2+twist;
-        pos.push(x+Math.cos(a)*(r.rx||0.1), r.y||0, z+Math.sin(a)*(r.rz||r.rx||0.1));
-      }
+      var x=r.x||0, z=r.z||0;
+      for(var i=0;i<seg;i++){ var a=(i/seg)*TAU; pos.push(x+Math.cos(a)*(r.rx||0.1), r.y||0, z+Math.sin(a)*(r.rz||r.rx||0.1)); }
     });
-    for(var j=0;j<rings.length-1;j++){
-      var a0=j*seg, b0=(j+1)*seg;
-      for(var k=0;k<seg;k++){
-        var n=(k+1)%seg;
-        idx.push(a0+k,b0+k,a0+n, a0+n,b0+k,b0+n);
-      }
-    }
-    var bottomCenter=pos.length/3, br=rings[0]; pos.push(br.x||0,br.y||0,br.z||0);
-    for(var bi=0;bi<seg;bi++) idx.push(bottomCenter,bi,(bi+1)%seg);
-    var topCenter=pos.length/3, tr=rings[rings.length-1], topBase=(rings.length-1)*seg; pos.push(tr.x||0,tr.y||0,tr.z||0);
-    for(var ti=0;ti<seg;ti++) idx.push(topCenter,topBase+(ti+1)%seg,topBase+ti);
+    for(var j=0;j<rings.length-1;j++){ var a0=j*seg, b0=(j+1)*seg;
+      for(var k=0;k<seg;k++){ var n=(k+1)%seg; idx.push(a0+k,b0+k,a0+n, a0+n,b0+k,b0+n); } }
+    var bc=pos.length/3, br=rings[0]; pos.push(br.x||0,br.y||0,br.z||0);
+    for(var bi=0;bi<seg;bi++) idx.push(bc,bi,(bi+1)%seg);
+    var tc=pos.length/3, tr=rings[rings.length-1], tb=(rings.length-1)*seg; pos.push(tr.x||0,tr.y||0,tr.z||0);
+    for(var ti=0;ti<seg;ti++) idx.push(tc,tb+(ti+1)%seg,tb+ti);
     var g=new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.Float32BufferAttribute(pos,3));
     g.setIndex(idx); g.computeVertexNormals();
     return g;
   }
   function Loft(rings, mat, seg){ return M(loftGeometry(rings, seg||28), mat); }
+  /* horizontal loft: rings stacked along Z (each ring in the XY plane) */
+  function loftZGeometry(rings, seg){
+    seg=seg||24;
+    var pos=[], idx=[];
+    rings.forEach(function(r){
+      var x=r.x||0, y=r.y||0;
+      for(var i=0;i<seg;i++){ var a=(i/seg)*TAU; pos.push(x+Math.cos(a)*(r.rx||0.1), y+Math.sin(a)*(r.ry||r.rx||0.1), r.z||0); }
+    });
+    for(var j=0;j<rings.length-1;j++){ var a0=j*seg, b0=(j+1)*seg;
+      for(var k=0;k<seg;k++){ var n=(k+1)%seg; idx.push(a0+k,a0+n,b0+k, a0+n,b0+n,b0+k); } }
+    var bc=pos.length/3, br=rings[0]; pos.push(br.x||0,br.y||0,br.z||0);
+    for(var bi=0;bi<seg;bi++) idx.push(bc,(bi+1)%seg,bi);
+    var tc=pos.length/3, tr=rings[rings.length-1], tb=(rings.length-1)*seg; pos.push(tr.x||0,tr.y||0,tr.z||0);
+    for(var ti=0;ti<seg;ti++) idx.push(tc,tb+ti,tb+(ti+1)%seg);
+    var g=new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(pos,3));
+    g.setIndex(idx); g.computeVertexNormals();
+    return g;
+  }
+  function LoftZ(rings, mat, seg){ return M(loftZGeometry(rings, seg||24), mat); }
   function Ball(rx, ry, rz, mat, x, y, z, seg){
-    var m=M(new THREE.SphereGeometry(1, seg||28, Math.max(12, Math.floor((seg||28)*0.7))), mat, x||0, y||0, z||0);
+    var m=M(new THREE.SphereGeometry(1, seg||26, Math.max(12, Math.floor((seg||26)*0.7))), mat, x||0, y||0, z||0);
     m.scale.set(rx,ry,rz); return m;
   }
-  function Capsule(rad, len, mat, x, y, z, sx, sz, seg){
-    var m=M(new THREE.CapsuleGeometry(rad, len, 10, seg||24), mat, x||0, y||0, z||0);
-    m.scale.set(sx||1,1,sz||1); return m;
+  /* tapered limb segment BETWEEN two points — guarantees connection */
+  function seg3(a, b, r0, r1, mat, segs){
+    var av=new THREE.Vector3(a[0],a[1],a[2]), bv=new THREE.Vector3(b[0],b[1],b[2]);
+    var dir=bv.clone().sub(av), len=dir.length()||0.001, mid=av.clone().add(bv).multiplyScalar(0.5);
+    var geo=new THREE.CylinderGeometry(r1||0.02, r0||0.02, len, segs||18, 1, false);
+    var m=M(geo, mat); m.position.copy(mid);
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), dir.normalize());
+    return m;
   }
+  function joint(p, r, mat, sy){ return Ball(r, r*(sy||0.94), r, mat, p[0], p[1], p[2], 18); }
   function panel(w,h,d,mat,x,y,z,rx,ry,rz){
     var m=M(new THREE.BoxGeometry(w,h,d), mat, x||0, y||0, z||0);
     m.rotation.set(rx||0,ry||0,rz||0); return m;
   }
-  function buildHeroModelKit(spec){
-    var mats=makeMats(spec), t=spec.traits||{}, eq=spec.equipped||{}, rig=new THREE.Group();
-    rig.userData.modelKit="mesh-avatar-modelkit-v1";
-    var hasArmor=!!eq.armor, hasHelmet=!!eq.helmet, build=t.body||"balanced";
-    var bw=build==="broad"?1.08:build==="lean"?0.86:0.96, slim=build==="lean"?0.92:1.0;
-    var HIPY=0.88, sx=0.272*bw;
+  function torus(rad, tube, mat, x,y,z, rx,ry,rz, arc){
+    var m=M(new THREE.TorusGeometry(rad,tube,10,40,arc||TAU), mat, x||0,y||0,z||0);
+    m.rotation.set(rx||0,ry||0,rz||0); return m;
+  }
+  function cone(r,h,mat,x,y,z,rx,ry,rz,seg){ var m=M(new THREE.ConeGeometry(r,h,seg||12), mat, x||0,y||0,z||0); m.rotation.set(rx||0,ry||0,rz||0); return m; }
+  function disposeGroup(g){ if(!g) return; g.traverse(function(o){ if(o.geometry && !o.userData._ol) o.geometry.dispose(); }); }
+  function flush(){ for(var i=0;i<R.disposables.length;i++){ try{ R.disposables[i].dispose(); }catch(e){} } R.disposables.length=0; }
 
-    var legL=mkLeg(mats, hasArmor, -1, bw, slim); legL.position.set(-0.135*bw,HIPY,0); rig.add(legL);
-    var legR=mkLeg(mats, hasArmor, 1, bw, slim); legR.position.set(0.135*bw,HIPY,0); rig.add(legR);
+  /* ---------------- materials ---------------- */
+  function makeMats(spec){
+    var c=spec.colors, m={};
+    function s(o){ var mt=new THREE.MeshStandardMaterial(o); R.disposables.push(mt); return mt; }
+    m.s = s;
+    var armorTex=makeDetailTexture(31,"#777","rgba(255,255,255,.14)"), clothTex=makeDetailTexture(59,"#555","rgba(255,255,255,.06)"), skinTex=makeDetailTexture(71,"#999",null,false);
+    m.skin=s({ color:col(c.skin,"#e7b48c"), roughness:0.62, metalness:0.0, envMapIntensity:0.5, bumpMap:skinTex, bumpScale:0.003 });
+    m.skinDk=s({ color:darken(c.skin||"#e7b48c",0.07), roughness:0.66, metalness:0.0, envMapIntensity:0.45 });
+    m.cloth=s({ color:col(c.outfit||c.armorDark,"#26334d"), roughness:0.86, metalness:0.02, envMapIntensity:0.4, bumpMap:clothTex, bumpScale:0.014 });
+    m.clothHi=s({ color:lighten(c.outfit||c.armorMid||"#334155",0.14), roughness:0.8, metalness:0.03, envMapIntensity:0.46, bumpMap:clothTex, bumpScale:0.012 });
+    m.clothDk=s({ color:darken(c.outfit||c.armorDark||"#172033",0.09), roughness:0.9, metalness:0.02, envMapIntensity:0.34, bumpMap:clothTex, bumpScale:0.014 });
+    m.armor=s({ color:col(c.armorMid,"#465e80"), roughness:0.34, metalness:0.68, envMapIntensity:1.1, bumpMap:armorTex, bumpScale:0.01 });
+    m.armorHi=s({ color:col(c.armorHigh,"#7e97bd"), roughness:0.26, metalness:0.78, envMapIntensity:1.25, bumpMap:armorTex, bumpScale:0.008 });
+    m.armorDk=s({ color:col(c.armorDark,"#22304a"), roughness:0.45, metalness:0.55, envMapIntensity:0.9, bumpMap:armorTex, bumpScale:0.012 });
+    m.trim=s({ color:col(c.accent,"#f6cb6e"), roughness:0.24, metalness:0.9, envMapIntensity:1.35 });
+    m.trimGlow=s({ color:col(c.accent,"#f6cb6e"), roughness:0.3, metalness:0.4, emissive:col(c.accent,"#f6cb6e").multiplyScalar(0.35), envMapIntensity:1.1 });
+    m.cloak=s({ color:col(c.cloak,"#3a5a9c"), roughness:0.88, metalness:0.0, envMapIntensity:0.4, side:THREE.DoubleSide, bumpMap:clothTex, bumpScale:0.016 });
+    m.cloakIn=s({ color:darken(c.cloak||"#3a5a9c",0.16), roughness:0.92, metalness:0.0, envMapIntensity:0.3, side:THREE.DoubleSide });
+    m.hair=s({ color:col(c.hair,"#3a2417"), roughness:0.55, metalness:0.06, envMapIntensity:0.7 });
+    m.hairDk=s({ color:darken(c.hair||"#3a2417",0.08), roughness:0.6, metalness:0.05, envMapIntensity:0.6 });
+    m.boot=s({ color:darken(c.leather||"#4a3324",0.03), roughness:0.68, metalness:0.08, bumpMap:clothTex, bumpScale:0.01 });
+    m.leather=s({ color:col(c.leather,"#5b3d22"), roughness:0.78, metalness:0.1, bumpMap:clothTex, bumpScale:0.008 });
+    m.leatherHi=s({ color:lighten(c.leather||"#5b3d22",0.1), roughness:0.72, metalness:0.1 });
+    var eyeC=col(c.eye,"#6cc6ff");
+    m.eye=s({ color:eyeC, roughness:0.12, emissive:eyeC.clone().multiplyScalar(0.32), envMapIntensity:1.2 });
+    m.eyeWhite=s({ color:0xf2f5fc, roughness:0.22, envMapIntensity:0.9 });
+    m.pupil=s({ color:0x0b0e14, roughness:0.3 });
+    m.dark=s({ color:0x12161e, roughness:0.5 });
+    m.mouth=s({ color:0x6e3730, roughness:0.6 });
+    m.teeth=s({ color:0xf3ecd6, roughness:0.42 });
+    var energyC=col(c.accent,"#8b9cff");
+    m.energy=s({ color:energyC, roughness:0.2, metalness:0.1, emissive:energyC.clone().multiplyScalar(0.55), envMapIntensity:1.25, transparent:true, opacity:0.95 });
+    return m;
+  }
+  function gText(g){ return String((g&&g.name)||"").toLowerCase()+" "+String((g&&g.id)||"").toLowerCase(); }
+  function gMetal(g,fb){ var m=new THREE.MeshStandardMaterial({ color:col(g&&g.metal,fb||"#cbd5e1"), roughness:0.26, metalness:0.92, envMapIntensity:1.3 }); R.disposables.push(m); return m; }
+  function gGem(g,fb){ var c=col(g&&g.gem,fb||"#22d3ee"); var glow=(g&&g.glow)||0; var m=new THREE.MeshStandardMaterial({ color:c, roughness:0.1, metalness:0.1, emissive:c.clone().multiplyScalar(0.35+glow*0.12), envMapIntensity:1.3 }); R.disposables.push(m); return m; }
+  function gCloth(g,fb){ var c=col(g&&g.metal,fb||"#64748b"); c.offsetHSL(0,-0.15,-0.06); var m=new THREE.MeshStandardMaterial({ color:c, roughness:0.82, metalness:0.05, envMapIntensity:0.45 }); R.disposables.push(m); return m; }
+
+  /* ================= CHARACTER — joint-anchored sculpt ================= */
+  /* Proportions (unit ~ meters). Feet at y=0. */
+  function bodyPlan(build, race){
+    var p={ hipY:0.94, waistY:1.12, chestY:1.38, shoulderY:1.535, neckY:1.60, headY:1.76, HR:0.148,
+      shoulderW:0.205, hipW:0.128, legSpread:0.115, armLen:0.565, legLift:0 };
+    if(build==="broad"){ p.shoulderW=0.245; p.hipW=0.15; p.legSpread=0.135; p.thick=1.18; }
+    else if(build==="lean"){ p.shoulderW=0.185; p.hipW=0.115; p.legSpread=0.105; p.thick=0.88; }
+    else p.thick=1.0;
+    race=String(race||"");
+    if(/dwarf/.test(race)){ p.scaleY=0.82; p.thick*=1.22; p.shoulderW*=1.12; p.HR=0.172; }
+    if(/goblin/.test(race)){ p.scaleY=0.8; p.thick*=0.92; p.HR=0.165; }
+    if(/orc/.test(race)){ p.scaleY=1.04; p.thick*=1.12; p.shoulderW*=1.08; }
+    if(/fae/.test(race)){ p.scaleY=0.94; p.thick*=0.86; }
+    return p;
+  }
+  function classKit(cls){
+    var k=String(cls||"knight").toLowerCase();
+    if(/knight|warrior|sentinel|paladin|guardian/.test(k)) return "plate";
+    if(/mage|wizard|cleric|warlock|sage/.test(k)) return "robe";
+    if(/bard|minstrel/.test(k)) return "doublet";
+    if(/rogue|shadow|assassin|thief/.test(k)) return "shade";
+    if(/monk|alchemist|artificer/.test(k)) return "wraps";
+    return "leathers"; /* ranger, druid, hunter... */
+  }
+
+  function buildHeroModelKit(spec){
+    var mats=makeMats(spec), t=spec.traits||{}, eq=spec.equipped||{};
+    var race=String(t.race||"human"), P=bodyPlan(t.body||"balanced", race), kit=classKit(spec.cls);
+    var rig=new THREE.Group(); rig.userData.modelKit="atelier-v1";
+    var th=P.thick, robe=(kit==="robe");
+
+    /* ---- legs (hip → knee → ankle chains) ---- */
+    var kneeY=0.5, ankleY=0.085;
+    function mkLegAt(side){
+      var hx=P.legSpread*side;
+      var g=new THREE.Group(); g.position.set(hx,P.hipY,0); /* rotate at hip */
+      var hip=[0,0,0], knee=[0.012*side,kneeY-P.hipY,0.012], ankle=[0.02*side,ankleY-P.hipY,-0.008];
+      var pants=(kit==="plate")?mats.armorDk:(kit==="wraps")?mats.cloth:mats.clothDk;
+      g.add(joint(hip,0.082*th,pants));
+      g.add(seg3(hip,knee,0.079*th,0.056*th,pants,20));
+      /* articulated knee: everything below the knee lives in kneeG */
+      var kneeG=new THREE.Group(); kneeG.position.set(knee[0],knee[1],knee[2]); g.add(kneeG); g.userData.knee=kneeG;
+      var ankleRel=[ankle[0]-knee[0],ankle[1]-knee[1],ankle[2]-knee[2]];
+      kneeG.add(joint([0,0,0],0.056*th,(kit==="plate")?mats.armorHi:pants));
+      kneeG.add(seg3([0,0,0],ankleRel,0.054*th,0.037*th,(kit==="plate")?mats.armor:pants,20));
+      /* calf bulge */
+      kneeG.add(Ball(0.052*th,0.085,0.05*th,pants,0.014*side,-0.1,-0.012,16));
+      /* boot */
+      var bg=new THREE.Group(); bg.position.set(ankleRel[0],ankleRel[1],ankleRel[2]); kneeG.add(bg); var bootHost=kneeG;
+      bg.add(Loft([{y:-0.02,rx:0.052*th,rz:0.06},{y:0.045,rx:0.056*th,rz:0.062},{y:0.085,rx:0.052*th,rz:0.05}],mats.boot,20));
+      var foot=Loft([{y:-0.075,rx:0.054*th,rz:0.085,z:0.045},{y:-0.028,rx:0.056*th,rz:0.088,z:0.04},{y:-0.005,rx:0.045*th,rz:0.06,z:0.02}],mats.boot,20);
+      bg.add(foot);
+      bg.add(Ball(0.045*th,0.032,0.05,mats.boot,0,-0.055,0.115,14)); /* toe cap */
+      bg.add(panel(0.105*th,0.02,0.2,mats.leather,0,-0.083,0.045));
+      bg.add(torus(0.056*th,0.009,mats.leather,0,0.06,0,HPI,0,0)); /* cuff strap */
+      if(kit==="plate"){ kneeG.add(panel(0.07*th,0.16,0.02,mats.armorHi,0.02*side,-0.22,0.055,0.06,0,0.03*side)); }
+      g.userData.upper=null;
+      return g;
+    }
+    var legL=mkLegAt(-1), legR=mkLegAt(1); rig.add(legL); rig.add(legR);
     rig.userData.legL=legL; rig.userData.legR=legR;
 
+    /* ---- pelvis / hips (connects legs to torso) ---- */
     var pelvis=Loft([
-      {y:0.78,rx:0.12*bw,rz:0.08},{y:0.86,rx:0.22*bw,rz:0.12},{y:0.96,rx:0.18*bw,rz:0.1},{y:1.02,rx:0.13*bw,rz:0.075}
-    ], hasArmor?mats.armorDk:mats.clothDk, 28); rig.add(pelvis);
+      {y:P.hipY-0.075,rx:0.135*th,rz:0.088},
+      {y:P.hipY+0.005,rx:0.155*th,rz:0.1},
+      {y:P.waistY-0.03,rx:0.125*th,rz:0.082}
+    ],(kit==="plate")?mats.armorDk:mats.clothDk,30); rig.add(pelvis);
 
-    var torso=new THREE.Group(); torso.position.y=1.12; rig.add(torso); rig.userData.torso=torso;
-    var bodyMat=hasArmor?mats.armor:mats.cloth;
-    var torsoMesh=Loft([
-      {y:-0.34,rx:0.145*bw,rz:0.075},
-      {y:-0.18,rx:0.165*bw,rz:0.088},
-      {y:0.06,rx:0.195*bw,rz:0.104},
-      {y:0.25,rx:0.212*bw,rz:0.108},
-      {y:0.38,rx:0.18*bw,rz:0.086}
-    ], bodyMat, 34); torso.add(torsoMesh);
-    if(hasArmor){
-      var plate=Loft([{y:-0.18,rx:0.12*bw,rz:0.012,z:0.118},{y:0.06,rx:0.17*bw,rz:0.018,z:0.128},{y:0.26,rx:0.14*bw,rz:0.014,z:0.12}], mats.armorHi, 28); torso.add(plate);
-      torso.add(panel(0.018,0.43,0.02,mats.trim,0,0.02,0.155));
-    } else {
-      var jacketL=Loft([{y:-0.3,rx:0.045*bw,rz:0.009,x:-0.055*bw,z:0.12},{y:0.1,rx:0.078*bw,rz:0.012,x:-0.06*bw,z:0.133},{y:0.34,rx:0.056*bw,rz:0.011,x:-0.044*bw,z:0.124}], mats.clothHi, 18); torso.add(jacketL);
-      var jacketR=jacketL.clone(); jacketR.position.x=0.11*bw; torso.add(jacketR);
-      torso.add(CBetween([0,-0.27,0.151],[0,0.25,0.15],0.0045,mats.leather,6));
-      torso.add(CBetween([-0.075*bw,0.3,0.132],[0,0.18,0.156],0.006,mats.clothDk,8));
-      torso.add(CBetween([0.075*bw,0.3,0.132],[0,0.18,0.156],0.006,mats.clothDk,8));
-      var hood=Loft([{y:0.28,rx:0.14*bw,rz:0.028,z:-0.09},{y:0.42,rx:0.12*bw,rz:0.04,z:-0.065}], mats.clothDk, 24); torso.add(hood);
-      var pendant=Ball(0.018,0.022,0.012,mats.trim,0,0.12,0.168,14); torso.add(pendant);
+    /* ---- torso (waist → chest → shoulders), one continuous loft ---- */
+    var torso=new THREE.Group(); torso.position.y=P.waistY; rig.add(torso); rig.userData.torso=torso;
+    rig.userData.torsoBaseY=P.waistY;
+    var bodyMat=(kit==="plate")?mats.armor:(kit==="shade")?mats.clothDk:mats.cloth;
+    var chestRel=P.chestY-P.waistY, shRel=P.shoulderY-P.waistY;
+    torso.add(Loft([
+      {y:-0.035,rx:0.126*th,rz:0.083},
+      {y:0.09,rx:0.138*th,rz:0.09},
+      {y:chestRel,rx:0.168*th,rz:0.105},
+      {y:shRel-0.035,rx:0.175*th,rz:0.108},
+      {y:shRel+0.035,rx:0.128*th,rz:0.085}
+    ],bodyMat,34));
+    /* trapezius bridge to shoulders */
+    torso.add(Ball(P.shoulderW*0.95,0.055,0.085,bodyMat,0,shRel+0.01,0,22));
+
+    /* ---- arms (shoulder → elbow → wrist chains, relaxed pose) ---- */
+    function mkArmAt(side){
+      var g=new THREE.Group(); g.position.set(P.shoulderW*side,P.shoulderY,0);
+      var sleeves=(kit==="plate")?mats.armor:(kit==="robe")?mats.clothHi:(kit==="shade")?mats.clothDk:(kit==="doublet")?mats.clothHi:mats.cloth;
+      var elbow=[0.05*side,-0.26,0.025], wrist=[0.068*side,-0.475,0.095];
+      g.add(joint([0,0,0],0.072*th,(kit==="plate")?mats.armorHi:sleeves,1.0)); /* deltoid */
+      g.add(seg3([0,0,0],elbow,0.062*th,0.047*th,sleeves,20));
+      g.add(joint(elbow,0.046*th,(kit==="plate")?mats.armorHi:sleeves));
+      g.add(seg3(elbow,wrist,0.045*th,0.034*th,(kit==="plate")?mats.armorDk:sleeves,20));
+      if(kit==="leathers"||kit==="shade"){ /* bracer */
+        g.add(seg3([elbow[0]+0.008*side,elbow[1]-0.08,elbow[2]+0.016],[wrist[0],wrist[1]+0.02,wrist[2]-0.008],0.043*th,0.037*th,mats.leather,14));
+      }
+      if(kit==="robe"){ /* hanging sleeve cuff */
+        g.add(Loft([{y:-0.34,rx:0.048*th,rz:0.044,x:0.058*side},{y:-0.45,rx:0.066*th,rz:0.058,x:0.068*side}],mats.cloth,16));
+      }
+      g.add(torus(0.037*th,0.008,(kit==="plate")?mats.trim:mats.leather,wrist[0],wrist[1]+0.015,wrist[2],HPI*0.94,0,0));
+      /* hand at wrist */
+      var hand=new THREE.Group(); hand.position.set(wrist[0],wrist[1],wrist[2]);
+      var palm=Ball(0.035,0.048,0.026,mats.skin,0.006*side,-0.035,0.006,16); hand.add(palm);
+      for(var f=0;f<4;f++){
+        var fx=(-0.018+f*0.013)*1.0;
+        var fing=seg3([fx*side,-0.062,0.012],[fx*side,-0.098,0.028],0.0068,0.0058,mats.skin,10);
+        hand.add(fing);
+        hand.add(joint([fx*side,-0.1,0.03],0.006,mats.skin));
+      }
+      var thumb=seg3([-0.028*side,-0.04,0.016],[-0.044*side,-0.062,0.038],0.008,0.0065,mats.skin,10); hand.add(thumb);
+      g.add(hand); g.userData.hand=hand;
+      return g;
     }
-    var belt=Loft([{y:-0.305,rx:0.172*bw,rz:0.084},{y:-0.26,rx:0.18*bw,rz:0.09}], mats.leather, 30); torso.add(belt);
-    torso.add(panel(0.052,0.042,0.022,mats.trim,0,-0.282,0.106));
+    var armL=mkArmAt(-1), armR=mkArmAt(1);
+    armL.rotation.z=0.07; armR.rotation.z=-0.07; /* relaxed, slightly out */
+    rig.add(armL); rig.add(armR); rig.userData.armL=armL; rig.userData.armR=armR;
 
-    var neck=Capsule(0.052,0.12,mats.skin,0,1.44,0,1.0,0.92,18); rig.add(neck);
-    var headG=new THREE.Group(); headG.position.y=1.61; rig.add(headG); rig.userData.headG=headG;
-    mkHead(headG, mats, spec, t, hasHelmet);
+    /* ---- neck + head ---- */
+    rig.add(seg3([0,P.shoulderY+0.02,0.004],[0,P.headY-P.HR*0.72,0.012],0.048*th,0.042*th,mats.skin,16));
+    var headG=new THREE.Group(); headG.position.y=P.headY; rig.add(headG); rig.userData.headG=headG;
+    rig.userData.headBaseY=P.headY;
+    /* light headgear (crowns/circlets/halos) keeps the hair; heavy helms hide it */
+    var helmTxt=eq.helmet?gText(eq.helmet):"";
+    var hideHair=!!eq.helmet && !(/crown|circlet|tiara|halo|tome|diadem|wreath/.test(helmTxt));
+    mkHead(headG, mats, spec, t, hideHair, P.HR, race);
 
-    var armL=mkArm(mats, hasArmor, -1, bw); armL.position.set(-sx,1.335,0); armL.rotation.z=-0.035; rig.add(armL);
-    var armR=mkArm(mats, hasArmor, 1, bw); armR.position.set(sx,1.335,0); armR.rotation.z=0.035; rig.add(armR);
-    rig.userData.armL=armL; rig.userData.armR=armR;
-
-    if(hasArmor) addModelKitArmor(rig, torso, mats, spec, bw);
-    if(hasHelmet) addModelKitHelmet(headG, mats, spec, 0.158);
-    addModelKitClassAccent(rig, torso, headG, spec, mats, bw);
-    addWeapon(rig.userData.armR, spec, mats);
+    /* ---- outfit layer + gear + accents ---- */
+    addOutfit(rig, torso, mats, spec, P, kit, th, robe);
+    addRaceBody(rig, mats, spec, race, P, th);
+    addArmorGear(rig, spec, mats, torso, P, th);
+    addHelmetGear(headG, spec, mats, P.HR);
+    addWeapon(rig, spec, mats, P);
+    addClassSignature(rig, torso, headG, spec, mats, P, th, kit);
+    if(P.scaleY){ rig.scale.y=P.scaleY; rig.scale.x=rig.scale.z=(P.scaleY+1)/2; }
+    rig.userData.plan=P;
     return rig;
   }
-  function mkLeg(mats, armored, side, bw, slim){
-    var g=new THREE.Group();
-    var thigh=Loft([{y:0,rx:0.066*slim,rz:0.055},{y:-0.18,rx:0.082*slim,rz:0.06},{y:-0.42,rx:0.064*slim,rz:0.05}], armored?mats.armorDk:mats.cloth, 24);
-    thigh.position.x=0.008*side; thigh.rotation.z=-0.035*side; g.add(thigh);
-    var knee=Ball(0.055,0.04,0.048,armored?mats.armorHi:mats.clothDk,0.022*side,-0.47,0.014,18); g.add(knee);
-    var shin=Loft([{y:-0.5,rx:0.064*slim,rz:0.048},{y:-0.72,rx:0.055*slim,rz:0.042},{y:-0.94,rx:0.043*slim,rz:0.038}], armored?mats.armor:mats.clothDk, 24);
-    shin.position.x=0.032*side; shin.rotation.z=0.02*side; g.add(shin);
-    if(!armored) g.add(CBetween([0.038*side,-0.55,0.054],[0.046*side,-0.9,0.056],0.0035,mats.clothHi,6));
-    else g.add(panel(0.056,0.25,0.024,mats.armorHi,0.04*side,-0.72,0.066,0,0,0.02*side));
-    var shoe=Loft([{y:-0.99,rx:0.052,rz:0.076,z:0.04},{y:-1.045,rx:0.07,rz:0.11,z:0.08}], mats.boot, 22);
-    shoe.position.x=0.052*side; shoe.rotation.z=0.015*side; g.add(shoe);
-    g.add(panel(0.13,0.017,0.21,mats.leather,0.052*side,-1.066,0.09,0,0,0.015*side));
-    g.userData.thigh=thigh; return g;
-  }
-  function mkArm(mats, armored, side, bw){
-    var g=new THREE.Group();
-    g.add(Ball(0.048,0.038,0.052,armored?mats.armor:mats.clothHi,0,0,0,22));
-    var upper=Loft([{y:-0.03,rx:0.047,rz:0.048},{y:-0.22,rx:0.052,rz:0.048},{y:-0.42,rx:0.041,rz:0.04}], armored?mats.armor:mats.cloth, 26);
-    upper.position.x=0.02*side; upper.rotation.z=0.045*side; g.add(upper);
-    g.add(Ball(0.041,0.035,0.038,armored?mats.armorHi:mats.clothDk,0.045*side,-0.46,0.012,16));
-    var fore=Loft([{y:-0.49,rx:0.042,rz:0.039},{y:-0.64,rx:0.039,rz:0.036},{y:-0.79,rx:0.033,rz:0.032}], armored?mats.armorDk:mats.cloth, 26);
-    fore.position.x=0.074*side; fore.rotation.z=-0.03*side; g.add(fore);
-    g.add(CBetween([0.06*side,-0.77,0.035],[0.115*side,-0.78,0.034],0.007,armored?mats.trim:mats.leather,8));
-    var hand=Ball(0.042,0.052,0.034,mats.skin,0.1*side,-0.855,0.042,16); g.add(hand);
-    [-0.023,-0.008,0.008,0.023].forEach(function(off){ var f=Capsule(0.0055,0.048,mats.skin,0.108*side+off*side,-0.905,0.058,1,0.8,6); f.rotation.z=-0.06*side; g.add(f); });
-    var thumb=Capsule(0.006,0.046,mats.skin,0.065*side,-0.875,0.062,1,0.8,6); thumb.rotation.z=0.55*side; g.add(thumb);
-    if(armored) g.add(panel(0.042,0.19,0.025,mats.armorHi,0.08*side,-0.64,0.068,0,0,-0.03*side));
-    else g.add(CBetween([0.042*side,-0.16,0.056],[0.076*side,-0.6,0.062],0.003,mats.clothHi,6));
-    g.userData.hand=hand; return g;
-  }
-  function mkHead(headG, mats, spec, t, hasHelmet){
-    var HR=0.158, race=t.race||"human";
-    headG.add(Ball(HR*0.86,HR*1.02,HR*0.86,mats.skin,0,0.005,0,30));
-    headG.add(Ball(HR*0.58,HR*0.44,HR*0.68,mats.skin,0,-0.092,0.03,22));
-    var z=HR*0.82, ex=0.052, eyeR=t.eyeShape==="round"?0.022:t.eyeShape==="sharp"?0.016:0.019;
-    [-1,1].forEach(function(sg){
-      headG.add(Ball(0.024,0.012,0.008,mats.eyeWhite,ex*sg,0.022,z,16));
-      headG.add(Ball(eyeR*0.56,eyeR*0.5,0.006,mats.eye,ex*sg,0.016,z+0.01,14));
-      headG.add(panel(0.05,0.007,0.01,mats.hair,ex*sg,0.073,z*0.96,0,0,-0.08*sg));
-      var cheek=Ball(0.02,0.011,0.01,mats.skin,0.052*sg,-0.054,z*0.94,12); headG.add(cheek);
-    });
-    var nose=Loft([{y:0.012,rx:0.008,rz:0.005,z:z+0.01},{y:-0.034,rx:0.014,rz:0.018,z:z+0.026}], mats.skin, 10); headG.add(nose);
-    var mouth=(t.face==="smile")?M(new THREE.TorusGeometry(0.03,0.004,8,16,Math.PI), mats.mouth):panel(0.04,0.005,0.01,mats.mouth,0,-0.092,z*0.94);
-    if(t.face==="smile"){ mouth.rotation.z=Math.PI; mouth.position.set(0,-0.092,z*0.94); } headG.add(mouth);
-    if(/elf|fae|sprite/.test(race)){ [-1,1].forEach(function(sg){ var ear=M(new THREE.ConeGeometry(0.04,0.15,8), mats.skin); ear.position.set(HR*0.82*sg,0.045,0); ear.rotation.set(0,0.22*sg,-Math.PI/2*sg); headG.add(ear); }); }
-    else { [-1,1].forEach(function(sg){ headG.add(Ball(0.024,0.04,0.02,mats.skin,HR*0.83*sg,-0.01,0,12)); }); }
-    if(/orc|goblin/.test(race)){ [-1,1].forEach(function(sg){ var tusk=M(new THREE.ConeGeometry(0.014,0.055,6), mats.eyeWhite); tusk.position.set(0.045*sg,-0.125,z*0.86); tusk.rotation.x=Math.PI; headG.add(tusk); }); }
-    if(/demon/.test(race)){ [-1,1].forEach(function(sg){ var horn=M(new THREE.ConeGeometry(0.035,0.14,8), mats.trim); horn.position.set(0.092*sg,HR*0.9,-0.045); horn.rotation.z=-0.3*sg; headG.add(horn); }); }
-    if(!hasHelmet) mkHairModelKit(headG, t.hair||"short", mats.hair, HR);
-  }
-  function mkHairModelKit(headG, style, hairMat, HR){
-    if(style==="shaved"||style==="bald") return;
-    var cap=Ball(HR*0.92,HR*0.38,HR*0.9,hairMat,0,HR*0.43,-0.012,30); cap.scale.y*=0.72; headG.add(cap);
-    if(style==="mohawk"){ var mh=Capsule(0.025,HR*0.82,hairMat,0,HR*0.55,-0.02,1,0.7,10); mh.rotation.x=-0.12; headG.add(mh); return; }
-    [-0.08,-0.04,0.005,0.05,0.087].forEach(function(x,i){
-      var l=Capsule(0.01+(i%2)*0.003,HR*(0.15+(i%3)*0.035),hairMat,x,HR*(0.2-(i%2)*0.018),HR*0.79,1,0.7,8);
-      l.rotation.x=-0.18; l.rotation.z=(x<0?0.05:-0.05); headG.add(l);
-    });
-    if(/long/.test(style)){ var back=Loft([{y:-HR*0.05,rx:HR*0.55,rz:HR*0.18,z:-HR*0.62},{y:-HR*0.6,rx:HR*0.45,rz:HR*0.14,z:-HR*0.55}], hairMat, 24); headG.add(back); }
-    if(/braid/.test(style)){ [-1,1].forEach(function(sg){ var br=Capsule(0.026,HR*0.78,hairMat,HR*0.82*sg,-HR*0.26,0.02,1,0.8,8); br.rotation.z=0.05*sg; headG.add(br); }); }
-  }
-  function addModelKitArmor(rig, torso, mats, spec, bw){
-    var g=spec.equipped&&spec.equipped.armor; if(!g) return;
-    var metal=gMetal(g,"#dde7f2"), gem=gGem(g,"#9fd8ff"), txt=gText(g), light=/leather|hide|vest|mantle|robe/.test(txt)&&!/plate|war/.test(txt);
-    var mat=light?gCloth(g,"#64748b"):metal;
-    torso.add(Loft([{y:-0.2,rx:0.13*bw,rz:0.014,z:0.155},{y:0.05,rx:0.18*bw,rz:0.018,z:0.17},{y:0.3,rx:0.15*bw,rz:0.015,z:0.155}], mat, 28));
-    torso.add(Ball(0.042,0.052,0.018,gem,0,0.085,0.188,16));
-    [-1,1].forEach(function(sg){
-      torso.add(panel(0.032,0.34,0.026,light?mats.leather:mats.trim,0.095*sg,-0.02,0.184,0,0,0.22*sg));
-      var sh=Ball(0.12*bw,0.06,0.08,mat,0.34*sg,1.33,0.02,18); rig.add(sh);
-      var vam=Capsule(0.052,0.24,mat,0.36*sg,0.83,0.08,1,0.86,12); vam.rotation.z=-0.28*sg; rig.add(vam);
-      var gr=Capsule(0.054,0.28,mat,0.13*sg,0.25,0.05,1,0.86,12); rig.add(gr);
-    });
-  }
-  function addModelKitHelmet(headG, mats, spec, HR){
-    var g=spec.equipped&&spec.equipped.helmet; if(!g) return;
-    var metal=gMetal(g,"#f6cb6e"), gem=gGem(g,"#38bdf8"), txt=gText(g);
-    if(/hood|hide|leather/.test(txt)){
-      headG.add(Ball(HR*0.98,HR*0.74,HR*0.96,gCloth(g,"#475569"),0,HR*0.18,-0.02,26));
-      return;
-    }
-    headG.add(Ball(HR*0.94,HR*0.52,HR*0.94,metal,0,HR*0.45,-0.02,26));
-    headG.add(CBetween([-HR*0.72,HR*0.1,HR*0.78],[HR*0.72,HR*0.1,HR*0.78],0.014,metal,8));
-    headG.add(Ball(0.036,0.044,0.02,gem,0,HR*0.74,HR*0.28,12));
-  }
-  function addModelKitClassAccent(rig, torso, headG, spec, mats, bw){
-    var key=String(spec.cls||"knight").toLowerCase();
-    if(/monk/.test(key)){ var halo=M(new THREE.TorusGeometry(0.19,0.008,8,36), mats.energy); halo.position.set(0,1.78,-0.04); halo.rotation.x=Math.PI/2; rig.add(halo); }
-    else if(/mage|cleric|bard|shadow/.test(key)){ var sig=M(new THREE.TorusGeometry(0.13,0.006,8,32), mats.energy); sig.position.set(0,0.12,0.19*bw); sig.rotation.x=Math.PI/2; torso.add(sig); }
-    else if(/ranger|druid/.test(key)){ var strap=CBetween([-0.16*bw,0.3,-0.02],[0.16*bw,-0.28,0.13],0.012,mats.leather,8); torso.add(strap); }
-  }
 
-  /* ===================== HERO (heroic-realistic ~6 heads) ===================== */
-  function buildHero(spec){
-    var mats=makeMats(spec), t=spec.traits||{}, rig=new THREE.Group();
-    var eq=spec.equipped||{}, hasArmor=!!eq.armor, hasHelmet=!!eq.helmet;
-    var build=t.body||"balanced";
-    var bw= build==="broad"?0.98: build==="lean"?0.78:0.86;
-    var HIPY=0.86;
-    // legs
-    var legL=makeLeg(mats, hasArmor, -1); legL.position.set(-0.13*bw,HIPY,0); rig.add(legL);
-    var legR=makeLeg(mats, hasArmor, 1); legR.position.set(0.13*bw,HIPY,0); rig.add(legR);
-    rig.userData.legL=legL; rig.userData.legR=legR;
-    // pelvis (connects legs to torso, no gap)
-    var pelvis=M(new THREE.SphereGeometry(0.205*bw,28,18), hasArmor?mats.armorDk:mats.clothDk); pelvis.position.y=0.9; pelvis.scale.set(1.06,0.46,0.76); rig.add(pelvis);
-    // torso
-    var torso=new THREE.Group(); torso.position.y=1.12; rig.add(torso); rig.userData.torso=torso;
-    var chest=M(new THREE.CapsuleGeometry(0.206*bw,0.5,12,36), hasArmor?mats.armor:mats.cloth); chest.scale.set(1.1,1.08,0.66); torso.add(chest);
-    var waist=M(new THREE.CapsuleGeometry(0.15*bw,0.19,10,26), hasArmor?mats.armorDk:mats.clothDk); waist.position.y=-0.29; waist.scale.set(1.1,0.95,0.58); torso.add(waist);
-    if(hasArmor){
-      var collar=M(new THREE.TorusGeometry(0.116,0.018,8,28), mats.trim); collar.rotation.x=Math.PI/2.16; collar.position.set(0,0.22,0.025); torso.add(collar);
+  /* ---------------- head & face ---------------- */
+  function mkHead(headG, mats, spec, t, hasHelmet, HR, race){
+    var beast=/beastfolk|cat|wolf|lizard/.test(race);
+    var catf=/cat/.test(race), wolff=/wolf/.test(race), liz=/lizard/.test(race);
+    /* skull: cranium + cheeks + jaw taper */
+    headG.add(Ball(HR*0.92,HR*1.0,HR*0.9,mats.skin,0,HR*0.1,-HR*0.06,30));
+    headG.add(Loft([
+      {y:-HR*0.62,rx:HR*0.36,rz:HR*0.42,z:HR*0.1},
+      {y:-HR*0.3,rx:HR*0.62,rz:HR*0.6,z:HR*0.06},
+      {y:HR*0.1,rx:HR*0.82,rz:HR*0.72,z:0}
+    ],mats.skin,26));
+    if(/orc|dwarf/.test(race)) headG.add(Ball(HR*0.5,HR*0.3,HR*0.34,mats.skin,0,-HR*0.5,HR*0.22,18)); /* heavy jaw */
+    var fz=HR*0.78; /* face plane z */
+    /* --- eyes with sockets, lids, catchlight --- */
+    var ex=HR*0.33, ey=HR*0.12, eyeS=t.eyeShape==="round"?1.14:t.eyeShape==="sharp"?0.85:1.0;
+    var lids=[];
+    [-1,1].forEach(function(sg){
+      headG.add(Ball(0.033*eyeS,0.026*eyeS,0.013,mats.eyeWhite,ex*sg,ey,fz,18));
+      headG.add(Ball(0.017*eyeS,0.018*eyeS,0.008,mats.eye,ex*sg,ey-0.002,fz+0.012,14));
+      headG.add(Ball(0.0075,0.008,0.005,mats.pupil,ex*sg,ey-0.002,fz+0.019,10));
+      headG.add(Ball(0.0032,0.0032,0.002,mats.eyeWhite,ex*sg+0.007,ey+0.006,fz+0.022,8));
+      var lid=Ball(0.034*eyeS,0.0085,0.015,mats.skinDk,ex*sg,ey+0.026,fz+0.003,14); lids.push(lid); headG.add(lid);
+      headG.add(Ball(0.03*eyeS,0.005,0.012,mats.skinDk,ex*sg,ey-0.024,fz+0.001,12));
+      /* brow */
+      var brow=seg3([ex*sg-0.027*sg,ey+0.054,fz+0.012],[ex*sg+0.03*sg,ey+0.046+(t.face==="scar"?0.01:0),fz+0.006],0.009,0.006,mats.hair,10);
+      if(/undead/.test(race)) brow.visible=false;
+      headG.add(brow);
+    });
+    headG.userData.lids=lids;
+    /* --- nose / muzzle --- */
+    if(beast&&!liz){
+      var muzzle=Loft([{y:-HR*0.18,rx:HR*0.3,rz:HR*0.26,z:HR*0.55},{y:-HR*0.08,rx:HR*0.34,rz:HR*0.3,z:HR*0.42},{y:HR*0.06,rx:HR*0.2,rz:HR*0.16,z:HR*0.42}],mats.skin,20);
+      headG.add(muzzle);
+      headG.add(Ball(0.022,0.015,0.014,mats.pupil,0,-HR*0.02,HR*0.95,10)); /* nose pad */
+      headG.add(cone(0.007,0.03,mats.teeth,-0.028,-HR*0.32,HR*0.78,Math.PI,0,0,6));
+      headG.add(cone(0.007,0.03,mats.teeth,0.028,-HR*0.32,HR*0.78,Math.PI,0,0,6));
+    } else if(liz){
+      headG.add(Loft([{y:-HR*0.2,rx:HR*0.3,rz:HR*0.2,z:HR*0.6},{y:-HR*0.02,rx:HR*0.36,rz:HR*0.26,z:HR*0.44},{y:HR*0.1,rx:HR*0.22,rz:HR*0.16,z:HR*0.4}],mats.skin,18));
+      [-1,1].forEach(function(sg){ headG.add(Ball(0.008,0.006,0.004,mats.pupil,0.03*sg,-HR*0.06,HR*0.98,8)); });
+      /* head crest fins */
+      [0,-1,1].forEach(function(o){ var fin=cone(0.05,HR*0.7,mats.trimGlow,o*HR*0.4,HR*0.75,-HR*0.25,-0.5,0,o*0.35,4); fin.scale.z=0.24; headG.add(fin); });
     } else {
-      var neckLineL=CBetween([-0.072*bw,0.25,0.145*bw],[0,0.17,0.168*bw],0.006,mats.clothHi,8); torso.add(neckLineL);
-      var neckLineR=CBetween([0.072*bw,0.25,0.145*bw],[0,0.17,0.168*bw],0.006,mats.clothHi,8); torso.add(neckLineR);
+      headG.add(seg3([0,ey+0.02,fz+0.006],[0,-HR*0.12,fz+0.028],0.0095,0.014,mats.skin,10));
+      headG.add(Ball(0.019,0.014,0.015,mats.skin,0,-HR*0.15,fz+0.026,12));
+      [-1,1].forEach(function(sg){ headG.add(Ball(0.007,0.005,0.005,mats.skinDk,0.013*sg,-HR*0.17,fz+0.024,8)); });
     }
-    if (hasArmor){
-      var plate=M(new THREE.CapsuleGeometry(0.118*bw,0.24,8,20), mats.armorHi); plate.position.set(0,0.005,0.124*bw); plate.scale.set(1.02,1,0.32); torso.add(plate);
-      var sternum=M(new THREE.BoxGeometry(0.014,0.24,0.016), mats.trim); sternum.position.set(0,0.0,0.166*bw); torso.add(sternum);
-    } else {
-      var tunic=M(new THREE.CapsuleGeometry(0.118*bw,0.37,10,26), mats.clothHi); tunic.position.set(0,0.0,0.126*bw); tunic.scale.set(1.12,1.05,0.3); torso.add(tunic);
-      var lacing=M(new THREE.BoxGeometry(0.012,0.27,0.012), mats.leather); lacing.position.set(0,-0.005,0.173*bw); torso.add(lacing);
+    /* --- mouth by expression --- */
+    var my=-HR*0.4, face=t.face||"calm";
+    if(beast&&!liz){ /* muzzle already carries the expression */
+      if(face==="warpaint"){ [-1,1].forEach(function(sg){ headG.add(panel(0.016,HR*0.5,0.008,mats.trimGlow,HR*0.42*sg,ey+0.02,fz*0.8,0,0,0.12*sg)); }); }
+    } else if(face==="smile"){
+      headG.add(torus(0.032,0.0052,mats.mouth,0,my+0.012,fz*0.94,0,0,Math.PI,Math.PI));
+      [-1,1].forEach(function(sg){ headG.add(Ball(0.012,0.008,0.007,mats.skinDk,0.042*sg,my+0.02,fz*0.9,10)); });
+    } else if(face==="scar"){
+      headG.add(panel(0.042,0.0055,0.01,mats.mouth,0.004,my,fz*0.94,0,0,-0.06));
+      var scar=seg3([HR*0.34,ey+0.09,fz*0.9],[HR*0.14,my+0.03,fz*0.96],0.004,0.004,mats.mouth,6); headG.add(scar);
+    } else if(face==="warpaint"){
+      headG.add(panel(0.04,0.006,0.01,mats.mouth,0,my,fz*0.94));
       [-1,1].forEach(function(sg){
-        var cord=M(new THREE.CylinderGeometry(0.0035,0.0035,0.19,7), mats.leather); cord.position.set(0.028*sg,-0.016,0.181*bw); cord.rotation.z=0.22*sg; torso.add(cord);
-        var seam=CBetween([0.125*sg,0.18,0.145*bw],[0.104*sg,-0.25,0.16*bw],0.004,mats.clothDk,6); torso.add(seam);
-        var flap=M(new THREE.BoxGeometry(0.082*bw,0.19,0.018), mats.clothDk); flap.position.set(0.052*sg,-0.385,0.055); flap.rotation.z=-0.08*sg; torso.add(flap);
+        headG.add(panel(0.016,HR*0.55,0.008,mats.trimGlow,HR*0.36*sg,ey-0.02,fz*0.92,0,0,0.12*sg));
+      });
+    } else {
+      headG.add(panel(0.036,0.0045,0.008,mats.mouth,0,my,fz*0.94));
+      headG.add(panel(0.026,0.003,0.006,mats.skinDk,0,my-0.011,fz*0.9));
+    }
+    /* --- race kits (head) --- */
+    if(/elf|fae/.test(race)){
+      [-1,1].forEach(function(sg){
+        var ear=Loft([{y:-0.012,rx:0.015,rz:0.022},{y:0.03,rx:0.011,rz:0.016},{y:0.072,rx:0.004,rz:0.007}],mats.skin,10);
+        ear.position.set(HR*0.84*sg,HR*0.02,-HR*0.04); ear.rotation.z=-1.15*sg; ear.rotation.y=0.3*sg; headG.add(ear);
+      });
+    } else if(/goblin/.test(race)){
+      [-1,1].forEach(function(sg){
+        var ear=Loft([{y:-0.02,rx:0.02,rz:0.038},{y:0.05,rx:0.016,rz:0.03},{y:0.13,rx:0.005,rz:0.01}],mats.skin,10);
+        ear.position.set(HR*0.88*sg,HR*0.12,-HR*0.1); ear.rotation.z=-1.15*sg; ear.rotation.x=-0.25; headG.add(ear);
+      });
+      headG.add(cone(0.0055,0.02,mats.teeth,0.02,my-0.004,fz*0.93,0.2,0,0,5));
+    } else if(beast&&!liz){
+      [-1,1].forEach(function(sg){
+        var ear=Loft([{y:0,rx:0.035,rz:0.02},{y:0.07,rx:0.02,rz:0.012},{y:0.11,rx:0.004,rz:0.004}],mats.skin,10);
+        ear.position.set(HR*0.55*sg,HR*0.82,-HR*0.15); ear.rotation.z=-0.3*sg; headG.add(ear);
+        var inner=cone(0.013,0.05,mats.skinDk,HR*0.55*sg,HR*0.85,-HR*0.13,0.15,0,-0.3*sg,8); headG.add(inner);
+        if(catf){ for(var w=0;w<3;w++){ var wh=seg3([HR*0.34*sg,-HR*0.3+w*0.011,HR*0.62],[HR*0.9*sg,-HR*0.28+w*0.02,HR*0.46],0.0015,0.001,mats.eyeWhite,4); headG.add(wh); } }
+      });
+    } else if(!/undead/.test(race)){
+      [-1,1].forEach(function(sg){
+        headG.add(Ball(0.02,0.036,0.024,mats.skin,HR*0.88*sg,-HR*0.02,-HR*0.04,12));
+        headG.add(Ball(0.01,0.02,0.012,mats.skinDk,HR*0.9*sg,-HR*0.03,-HR*0.02,8));
       });
     }
-    var clsMat=new THREE.MeshStandardMaterial({ color:col((spec.palette&&spec.palette[1])||spec.colors.accent,"#f6cb6e"), roughness:0.3, metalness:0.7, emissive:col((spec.palette&&spec.palette[1])||"#222").multiplyScalar(0.15), envMapIntensity:1.2 }); R.disposables.push(clsMat);
-    if(hasArmor){
-      var emblem=M(new THREE.OctahedronGeometry(0.038,0), clsMat); emblem.position.set(0,0.038,0.17*bw); torso.add(emblem);
-    } else {
-      var pendant=M(new THREE.SphereGeometry(0.018,12,10), clsMat); pendant.position.set(0,0.155,0.177*bw); torso.add(pendant);
-      var necklace=CBetween([-0.055*bw,0.2,0.158*bw],[0.055*bw,0.2,0.158*bw],0.0035,mats.leather,6); torso.add(necklace);
+    if(/orc/.test(race)){
+      [-1,1].forEach(function(sg){ headG.add(cone(0.011,0.05,mats.teeth,0.042*sg,my-0.005,fz*0.9,0.22,0,-0.1*sg,7)); });
     }
-    var belt=M(new THREE.TorusGeometry(0.16*bw,0.024,10,28), mats.leather); belt.rotation.x=Math.PI/2; belt.position.y=-0.245; belt.scale.z=0.72; torso.add(belt);
-    var buckle=M(new THREE.BoxGeometry(0.052,0.044,0.025), mats.trim); buckle.position.set(0,-0.245,0.125*bw); torso.add(buckle);
-    // Shoulders: cloth wraps when naked/base, actual pauldrons only when body armor is equipped.
-    if (hasArmor){
-      var pL=M(new THREE.SphereGeometry(0.104*bw,18,14), mats.armorHi); pL.position.set(-0.245*bw,0.15,0); pL.scale.set(1.06,0.58,0.82); torso.add(pL);
-      var pR=pL.clone(); pR.position.x=0.245*bw; torso.add(pR);
-    } else {
-      var swL=M(new THREE.SphereGeometry(0.058*bw,18,12), mats.clothHi); swL.position.set(-0.232*bw,0.13,0.01); swL.scale.set(1.08,0.42,0.68); torso.add(swL);
-      var swR=swL.clone(); swR.position.x=0.232*bw; torso.add(swR);
+    if(/demon/.test(race)){
+      [-1,1].forEach(function(sg){
+        var h1=seg3([HR*0.5*sg,HR*0.72,-HR*0.1],[HR*0.78*sg,HR*1.15,-HR*0.28],0.026,0.016,mats.trim,10);
+        var h2=seg3([HR*0.78*sg,HR*1.15,-HR*0.28],[HR*0.7*sg,HR*1.5,-HR*0.05],0.015,0.004,mats.trim,10);
+        headG.add(h1); headG.add(h2);
+      });
     }
-    // neck
-    var neck=M(new THREE.CylinderGeometry(0.056,0.066,0.13,14), mats.skin); neck.position.y=1.43; rig.add(neck);
-    // head
-    var HR=0.158;
-    var headG=new THREE.Group(); headG.position.y=1.59; rig.add(headG); rig.userData.headG=headG;
-    var head=M(new THREE.SphereGeometry(HR,30,24), mats.skin); head.scale.set(0.9,1.04,0.92); headG.add(head);
-    var jaw=M(new THREE.SphereGeometry(HR*0.76,18,14), mats.skin); jaw.position.set(0,-0.075,0.02); jaw.scale.set(0.86,0.68,0.9); headG.add(jaw);
-    var helm=t.helm||"open";
-    if (!hasHelmet && helm==="closed") helm="open";
-    if (helm==="closed") buildKnightHelm(headG, mats, HR);
-    else { buildFace(headG, mats, spec, t, HR); addHair(headG, t.hair||"short", mats.hair, HR);
-      if (hasHelmet && (helm==="open"||helm==="crest")){ var band=M(new THREE.TorusGeometry(HR*0.98,0.022,10,26), mats.armorHi); band.rotation.x=Math.PI/2; band.position.y=HR*0.55; headG.add(band); }
-      if (hasHelmet && helm==="crest") addPlume(headG, mats, HR);
+    if(/dwarf/.test(race)){
+      var beard=Loft([
+        {y:-HR*1.35,rx:HR*0.3,rz:HR*0.2,z:HR*0.3},
+        {y:-HR*0.9,rx:HR*0.55,rz:HR*0.34,z:HR*0.3},
+        {y:-HR*0.45,rx:HR*0.68,rz:HR*0.4,z:HR*0.16},
+        {y:-HR*0.2,rx:HR*0.72,rz:HR*0.4,z:HR*0.05}
+      ],mats.hair,22); headG.add(beard);
+      headG.add(torus(0.024,0.008,mats.trim,0,-HR*1.1,HR*0.34,0.1,0,0));
+      [-1,1].forEach(function(sg){ headG.add(Ball(0.05,0.09,0.04,mats.hair,HR*0.5*sg,-HR*0.5,HR*0.42,12)); }); /* mustache */
     }
-    // arms
-    var sx=0.245*bw, sy=1.36;
-    var armL=makeArm(mats, hasArmor, -1); armL.position.set(-sx,sy,0); armL.rotation.z=-0.06; armL.rotation.x=-0.03; rig.add(armL);
-    var armR=makeArm(mats, hasArmor, 1); armR.position.set(sx,sy,0); armR.rotation.z=0.06; armR.rotation.x=0.03; rig.add(armR);
-    rig.userData.armL=armL; rig.userData.armR=armR;
-    // cloak
-    if (spec.colors.cloak && spec.equipped && spec.equipped.armor){
-      var sh=new THREE.Shape();
-      sh.moveTo(-0.26*bw,0.34); sh.bezierCurveTo(-0.36*bw,-0.1,-0.24*bw,-0.6,-0.13*bw,-0.82);
-      sh.bezierCurveTo(-0.06*bw,-0.9,0.06*bw,-0.9,0.13*bw,-0.82);
-      sh.bezierCurveTo(0.24*bw,-0.6,0.36*bw,-0.1,0.26*bw,0.34);
-      sh.bezierCurveTo(0.14*bw,0.2,-0.14*bw,0.2,-0.26*bw,0.34);
-      var cg=new THREE.ShapeGeometry(sh,10); R.disposables.push(cg);
-      var cloak=new THREE.Mesh(cg, mats.cloak); cloak.castShadow=true; cloak.userData.noOutline=true; cloak.position.set(0,1.18,-0.28*bw); rig.add(cloak); rig.userData.cloak=cloak;
-      var clasp=M(new THREE.SphereGeometry(0.04,12,10), mats.trim); clasp.position.set(0,1.45,-0.02); rig.add(clasp);
+    if(/undead/.test(race)){
+      [-1,1].forEach(function(sg){
+        headG.add(Ball(0.034,0.026,0.01,mats.pupil,ex*sg,ey,fz-0.004,12)); /* hollow sockets behind */
+        headG.add(Ball(HR*0.16,HR*0.1,HR*0.06,mats.skinDk,HR*0.42*sg,-HR*0.2,HR*0.5,10)); /* gaunt cheeks */
+      });
+      var stitch=seg3([-HR*0.3,HR*0.55,fz*0.72],[HR*0.1,HR*0.7,fz*0.6],0.003,0.003,mats.pupil,4); headG.add(stitch);
     }
-    addArmorGear(rig, spec, mats, torso, bw);
-    addHelmetGear(headG, spec, mats, HR);
-    addWeapon(rig.userData.armR, spec, mats);
-    addClassSignature(rig, torso, headG, spec, mats, bw, HR);
-    return rig;
+    if(/fae/.test(race)){
+      [-1,1].forEach(function(sg){
+        var ant=seg3([HR*0.25*sg,HR*0.9,HR*0.2],[HR*0.45*sg,HR*1.35,HR*0.3],0.004,0.002,mats.hair,6);
+        headG.add(ant); headG.add(Ball(0.012,0.012,0.012,mats.energy,HR*0.45*sg,HR*1.37,HR*0.3,8));
+      });
+    }
+    if(!hasHelmet) mkHair(headG, t.hair||"short", mats, HR, race);
   }
-  function makeLeg(mats, armored, side){
-    side=side||1;
-    var g=new THREE.Group();
-    var thigh=M(new THREE.CapsuleGeometry(armored?0.078:0.082,0.4,10,24), armored?mats.armorDk:mats.cloth); thigh.position.set(0.006*side,-0.22,0); thigh.scale.set(1.03,1,0.9); thigh.rotation.z=-0.035*side; g.add(thigh);
-    var knee=M(new THREE.SphereGeometry(0.058,18,12), armored?mats.armorHi:mats.leather); knee.position.set(0.02*side,-0.465,0.012); knee.scale.set(armored?0.98:0.74,armored?0.88:0.54,armored?0.9:0.68); g.add(knee);
-    var shin=M(new THREE.CapsuleGeometry(armored?0.066:0.07,0.39,10,24), armored?mats.armor:mats.clothDk); shin.position.set(0.03*side,-0.715,0.008); shin.scale.set(0.94,1,0.84); shin.rotation.z=0.02*side; g.add(shin);
-    var ankle=M(new THREE.CylinderGeometry(0.048,0.056,0.07,12), armored?mats.armorDk:mats.clothDk); ankle.position.set(0.04*side,-0.94,0.03); ankle.rotation.z=0.02*side; g.add(ankle);
-    var boot=M(new THREE.SphereGeometry(0.088,18,12), mats.boot); boot.position.set(0.046*side,-1.0,0.074); boot.scale.set(0.98,0.42,1.58); g.add(boot);
-    var sole=M(new THREE.BoxGeometry(0.112,0.018,0.2), mats.leather); sole.position.set(0.052*side,-1.043,0.09); sole.rotation.z=0.02*side; g.add(sole);
-    if(!armored){ var pantSeam=CBetween([0.036*side,-0.55,0.075],[0.046*side,-0.86,0.078],0.004,mats.clothHi,6); g.add(pantSeam); }
-    if(armored){ var greave=M(new THREE.BoxGeometry(0.06,0.23,0.026), mats.armorHi); greave.position.set(0.04*side,-0.71,0.07); greave.rotation.z=0.02*side; g.add(greave); }
-    g.userData.thigh=thigh; return g;
-  }
-  function makeArm(mats, armored, side){
-    side=side||1;
-    var g=new THREE.Group();
-    var sh=M(new THREE.SphereGeometry(0.066,18,12), armored?mats.armor:mats.clothHi); sh.scale.set(armored?1.05:0.92,armored?0.62:0.5,armored?0.86:0.68); sh.position.x=0.004*side; g.add(sh);
-    var up=M(new THREE.CapsuleGeometry(armored?0.052:0.055,0.32,10,22), armored?mats.armor:mats.cloth); up.position.set(0.026*side,-0.235,0.006); up.scale.set(1,1,0.86); up.rotation.z=0.045*side; g.add(up);
-    var elbow=M(new THREE.SphereGeometry(0.046,16,12), armored?mats.armorHi:mats.clothDk); elbow.position.set(0.05*side,-0.46,0.012); elbow.scale.set(armored?0.92:0.76,armored?0.82:0.58,armored?0.9:0.68); g.add(elbow);
-    var fore=M(new THREE.CapsuleGeometry(armored?0.047:0.048,0.28,10,22), armored?mats.armorDk:mats.cloth); fore.position.set(0.075*side,-0.645,0.02); fore.scale.set(0.9,1,0.82); fore.rotation.z=-0.035*side; g.add(fore);
-    var cuff=M(new THREE.TorusGeometry(0.048,0.008,7,18), armored?mats.trim:mats.leather); cuff.rotation.x=Math.PI/2; cuff.position.set(0.088*side,-0.785,0.022); g.add(cuff);
-    var hand=M(new THREE.SphereGeometry(0.054,16,12), mats.skin); hand.position.set(0.098*side,-0.852,0.034); hand.scale.set(0.9,1.05,0.78); g.add(hand);
-    [-0.021,-0.006,0.009,0.024].forEach(function(off){ var finger=M(new THREE.CapsuleGeometry(0.0055,0.055,4,7), mats.skin); finger.position.set(0.106*side+off*side,-0.905,0.056); finger.rotation.z=-0.08*side; g.add(finger); });
-    var thumb=M(new THREE.CapsuleGeometry(0.007,0.048,4,7), mats.skin); thumb.position.set(0.058*side,-0.872,0.062); thumb.rotation.z=0.55*side; g.add(thumb);
-    if(!armored){ var sleeveSeam=CBetween([0.042*side,-0.18,0.06],[0.075*side,-0.57,0.068],0.0038,mats.clothHi,6); g.add(sleeveSeam); }
-    if(armored){ var vam=M(new THREE.BoxGeometry(0.044,0.19,0.026), mats.armorHi); vam.position.set(0.078*side,-0.62,0.068); vam.rotation.z=-0.035*side; g.add(vam); }
-    g.userData.hand=hand; return g;
-  }
-  function buildFace(headG, mats, spec, t, HR){
-    var z=HR*0.9, ex=0.052, eyeR=t.eyeShape==="round"?0.022:t.eyeShape==="sharp"?0.016:0.019;
-    var wL=M(new THREE.SphereGeometry(0.023,18,12), mats.eyeWhite); wL.position.set(-ex,0.018,z*0.9); wL.scale.set(1,0.5,0.34); headG.add(wL);
-    var wR=wL.clone(); wR.position.x=ex; headG.add(wR);
-    var iL=M(new THREE.SphereGeometry(eyeR,16,12), mats.eye); iL.position.set(-ex,0.01,z*0.985); iL.scale.set(1,0.86,0.45); headG.add(iL);
-    var iR=iL.clone(); iR.position.x=ex; headG.add(iR);
-    var pL=M(new THREE.SphereGeometry(eyeR*0.36,10,8), mats.dark); pL.position.set(-ex,0.012,z*1.025); headG.add(pL);
-    var pR=pL.clone(); pR.position.x=ex; headG.add(pR);
-    var brow=new THREE.MeshStandardMaterial({ color:darken(spec.colors.hair||"#3a2417",0.02), roughness:0.8 }); R.disposables.push(brow);
-    var bL=M(new THREE.BoxGeometry(0.05,0.009,0.014), brow); bL.position.set(-ex,0.068,z*0.93); bL.rotation.z=0.08; headG.add(bL);
-    var bR=bL.clone(); bR.position.x=ex; bR.rotation.z=-0.08; headG.add(bR);
-    var nose=M(new THREE.ConeGeometry(0.015,0.052,9), mats.skin); nose.rotation.x=Math.PI/2.1; nose.position.set(0,-0.022,z*1.03); headG.add(nose);
-    var bridge=M(new THREE.CapsuleGeometry(0.006,0.04,4,8), mats.skin); bridge.position.set(0,0.02,z*1.035); bridge.rotation.x=0.08; headG.add(bridge);
-    [-1,1].forEach(function(sg){ var cheek=M(new THREE.SphereGeometry(0.022,12,8), mats.skin); cheek.position.set(0.052*sg,-0.052,z*0.95); cheek.scale.set(1,0.5,0.34); headG.add(cheek); });
-    if (t.face==="smile"){ var sm=M(new THREE.TorusGeometry(0.03,0.0045,8,16,Math.PI), mats.mouth); sm.rotation.z=Math.PI; sm.position.set(0,-0.094,z*0.93); headG.add(sm); }
-    else { var mo=M(new THREE.BoxGeometry(0.04,0.006,0.014), mats.mouth); mo.position.set(0,-0.094,z*0.93); headG.add(mo); }
-    var race=t.race||"human";
-    if (/elf|fae|sprite/.test(race)){ var earL=M(new THREE.ConeGeometry(0.045,0.17,8), mats.skin); earL.position.set(-HR*0.95,0.05,0); earL.rotation.set(0,0.3,Math.PI/2.0); headG.add(earL); var earR=earL.clone(); earR.position.x=HR*0.95; earR.rotation.set(0,-0.3,-Math.PI/2.0); headG.add(earR); }
-    else { var eaL=M(new THREE.SphereGeometry(0.04,10,8), mats.skin); eaL.position.set(-HR*0.95,-0.01,0); eaL.scale.set(0.6,1,1); headG.add(eaL); var eaR=eaL.clone(); eaR.position.x=HR*0.95; headG.add(eaR); }
-    if (/orc|goblin|troll/.test(race)){ var tu=new THREE.MeshStandardMaterial({ color:0xf3ecd6, roughness:0.5 }); R.disposables.push(tu); var tL=M(new THREE.ConeGeometry(0.022,0.08,6), tu); tL.position.set(-0.05,-0.14,z*0.85); tL.rotation.x=Math.PI; headG.add(tL); var tR=tL.clone(); tR.position.x=0.05; headG.add(tR); }
-    if (/dwarf/.test(race)){ var beard=M(new THREE.SphereGeometry(0.16,18,14,0,Math.PI*2,Math.PI*0.5,Math.PI*0.5), mats.hair); beard.position.set(0,-0.12,0.05); beard.scale.set(1,1.3,0.85); headG.add(beard); }
-    if (/demon/.test(race)){ var hL=M(new THREE.ConeGeometry(0.04,0.16,8), mats.trim); hL.position.set(-0.12,HR*0.95,-0.04); hL.rotation.z=-0.3; headG.add(hL); var hR=hL.clone(); hR.position.x=0.12; hR.rotation.z=0.3; headG.add(hR); }
-  }
-  function buildKnightHelm(headG, mats, HR){
-    var dome=M(new THREE.SphereGeometry(HR*1.06,26,18,0,Math.PI*2,0,Math.PI*0.66), mats.armorHi); dome.position.y=HR*0.05; dome.scale.set(1,1.04,1.1); headG.add(dome);
-    var guard=M(new THREE.SphereGeometry(HR*1.0,24,16,0,Math.PI*2,Math.PI*0.42,Math.PI*0.42), mats.armor); guard.scale.set(1,1,1.12); headG.add(guard);
-    var keel=M(new THREE.BoxGeometry(0.028,0.05,HR*2.0), mats.armor); keel.position.set(0,HR*0.7,-0.02); headG.add(keel);
-    var nasal=M(new THREE.BoxGeometry(0.035,0.14,0.04), mats.armor); nasal.position.set(0,-0.03,HR*0.96); headG.add(nasal);
-    var slit=M(new THREE.BoxGeometry(HR*1.3,0.03,0.03), mats.dark); slit.position.set(0,0.02,HR*0.98); headG.add(slit);
-    var tb=M(new THREE.TorusGeometry(HR*0.98,0.014,8,26), mats.trim); tb.rotation.x=Math.PI/2; tb.position.y=-HR*0.2; headG.add(tb);
-  }
-  function addHair(headG, style, hairMat, HR){
-    if (style==="shaved"||style==="bald") return;
-    if (style==="mohawk"){ var mh=M(new THREE.CapsuleGeometry(0.026,HR*0.92,5,12), hairMat); mh.position.set(0,HR*0.62,-0.02); mh.scale.z=0.68; headG.add(mh); return; }
-    var cap=M(new THREE.SphereGeometry(HR*1.04,28,18,0,Math.PI*2,0,Math.PI*0.5), hairMat); cap.position.y=HR*0.11; cap.scale.set(1.02,0.94,1.02); headG.add(cap);
-    [-0.092,-0.052,-0.015,0.022,0.062,0.098].forEach(function(x,i){
-      var lock=M(new THREE.CapsuleGeometry(0.014+(i%2)*0.004,HR*(0.22+(i%3)*0.035),5,10), hairMat);
-      lock.position.set(x,HR*(0.2-(i%2)*0.03),HR*0.82);
-      lock.rotation.x=-0.22; lock.rotation.z=(x<0?0.08:-0.08);
-      headG.add(lock);
-    });
-    [-1,1].forEach(function(sg){ var side=M(new THREE.CapsuleGeometry(0.018,HR*0.34,5,10), hairMat); side.position.set(HR*0.83*sg,-HR*0.05,HR*0.08); side.rotation.z=0.08*sg; headG.add(side); });
-    if (/long/.test(style)){ var back=M(new THREE.CapsuleGeometry(HR*0.72,HR*0.68,8,16), hairMat); back.position.set(0,-HR*0.32,-HR*0.52); back.scale.set(1,1.06,0.44); headG.add(back); }
-    if (/braid/.test(style)){ var brL=M(new THREE.CapsuleGeometry(0.032,HR*0.86,5,12), hairMat); brL.position.set(-HR*0.85,-HR*0.34,0.02); headG.add(brL); var brR=brL.clone(); brR.position.x=HR*0.85; headG.add(brR); }
-  }
-  function addPlume(headG, mats, HR){ var p=M(new THREE.CapsuleGeometry(0.04,HR*1.0,6,10), mats.trim); p.position.set(0,HR*1.1,-HR*0.2); p.rotation.x=-0.3; headG.add(p); }
 
-  function gText(g){ return String((g&&g.name)||"").toLowerCase()+" "+String((g&&g.id)||"").toLowerCase(); }
-  function gMetal(g,fb){ var m=new THREE.MeshStandardMaterial({ color:col(g&&g.metal,fb||"#cbd5e1"), roughness:0.28, metalness:0.9, envMapIntensity:1.25 }); R.disposables.push(m); return m; }
-  function gGem(g,fb){ var c=col(g&&g.gem,fb||"#22d3ee"); var m=new THREE.MeshStandardMaterial({ color:c, roughness:0.12, metalness:0.1, emissive:c.clone().multiplyScalar(0.5) }); R.disposables.push(m); return m; }
-  function gCloth(g,fb){ var c=col(g&&g.metal,fb||"#64748b"); c.offsetHSL(0, -0.18, -0.08); var m=new THREE.MeshStandardMaterial({ color:c, roughness:0.82, metalness:0.04, envMapIntensity:0.44 }); R.disposables.push(m); return m; }
-  function addClassSignature(rig, torso, headG, spec, mats, bw, HR){
-    var key=String(spec.cls||"knight").toLowerCase();
-    var hasArmor=!!(spec.equipped&&spec.equipped.armor);
-    if (/monk/.test(key)){
-      var halo=M(new THREE.TorusGeometry(HR*1.22,0.012,8,36), mats.energy); halo.rotation.x=Math.PI/2; halo.position.y=HR*1.0; headG.add(halo);
-      var core=M(new THREE.TorusGeometry(0.26*bw,0.012,8,36), mats.energy); core.rotation.x=Math.PI/2; core.position.set(0,0.02,0.21*bw); torso.add(core);
-      [-1,1].forEach(function(sg){ var bead=M(new THREE.SphereGeometry(0.035,10,8), mats.energy); bead.position.set(0.27*sg,1.02,0.18); rig.add(bead); });
-    } else if (/alchemist/.test(key)){
-      var glass=new THREE.MeshStandardMaterial({ color:0x9ff3ff, roughness:0.08, metalness:0.0, transparent:true, opacity:0.62, emissive:0x164b5a, envMapIntensity:1.4 }); R.disposables.push(glass);
-      [-1,0,1].forEach(function(n){ var vial=M(new THREE.CylinderGeometry(0.026,0.026,0.16,10), glass); vial.position.set((n*0.07),-0.18,0.22*bw); vial.rotation.z=n*0.15; torso.add(vial); var cork=M(new THREE.CylinderGeometry(0.02,0.022,0.025,8), mats.leather); cork.position.set(n*0.07,-0.09,0.22*bw); torso.add(cork); });
-      var satchel=M(new THREE.BoxGeometry(0.16,0.13,0.08), mats.leather); satchel.position.set(-0.28*bw,1.04,0.08); rig.add(satchel);
-    } else if (/sentinel/.test(key)){
-      var shield=M(new THREE.CylinderGeometry(0.22*bw,0.22*bw,0.055,6), mats.armorHi); shield.rotation.x=Math.PI/2; shield.rotation.z=Math.PI/6; shield.position.set(0,1.27,-0.28*bw); rig.add(shield);
-      var boss=M(new THREE.OctahedronGeometry(0.055,0), mats.trim); boss.position.set(0,1.27,-0.32*bw); rig.add(boss);
-    } else if (/knight|warrior/.test(key)){
-      if(!hasArmor) return;
-      [-1,1].forEach(function(sg){ var trim=M(new THREE.BoxGeometry(0.16,0.028,0.026), mats.trim); trim.position.set(0.16*sg,1.32,0.17); trim.rotation.z=0.22*sg; rig.add(trim); });
-    } else if (/shadow/.test(key)){
-      var cres=M(new THREE.TorusGeometry(0.2,0.018,8,36), mats.energy); cres.position.set(-0.18*bw,1.5,-0.08); cres.rotation.set(0.2,0.1,0.3); rig.add(cres);
-      var cut=M(new THREE.SphereGeometry(0.16,16,12), mats.dark); cut.position.set(-0.11*bw,1.53,-0.055); rig.add(cut);
-      var shard=M(new THREE.OctahedronGeometry(0.045,0), mats.energy); shard.position.set(0.25*bw,1.38,0.14); rig.add(shard);
-    } else if (/ranger|druid/.test(key)){
-      var quiver=M(new THREE.CylinderGeometry(0.055,0.065,0.42,10), mats.leather); quiver.position.set(-0.25*bw,1.25,-0.2); quiver.rotation.z=-0.35; rig.add(quiver);
-      for(var i=0;i<3;i++){ var arr=M(new THREE.CylinderGeometry(0.006,0.006,0.36,6), mats.trim); arr.position.set(-0.29*bw+i*0.026,1.45,-0.18); arr.rotation.z=-0.35; rig.add(arr); }
-    } else if (/cleric|mage|bard/.test(key)){
-      var sig=M(new THREE.TorusGeometry(HR*0.78,0.01,8,30), mats.energy); sig.position.set(0,HR*1.03,-0.02); sig.rotation.x=Math.PI/2; headG.add(sig);
+  function mkHair(headG, style, mats, HR, race){
+    var hm=mats.hair, hd=mats.hairDk;
+    if(/undead/.test(String(race))&&style!=="long") style="shaved";
+    if(style==="shaved"||style==="bald"){
+      if(style==="shaved") headG.add(Ball(HR*0.9,HR*0.88,HR*0.88,hd,0,HR*0.16,-HR*0.07,24)).material=hd;
+      return;
+    }
+    if(style==="mohawk"){
+      headG.add(Ball(HR*0.9,HR*0.86,HR*0.86,hd,0,HR*0.16,-HR*0.07,24));
+      for(var i=0;i<6;i++){
+        var fy=HR*(0.85-i*0.06), fz2=HR*(0.55-i*0.26);
+        var fin=cone(0.045,HR*(0.75-i*0.06),hm,0,fy+HR*0.3,fz2,-0.25+i*0.12,0,0,4); fin.scale.z=0.3; headG.add(fin);
+      }
+      return;
+    }
+    /* base cap that hugs the cranium — hairline stays above the brow */
+    headG.add(Loft([
+      {y:HR*0.18,rx:HR*0.97,rz:HR*0.9,z:-HR*0.18},
+      {y:HR*0.48,rx:HR*0.9,rz:HR*0.84,z:-HR*0.16},
+      {y:HR*0.82,rx:HR*0.6,rz:HR*0.56,z:-HR*0.14},
+      {y:HR*1.02,rx:HR*0.18,rz:HR*0.18,z:-HR*0.1}
+    ],hm,26));
+    /* back fill so the cap doesn't float */
+    headG.add(Ball(HR*0.88,HR*0.62,HR*0.6,hm,0,HR*0.28,-HR*0.42,20));
+    /* front fringe tufts along the hairline */
+    [-0.4,-0.15,0.12,0.38].forEach(function(fx,i){
+      var tuft=Ball(HR*0.17,HR*0.09,HR*0.1,i%2?hm:hd,HR*fx,HR*0.58,HR*0.63,12);
+      tuft.rotation.x=-0.5; headG.add(tuft);
+    });
+    if(/long/.test(style)){
+      headG.add(Loft([
+        {y:-HR*1.15,rx:HR*0.42,rz:HR*0.2,z:-HR*0.55},
+        {y:-HR*0.5,rx:HR*0.58,rz:HR*0.3,z:-HR*0.5},
+        {y:HR*0.1,rx:HR*0.8,rz:HR*0.45,z:-HR*0.3}
+      ],hm,22));
+      [-1,1].forEach(function(sg){ headG.add(Ball(HR*0.12,HR*0.46,HR*0.12,hd,HR*0.78*sg,-HR*0.4,HR*0.04,12)); });
+    }
+    if(/braid/.test(style)){
+      [-1,1].forEach(function(sg){
+        var px=HR*0.7*sg;
+        for(var b=0;b<4;b++){ headG.add(Ball(0.026-b*0.003,0.034,0.026-b*0.003,b%2?hm:hd,px,-HR*(0.1+b*0.32),HR*0.1,10)); }
+        headG.add(torus(0.014,0.005,mats.trim,px,-HR*1.06,HR*0.1,HPI,0,0));
+      });
+    }
+    if(/top|bun|knot/.test(style)){
+      headG.add(Ball(HR*0.26,HR*0.22,HR*0.26,hm,0,HR*1.05,-HR*0.15,14));
+      headG.add(torus(0.02,0.006,mats.trim,0,HR*0.92,-HR*0.15,0.2,0,0));
     }
   }
+
+  /* ---------------- outfit layer per class ---------------- */
+  function addOutfit(rig, torso, mats, spec, P, kit, th, robe){
+    var shRel=P.shoulderY-P.waistY, chestRel=P.chestY-P.waistY;
+    /* belt with buckle — everyone */
+    torso.add(Loft([{y:-0.005,rx:0.132*th,rz:0.088},{y:0.045,rx:0.138*th,rz:0.092}],mats.leather,30));
+    torso.add(panel(0.05,0.04,0.02,mats.trim,0,0.02,0.098));
+    if(kit==="plate"){
+      /* cuirass front plate w/ center ridge */
+      torso.add(Loft([{y:0.06,rx:0.118*th,rz:0.02,z:0.092},{y:chestRel,rx:0.155*th,rz:0.028,z:0.1},{y:shRel-0.05,rx:0.135*th,rz:0.022,z:0.09}],mats.armorHi,26));
+      torso.add(panel(0.016,0.36,0.02,mats.trim,0,chestRel-0.05,0.128,0.06,0,0));
+      /* abdomen lames */
+      [0.09,0.155].forEach(function(y){ torso.add(Loft([{y:y-0.025,rx:0.128*th,rz:0.086},{y:y+0.005,rx:0.133*th,rz:0.09}],mats.armorDk,26)); });
+      /* pauldrons — layered, ON the shoulders (skip when an armor item overlays its own) */
+      if(!(spec.equipped&&spec.equipped.armor)) [-1,1].forEach(function(sg){
+        var sp=new THREE.Group(); sp.position.set(P.shoulderW*sg,shRel+0.015,0);
+        sp.add(Ball(0.092*th,0.062,0.088,mats.armorHi,0,0.012,0,20));
+        sp.add(Loft([{y:-0.045,rx:0.088*th,rz:0.082},{y:-0.004,rx:0.098*th,rz:0.088}],mats.armor,18));
+        sp.add(Loft([{y:-0.085,rx:0.075*th,rz:0.072},{y:-0.045,rx:0.086*th,rz:0.079}],mats.armorDk,16));
+        sp.add(Ball(0.016,0.016,0.016,mats.trim,0,0.062,0.018,10));
+        torso.add(sp);
+      });
+      /* tassets on the hips + a center fauld plate */
+      [-1,1].forEach(function(sg){
+        var tas=panel(0.075*th,0.125,0.018,mats.armor,0.125*th*sg,-0.055,0.03,0.15,0.55*sg,-0.1*sg);
+        torso.add(tas);
+        torso.add(panel(0.05*th,0.09,0.014,mats.armorDk,0.15*th*sg,-0.09,-0.01,0.15,0.9*sg,-0.2*sg));
+      });
+      torso.add(panel(0.07*th,0.1,0.016,mats.armorHi,0,-0.075,0.088,0.22,0,0));
+      torso.add(panel(0.02,0.08,0.018,mats.trim,0,-0.07,0.096,0.22,0,0));
+    } else if(kit==="robe"){
+      /* long skirt from waist to near ground */
+      var skirt=Loft([
+        {y:-P.waistY+0.06,rx:0.24*th,rz:0.2},
+        {y:-P.waistY+0.45,rx:0.19*th,rz:0.15},
+        {y:-0.02,rx:0.135*th,rz:0.09}
+      ],mats.cloth,30); torso.add(skirt); torso.userData.skirt=skirt; rig.userData.robed=true;
+      torso.add(Loft([{y:-P.waistY+0.055,rx:0.242*th,rz:0.202},{y:-P.waistY+0.2,rx:0.215*th,rz:0.175}],mats.clothDk,30));
+      /* sash */
+      var sash=seg3([-0.1*th,0.06,0.09],[0.12*th,-P.waistY+0.62,0.12],0.024,0.03,mats.clothHi,12); torso.add(sash);
+      /* rune trim */
+      torso.add(torus(0.152*th,0.007,mats.trimGlow,0,chestRel-0.06,0.01,HPI*0.88,0,0));
+      /* shoulder mantle */
+      torso.add(Loft([{y:shRel-0.09,rx:0.2*th,rz:0.13},{y:shRel+0.02,rx:0.145*th,rz:0.095},{y:shRel+0.06,rx:0.1*th,rz:0.075}],mats.clothDk,26));
+    } else if(kit==="doublet"){
+      /* bard: fitted doublet with button line + half cape */
+      torso.add(Loft([{y:0.05,rx:0.128*th,rz:0.087,z:0.01},{y:chestRel,rx:0.162*th,rz:0.1,z:0.012},{y:shRel-0.06,rx:0.15*th,rz:0.095,z:0.008}],mats.clothHi,28));
+      for(var b=0;b<4;b++){ torso.add(Ball(0.008,0.008,0.006,mats.trim,0.012,0.09+b*0.075,0.105+b*0.004,8)); }
+      torso.add(seg3([-0.02,shRel-0.02,0.09],[-0.14*th,0.05,0.1],0.008,0.008,mats.leather,8)); /* strap for lute */
+      var cape=Loft([{y:-0.15,rx:0.19*th,rz:0.05,x:0.12*th,z:-0.1},{y:shRel-0.04,rx:0.12*th,rz:0.03,x:0.09*th,z:-0.08}],mats.cloak,16);
+      torso.add(cape);
+    } else if(kit==="shade"){
+      /* rogue: layered dark wraps + scarf + crossed belts */
+      torso.add(Loft([{y:0.06,rx:0.127*th,rz:0.086},{y:chestRel+0.02,rx:0.165*th,rz:0.102},{y:shRel-0.04,rx:0.14*th,rz:0.09}],mats.clothDk,28));
+      torso.add(Loft([{y:shRel-0.06,rx:0.15*th,rz:0.1},{y:shRel+0.045,rx:0.11*th,rz:0.085}],mats.cloth,22)); /* scarf collar */
+      torso.add(seg3([-0.13*th,shRel-0.08,0.06],[0.12*th,0.03,0.1],0.009,0.009,mats.leather,10));
+      torso.add(seg3([0.13*th,shRel-0.08,0.06],[-0.12*th,0.03,0.1],0.009,0.009,mats.leather,10));
+      torso.add(panel(0.03,0.03,0.014,mats.trim,0,chestRel-0.12,0.108,0,0,0.78));
+      /* thigh pouch */
+      rig.add(panel(0.05,0.06,0.03,mats.leather,P.legSpread+0.05,P.hipY-0.12,0.03,0,0,-0.06));
+    } else if(kit==="wraps"){
+      torso.add(Loft([{y:0.05,rx:0.126*th,rz:0.085},{y:chestRel,rx:0.16*th,rz:0.1},{y:shRel-0.05,rx:0.135*th,rz:0.088}],mats.clothHi,28));
+      [0.1,0.2,0.3].forEach(function(y){ torso.add(torus(0.145*th,0.008,mats.cloth,0,y,0,HPI*0.94,0,0.2)); });
+      /* prayer beads */
+      for(var i=0;i<9;i++){ var a=-0.8+i*0.2; torso.add(Ball(0.014,0.014,0.014,i%3?mats.leather:mats.trim,Math.sin(a)*0.13*th,chestRel-0.06-Math.abs(Math.cos(a))*0.05,0.1+Math.cos(a)*0.02,8)); }
+    } else { /* leathers — ranger/druid */
+      torso.add(Loft([{y:0.05,rx:0.13*th,rz:0.088,z:0.005},{y:chestRel,rx:0.165*th,rz:0.103,z:0.006},{y:shRel-0.05,rx:0.142*th,rz:0.09,z:0.004}],mats.leather,28));
+      /* stitched panels + studs */
+      [-1,1].forEach(function(sg){
+        torso.add(seg3([0.1*th*sg,0.08,0.095],[0.085*th*sg,chestRel+0.04,0.1],0.004,0.004,mats.leatherHi,6));
+        for(var s2=0;s2<3;s2++){ torso.add(Ball(0.006,0.006,0.004,mats.trim,0.115*th*sg,0.12+s2*0.1,0.1,6)); }
+      });
+      /* hood down behind neck */
+      torso.add(Loft([{y:shRel-0.06,rx:0.13*th,rz:0.06,z:-0.08},{y:shRel+0.03,rx:0.1*th,rz:0.05,z:-0.11},{y:shRel+0.08,rx:0.05,rz:0.03,z:-0.13}],mats.cloth,18));
+      /* shoulder wrap */
+      torso.add(Loft([{y:shRel-0.03,rx:0.185*th,rz:0.12},{y:shRel+0.04,rx:0.12*th,rz:0.08}],mats.clothDk,22));
+    }
+    /* cloak for classes with capes (or armor equipped) */
+    var wantCloak=(kit==="plate"||kit==="robe"||!!(spec.equipped&&spec.equipped.armor));
+    if(wantCloak&&spec.colors.cloak){
+      var ck=Loft([
+        {y:-P.waistY+0.12,rx:0.26*th,rz:0.045,z:-0.1},
+        {y:-P.waistY+0.7,rx:0.24*th,rz:0.05,z:-0.13},
+        {y:chestRel+0.02,rx:0.19*th,rz:0.04,z:-0.115},
+        {y:shRel+0.01,rx:0.12*th,rz:0.03,z:-0.075}
+      ],mats.cloak,24);
+      torso.add(ck); rig.userData.cloak=ck;
+      [-1,1].forEach(function(sg){ torso.add(Ball(0.018,0.018,0.014,mats.trim,0.1*th*sg,shRel-0.005,0.075,10)); });
+      torso.add(seg3([-0.1*th,shRel-0.005,0.08],[0.1*th,shRel-0.005,0.08],0.006,0.006,mats.trim,8));
+    }
+  }
+
+  /* ---------------- race body extras ---------------- */
+  function addRaceBody(rig, mats, spec, race, P, th){
+    if(/beastfolk|cat|wolf/.test(race)){
+      var tail=new THREE.Group(); tail.position.set(0,P.hipY+0.02,-0.1);
+      var pts=[[0,0,0],[0.02,-0.12,-0.14],[0.01,-0.05,-0.3],[0,0.12,-0.42]];
+      for(var i=0;i<pts.length-1;i++){ tail.add(seg3(pts[i],pts[i+1],0.028-i*0.005,0.024-i*0.005,mats.hair,12)); tail.add(joint(pts[i+1],0.024-i*0.005,mats.hair)); }
+      if(/cat/.test(race)) tail.add(Ball(0.02,0.03,0.02,mats.hairDk,0,0.13,-0.43,10));
+      else tail.add(Ball(0.034,0.05,0.034,mats.hairDk,0,0.13,-0.43,10));
+      rig.add(tail); rig.userData.tail=tail;
+      /* neck ruff */
+      rig.add(Loft([{y:P.shoulderY-0.03,rx:0.15*th,rz:0.1},{y:P.shoulderY+0.05,rx:0.11*th,rz:0.08}],mats.hair,20));
+    }
+    if(/lizard/.test(race)){
+      var ltail=new THREE.Group(); ltail.position.set(0,P.hipY-0.02,-0.08);
+      var lp=[[0,0,0],[0,-0.16,-0.16],[0,-0.3,-0.34],[0,-0.36,-0.52]];
+      for(var j=0;j<lp.length-1;j++){ ltail.add(seg3(lp[j],lp[j+1],0.05-j*0.013,0.038-j*0.013,mats.skin,12)); }
+      rig.add(ltail); rig.userData.tail=ltail;
+      for(var k2=0;k2<4;k2++){ rig.add(cone(0.016,0.05,mats.trimGlow,0,P.hipY-0.02-k2*0.09,-0.12-k2*0.11,-0.6,0,0,4)); }
+    }
+    if(/demon/.test(race)){
+      var dt=new THREE.Group(); dt.position.set(0,P.hipY-0.01,-0.09);
+      var dp=[[0,0,0],[0.04,-0.18,-0.14],[0.02,-0.3,-0.3],[-0.02,-0.22,-0.44]];
+      for(var d=0;d<dp.length-1;d++){ dt.add(seg3(dp[d],dp[d+1],0.02-d*0.004,0.016-d*0.004,mats.skinDk,10)); }
+      var spade=cone(0.03,0.06,mats.skinDk,-0.03,-0.2,-0.47,0.7,0,0,4); spade.scale.z=0.4; dt.add(spade);
+      rig.add(dt); rig.userData.tail=dt;
+    }
+    if(/fae/.test(race)){
+      var wm=new THREE.MeshStandardMaterial({ color:col(spec.colors.accent,"#a5f3fc"), roughness:0.2, metalness:0.05, transparent:true, opacity:0.42, side:THREE.DoubleSide, emissive:col(spec.colors.accent,"#a5f3fc").multiplyScalar(0.3) }); R.disposables.push(wm);
+      rig.userData.wings=[];
+      [-1,1].forEach(function(sg){
+        var wg=new THREE.Group(); wg.position.set(0.05*sg,P.shoulderY-0.04,-0.1);
+        var upper=new THREE.Mesh(loftGeometry([{y:0,rx:0.02,rz:0.01},{y:0.16,rx:0.14,rz:0.02,x:0.12*sg},{y:0.3,rx:0.05,rz:0.01,x:0.22*sg}],14),wm); R.disposables.push(upper.geometry);
+        upper.castShadow=true; wg.add(upper);
+        var lower=new THREE.Mesh(loftGeometry([{y:0,rx:0.02,rz:0.01},{y:-0.14,rx:0.1,rz:0.016,x:0.1*sg},{y:-0.24,rx:0.03,rz:0.008,x:0.16*sg}],12),wm); R.disposables.push(lower.geometry);
+        lower.castShadow=true; wg.add(lower);
+        wg.rotation.y=0.5*sg; wg.rotation.x=0.18; wg.scale.setScalar(0.9); rig.add(wg); rig.userData.wings.push(wg);
+      });
+    }
+  }
+
+  /* ---------------- equipped gear ---------------- */
   function weaponKind(id){
     id=String(id||"").toLowerCase();
-    if (/staff|scepter|orb|lute|quill/.test(id)) return "staff";
-    if (/hammer|pick|axe|cudgel/.test(id)) return "heavy";
-    if (/bow|boomerang|compass|trident/.test(id)) return "ranged";
-    if (/dagger|dual|blade|sword|shortsword|chronoblade|voidblade/.test(id)) return "blade";
-    return "blade";
+    if (/axe/.test(id)) return "axe";
+    if (/greatsword|claymore|sunder/.test(id)) return "great";
+    if (/scythe/.test(id)) return "scythe";
+    if (/spear|lance|trident|halberd|glaive|pike/.test(id)) return "spear";
+    if (/hammer|maul|mace|cudgel|pick/.test(id)) return "heavy";
+    if (/bow/.test(id)) return "bow";
+    if (/staff|scepter|rod|quill/.test(id)) return "staff";
+    if (/wand/.test(id)) return "wand";
+    if (/orb|crystal ball|seer/.test(id)) return "orb";
+    if (/lute|harp|lyre/.test(id)) return "lute";
+    if (/tome|book|grimoire/.test(id)) return "tome";
+    if (/dagger|shiv|knife/.test(id)) return "dagger";
+    if (/dual/.test(id)) return "dual";
+    return "sword";
   }
-  function addWeapon(armR, spec, mats){
-    var w=spec.equipped&&spec.equipped.weapon; if(!armR||!w) return;
-    var metal=gMetal(w,"#dde7f2"), gem=gGem(w,"#9fd8ff"); var s=new THREE.Group(), kind=weaponKind(w.id), txt=gText(w);
-    var grip=M(new THREE.CylinderGeometry(0.024,0.024,0.2,8), mats.leather); grip.position.y=-0.02; s.add(grip);
-    if (kind==="staff"){
-      var staff=M(new THREE.CylinderGeometry(0.02,0.02,0.94,10), mats.leather); staff.position.y=0.36; s.add(staff);
-      var orb=M(new THREE.SphereGeometry(/orb/.test(txt)?0.095:0.075,20,16), gem); orb.position.y=0.86; s.add(orb);
-      var halo=M(new THREE.TorusGeometry(0.11,0.008,8,30), metal); halo.position.y=0.86; halo.rotation.x=Math.PI/2; s.add(halo);
-      if (/lute/.test(txt)){ var lute=M(new THREE.SphereGeometry(0.1,18,12), metal); lute.position.set(0.09,0.35,0.02); lute.scale.set(0.75,1.1,0.25); s.add(lute); }
-    } else if (kind==="heavy"){
-      var haft=M(new THREE.CylinderGeometry(0.02,0.024,0.72,8), mats.leather); haft.position.y=0.3; s.add(haft);
-      var head=M(new THREE.BoxGeometry(/axe/.test(txt)?0.11:0.22,0.14,0.12), metal); head.position.y=0.66; head.rotation.z=/axe/.test(txt)?0.32:0.08; s.add(head);
-      if (/axe/.test(txt)){ var axe=M(new THREE.ConeGeometry(0.14,0.2,4), metal); axe.position.set(0.09,0.66,0); axe.rotation.z=-Math.PI/2; s.add(axe); }
-      var spike=M(new THREE.ConeGeometry(0.05,0.15,6), gem); spike.position.y=0.79; s.add(spike);
-    } else if (kind==="ranged"){
-      var bow=M(new THREE.TorusGeometry(0.25,0.012,8,36,Math.PI*1.22), metal); bow.position.y=0.42; bow.rotation.z=Math.PI/2.15; s.add(bow);
-      var string=M(new THREE.CylinderGeometry(0.004,0.004,0.52,5), mats.energy); string.position.y=0.36; string.position.x=-0.12; s.add(string);
-      var arrow=M(new THREE.CylinderGeometry(0.007,0.007,0.48,6), gem); arrow.position.y=0.36; arrow.rotation.z=Math.PI/2; s.add(arrow);
-      if (/trident/.test(txt)){ for(var pr=-1;pr<=1;pr++){ var tine=M(new THREE.ConeGeometry(0.02,0.14,5), metal); tine.position.set(pr*0.045,0.83,0); s.add(tine); } }
-    } else {
-      var short=/dual|dagger|short/.test(txt);
-      var blade=M(new THREE.CylinderGeometry(0.018,short?0.036:0.048,short?0.48:0.68,4), metal); blade.position.y=short?0.32:0.42; blade.rotation.y=Math.PI/4; s.add(blade);
-      var tip=M(new THREE.ConeGeometry(short?0.036:0.048,0.13,4), metal); tip.position.y=short?0.59:0.78; tip.rotation.y=Math.PI/4; s.add(tip);
-      var guard=M(new THREE.BoxGeometry(short?0.16:0.25,0.04,0.05), mats.trim); guard.position.y=0.08; s.add(guard);
-      if (/dual/.test(txt)){ var off=blade.clone(); off.position.x=-0.065; off.position.y=0.29; off.scale.setScalar(0.72); s.add(off); var offTip=tip.clone(); offTip.position.x=-0.065; offTip.position.y=0.49; offTip.scale.setScalar(0.72); s.add(offTip); }
+  function mkBlade(metal, gem, mats, len, wide){
+    var s=new THREE.Group();
+    var bl=Loft([{y:0,rx:wide,rz:0.008},{y:len*0.75,rx:wide*0.92,rz:0.007},{y:len,rx:0.004,rz:0.002}],metal,10);
+    s.add(bl);
+    s.add(panel(0.006,len*0.72,0.004,mats.dark,0,len*0.38,0)); /* fuller */
+    var guard=panel(wide*4.6,0.022,0.03,mats.trim,0,-0.012,0);
+    guard.add(Ball(0.014,0.014,0.014,gem,wide*2.3,0,0,8)); guard.add(Ball(0.014,0.014,0.014,gem,-wide*2.3,0,0,8));
+    s.add(guard);
+    var grip=seg3([0,-0.03,0],[0,-0.15,0],0.014,0.016,mats.leather,10); s.add(grip);
+    for(var i2=0;i2<3;i2++){ s.add(torus(0.016,0.003,mats.trim,0,-0.05-i2*0.033,0,HPI,0,0)); }
+    s.add(Ball(0.022,0.026,0.022,gem,0,-0.175,0,10));
+    return s;
+  }
+  function addWeapon(rig, spec, mats, P){
+    var w=spec.equipped&&spec.equipped.weapon; if(!w) return;
+    var armR=rig.userData.armR, armL=rig.userData.armL; if(!armR) return;
+    var metal=gMetal(w,"#dde7f2"), gem=gGem(w,"#9fd8ff"), kind=weaponKind(gText(w));
+    var handR=armR.userData.hand, handL=armL&&armL.userData.hand;
+    function grip(group, hand, rx){
+      var side=(hand===handL)?-1:1;
+      group.rotation.x=(rx===undefined?-0.42:rx); group.rotation.z=-0.3*side;
+      group.position.set(0.008*side,-0.05,0.032); hand.add(group);
     }
-    var pom=M(new THREE.SphereGeometry(0.035,10,8), gem); pom.position.y=-0.11; s.add(pom);
-    s.position.set(0,-0.66,0.04); s.rotation.x=-0.12; armR.add(s);
+    if(kind==="sword"){ grip(mkBlade(metal,gem,mats,0.62,0.02), handR); }
+    else if(kind==="great"){ var g2=mkBlade(metal,gem,mats,0.85,0.03); g2.scale.setScalar(1.05); grip(g2,handR,-0.2); }
+    else if(kind==="dagger"){ var dg=mkBlade(metal,gem,mats,0.3,0.016); grip(dg,handR,0.6); }
+    else if(kind==="dual"){ grip(mkBlade(metal,gem,mats,0.44,0.017),handR); if(handL){ var off=mkBlade(metal,gem,mats,0.44,0.017); grip(off,handL); } }
+    else if(kind==="axe"){
+      var ax=new THREE.Group();
+      ax.add(seg3([0,-0.16,0],[0,0.55,0],0.015,0.013,mats.leather,10));
+      var head=Loft([{y:0,rx:0.03,rz:0.02},{y:0.09,rx:0.16,rz:0.014},{y:0.18,rx:0.03,rz:0.02}],metal,12);
+      head.rotation.z=-HPI; head.position.set(0.055,0.42,0); ax.add(head);
+      ax.add(Ball(0.024,0.024,0.02,gem,-0.02,0.42,0,10));
+      ax.add(cone(0.02,0.07,metal,0,0.6,0,0,0,0,6));
+      [0.05,0.12].forEach(function(y){ ax.add(torus(0.017,0.004,mats.trim,0,y,0,HPI,0,0)); });
+      grip(ax,handR,-0.2);
+    }
+    else if(kind==="heavy"){
+      var hm2=new THREE.Group();
+      hm2.add(seg3([0,-0.16,0],[0,0.5,0],0.016,0.014,mats.leather,10));
+      hm2.add(panel(0.19,0.11,0.11,metal,0,0.46,0));
+      hm2.add(Ball(0.03,0.03,0.03,gem,0,0.46,0.062,10));
+      [-1,1].forEach(function(sg){ hm2.add(torus(0.045,0.008,mats.trim,0.095*sg,0.46,0,0,HPI,0)); });
+      grip(hm2,handR,-0.2);
+    }
+    else if(kind==="spear"){
+      var sp2=new THREE.Group();
+      sp2.add(seg3([0,-0.35,0],[0,0.75,0],0.012,0.011,mats.leather,10));
+      sp2.add(cone(0.032,0.16,metal,0,0.84,0,0,0,0,8));
+      sp2.add(Ball(0.02,0.02,0.02,gem,0,0.74,0,8));
+      sp2.add(torus(0.014,0.004,mats.trim,0,0.7,0,HPI,0,0));
+      grip(sp2,handR,-0.12);
+    }
+    else if(kind==="scythe"){
+      var sc=new THREE.Group();
+      sc.add(seg3([0,-0.35,0],[0,0.75,0],0.013,0.011,mats.leather,10));
+      sc.add(torus(0.015,0.005,mats.trim,0,0.4,0,HPI,0,0));
+      sc.add(Ball(0.022,0.022,0.022,gem,0,0.76,0,10));
+      /* curved blade: tapered chords sweeping out and down from the shaft top */
+      var bl=[[0,0.75,0],[0.13,0.735,0],[0.24,0.67,0],[0.31,0.56,0],[0.33,0.44,0]];
+      for(var sci=0;sci<bl.length-1;sci++){ sc.add(seg3(bl[sci],bl[sci+1],0.026-sci*0.005,0.02-sci*0.005,metal,8)); }
+      sc.add(cone(0.014,0.06,metal,0.335,0.4,0,Math.PI,0,0,5));
+      sc.add(cone(0.012,0.07,metal,-0.05,0.75,0,0,0,1.9,5)); /* back spike */
+      grip(sc,handR,-0.15);
+    }
+    else if(kind==="bow"){
+      if(handL){
+        var bw2=new THREE.Group();
+        /* recurve limbs built from segments: grip at origin, tips at ±0.34 */
+        var lim=[[0,0.03,0],[0.012,0.14,0.02],[0.0,0.26,0.045],[-0.02,0.34,0.03]];
+        for(var bi2=0;bi2<lim.length-1;bi2++){
+          bw2.add(seg3(lim[bi2],lim[bi2+1],0.011-bi2*0.002,0.009-bi2*0.002,metal,8));
+          var mirA=[lim[bi2][0],-lim[bi2][1],lim[bi2][2]], mirB=[lim[bi2+1][0],-lim[bi2+1][1],lim[bi2+1][2]];
+          bw2.add(seg3(mirA,mirB,0.011-bi2*0.002,0.009-bi2*0.002,metal,8));
+        }
+        bw2.add(seg3([-0.02,0.34,0.03],[-0.02,-0.34,0.03],0.0022,0.0022,mats.eyeWhite,4)); /* string */
+        bw2.add(seg3([0,-0.035,0],[0,0.035,0],0.014,0.014,mats.leather,10)); /* grip wrap */
+        bw2.add(Ball(0.012,0.012,0.012,gem,0,0.0,0.012,8));
+        bw2.rotation.set(-0.15,0.35,0); bw2.position.set(-0.01,-0.055,0.035); handL.add(bw2);
+      }
+      var qv=new THREE.Group(); qv.position.set(-0.08,P.chestY,-0.13); qv.rotation.z=-0.35;
+      qv.add(seg3([0,-0.16,0],[0,0.16,0],0.045,0.05,mats.leather,12));
+      for(var a2=0;a2<3;a2++){ qv.add(seg3([-0.02+a2*0.02,0.1,0],[-0.02+a2*0.02,0.3,0],0.004,0.004,metal,5)); qv.add(cone(0.012,0.03,gem,-0.02+a2*0.02,0.32,0,0,0,0,4)); }
+      rig.add(qv);
+    }
+    else if(kind==="staff"){
+      var st=new THREE.Group();
+      st.add(seg3([0,-0.5,0],[0,0.62,0],0.014,0.011,mats.leather,12));
+      var claw=Loft([{y:0.6,rx:0.02,rz:0.02},{y:0.68,rx:0.05,rz:0.05},{y:0.76,rx:0.028,rz:0.028}],metal,10); st.add(claw);
+      st.add(Ball(0.05,0.05,0.05,gem,0,0.76,0,16));
+      var ring1=torus(0.075,0.005,metal,0,0.76,0,0.4,0,0); st.add(ring1); st.userData.spin=ring1;
+      st.add(torus(0.016,0.005,mats.trim,0,0.5,0,HPI,0,0));
+      grip(st,handR,-0.08);
+    }
+    else if(kind==="wand"){
+      var wd=new THREE.Group();
+      wd.add(seg3([0,-0.08,0],[0,0.22,0],0.009,0.006,mats.leather,8));
+      wd.add(Ball(0.02,0.02,0.02,gem,0,0.25,0,10));
+      [-1,1].forEach(function(sg){ wd.add(cone(0.007,0.03,metal,0.017*sg,0.24,0,0,0,-0.7*sg,4)); });
+      grip(wd,handR,0.2);
+    }
+    else if(kind==="orb"){
+      var obHand=handL||handR;
+      var ob=new THREE.Group(); ob.add(Ball(0.055,0.055,0.055,gem,0,0,0,20)); ob.add(torus(0.075,0.005,metal,0,0,0,0.6,0,0));
+      ob.position.set(0,-0.14,0.05); obHand.add(ob);
+    }
+    else if(kind==="lute"){
+      var lu=new THREE.Group();
+      lu.add(Ball(0.09,0.12,0.035,mats.leatherHi,0,0,0,18));
+      lu.add(Ball(0.045,0.045,0.02,mats.dark,0,0.03,0.03,12));
+      lu.add(seg3([0,0.1,0.01],[0,0.34,0.02],0.014,0.012,mats.leather,8));
+      lu.add(panel(0.045,0.05,0.02,mats.leather,0,0.36,0.02,0.15,0,0));
+      for(var st2=0;st2<4;st2++){ lu.add(seg3([-0.012+st2*0.008,-0.05,0.037],[-0.012+st2*0.008,0.33,0.026],0.0012,0.0012,mats.eyeWhite,3)); }
+      lu.rotation.set(-0.3,0.2,-0.5); lu.position.set(0,-0.06,0.05); handR.add(lu);
+    }
+    else if(kind==="tome"){
+      if(handL){
+        var tm=new THREE.Group();
+        tm.add(panel(0.11,0.016,0.14,mats.leather,0,0,0));
+        tm.add(panel(0.05,0.01,0.13,mats.eyeWhite,-0.026,0.012,0,0,0,0.06));
+        tm.add(panel(0.05,0.01,0.13,mats.eyeWhite,0.026,0.012,0,0,0,-0.06));
+        tm.add(Ball(0.012,0.012,0.012,gem,0,0.02,0,8));
+        tm.rotation.set(-0.5,0,0); tm.position.set(0,-0.1,0.06); handL.add(tm);
+      }
+      var tw=mkBlade(metal,gem,mats,0.4,0.016); grip(tw,handR);
+    }
+    /* tier sparkle on mythic/legendary */
+    if((w.glow||0)>=4&&R.heroRig!==null){ /* aura handled by pedestal ring */ }
   }
   function addHelmetGear(headG, spec, mats, HR){
-    var g=spec.equipped&&spec.equipped.helmet; if(!g) return; var metal=gMetal(g,"#f6cb6e"), gem=gGem(g,"#38bdf8"), txt=gText(g);
-    if (/crown/.test(txt)){ var base=M(new THREE.CylinderGeometry(HR*0.92,HR*0.98,0.05,14,1,true), metal); base.position.y=HR*0.7; headG.add(base);
-      for(var i=0;i<7;i++){ var a=(i/7)*Math.PI*2; var sp=M(new THREE.ConeGeometry(0.03,0.11,4), metal); sp.position.set(Math.cos(a)*HR*0.92,HR*0.82,Math.sin(a)*HR*0.92); headG.add(sp); }
-      var jew=M(new THREE.OctahedronGeometry(0.045,0), gem); jew.position.set(0,HR*0.78,HR*0.92); headG.add(jew);
-    } else if (/hood|hide|leather/.test(txt)) {
-      var hood=gCloth(g,"#475569");
-      var cap=M(new THREE.SphereGeometry(HR*1.14,24,18,0,Math.PI*2,0,Math.PI*0.68), hood); cap.position.y=HR*0.08; cap.scale.set(1.06,1.08,1.12); headG.add(cap);
-      var brow=M(new THREE.TorusGeometry(HR*0.86,0.018,8,26), metal); brow.rotation.x=Math.PI/2; brow.position.y=HR*0.2; headG.add(brow);
-      var tail=M(new THREE.CapsuleGeometry(0.038,0.22,6,10), hood); tail.position.set(0,HR*0.28,-HR*0.92); tail.rotation.x=0.7; headG.add(tail);
-    } else {
-      var ring=M(new THREE.TorusGeometry(HR*0.95,0.022,8,28), metal); ring.rotation.x=Math.PI/2; ring.position.y=HR*0.6; headG.add(ring);
-      var brow=M(new THREE.BoxGeometry(HR*1.18,0.036,0.042), metal); brow.position.set(0,HR*0.14,HR*0.92); brow.rotation.x=-0.1; headG.add(brow);
-      var cheekL=M(new THREE.BoxGeometry(0.035,0.16,0.045), metal); cheekL.position.set(-HR*0.63,-HR*0.05,HR*0.84); cheekL.rotation.z=-0.12; headG.add(cheekL);
-      var cheekR=cheekL.clone(); cheekR.position.x=HR*0.63; cheekR.rotation.z=0.12; headG.add(cheekR);
-      var crest=M(new THREE.ConeGeometry(0.052,0.16,6), gem); crest.position.set(0,HR*0.86,HR*0.2); crest.rotation.x=-0.22; headG.add(crest);
-      if (/war|resolve|helm/.test(txt)){ [-1,1].forEach(function(sg){ var horn=M(new THREE.ConeGeometry(0.035,0.17,7), metal); horn.position.set(HR*0.72*sg,HR*0.55,0); horn.rotation.z=-0.7*sg; headG.add(horn); }); }
+    var g=spec.equipped&&spec.equipped.helmet; if(!g) return;
+    var metal=gMetal(g,"#f6cb6e"), gem=gGem(g,"#38bdf8"), txt=gText(g);
+    if(/halo/.test(txt)){
+      var halo=M(new THREE.TorusGeometry(HR*1.05,0.012,10,44), gGem(g,"#fde68a")); halo.rotation.x=HPI*0.94; halo.position.y=HR*1.45; headG.add(halo); headG.userData.halo=halo; return;
+    }
+    if(/crown/.test(txt)){
+      var band=Loft([{y:HR*0.58,rx:HR*0.98,rz:HR*0.94},{y:HR*0.8,rx:HR*0.92,rz:HR*0.88}],metal,20);
+      headG.add(band);
+      for(var i=0;i<6;i++){ var a=(i/6)*TAU+0.5; headG.add(cone(0.017,0.06,metal,Math.cos(a)*HR*0.9,HR*0.9,Math.sin(a)*HR*0.86,0,0,0,4)); }
+      headG.add(Ball(0.02,0.026,0.013,gem,0,HR*0.72,HR*0.92,10));
+      return;
+    }
+    if(/circlet|tiara|tome/.test(txt)){
+      headG.add(torus(HR*0.9,0.009,metal,0,HR*0.42,0,HPI*0.88,0,0));
+      headG.add(Ball(0.018,0.022,0.012,gem,0,HR*0.5,HR*0.84,10));
+      return;
+    }
+    if(/hood|hide|leather|cowl/.test(txt)){
+      var hm2=gCloth(g,"#475569");
+      headG.add(Loft([
+        {y:-HR*0.3,rx:HR*1.02,rz:HR*1.0,z:-HR*0.1},
+        {y:HR*0.3,rx:HR*1.05,rz:HR*1.02,z:-HR*0.12},
+        {y:HR*0.85,rx:HR*0.72,rz:HR*0.7,z:-HR*0.2},
+        {y:HR*1.1,rx:HR*0.2,rz:HR*0.24,z:-HR*0.38}
+      ],hm2,22));
+      headG.add(torus(HR*0.95,0.014,metal,0,HR*0.16,0,HPI*0.8,0,0));
+      return;
+    }
+    if(/greathelm|closed|visor|war/.test(txt)){
+      headG.add(Loft([
+        {y:-HR*0.55,rx:HR*0.98,rz:HR*0.95},
+        {y:HR*0.2,rx:HR*1.02,rz:HR*0.98},
+        {y:HR*0.75,rx:HR*0.8,rz:HR*0.78},
+        {y:HR*1.02,rx:HR*0.2,rz:HR*0.2}
+      ],metal,24));
+      headG.add(panel(HR*1.2,0.022,0.03,mats.dark,0,HR*0.1,HR*0.9));
+      headG.add(panel(0.02,HR*0.9,0.03,gem,0,HR*0.62,HR*0.86,-0.15,0,0));
+      [-1,1].forEach(function(sg){ headG.add(cone(0.024,0.12,metal,HR*0.8*sg,HR*0.75,0,0,0,-0.5*sg,6)); });
+      return;
+    }
+    /* default: open helm band + crest */
+    headG.add(Loft([{y:HR*0.34,rx:HR*0.98,rz:HR*0.95},{y:HR*0.66,rx:HR*0.88,rz:HR*0.85},{y:HR*0.95,rx:HR*0.4,rz:HR*0.4}],metal,22));
+    headG.add(panel(HR*1.1,0.03,0.035,metal,0,HR*0.28,HR*0.8,-0.12,0,0));
+    headG.add(cone(0.03,0.1,gem,0,HR*1.05,-HR*0.05,-0.2,0,0,6));
+  }
+  function addArmorGear(rig, spec, mats, torso, P, th){
+    var a=spec.equipped&&spec.equipped.armor; if(!a) return;
+    var txt=gText(a), light=/leather|hide|vest|mantle|coinweave|velvet|robe|cloak|tunic/.test(txt)&&!/plate|war|iron|steel/.test(txt);
+    var metal=light?gCloth(a,"#64748b"):gMetal(a,"#dde7f2"), gem=gGem(a,"#9fd8ff");
+    var shRel=P.shoulderY-P.waistY, chestRel=P.chestY-P.waistY;
+    /* overlay cuirass hugging the torso silhouette */
+    torso.add(Loft([
+      {y:0.055,rx:0.134*th,rz:0.092,z:0.006},
+      {y:chestRel,rx:0.174*th,rz:0.112,z:0.007},
+      {y:shRel-0.04,rx:0.15*th,rz:0.098,z:0.005}
+    ],metal,30));
+    torso.add(Ball(0.03,0.038,0.016,gem,0,chestRel-0.02,0.115,12));
+    [-1,1].forEach(function(sg){
+      /* pauldron overlay at the shoulder joints */
+      var sp=new THREE.Group(); sp.position.set(P.shoulderW*sg,shRel+0.012,0);
+      sp.add(Ball(0.096*th,0.066,0.09,metal,0,0.008,0,20));
+      sp.add(Loft([{y:-0.052,rx:0.088*th,rz:0.082},{y:-0.008,rx:0.099*th,rz:0.09}],light?mats.leather:mats.armorDk,16));
+      sp.add(Ball(0.015,0.015,0.015,gem,0,0.058,0.026,8));
+      torso.add(sp);
+      torso.add(seg3([0.115*th*sg,0.08,0.09],[0.1*th*sg,chestRel+0.03,0.1],0.0035,0.0035,light?mats.leatherHi:mats.trim,6));
+    });
+    if(/moon|mythic|legend|astral|void/.test(txt)){
+      var glowm=new THREE.MeshStandardMaterial({ color:col(a.gem,"#c4b5fd"), roughness:0.2, metalness:0.4, emissive:col(a.gem,"#c4b5fd").multiplyScalar(0.5), transparent:true, opacity:0.9 }); R.disposables.push(glowm);
+      torso.add(torus(0.155*th,0.006,glowm,0,chestRel-0.06,0.02,HPI*0.92,0,0));
+      torso.add(torus(0.14*th,0.005,glowm,0,0.12,0.01,HPI*0.92,0,0));
     }
   }
-  function addArmorGear(rig, spec, mats, torso, bw){
-    var a=spec.equipped&&spec.equipped.armor; if(!a) return;
-    var txt=gText(a), light=/leather|hide|vest|mantle|coinweave|velvet|robe/.test(txt) && !/plate|war/.test(txt);
-    var metal=light?gCloth(a,"#64748b"):gMetal(a,"#dde7f2"), gem=gGem(a,"#9fd8ff");
-    var cuirass=M(new THREE.SphereGeometry(0.24*bw,26,18,0,Math.PI*2,0,Math.PI*0.68), metal); cuirass.position.set(0,0.01,0.13*bw); cuirass.scale.set(1.18,1.3,0.5); torso.add(cuirass);
-    var core=M(new THREE.OctahedronGeometry(0.058,0), gem); core.position.set(0,0.07,0.25*bw); torso.add(core);
-    [-1,1].forEach(function(sg){
-      var rib=M(new THREE.BoxGeometry(light?0.028:0.045,0.31,0.035), light?mats.leather:metal); rib.position.set(0.1*sg,-0.02,0.24*bw); rib.rotation.z=0.26*sg; torso.add(rib);
-      var hip=M(new THREE.BoxGeometry(0.13,0.18,0.035), metal); hip.position.set(0.13*sg,-0.33,0.11*bw); hip.rotation.z=-0.18*sg; torso.add(hip);
-      var shoulder=M(new THREE.SphereGeometry(0.14*bw,18,14), metal); shoulder.position.set(0.34*sg,1.35,0.02); shoulder.scale.set(1.25,0.68,0.9); rig.add(shoulder);
-      var vam=M(new THREE.CapsuleGeometry(0.058,0.24,6,12), metal); vam.position.set(0.36*sg,0.84,0.08); vam.rotation.z=-0.28*sg; rig.add(vam);
-      var greave=M(new THREE.CapsuleGeometry(0.058,0.28,6,12), metal); greave.position.set(0.13*sg,0.25,0.05); rig.add(greave);
-      var buckle=M(new THREE.BoxGeometry(0.036,0.026,0.018), gem); buckle.position.set(0.16*sg,-0.21,0.255*bw); torso.add(buckle);
-    });
-    [-0.11,0,0.11].forEach(function(y){ var seam=M(new THREE.BoxGeometry(0.2*bw,0.012,0.014), light?mats.leather:mats.trim); seam.position.set(0,y,0.258*bw); torso.add(seam); });
-    if (/moon|mythic|legend|coin|velvet/.test(txt)){ var c=col(a.gem,"#c4b5fd"); var gm=new THREE.MeshStandardMaterial({ color:c, roughness:0.24, metalness:0.55, emissive:c.clone().multiplyScalar(0.48), envMapIntensity:1.18 }); R.disposables.push(gm); var v=M(new THREE.SphereGeometry(0.2*bw,22,16,0,Math.PI*2,0,Math.PI*0.6), gm); v.position.set(0,0.0,0.15*bw); v.scale.set(1,1.18,0.46); torso.add(v); }
-  }
-  function buildPet(spec){
-    var p=spec.equipped&&spec.equipped.pet; if(!p) return null; var g=new THREE.Group(); var c=col(p.gem,"#c084fc");
-    var bm=new THREE.MeshStandardMaterial({ color:c, roughness:0.5, metalness:0.2, emissive:c.clone().multiplyScalar(0.22) }); R.disposables.push(bm);
-    var body=M(new THREE.SphereGeometry(0.1,18,14), bm); g.add(body);
-    var e1=M(new THREE.ConeGeometry(0.03,0.06,5), bm); e1.position.set(-0.05,0.1,0); g.add(e1); var e2=e1.clone(); e2.position.x=0.05; g.add(e2);
-    var em=new THREE.MeshStandardMaterial({ color:0xfff3c4, emissive:0x886600, roughness:0.4 }); R.disposables.push(em);
-    var eL=M(new THREE.SphereGeometry(0.035,12,10), em); eL.position.set(-0.038,0.02,0.085); g.add(eL); var eR=eL.clone(); eR.position.x=0.038; g.add(eR);
-    g.scale.setScalar(0.95); return g;
+  function addClassSignature(rig, torso, headG, spec, mats, P, th, kit){
+    var key=String(spec.cls||"knight").toLowerCase(), shRel=P.shoulderY-P.waistY;
+    if(/monk/.test(key)){ var halo=torus(0.17,0.007,mats.energy,0,P.headY+P.HR*1.5,-0.02,HPI*0.94,0,0); rig.add(halo); }
+    else if(/alchemist/.test(key)){
+      var glass=new THREE.MeshStandardMaterial({ color:0x9ff3ff, roughness:0.08, transparent:true, opacity:0.6, emissive:0x11434f, envMapIntensity:1.4 }); R.disposables.push(glass);
+      [-1,0,1].forEach(function(n){ torso.add(seg3([n*0.055,0.04,0.1],[n*0.055,0.11,0.104],0.016,0.014,glass,8)); torso.add(Ball(0.012,0.01,0.012,mats.leather,n*0.055,0.115,0.104,6)); });
+    }
+    else if(/sentinel|guardian/.test(key)){
+      var sh=new THREE.Group(); sh.position.set(0,P.chestY-0.05,-0.16);
+      var face2=Loft([{y:-0.2,rx:0.13,rz:0.02},{y:0,rx:0.17,rz:0.03},{y:0.16,rx:0.14,rz:0.022}],mats.armorHi,14);
+      sh.add(face2); sh.add(Ball(0.035,0.035,0.02,mats.trim,0,0,0.03,10));
+      sh.rotation.x=0.12; rig.add(sh);
+    }
+    else if(/bard|minstrel/.test(key)){
+      if(!(spec.equipped&&spec.equipped.weapon&&/lute|harp/.test(gText(spec.equipped.weapon)))){
+        var lu=new THREE.Group(); lu.position.set(0.1,P.chestY-0.02,-0.15); lu.rotation.set(0.15,0.15,2.6);
+        lu.add(Ball(0.075,0.1,0.03,mats.leatherHi,0,0,0,16));
+        lu.add(Ball(0.036,0.036,0.016,mats.dark,0,0.025,0.026,10));
+        lu.add(seg3([0,0.08,0.008],[0,0.28,0.016],0.012,0.01,mats.leather,8));
+        for(var s3=0;s3<4;s3++){ lu.add(seg3([-0.01+s3*0.0068,-0.04,0.031],[-0.01+s3*0.0068,0.27,0.022],0.001,0.001,mats.eyeWhite,3)); }
+        rig.add(lu);
+      }
+      var hat=Loft([{y:0,rx:P.HR*1.15,rz:P.HR*1.1},{y:0.02,rx:P.HR*0.95,rz:P.HR*0.9},{y:0.1,rx:P.HR*0.72,rz:P.HR*0.68},{y:0.14,rx:P.HR*0.3,rz:P.HR*0.3}],mats.clothHi,20);
+      hat.position.y=P.headY+P.HR*0.62; hat.rotation.z=-0.1; rig.add(hat);
+      var feather=cone(0.02,0.16,mats.trimGlow,P.HR*0.9,P.headY+P.HR*0.95,-0.02,0,0,-2.2,4); feather.scale.z=0.3; rig.add(feather);
+    }
+    else if(/ranger|druid|hunter/.test(key)){
+      if(!(spec.equipped&&spec.equipped.weapon&&/bow/.test(gText(spec.equipped.weapon)))){
+        var qv=new THREE.Group(); qv.position.set(-0.09,P.chestY,-0.14); qv.rotation.z=-0.4;
+        qv.add(seg3([0,-0.14,0],[0,0.14,0],0.04,0.045,mats.leather,10));
+        for(var a3=0;a3<3;a3++){ qv.add(seg3([-0.018+a3*0.018,0.08,0],[-0.018+a3*0.018,0.26,0],0.0035,0.0035,mats.trim,4)); }
+        rig.add(qv);
+      }
+    }
+    else if(/shadow|rogue|assassin/.test(key)){
+      var headG2=rig.userData.headG;
+      if(headG2){
+        var mask=Ball(P.HR*0.82,P.HR*0.34,P.HR*0.5,mats.clothDk,0,-P.HR*0.44,P.HR*0.42,18);
+        headG2.add(mask);
+        var knot=Ball(P.HR*0.14,P.HR*0.1,P.HR*0.1,mats.clothDk,0,-P.HR*0.3,-P.HR*0.8,8);
+        headG2.add(knot);
+      }
+    }
+    else if(/mage|wizard|cleric|sage|warlock/.test(key)){
+      var orb2=Ball(0.028,0.028,0.028,mats.energy,0.22,P.chestY+0.08,0.1,12);
+      rig.add(orb2); if(!R.floaters) R.floaters=[]; R.floaters.push(orb2); orb2.userData.float=true;
+    }
   }
 
-  /* ===================== MOUNTS (per family) ===================== */
+  /* ---------------- pet familiars ---------------- */
+  function buildPet(spec){
+    var p=spec.equipped&&spec.equipped.pet; if(!p) return null;
+    var g=new THREE.Group(); var txt=gText(p);
+    var c=col(p.gem,"#c084fc");
+    function s(o){ var m=new THREE.MeshStandardMaterial(o); R.disposables.push(m); return m; }
+    var bm=s({ color:c, roughness:0.45, metalness:0.15, emissive:c.clone().multiplyScalar(0.25), envMapIntensity:0.9 });
+    var dk=s({ color:c.clone().offsetHSL(0,0,-0.18), roughness:0.55 });
+    var em=s({ color:0xfff3c4, emissive:0xaa8822, roughness:0.3 });
+    if(/dragon|drake|wyrm|phoenix/.test(txt)){
+      g.add(Ball(0.075,0.065,0.095,bm,0,0,0,16));
+      g.add(Ball(0.05,0.045,0.05,bm,0,0.055,0.09,14));
+      g.add(cone(0.02,0.05,dk,0,0.05,0.15,HPI*0.9,0,0,6));
+      [-1,1].forEach(function(sg){
+        var wing=M(new THREE.ConeGeometry(0.07,0.16,4), dk); wing.scale.z=0.25; wing.position.set(0.08*sg,0.05,-0.02); wing.rotation.z=-1.1*sg; g.add(wing); (g.userData.wings=g.userData.wings||[]).push(wing);
+        g.add(Ball(0.011,0.013,0.008,em,0.026*sg,0.075,0.125,6));
+      });
+      g.add(cone(0.02,0.1,bm,0,-0.02,-0.12,-1.2,0,0,6));
+    } else if(/fox|cat|wolf|hound/.test(txt)){
+      g.add(Ball(0.062,0.055,0.088,bm,0,0,0,16));
+      g.add(Ball(0.046,0.044,0.046,bm,0,0.055,0.085,14));
+      g.add(Ball(0.02,0.016,0.022,dk,0,0.035,0.125,10)); /* snout */
+      g.add(Ball(0.008,0.006,0.005,em,0,0.042,0.145,6));
+      [-1,1].forEach(function(sg){ g.add(cone(0.02,0.055,dk,0.028*sg,0.105,0.065,0.1,0,-0.15*sg,4)); g.add(Ball(0.009,0.011,0.007,em,0.02*sg,0.062,0.122,6)); });
+      var tail2=seg3([0,-0.005,-0.08],[0,0.075,-0.19],0.03,0.014,dk,10); g.add(tail2);
+      g.add(Ball(0.024,0.028,0.024,em,0,0.095,-0.205,8)); /* tail tip */
+      [-1,1].forEach(function(sg){ g.add(Ball(0.014,0.02,0.014,dk,0.035*sg,-0.05,0.04,6)); }); /* paws tucked */
+    } else if(/owl|bird|raven|sparrow/.test(txt)){
+      g.add(Ball(0.06,0.075,0.06,bm,0,0,0,16));
+      g.add(Ball(0.045,0.045,0.045,bm,0,0.075,0.02,12));
+      g.add(cone(0.012,0.025,em,0,0.07,0.06,HPI*0.9,0,0,5));
+      [-1,1].forEach(function(sg){ g.add(Ball(0.016,0.02,0.01,em,0.02*sg,0.085,0.045,8)); var w2=Ball(0.02,0.05,0.04,dk,0.058*sg,0,0,10); (g.userData.wings=g.userData.wings||[]).push(w2); g.add(w2); });
+    } else if(/slime|blob|ooze/.test(txt)){
+      var sl=Loft([{y:0,rx:0.085,rz:0.085},{y:0.05,rx:0.075,rz:0.075},{y:0.095,rx:0.04,rz:0.04}],bm,18); g.add(sl);
+      [-1,1].forEach(function(sg){ g.add(Ball(0.01,0.014,0.008,mats_dark(),0.03*sg,0.05,0.07)); });
+      function mats_dark(){ return dk; }
+    } else if(/golem|crystal|shard|gem/.test(txt)){
+      var core=M(new THREE.OctahedronGeometry(0.07,0), bm); g.add(core);
+      var r1=M(new THREE.OctahedronGeometry(0.02,0), em); r1.position.set(0.09,0.04,0); g.add(r1);
+      var r2=M(new THREE.OctahedronGeometry(0.016,0), em); r2.position.set(-0.08,-0.03,0.03); g.add(r2);
+      g.userData.spinAll=true;
+    } else { /* wisp */
+      g.add(Ball(0.055,0.055,0.055,bm,0,0,0,18));
+      g.add(torus(0.08,0.005,em,0,0,0,0.5,0.4,0));
+      [-1,1].forEach(function(sg){ g.add(Ball(0.008,0.012,0.006,em,0.02*sg,0.01,0.048,6)); });
+    }
+    g.userData.pet=true;
+    return g;
+  }
+
+  /* ================= MOUNTS ================= */
   function buildMount(spec){
     var mt=spec.mount; if(!mt) return null;
-    var fam=String(mt.family||"").toLowerCase(), id=mt.id||"", cs=mt.colors||["#6b5640","#caa46a","#f6cb6e"];
+    var fam=String(mt.family||"").toLowerCase(), id=String(mt.id||"").toLowerCase(), cs=mt.colors||["#6b5640","#caa46a","#f6cb6e"];
     function s(o){ var m=new THREE.MeshStandardMaterial(o); R.disposables.push(m); return m; }
-    var body=s({ color:col(cs[0]), roughness:0.66, metalness:0.06, envMapIntensity:0.5 });
-    var acc=s({ color:col(cs[1]), roughness:0.6, metalness:0.12, envMapIntensity:0.5 });
-    var det=s({ color:col(cs[2]), roughness:0.32, metalness:0.5, emissive:col(cs[2]).multiplyScalar(0.12), envMapIntensity:1.0 });
-    if (fam==="bird" || /eagle|hawk|owl|raven|phoenix|roc|falcon|wing/.test(id)) return buildBird(body,acc,det,s);
-    if (fam==="dragon" || /dragon|wyrm|drake|wyvern/.test(id)) return buildDragon(body,acc,det,s);
-    if (fam==="aquatic" || /shark|dolphin|whale|jelly|serpent|turtle|croc|otter|tide|tides/.test(id)) return buildAquatic(body,acc,det,s,id);
-    if (fam==="insect" || /moth|beetle|mantis|spider|scorpion|bee|wasp/.test(id)) return buildInsect(body,acc,det,s,id);
-    if (fam==="elemental" || id==="void_skiff" || /skiff|orb|elemental|spirit|wisp/.test(id)) return buildSkiff(acc,det);
-    var panther=(fam==="feline"||/panther|cat|tiger|lion|lynx/.test(id));
-    var wolf=(fam==="canine"||/wolf|hound|fox|dog/.test(id));
-    return buildQuadruped(body,acc,det,s,id,panther,wolf);
+    var body=s({ color:col(cs[0]), roughness:0.6, metalness:0.05, envMapIntensity:0.55 });
+    var acc=s({ color:col(cs[1]), roughness:0.55, metalness:0.1, envMapIntensity:0.55 });
+    var det=s({ color:col(cs[2]), roughness:0.28, metalness:0.5, emissive:col(cs[2]).multiplyScalar(0.16), envMapIntensity:1.05 });
+    var dark=s({ color:0x14181f, roughness:0.5 });
+    var leather=s({ color:0x3b271b, roughness:0.75, metalness:0.06 });
+    if (fam==="bird" || /eagle|hawk|owl|raven|phoenix|roc|falcon|griffin|wing/.test(id)) return buildBird(body,acc,det,dark,leather,s);
+    if (fam==="dragon" || /dragon|wyrm|drake|wyvern/.test(id)) return buildDragon(body,acc,det,dark,leather,s);
+    if (fam==="aquatic" || /shark|dolphin|whale|jelly|serpent|turtle|croc|otter|tide/.test(id)) return buildAquatic(body,acc,det,dark,s,id);
+    if (fam==="insect" || /moth|beetle|mantis|spider|scorpion|bee|wasp/.test(id)) return buildInsect(body,acc,det,dark,s,id);
+    if (fam==="elemental" || /skiff|orb|elemental|spirit|wisp|void/.test(id)) return buildSkiff(acc,det,s);
+    var feline=(fam==="feline"||fam==="cat"||/panther|cat|tiger|lion|lynx/.test(id));
+    var canine=(fam==="canine"||fam==="wolf"||/wolf|hound|fox|dog/.test(id));
+    return buildQuadruped(body,acc,det,dark,leather,s,id,feline,canine);
   }
   function rideMeta(g, seatY, stand, meta){ g.userData.seatY=seatY; g.userData.stand=!!stand; if(meta) Object.assign(g.userData, meta); return g; }
 
-  function buildBird(body,acc,det,s){
+  function addTack(g, seatZ, seatY, headZ, headY, leather, det){
+    /* saddle along Z (mount faces +Z) */
+    g.add(LoftZ([
+      {z:seatZ+0.15,rx:0.14,ry:0.05,y:seatY},
+      {z:seatZ,rx:0.16,ry:0.055,y:seatY-0.01},
+      {z:seatZ-0.15,rx:0.13,ry:0.05,y:seatY+0.01}
+    ],leather,14));
+    g.add(Loft([{y:seatY,rx:0.045,rz:0.04,z:seatZ-0.17},{y:seatY+0.09,rx:0.024,rz:0.022,z:seatZ-0.2}],leather,10)); /* cantle behind */
+    [-1,1].forEach(function(sg){
+      g.add(seg3([0.18*sg,seatY-0.02,seatZ],[0.2*sg,seatY-0.34,seatZ+0.02],0.01,0.009,leather,6));
+      g.add(torus(0.045,0.007,det,0.2*sg,seatY-0.38,seatZ+0.02,0,HPI*0.5,0));
+      g.add(seg3([0.08*sg,seatY+0.02,seatZ+0.12],[0.05*sg,headY,headZ],0.006,0.005,leather,6));
+    });
+  }
+  function buildQuadruped(body,acc,det,dark,leather,s,id,feline,canine){
+    id=String(id||"").toLowerCase();
+    var horse=!feline&&!canine;
+    var g=new THREE.Group(), by=horse?1.0:0.84;
+    /* barrel along Z: nose -Z (front), tail +Z */
+    g.add(LoftZ([
+      {z:-0.6,rx:0.2,ry:0.21,y:by+0.02},
+      {z:-0.3,rx:0.26,ry:0.27,y:by},
+      {z:0.1,rx:0.27,ry:0.26,y:by-0.01},
+      {z:0.42,rx:0.23,ry:0.24,y:by+0.02},
+      {z:0.62,rx:0.16,ry:0.18,y:by+0.05}
+    ],body,26));
+    g.add(Ball(0.21,0.23,0.2,body,0,by-0.01,-0.55,20)); /* chest */
+    g.add(Ball(0.23,0.25,0.22,body,0,by+0.02,0.52,20));  /* rump  */
+    g.add(LoftZ([{z:-0.42,rx:0.17,ry:0.1,y:by-0.16},{z:0.3,rx:0.17,ry:0.1,y:by-0.16}],acc,18)); /* belly */
+    function leg(x,zPos,front){
+      var lg=new THREE.Group(); lg.position.set(x,by-0.08,zPos);
+      var knee=[0,-0.36,front?-0.03:0.05], ankle=[0,-0.64,front?0.0:-0.02], hoofP=[0,-0.82,front?-0.04:-0.02];
+      lg.add(joint([0,0,0],0.1,body,1.2));
+      lg.add(seg3([0,0,0],knee,0.082,0.05,body,14));
+      lg.add(joint(knee,0.05,acc));
+      lg.add(seg3(knee,ankle,0.046,0.034,body,12));
+      lg.add(joint(ankle,0.035,body));
+      lg.add(seg3(ankle,hoofP,0.033,0.042,body,10));
+      if(horse){ lg.add(LoftZ([{z:hoofP[2]-0.055,rx:0.05,ry:0.05,y:hoofP[1]-0.045},{z:hoofP[2]+0.045,rx:0.052,ry:0.052,y:hoofP[1]-0.045}],det,12)); }
+      else { lg.add(Ball(0.048,0.032,0.058,acc,hoofP[0],hoofP[1]-0.035,hoofP[2]+0.015,10)); }
+      g.add(lg); return lg;
+    }
+    g.userData.legs=[leg(0.16,-0.42,true),leg(-0.16,-0.42,true),leg(0.16,0.46,false),leg(-0.16,0.46,false)];
+    /* neck: two tapered segments curving up-forward */
+    var nb=[0,by+0.1,-0.5], nm=[0,by+0.36,-0.68], nh=[0,by+0.56,-0.78];
+    g.add(seg3(nb,nm,0.16,0.12,body,18)); g.add(seg3(nm,nh,0.12,0.09,body,16)); g.add(joint(nh,0.095,body));
+    /* head */
+    var hg=new THREE.Group(); hg.position.set(nh[0],nh[1],nh[2]); g.userData.headG=hg;
+    if(horse){
+      hg.add(LoftZ([
+        {z:0.02,rx:0.095,ry:0.1,y:0.01},
+        {z:-0.12,rx:0.075,ry:0.082,y:-0.03},
+        {z:-0.24,rx:0.05,ry:0.055,y:-0.085},
+        {z:-0.31,rx:0.042,ry:0.045,y:-0.11}
+      ],body,16));
+      hg.add(Ball(0.045,0.04,0.05,acc,0,-0.115,-0.33,12)); /* muzzle */
+      [-1,1].forEach(function(sg){ hg.add(Ball(0.007,0.006,0.005,dark,0.026*sg,-0.12,-0.36,6)); });
+      /* bridle */
+      hg.add(torus(0.062,0.006,leather,0,-0.09,-0.26,0,0,0));
+      hg.add(torus(0.085,0.006,leather,0,0.0,-0.05,0.35,0,0));
+    } else {
+      hg.add(Ball(0.11,0.1,0.12,body,0,0,-0.05,18));
+      hg.add(LoftZ([{z:-0.13,rx:0.055,ry:0.05,y:-0.045},{z:-0.2,rx:0.038,ry:0.034,y:-0.06}],body,12));
+      hg.add(Ball(0.015,0.011,0.01,dark,0,-0.05,-0.22,8));
+      [-1,1].forEach(function(sg){ hg.add(cone(0.007,0.024,s({color:0xf3ecd6,roughness:0.4}),0.028*sg,-0.085,-0.17,2.9,0,0,5)); });
+    }
+    [-1,1].forEach(function(sg){
+      hg.add(cone(horse?0.03:0.035,horse?0.09:0.08,body,(horse?0.055:0.07)*sg,0.1,horse?0.02:0.01,-0.15,0,-0.15*sg,8));
+      hg.add(Ball(0.017,0.017,0.01,dark,(horse?0.07:0.078)*sg,0.01,horse?-0.08:-0.1,8));
+      hg.add(Ball(0.005,0.005,0.003,s({color:0xffffff,roughness:0.2}),(horse?0.074:0.082)*sg,0.017,horse?-0.086:-0.106,4));
+    });
+    g.add(hg);
+    /* mane / ruff / markings */
+    if(horse){ for(var i=0;i<7;i++){ var f=i/6; g.add(Ball(0.045,0.085,0.05,acc,0,by+0.2+f*0.4,-0.42-f*0.32,12)); } g.add(Ball(0.04,0.1,0.05,acc,0,by+0.62,-0.8,10)); }
+    if(canine){ g.add(LoftZ([{z:-0.55,rx:0.24,ry:0.26,y:by+0.02},{z:-0.32,rx:0.3,ry:0.3,y:by+0.02}],acc,18)); }
+    if(feline){ [-1,1].forEach(function(sg){ for(var st=0;st<3;st++){ g.add(panel(0.012,0.1,0.02,det,0.24*sg,by+0.03,-0.2+st*0.24,0.2,0,0.5*sg)); } }); }
+    /* tail */
+    if(horse){ g.add(seg3([0,by+0.08,0.62],[0,by-0.12,0.8],0.05,0.038,acc,10)); g.add(seg3([0,by-0.12,0.8],[0,by-0.4,0.86],0.038,0.016,acc,10)); }
+    else if(canine){ g.add(seg3([0,by+0.06,0.6],[0,by+0.3,0.8],0.045,0.02,acc,10)); g.add(Ball(0.042,0.055,0.042,acc,0,by+0.33,0.83,10)); }
+    else { g.add(seg3([0,by+0.04,0.6],[0,by+0.16,0.82],0.028,0.02,body,8)); g.add(seg3([0,by+0.16,0.82],[0,by+0.34,0.9],0.02,0.011,body,8)); g.add(Ball(0.018,0.028,0.018,det,0,by+0.37,0.91,8)); }
+    /* id extras */
+    if(/unicorn/.test(id)){ hg.add(cone(0.026,0.22,det,0,0.16,-0.14,-0.5,0,0,10)); }
+    if(/stag|deer|elk/.test(id)){ [-1,1].forEach(function(sg){
+      hg.add(seg3([0.05*sg,0.08,0.03],[0.15*sg,0.3,0.1],0.013,0.009,det,6));
+      hg.add(seg3([0.15*sg,0.3,0.1],[0.1*sg,0.45,0.04],0.008,0.004,det,6));
+      hg.add(seg3([0.15*sg,0.3,0.1],[0.24*sg,0.42,0.16],0.007,0.004,det,6));
+    }); }
+    if(/ram|bull|bison|yak|ox|rhino/.test(id)){ [-1,1].forEach(function(sg){ hg.add(cone(0.04,0.2,det,0.1*sg,0.1,0.03,0.3,0,1.6*sg,8)); }); }
+    if(/pegasus/.test(id)){ g.userData.wing=[]; [-1,1].forEach(function(sg){
+      var w3=Loft([{y:0,rx:0.05,rz:0.02},{y:0.3,rx:0.3,rz:0.03,x:0.2*sg},{y:0.5,rx:0.12,rz:0.02,x:0.4*sg}],acc,12);
+      w3.position.set(0.2*sg,by+0.1,-0.1); w3.rotation.z=0.6*sg; g.add(w3); g.userData.wing.push(w3);
+    }); }
+    /* tack: saddle at z≈0, reins to the head */
+    var seatY=by+0.22, seatZ=0.02;
+    g.add(LoftZ([{z:seatZ-0.24,rx:0.24,ry:0.05,y:seatY-0.03},{z:seatZ+0.24,rx:0.24,ry:0.05,y:seatY-0.03}],acc,16)); /* blanket */
+    g.add(LoftZ([
+      {z:seatZ-0.17,rx:0.15,ry:0.05,y:seatY},
+      {z:seatZ,rx:0.17,ry:0.06,y:seatY-0.01},
+      {z:seatZ+0.17,rx:0.14,ry:0.05,y:seatY+0.01}
+    ],leather,16));
+    g.add(Loft([{y:seatY,rx:0.05,rz:0.045,z:seatZ+0.2},{y:seatY+0.1,rx:0.028,rz:0.026,z:seatZ+0.23}],leather,10)); /* cantle */
+    g.add(Loft([{y:seatY,rx:0.04,rz:0.035,z:seatZ-0.19},{y:seatY+0.07,rx:0.02,rz:0.02,z:seatZ-0.22}],det,10)); /* pommel */
+    [-1,1].forEach(function(sg){
+      g.add(seg3([0.22*sg,seatY-0.03,seatZ],[0.25*sg,seatY-0.42,seatZ+0.02],0.011,0.009,leather,6));
+      g.add(torus(0.048,0.008,det,0.25*sg,seatY-0.46,seatZ+0.02,0,HPI*0.5,0));
+      g.add(seg3([0.1*sg,seatY+0.02,seatZ-0.16],[nh[0]+0.06*sg,nh[1]-0.06,nh[2]+0.02],0.006,0.005,leather,6));
+    });
+    g.rotation.y=Math.PI; /* face +Z like the hero */
+    return rideMeta(g, seatY+0.02, false, { riderScale:0.8, riderX:0, riderZ:-seatZ, riderYOffset:0.0, cameraDist:5.9, cameraLookY:1.2, previewYaw:-0.5 });
+  }
+  function buildBird(body,acc,det,dark,leather,s){
     var g=new THREE.Group(); var by=0.95;
-    var torso=M(new THREE.SphereGeometry(0.42,20,16), body); torso.position.set(0,by,0); torso.scale.set(1,0.95,1.25); g.add(torso);
-    var breast=M(new THREE.SphereGeometry(0.3,18,14), acc); breast.position.set(0,by-0.05,0.32); breast.scale.set(0.9,1,0.7); g.add(breast);
-    var neck=M(new THREE.CapsuleGeometry(0.12,0.2,6,12), body); neck.position.set(0,by+0.34,0.34); neck.rotation.x=0.5; g.add(neck);
-    var head=M(new THREE.SphereGeometry(0.17,16,14), body); head.position.set(0,by+0.55,0.46); g.add(head);
-    var beak=M(new THREE.ConeGeometry(0.07,0.2,6), det); beak.rotation.x=Math.PI/2; beak.position.set(0,by+0.52,0.66); g.add(beak);
-    var em=s({ color:0x10131a, roughness:0.4 });
-    var eL=M(new THREE.SphereGeometry(0.03,10,8), em); eL.position.set(-0.07,by+0.6,0.56); g.add(eL); var eR=eL.clone(); eR.position.x=0.07; g.add(eR);
-    // big wings
+    g.add(Loft([
+      {y:by-0.02,rx:0.22,rz:0.2,z:0.55},{y:by+0.02,rx:0.34,rz:0.3,z:0.15},{y:by,rx:0.3,rz:0.27,z:-0.25},{y:by+0.06,rx:0.16,rz:0.15,z:-0.55}
+    ],body,22));
+    g.add(Ball(0.26,0.28,0.24,acc,0,by-0.06,0.32,18)); /* breast */
+    var nh=[0,by+0.42,0.62];
+    g.add(seg3([0,by+0.12,0.5],nh,0.12,0.09,body,14));
+    var hg=new THREE.Group(); hg.position.set(nh[0],nh[1],nh[2]);
+    hg.add(Ball(0.13,0.12,0.14,body,0,0.02,0.02,16));
+    hg.add(Loft([{y:0.0,rx:0.045,rz:0.04,z:0.14},{y:-0.03,rx:0.02,rz:0.018,z:0.22}],det,10));
+    hg.add(cone(0.014,0.05,det,0,-0.055,0.19,2.6,0,0,6));
+    [-1,1].forEach(function(sg){ hg.add(Ball(0.022,0.022,0.014,dark,0.07*sg,0.05,0.09,8)); hg.add(Ball(0.006,0.006,0.004,s({color:0xffffff,roughness:0.2}),0.075*sg,0.058,0.098,4));
+      hg.add(Ball(0.05,0.03,0.06,acc,0.08*sg,0.09,-0.02,10)); });
+    g.add(hg);
     g.userData.wing=[];
     [-1,1].forEach(function(sg){
-      var w=new THREE.Group();
-      var w1=M(new THREE.BoxGeometry(0.5,0.06,0.5), acc); w1.position.set(0.3*sg,0,0); w.add(w1);
-      var w2=M(new THREE.BoxGeometry(0.45,0.05,0.36), body); w2.position.set(0.7*sg,-0.02,-0.05); w.add(w2);
-      [0,1,2].forEach(function(k){ var f=M(new THREE.BoxGeometry(0.16,0.04,0.5), acc); f.position.set((0.55+k*0.16)*sg,-0.04,-0.28-k*0.02); f.rotation.y=0.2*sg; w.add(f); });
-      w.position.set(0.36*sg,by+0.16,-0.02); w.rotation.z=0.25*sg; g.add(w); g.userData.wing.push(w);
+      var w=new THREE.Group(); w.position.set(0.24*sg,by+0.14,0.05);
+      var arm1=seg3([0,0,0],[0.34*sg,0.1,-0.05],0.05,0.035,body,10); w.add(arm1);
+      var arm2=seg3([0.34*sg,0.1,-0.05],[0.62*sg,0.08,-0.12],0.035,0.02,body,8); w.add(arm2);
+      for(var f2=0;f2<5;f2++){
+        var fx=0.18+f2*0.11, fl=0.3+f2*0.06;
+        var feather=Loft([{y:0,rx:0.045,rz:0.012},{y:-fl,rx:0.03,rz:0.008}],f2%2?acc:body,8);
+        feather.position.set(fx*sg,0.06,-0.08-f2*0.015); feather.rotation.z=0.25*sg*(f2*0.16); feather.rotation.x=-0.3-f2*0.06;
+        w.add(feather);
+      }
+      g.add(w); g.userData.wing.push(w);
     });
-    // tail feathers
-    [-0.12,0,0.12].forEach(function(o){ var tf=M(new THREE.BoxGeometry(0.1,0.04,0.4), acc); tf.position.set(o,by-0.05,-0.5); tf.rotation.x=-0.3; g.add(tf); });
-    // talon legs
-    [-0.16,0.16].forEach(function(x){ var lg=M(new THREE.CapsuleGeometry(0.05,0.18,5,8), det); lg.position.set(x,by-0.42,0.12); g.add(lg); var foot=M(new THREE.SphereGeometry(0.08,10,8), det); foot.position.set(x,by-0.56,0.18); foot.scale.set(1,0.5,1.3); g.add(foot); });
-    return rideMeta(g, by+0.36, false);
+    [-0.1,0,0.1].forEach(function(o,i2){ var tf=Loft([{y:0,rx:0.05,rz:0.014},{y:-0.4,rx:0.035,rz:0.01}],i2===1?acc:body,8); tf.position.set(o,by+0.03,-0.55); tf.rotation.x=1.9; g.add(tf); });
+    [-0.15,0.15].forEach(function(x){
+      g.add(seg3([x,by-0.24,0.15],[x,by-0.5,0.18],0.045,0.03,det,8));
+      for(var t2=0;t2<3;t2++){ g.add(seg3([x,by-0.5,0.18],[x+(t2-1)*0.04,by-0.56,0.26],0.012,0.006,det,5)); }
+    });
+    addTack(g,-0.05,by+0.26,0.58,by+0.5,leather,det);
+    return rideMeta(g, by+0.34, false, { riderScale:0.8, riderZ:-0.05, cameraDist:5.8, cameraLookY:1.2, previewYaw:-0.4 });
   }
-  function buildDragon(body,acc,det,s){
-    var g=new THREE.Group(); var by=0.92;
-    var torso=M(new THREE.CapsuleGeometry(0.34,0.7,8,16), body); torso.rotation.z=Math.PI/2; torso.position.set(0,by,0); torso.scale.set(1,1,0.92); g.add(torso);
-    var chest=M(new THREE.SphereGeometry(0.34,16,14), body); chest.position.set(0.5,by,0); g.add(chest);
-    var neck=M(new THREE.CapsuleGeometry(0.16,0.4,6,12), body); neck.position.set(0.7,by+0.34,0); neck.rotation.z=-0.7; g.add(neck);
-    var head=M(new THREE.CapsuleGeometry(0.16,0.3,7,14), body); head.position.set(1.0,by+0.56,0); head.rotation.z=-1.1; g.add(head);
-    var snout=M(new THREE.ConeGeometry(0.13,0.26,8), body); snout.rotation.z=-Math.PI/2; snout.position.set(1.22,by+0.5,0); g.add(snout);
-    [-1,1].forEach(function(sg){ var horn=M(new THREE.ConeGeometry(0.04,0.22,6), det); horn.position.set(0.92,by+0.74,0.08*sg); horn.rotation.z=0.4; g.add(horn); });
-    var em=s({ color:0xffcc33, emissive:0x884400, roughness:0.3 });
-    var eL=M(new THREE.SphereGeometry(0.035,10,8), em); eL.position.set(1.04,by+0.6,0.1); g.add(eL); var eR=eL.clone(); eR.position.z=-0.1; g.add(eR);
-    // legs
-    [[0.42,0.22],[0.42,-0.22],[-0.4,0.22],[-0.4,-0.22]].forEach(function(p){ var lg=M(new THREE.CapsuleGeometry(0.09,0.34,5,10), body); lg.position.set(p[0],by-0.34,p[1]); g.add(lg); var claw=M(new THREE.ConeGeometry(0.09,0.12,6), det); claw.position.set(p[0],by-0.56,p[1]+0.04); claw.rotation.x=Math.PI; g.add(claw); });
-    // membrane wings
+  function buildDragon(body,acc,det,dark,leather,s){
+    var g=new THREE.Group(); var by=0.95;
+    /* torso along Z, head +Z */
+    g.add(LoftZ([
+      {z:-0.68,rx:0.15,ry:0.14,y:by+0.06},
+      {z:-0.3,rx:0.28,ry:0.26,y:by},
+      {z:0.12,rx:0.3,ry:0.28,y:by},
+      {z:0.5,rx:0.2,ry:0.19,y:by+0.03}
+    ],body,24));
+    g.add(LoftZ([{z:-0.3,rx:0.2,ry:0.08,y:by-0.17},{z:0.35,rx:0.2,ry:0.08,y:by-0.17}],acc,16)); /* belly plates */
+    for(var bp=0;bp<5;bp++){ g.add(torus(0.2-bp*0.008,0.012,acc,0,by-0.17,0.28-bp*0.14,0.12,0,0,Math.PI)); }
+    /* neck up-forward */
+    var nb=[0,by+0.12,0.42], nm=[0,by+0.38,0.58], nh=[0,by+0.6,0.7];
+    g.add(seg3(nb,nm,0.12,0.095,body,16)); g.add(seg3(nm,nh,0.095,0.078,body,14)); g.add(joint(nh,0.082,body));
+    for(var ns=0;ns<4;ns++){ var f=ns/3; g.add(cone(0.028,0.09,det,0,by+0.2+f*0.42,0.48+f*0.2,-0.5,0,0,4)); }
+    /* head: reptile skull + jaw + horns */
+    var hg=new THREE.Group(); hg.position.set(nh[0],nh[1],nh[2]); g.userData.headG=hg;
+    hg.add(Ball(0.1,0.09,0.13,body,0,0.01,0.02,16));
+    hg.add(LoftZ([{z:0.08,rx:0.07,ry:0.05,y:-0.015},{z:0.22,rx:0.045,ry:0.032,y:-0.03}],body,12)); /* snout */
+    hg.add(LoftZ([{z:0.06,rx:0.055,ry:0.02,y:-0.07},{z:0.19,rx:0.035,ry:0.014,y:-0.075}],acc,10)); /* jaw */
+    [-1,1].forEach(function(sg){
+      hg.add(Ball(0.008,0.006,0.005,dark,0.028*sg,-0.02,0.235,6));
+      hg.add(cone(0.006,0.03,s({color:0xf3ecd6,roughness:0.4}),0.03*sg,-0.055,0.18,2.8,0,0,5)); /* fangs */
+      var eye=Ball(0.02,0.016,0.012,s({color:0xffcc33,emissive:0x996600,roughness:0.25}),0.062*sg,0.035,0.09,8); hg.add(eye);
+      hg.add(Ball(0.024,0.01,0.016,body,0.062*sg,0.055,0.09,8)); /* brow ridge */
+      /* swept horns */
+      hg.add(seg3([0.05*sg,0.07,-0.02],[0.11*sg,0.16,-0.14],0.02,0.012,det,8));
+      hg.add(seg3([0.11*sg,0.16,-0.14],[0.09*sg,0.26,-0.24],0.011,0.004,det,8));
+    });
+    g.add(hg);
+    /* quadruped legs */
+    g.userData.legs=[];
+    [[0.2,0.32],[-0.2,0.32],[0.22,-0.4],[-0.22,-0.4]].forEach(function(p,pi){
+      var lg=new THREE.Group(); lg.position.set(p[0],by-0.12,p[1]);
+      var knee=[0.01*(p[0]>0?1:-1),-0.3,0.03], ankle=[0.01*(p[0]>0?1:-1),-0.56,-0.02];
+      lg.add(joint([0,0,0],0.1,body,1.15));
+      lg.add(seg3([0,0,0],knee,0.08,0.05,body,12));
+      lg.add(joint(knee,0.05,body));
+      lg.add(seg3(knee,ankle,0.045,0.036,body,10));
+      for(var c2=0;c2<3;c2++){ lg.add(cone(0.016,0.05,det,(c2-1)*0.032+ankle[0],ankle[1]-0.02,ankle[2]+0.06,1.75,0,0,5)); }
+      g.add(lg); g.userData.legs.push(lg);
+    });
+    /* bat wings: bones + membrane fan */
     g.userData.wing=[];
-    [-1,1].forEach(function(sg){ var wm=s({ color:col_mix(acc), roughness:0.6, side:THREE.DoubleSide, transparent:true, opacity:0.92 }); var wing=new THREE.Mesh(new THREE.PlaneGeometry(0.95,0.7,4,3), wm); R.disposables.push(wing.geometry); wing.castShadow=true; wing.position.set(-0.05,by+0.45,0.3*sg); wing.rotation.set(0,0.5*sg,0.5); g.add(wing); g.userData.wing.push(wing); });
-    // tail
-    var tail=M(new THREE.ConeGeometry(0.16,0.9,10), body); tail.rotation.z=Math.PI/2; tail.position.set(-0.85,by+0.05,0); g.add(tail);
-    var saddle=M(new THREE.SphereGeometry(0.26,16,12,0,Math.PI*2,0,Math.PI*0.5), det); saddle.position.set(-0.04,by+0.28,0); saddle.scale.set(1,0.55,0.95); g.add(saddle);
-    return rideMeta(g, by+0.36, false);
+    var wm=s({ color:col_mix(acc), roughness:0.5, side:THREE.DoubleSide, transparent:true, opacity:0.88, emissive:col_mix(det), emissiveIntensity:0.05 });
+    [-1,1].forEach(function(sg){
+      var w=new THREE.Group(); w.position.set(0.15*sg,by+0.26,-0.02); w.scale.setScalar(1.15);
+      var elbowW=[0.3*sg,0.32,-0.1], tipW=[0.72*sg,0.5,-0.28], back1=[0.55*sg,0.05,-0.3], back2=[0.25*sg,-0.1,-0.2];
+      w.add(seg3([0,0,0],elbowW,0.035,0.022,body,8));
+      w.add(seg3(elbowW,tipW,0.02,0.008,body,8));
+      w.add(joint(elbowW,0.024,body));
+      /* membrane: triangle fan shoulder→elbow→tip→back1→back2 */
+      var pts=[[0,0,0],elbowW,tipW,back1,back2,[0,-0.08,-0.05]];
+      var pos=[]; var tris=[[0,1,2],[0,2,3],[0,3,4],[0,4,5]];
+      tris.forEach(function(tr){ tr.forEach(function(ix){ pos.push(pts[ix][0],pts[ix][1],pts[ix][2]); }); });
+      var mg2=new THREE.BufferGeometry(); mg2.setAttribute("position", new THREE.Float32BufferAttribute(pos,3)); mg2.computeVertexNormals();
+      R.disposables.push(mg2);
+      var mem=new THREE.Mesh(mg2, wm); mem.castShadow=true; w.add(mem);
+      /* wing claw */
+      w.add(cone(0.012,0.04,det,tipW[0],tipW[1]+0.02,tipW[2],0,0,-0.4*sg,5));
+      g.add(w); g.userData.wing.push(w);
+    });
+    /* tail with fin */
+    var tl=[[0,by+0.05,-0.66],[0,by-0.02,-1.0],[0,by+0.12,-1.3]];
+    g.add(seg3(tl[0],tl[1],0.12,0.07,body,12)); g.add(seg3(tl[1],tl[2],0.07,0.025,body,10));
+    var fin=cone(0.08,0.15,det,0,by+0.15,-1.34,0.5,0,0,4); fin.scale.z=0.3; g.add(fin);
+    for(var ts=0;ts<3;ts++){ g.add(cone(0.02,0.06,det,0,by+0.12-ts*0.05,-0.72-ts*0.2,-0.6,0,0,4)); }
+    addTack(g,-0.08,by+0.26,0.6,by+0.55,leather,det);
+    return rideMeta(g, by+0.34, false, { riderScale:0.8, riderZ:-0.08, cameraDist:6.4, cameraLookY:1.25, previewYaw:-0.42 });
   }
   function col_mix(mat){ try{ return mat.color.getHex(); }catch(e){ return 0x88aadd; } }
-  function buildSkiff(acc, det){
+  function buildSkiff(acc, det, s){
     var g=new THREE.Group();
-    var hull=M(new THREE.CapsuleGeometry(0.34,1.0,8,18), acc); hull.rotation.z=Math.PI/2; hull.scale.set(1,1,0.5); hull.position.y=0.5; g.add(hull);
-    var deck=M(new THREE.BoxGeometry(1.15,0.06,0.5), det); deck.position.y=0.66; g.add(deck);
-    var glow=M(new THREE.SphereGeometry(0.5,18,10,0,Math.PI*2,Math.PI*0.55,Math.PI*0.45), det); glow.position.y=0.4; glow.scale.set(1.3,1,0.7); g.add(glow);
-    g.userData.skiff=true; return rideMeta(g, 0.72, true);
+    g.add(Loft([{y:0.5,rx:0.16,rz:0.05,z:0.62},{y:0.46,rx:0.3,rz:0.09,z:0.1},{y:0.48,rx:0.26,rz:0.08,z:-0.4},{y:0.54,rx:0.1,rz:0.04,z:-0.6}],acc,18));
+    g.add(panel(0.4,0.03,1.0,det,0,0.55,0));
+    var core=Ball(0.09,0.09,0.09,s({color:col_mix(det),emissive:col_mix(det),emissiveIntensity:0.7,roughness:0.2,transparent:true,opacity:0.95}),0,0.42,-0.3,14);
+    g.add(core); g.userData.core=core;
+    [-1,1].forEach(function(sg){ var fin2=cone(0.06,0.22,acc,0.24*sg,0.44,-0.55,1.8,0,0.3*sg,4); fin2.scale.z=0.3; g.add(fin2); });
+    g.userData.skiff=true; return rideMeta(g, 0.62, true, { cameraDist:5.4, cameraLookY:1.1 });
   }
-  function buildAquatic(body,acc,det,s,id){
-    var g=new THREE.Group(); var by=0.78; id=String(id||"").toLowerCase();
+  function buildAquatic(body,acc,det,dark,s,id){
+    var g=new THREE.Group(); var by=0.8; id=String(id||"").toLowerCase();
     if (/jelly/.test(id)){
-      var bell=M(new THREE.SphereGeometry(0.36,22,14,0,Math.PI*2,0,Math.PI*0.58), body); bell.position.set(0,by+0.12,0); bell.scale.set(1,0.68,1); g.add(bell);
-      for(var j=0;j<7;j++){ var a=(j/7)*Math.PI*2; var ten=M(new THREE.CapsuleGeometry(0.018,0.42,4,8), det); ten.position.set(Math.cos(a)*0.2,by-0.17,Math.sin(a)*0.2); ten.rotation.z=Math.sin(a)*0.35; g.add(ten); }
-      return rideMeta(g, by+0.42, true);
+      var bell=Loft([{y:by-0.05,rx:0.36,rz:0.36},{y:by+0.14,rx:0.3,rz:0.3},{y:by+0.26,rx:0.14,rz:0.14}],body,22); g.add(bell);
+      for(var j=0;j<7;j++){ var a=(j/7)*TAU; g.add(seg3([Math.cos(a)*0.2,by-0.05,Math.sin(a)*0.2],[Math.cos(a)*0.26,by-0.5,Math.sin(a)*0.26],0.016,0.008,det,6)); }
+      return rideMeta(g, by+0.3, true, { cameraDist:5.2 });
     }
-    var torso=M(new THREE.CapsuleGeometry(0.3,0.88,8,18), body); torso.rotation.z=Math.PI/2; torso.position.set(0,by,0); torso.scale.set(1,0.84,0.78); g.add(torso);
-    var nose=M(new THREE.ConeGeometry(0.22,0.34,14), body); nose.rotation.z=-Math.PI/2; nose.position.set(0.62,by,0); g.add(nose);
-    var tail=M(new THREE.ConeGeometry(0.18,0.48,4), acc); tail.rotation.z=Math.PI/2; tail.position.set(-0.7,by,0); g.add(tail);
-    [-1,1].forEach(function(sg){ var fin=M(new THREE.ConeGeometry(0.08,0.3,4), acc); fin.position.set(0.05,by-0.02,0.28*sg); fin.rotation.x=Math.PI/2*sg; g.add(fin); });
-    var top=M(new THREE.ConeGeometry(0.1,0.32,4), acc); top.position.set(-0.06,by+0.32,0); top.rotation.x=Math.PI; g.add(top);
-    if (/turtle/.test(id)){ var shell=M(new THREE.SphereGeometry(0.36,18,12,0,Math.PI*2,0,Math.PI*0.58), acc); shell.position.set(-0.02,by+0.1,0); shell.scale.set(1.1,0.56,0.9); g.add(shell); }
-    if (/croc/.test(id)){ for(var k=0;k<5;k++){ var sp=M(new THREE.ConeGeometry(0.035,0.12,5), det); sp.position.set(-0.38+k*0.17,by+0.25,0); sp.rotation.x=Math.PI; g.add(sp); } }
-    var saddle=M(new THREE.SphereGeometry(0.25,16,12,0,Math.PI*2,0,Math.PI*0.5), det); saddle.position.set(-0.05,by+0.29,0); saddle.scale.set(1,0.52,0.9); g.add(saddle);
-    return rideMeta(g, by+0.35, false);
+    g.add(Loft([{y:by,rx:0.16,rz:0.14,z:0.6},{y:by,rx:0.28,rz:0.24,z:0.1},{y:by,rx:0.22,rz:0.2,z:-0.35},{y:by+0.02,rx:0.08,rz:0.08,z:-0.62}],body,20));
+    var tf2=cone(0.16,0.3,acc,0,by+0.02,-0.75,-1.35,0,0,4); tf2.scale.x=0.24; g.add(tf2);
+    var tf3=cone(0.16,0.3,acc,0,by-0.0,-0.75,1.55,0,0,4); tf3.scale.x=0.24; g.add(tf3);
+    [-1,1].forEach(function(sg){ var fin3=cone(0.07,0.24,acc,0.24*sg,by-0.08,0.25,0,0,1.9*sg,4); fin3.scale.z=0.3; g.add(fin3); });
+    var dor=cone(0.1,0.24,acc,0,by+0.26,-0.05,-0.35,0,0,4); dor.scale.z=0.3; g.add(dor);
+    [-1,1].forEach(function(sg){ g.add(Ball(0.02,0.018,0.012,dark,0.13*sg,by+0.06,0.5,8)); });
+    if (/turtle/.test(id)){ g.add(Loft([{y:by+0.02,rx:0.3,rz:0.26},{y:by+0.2,rx:0.2,rz:0.18},{y:by+0.28,rx:0.08,rz:0.08}],acc,18)); }
+    addTack(g,-0.05,by+0.24,0.45,by+0.1,s({color:0x3b271b,roughness:0.75}),det);
+    return rideMeta(g, by+0.3, false, { riderScale:0.8, cameraDist:5.4, cameraLookY:1.05 });
   }
-  function buildInsect(body,acc,det,s,id){
-    var g=new THREE.Group(); var by=0.78; id=String(id||"").toLowerCase();
-    [-0.35,0,0.35].forEach(function(x,idx){ var seg=M(new THREE.SphereGeometry(idx===1?0.28:0.24,18,12), idx===1?body:acc); seg.position.set(x,by,0); seg.scale.set(1,0.72,0.9); g.add(seg); });
-    for(var l=0;l<6;l++){ var side=l%2?1:-1, x=-0.32+Math.floor(l/2)*0.32; var leg=M(new THREE.CapsuleGeometry(0.025,0.48,4,8), body); leg.position.set(x,by-0.22,0.24*side); leg.rotation.x=0.9*side; leg.rotation.z=(l<2?0.5:l>3?-0.5:0); g.add(leg); }
-    if (/moth|bee|wasp/.test(id)){
-      g.userData.wing=[];
-      [-1,1].forEach(function(sg){ var wm=s({ color:col_mix(det), roughness:0.35, side:THREE.DoubleSide, transparent:true, opacity:0.58, emissive:col_mix(det) }); var wing=new THREE.Mesh(new THREE.PlaneGeometry(0.58,0.44,2,2), wm); R.disposables.push(wing.geometry); wing.castShadow=true; wing.position.set(0.03,by+0.26,0.22*sg); wing.rotation.set(0.25,0.62*sg,0.18*sg); g.add(wing); g.userData.wing.push(wing); });
-    }
-    if (/scorpion/.test(id)){ var tail=M(new THREE.CapsuleGeometry(0.045,0.52,5,10), det); tail.position.set(-0.55,by+0.25,0); tail.rotation.z=0.85; g.add(tail); var barb=M(new THREE.ConeGeometry(0.055,0.16,6), det); barb.position.set(-0.78,by+0.5,0); barb.rotation.z=0.55; g.add(barb); }
-    var saddle=M(new THREE.SphereGeometry(0.23,16,12,0,Math.PI*2,0,Math.PI*0.5), det); saddle.position.set(0.02,by+0.27,0); saddle.scale.set(1,0.52,0.9); g.add(saddle);
-    return rideMeta(g, by+0.33, false);
-  }
-  function buildQuadruped(body,acc,det,s,id,panther,wolf){
-    id=String(id||"").toLowerCase();
-    var horse=/horse|mare|stallion|steed|pony|unicorn|pegasus|mustang|charger/.test(id) || (!panther && !wolf);
-    var g=new THREE.Group(), by=0.82, legs=[];
-    var leather=s({ color:0x3b271b, roughness:0.78, metalness:0.08, envMapIntensity:0.45 });
-    var dark=s({ color:0x111827, roughness:0.5, metalness:0.08 });
-    var bone=s({ color:0xf5efe0, roughness:0.48, metalness:0.02 });
-    var torso=M(new THREE.CapsuleGeometry(horse?0.245:panther?0.25:0.28, horse?0.94:0.7,10,24), body);
-    torso.rotation.z=Math.PI/2; torso.position.set(-0.08,by,0); torso.scale.set(1,0.92,horse?0.62:0.82); g.add(torso);
-    var topline=M(new THREE.CapsuleGeometry(0.06,0.82,6,12), acc); topline.rotation.z=Math.PI/2; topline.position.set(-0.08,by+0.25,0); topline.scale.set(1,0.65,0.42); g.add(topline);
-    var chest=M(new THREE.SphereGeometry(horse?0.255:0.28,20,16), body); chest.position.set(0.49,by+0.015,0); chest.scale.set(0.78,1.02,0.68); g.add(chest);
-    var rump=M(new THREE.SphereGeometry(horse?0.27:0.29,20,16), body); rump.position.set(-0.62,by+0.02,0); rump.scale.set(0.88,0.98,0.68); g.add(rump);
-    var belly=M(new THREE.CapsuleGeometry(0.13,0.72,8,16), acc); belly.rotation.z=Math.PI/2; belly.position.set(-0.08,by-0.13,0); belly.scale.set(1,0.54,0.42); g.add(belly);
-    function leg(x,z,front){
-      var lg=new THREE.Group(); lg.position.set(x,by-0.06,z);
-      var upper=M(new THREE.CapsuleGeometry(0.052,0.38,6,12), body); upper.position.set(front?0.015:-0.02,-0.24,0); upper.rotation.z=(front?-0.08:0.08); lg.add(upper);
-      var joint=M(new THREE.SphereGeometry(0.052,14,10), acc); joint.position.set(front?0.035:-0.04,-0.47,0); joint.scale.set(0.78,0.62,0.78); lg.add(joint);
-      var lower=M(new THREE.CapsuleGeometry(0.04,0.37,6,12), body); lower.position.set(front?0.055:-0.055,-0.71,0); lower.rotation.z=(front?0.08:-0.08); lg.add(lower);
-      var hoof=M(new THREE.CylinderGeometry(0.062,0.075,0.08,10), det); hoof.position.set(front?0.07:-0.07,-0.92,0.025); hoof.scale.set(1,0.78,1.2); lg.add(hoof);
-      g.add(lg); legs.push(lg); return lg;
-    }
-    leg(0.43,0.18,true); leg(0.43,-0.18,true); leg(-0.52,0.18,false); leg(-0.52,-0.18,false); g.userData.legs=legs;
-    var neck=M(new THREE.CapsuleGeometry(horse?0.1:0.14, horse?0.54:0.4,8,16), body); neck.position.set(0.58,by+0.35,0); neck.rotation.z=horse?-0.48:-0.66; g.add(neck);
-    var head=M(new THREE.CapsuleGeometry(horse?0.105:0.14, horse?0.36:0.3,8,16), body); head.position.set(horse?0.88:0.86,by+0.62,0); head.rotation.z=horse?-1.0:-1.18; g.add(head);
-    var muzzle=M(new THREE.SphereGeometry(horse?0.082:0.12,14,10), body); muzzle.position.set(horse?1.06:1.02,horse?by+0.54:by+0.46,0); muzzle.scale.set(horse?1.5:1.2,0.68,0.68); g.add(muzzle);
-    [-1,1].forEach(function(sg){ var ear=M(new THREE.ConeGeometry(0.05,0.17,7), body); ear.position.set(0.78,by+0.8,0.08*sg); ear.rotation.set(0.1,0.15*sg,-0.12); g.add(ear); });
-    var em=s({ color:0x10131a, roughness:0.4 });
-    [-1,1].forEach(function(sg){ var eye=M(new THREE.SphereGeometry(0.028,12,8), em); eye.position.set(0.94,by+0.61,0.105*sg); g.add(eye); var nost=M(new THREE.SphereGeometry(0.018,8,6), em); nost.position.set(1.14,by+0.5,0.055*sg); g.add(nost); });
-    if (!panther && !wolf){ for(var i=0;i<7;i++){ var mh=M(new THREE.BoxGeometry(0.04,0.15,0.075), acc); var f=i/6; mh.position.set(0.45+f*0.33,by+0.43+f*0.18,0); mh.rotation.z=-0.55; g.add(mh); } }
-    if (wolf){ var ruff=M(new THREE.SphereGeometry(0.26,18,12), acc); ruff.position.set(0.38,by+0.1,0); ruff.scale.set(0.8,1.05,1); g.add(ruff); }
-    var tail=M(new THREE.CapsuleGeometry(wolf?0.08:0.055,wolf?0.46:0.5,6,12), acc); tail.position.set(-0.86,by+0.03,0); tail.rotation.z=wolf?0.95:1.18; tail.scale.set(1,1,0.8); g.add(tail);
-    [-1,1].forEach(function(sg){ var flank=CBetween([-0.46,by+0.07,0.2*sg],[0.28,by+0.09,0.2*sg],0.008,acc,6); g.add(flank); });
-    var blanket=M(new THREE.BoxGeometry(0.5,0.044,0.42), acc); blanket.position.set(-0.12,by+0.27,0); blanket.rotation.z=-0.015; g.add(blanket);
-    var saddle=M(new THREE.SphereGeometry(0.21,20,14,0,Math.PI*2,0,Math.PI*0.5), det); saddle.position.set(-0.08,by+0.34,0); saddle.scale.set(1.0,0.38,0.72); g.add(saddle);
-    [-1,1].forEach(function(sg){
-      var strap=CBetween([-0.12,by+0.31,0.24*sg],[-0.18,by-0.23,0.2*sg],0.012,leather,6); g.add(strap);
-      var stir=CBetween([-0.18,by-0.22,0.2*sg],[-0.18,by-0.45,0.2*sg],0.01,det,6); g.add(stir);
-      var ring=M(new THREE.TorusGeometry(0.055,0.008,6,18), det); ring.position.set(-0.18,by-0.49,0.2*sg); ring.rotation.x=Math.PI/2; g.add(ring);
-      var rein=CBetween([-0.02,by+0.43,0.12*sg],[0.96,by+0.62,0.085*sg],0.008,leather,6); g.add(rein);
+  function buildInsect(body,acc,det,dark,s,id){
+    var g=new THREE.Group(); var by=0.8; id=String(id||"").toLowerCase();
+    g.add(Ball(0.24,0.2,0.3,acc,0,by,0.3,18));
+    g.add(Ball(0.26,0.22,0.26,body,0,by,-0.05,18));
+    g.add(Ball(0.3,0.24,0.34,acc,0,by+0.02,-0.42,18));
+    [-1,1].forEach(function(sg){ g.add(Ball(0.035,0.03,0.02,dark,0.1*sg,by+0.08,0.52,8));
+      g.add(seg3([0.06*sg,by+0.16,0.5],[0.14*sg,by+0.34,0.62],0.006,0.003,dark,5));
+      g.add(Ball(0.012,0.012,0.012,det,0.14*sg,by+0.35,0.63,6));
     });
-    var breast=CBetween([0.28,by+0.18,0],[0.72,by+0.52,0],0.014,leather,6); g.add(breast);
-    var brow=CBetween([0.83,by+0.68,-0.12],[0.83,by+0.68,0.12],0.012,leather,6); g.add(brow);
-    var noseBand=CBetween([1.08,by+0.5,-0.1],[1.08,by+0.5,0.1],0.012,leather,6); g.add(noseBand);
-    if (/unicorn/.test(id)){ var horn=M(new THREE.ConeGeometry(0.04,0.34,12), det); horn.position.set(0.94,by+0.82,0); horn.rotation.z=-0.45; g.add(horn); }
-    if (/ram|bull|bison|yak|ox|rhino/.test(id)){ [-1,1].forEach(function(sg){ var horn2=M(new THREE.ConeGeometry(0.045,0.26,8), det); horn2.position.set(0.92,by+0.68,0.09*sg); horn2.rotation.set(0.2,0.4*sg,0.25); g.add(horn2); }); }
-    if (/stag|deer|elk/.test(id)){ [-1,1].forEach(function(sg){ var a1=M(new THREE.CylinderGeometry(0.02,0.03,0.3,6), det); a1.position.set(0.8,by+0.86,0.08*sg); a1.rotation.z=0.3*sg; g.add(a1); var a2=M(new THREE.CylinderGeometry(0.014,0.02,0.18,6), det); a2.position.set(0.74,by+1.0,0.16*sg); a2.rotation.z=0.8*sg; g.add(a2); }); }
-    return rideMeta(g, by+0.48, false, { riderScale:0.8, riderX:-0.1, riderZ:0.0, riderYOffset:0.07, cameraDist:5.1, cameraLookY:1.12, previewYaw:-0.38 });
+    for(var l=0;l<6;l++){ var side=l%2?1:-1, zp=0.3-Math.floor(l/2)*0.3;
+      var lg=new THREE.Group(); lg.position.set(0.2*side,by-0.05,zp);
+      lg.add(seg3([0,0,0],[0.2*side,-0.18,0.02],0.02,0.014,body,6));
+      lg.add(seg3([0.2*side,-0.18,0.02],[0.26*side,-0.5,0.04],0.013,0.006,body,6));
+      g.add(lg);
+    }
+    if (/moth|bee|wasp|beetle/.test(id)){
+      g.userData.wing=[];
+      [-1,1].forEach(function(sg){ var wm=s({ color:col_mix(det), roughness:0.3, side:THREE.DoubleSide, transparent:true, opacity:0.5, emissive:col_mix(det), emissiveIntensity:0.2 });
+        var wing=new THREE.Mesh(loftGeometry([{y:0,rx:0.04,rz:0.01},{y:0.42,rx:0.22,rz:0.014,x:0.18*sg},{y:0.6,rx:0.1,rz:0.01,x:0.3*sg}],10), wm); R.disposables.push(wing.geometry);
+        wing.castShadow=true; wing.position.set(0.1*sg,by+0.16,-0.05); wing.rotation.z=1.15*sg; g.add(wing); g.userData.wing.push(wing); });
+    }
+    if (/scorpion/.test(id)){
+      var t3=[[0,by+0.1,-0.6],[0,by+0.42,-0.78],[0,by+0.66,-0.6]];
+      g.add(seg3(t3[0],t3[1],0.06,0.04,body,8)); g.add(seg3(t3[1],t3[2],0.04,0.02,body,8));
+      g.add(cone(0.03,0.1,det,0,by+0.7,-0.52,0.8,0,0,6));
+    }
+    addTack(g,-0.06,by+0.24,0.42,by+0.14,s({color:0x3b271b,roughness:0.75}),det);
+    return rideMeta(g, by+0.28, false, { riderScale:0.8, cameraDist:5.2 });
   }
 
-  /* ---------- assemble ---------- */
+  /* ---------------- assemble / camera / loop ---------------- */
+  function maxGlow(spec){
+    var e=spec.equipped||{}, g=0;
+    ["weapon","helmet","armor","pet"].forEach(function(k){ if(e[k]&&(e[k].glow||0)>g) g=e[k].glow||0; });
+    if(spec.mount&&spec.mount.tier){ var tg={common:0,uncommon:1,rare:2,epic:3,legendary:4,mythic:5}[spec.mount.tier]||0; if(tg>g) g=tg; }
+    return g;
+  }
+  function auraColor(spec){
+    var e=spec.equipped||{}, best=null, bg=-1;
+    ["weapon","helmet","armor","pet"].forEach(function(k){ if(e[k]&&(e[k].glow||0)>bg){ bg=e[k].glow||0; best=e[k]; } });
+    return best&&best.gem?best.gem:"#22d3ee";
+  }
   function specSig(s){ var e=s.equipped||{}; function gid(x){ return x?(x.id+":"+x.tier):"-"; }
     return [s.cls,s.traits.race,s.traits.body,s.traits.hair,s.traits.helm,s.traits.face,s.traits.eyeShape,
       s.colors.skin,s.colors.hair,s.colors.eye,s.colors.armorMid,s.colors.armorHigh,s.colors.armorDark,s.colors.accent,s.colors.cloak,
@@ -731,69 +1275,129 @@
     if(R.heroRig){ R.root.remove(R.heroRig); disposeGroup(R.heroRig); }
     if(R.mountGroup){ R.root.remove(R.mountGroup); disposeGroup(R.mountGroup); }
     if(R.petGroup){ R.root.remove(R.petGroup); disposeGroup(R.petGroup); }
-    flush(); R.heroRig=R.mountGroup=R.petGroup=null;
-    var hero=buildHeroModelKit(spec); addOutlines(hero); var mount=spec.mount?buildMount(spec):null; if(mount) addOutlines(mount); var pet=buildPet(spec); R.mounted=!!mount;
-    if(mount){ R.root.add(mount); R.mountGroup=mount; applyMountedPose(hero, mount); if(R.mode==="studio" && mount.userData.previewYaw!==undefined){ R.yaw=mount.userData.previewYaw; R.targetYaw=mount.userData.previewYaw; }
-      if(R.pedestal) R.pedestal.visible=false;
-    } else { hero.position.y=0; if(R.pedestal) R.pedestal.visible=false; }
-    R.root.add(hero); R.heroRig=hero; if(pet){ R.root.add(pet); R.petGroup=pet; } frame();
+    flush(); R.heroRig=R.mountGroup=R.petGroup=null; R.floaters=[];
+    var hero=buildHeroModelKit(spec);
+    var mount=spec.mount?buildMount(spec):null;
+    var pet=buildPet(spec); R.mounted=!!mount;
+    if(mount){ R.root.add(mount); R.mountGroup=mount; applyMountedPose(hero, mount);
+      if(R.mode==="studio" && mount.userData.previewYaw!==undefined){ R.yaw=mount.userData.previewYaw; R.targetYaw=mount.userData.previewYaw; } }
+    else { hero.position.y=0; }
+    if(R.pedestal) R.pedestal.visible = true;
+    /* aura ring driven by best equipped tier */
+    var g=maxGlow(spec);
+    if(R.auraRing){ R.auraRing.material.color=col(auraColor(spec)); R.auraRing.material.opacity=g>0?(0.18+g*0.13):0.0; }
+    R.root.add(hero); R.heroRig=hero; if(pet){ R.root.add(pet); R.petGroup=pet; }
+    frame();
   }
   function applyMountedPose(hero, mount){
-    var ud=mount.userData||{}, stand=!!ud.stand, sc=stand?(ud.riderScale||0.88):(ud.riderScale||0.78);
-    hero.scale.setScalar(sc); hero.rotation.set(stand?0:-0.035,0,0);
-    var baseY = stand ? ((ud.seatY||0.72)+0.18*sc) : ((ud.seatY||1.25)+(ud.riderYOffset||0.06)-0.9*sc);
+    var ud=mount.userData||{}, stand=!!ud.stand, sc=stand?(ud.riderScale||0.86):(ud.riderScale||0.8);
+    hero.scale.setScalar(sc); if(hero.userData.plan&&hero.userData.plan.scaleY){ hero.scale.y=sc*hero.userData.plan.scaleY; }
+    hero.rotation.set(stand?0:-0.04,0,0);
+    var P=hero.userData.plan||{hipY:0.94};
+    var baseY = stand ? (ud.seatY||0.62) : ((ud.seatY||1.2)-P.hipY*sc+0.0+(ud.riderYOffset||0));
+    if(hero.userData.torso&&hero.userData.torso.userData.skirt){ hero.userData.torso.userData.skirt.visible=stand; }
+    if(hero.userData.cloak){ hero.userData.cloak.visible=false; }
     hero.position.set(ud.riderX||0, baseY, ud.riderZ||0); hero.userData.mountBaseY=baseY; hero.userData.mounted=!stand;
     if(!stand){
-      if(hero.userData.legL){ hero.userData.legL.position.set(-0.18,0.82,0.06); hero.userData.legL.rotation.set(0.88,0,0.42); }
-      if(hero.userData.legR){ hero.userData.legR.position.set(0.18,0.82,-0.06); hero.userData.legR.rotation.set(0.88,0,-0.42); }
-      if(hero.userData.armL){ hero.userData.armL.rotation.set(-0.42,0,-0.16); }
-      if(hero.userData.armR){ hero.userData.armR.rotation.set(-0.42,0,0.16); }
-      if(hero.userData.torso){ hero.userData.torso.rotation.x=-0.04; }
+      if(hero.userData.legL){ hero.userData.legL.rotation.set(-0.95,0.1,0.78); if(hero.userData.legL.userData.knee) hero.userData.legL.userData.knee.rotation.x=1.4; }
+      if(hero.userData.legR){ hero.userData.legR.rotation.set(-0.95,-0.1,-0.78); if(hero.userData.legR.userData.knee) hero.userData.legR.userData.knee.rotation.x=1.4; }
+      if(hero.userData.armL){ hero.userData.armL.rotation.set(0.5,0,0.14); }
+      if(hero.userData.armR){ hero.userData.armR.rotation.set(0.5,0,-0.14); }
+      if(hero.userData.torso){ hero.userData.torso.rotation.x=0.05; }
+    } else {
+      if(hero.userData.legL) hero.userData.legL.rotation.z=0.12;
+      if(hero.userData.legR) hero.userData.legR.rotation.z=-0.12;
+      if(hero.userData.armL) hero.userData.armL.rotation.z=0.3;
+      if(hero.userData.armR) hero.userData.armR.rotation.z=-0.3;
     }
   }
   function frame(){ var cam=R.camera;
     var md=R.mountGroup&&R.mountGroup.userData||{};
-    if(R.mode==="studio"){ if(R.mounted){ cam.position.set(0,1.38,md.cameraDist||5.25); R.lookY=md.cameraLookY||1.1; } else { cam.position.set(0,1.07,4.22); R.lookY=0.84; } }
-    else { if(R.mounted){ cam.position.set(0,1.34,md.cameraDist||5.15); R.lookY=md.cameraLookY||1.08; } else { cam.position.set(0,1.06,4.05); R.lookY=0.86; } }
-    cam.lookAt(0,R.lookY,0); }
+    var base;
+    if(R.mode==="studio"){ base=R.mounted?(md.cameraDist||5.6):4.35; R.lookY=R.mounted?(md.cameraLookY||1.12):0.98; }
+    else { base=R.mounted?(md.cameraDist||5.4):4.15; R.lookY=R.mounted?(md.cameraLookY||1.1):0.96; }
+    if(!R.dist||Math.abs(R.dist-base)>2.5){ R.dist=base; }
+    R.targetDist=R.targetDist||base; R.baseDist=base;
+    cam.position.set(0, 1.16+R.pitch*0.6, R.dist);
+    cam.lookAt(0,R.lookY,0);
+  }
   FH3D.sync=function(spec){ if(!FH3D.available){ if(!initEngine()) return; } if(!spec) return; R.running=!!spec.running;
-    try{ var sg=specSig(spec); if(sg!==R.sig){ R.sig=sg; rebuild(spec); } startLoop(); }catch(e){ console.warn("[FH3D] sync failed:",e); } };
-
+    try{ var sg=specSig(spec); if(sg!==R.sig){ R.sig=sg; rebuild(spec); } renderOnce(); startLoop(); }catch(e){ console.warn("[FH3D] sync failed:",e); } };
+  function renderOnce(){
+    /* guarantee a visible frame + ready flag even before rAF fires (background tabs) */
+    try{ if(R.renderer&&R.scene&&R.camera&&R.container){ R.renderer.render(R.scene,R.camera); R.container.setAttribute("data-fh3d-ready","1"); R.container.classList.add("fh3d-ready"); } }catch(e){}
+  }
   function attach(container, mode){ if(!container) return; if(!FH3D.available){ if(!initEngine()) return; }
     var canvas=R.renderer.domElement; try{ if(getComputedStyle(container).position==="static") container.style.position="relative"; }catch(e){}
-    if(canvas.parentNode!==container) container.appendChild(canvas); R.container=container; R.mode=mode||"home"; if(R.mode==="studio"){ R.yaw=0; R.targetYaw=0; R.autoSpin=false; } else if(!R.dragging){ R.autoSpin=true; }
-    if(R.pedestal) R.pedestal.visible = false;
-    container.classList.add("fh3d-host"); container.setAttribute("data-fh3d-ready","0"); resize(); frame(); observe(container); startLoop(); }
+    if(canvas.parentNode!==container) container.appendChild(canvas); R.container=container; R.mode=mode||"home";
+    if(R.mode==="studio"){ R.yaw=0; R.targetYaw=0; R.autoSpin=false; } else if(!R.dragging){ R.autoSpin=true; }
+    container.classList.add("fh3d-host"); container.setAttribute("data-fh3d-ready","0"); resize(); frame(); observe(container); renderOnce(); startLoop(); }
   FH3D.attachHome=function(el){ attach(el,"home"); }; FH3D.attachStudio=function(el){ attach(el,"studio"); }; FH3D.detachStudio=function(h){ if(h) attach(h,"home"); };
   function resize(){ if(!R.container||!R.renderer) return; var w=R.container.clientWidth||120,h=R.container.clientHeight||120; R.renderer.setSize(w,h,false); R.camera.aspect=w/h; R.camera.updateProjectionMatrix(); }
   function observe(container){ if(R.ro){ try{ R.ro.disconnect(); }catch(e){} } if(window.ResizeObserver){ R.ro=new ResizeObserver(function(){ resize(); }); R.ro.observe(container); }
     if(R.io){ try{ R.io.disconnect(); }catch(e){} } if(window.IntersectionObserver){ R.io=new IntersectionObserver(function(en){ var v=en[0]&&en[0].isIntersecting; if(v&&!document.hidden) startLoop(); else stopLoop(); }, {threshold:0.01}); R.io.observe(container); } }
   function wirePointer(canvas){
-    canvas.addEventListener("pointerdown", function(e){ R.dragging=true; R.autoSpin=false; R.lastPointerX=e.clientX; try{ canvas.setPointerCapture(e.pointerId); }catch(x){} });
-    canvas.addEventListener("pointermove", function(e){ if(!R.dragging) return; var dx=e.clientX-R.lastPointerX; R.lastPointerX=e.clientX; R.targetYaw+=dx*0.012; });
-    function up(){ R.dragging=false; clearTimeout(R._t); R._t=setTimeout(function(){ R.autoSpin=true; },2800); }
+    canvas.addEventListener("pointerdown", function(e){ R.dragging=true; R.autoSpin=false; R.lastPointerX=e.clientX; R.lastPointerY=e.clientY; try{ canvas.setPointerCapture(e.pointerId); }catch(x){} });
+    canvas.addEventListener("pointermove", function(e){ if(!R.dragging) return; var dx=e.clientX-R.lastPointerX, dy=e.clientY-R.lastPointerY; R.lastPointerX=e.clientX; R.lastPointerY=e.clientY;
+      R.targetYaw+=dx*0.012; R.targetPitch=Math.max(-0.5,Math.min(0.75,(R.targetPitch||0)+dy*0.006)); });
+    function up(){ R.dragging=false; clearTimeout(R._t); R._t=setTimeout(function(){ if(R.mode!=="studio") R.autoSpin=true; },2800); }
     canvas.addEventListener("pointerup",up); canvas.addEventListener("pointercancel",up); canvas.addEventListener("pointerleave", function(){ if(R.dragging) up(); });
+    canvas.addEventListener("wheel", function(e){ if(R.mode!=="studio") return; e.preventDefault();
+      var base=R.baseDist||4.35; R.targetDist=Math.max(base*0.55,Math.min(base*1.5,(R.targetDist||base)+(e.deltaY>0?0.25:-0.25))); }, {passive:false});
   }
   function startLoop(){ if(R.raf) return; if(document.hidden) return; R.last=performance.now(); R.raf=requestAnimationFrame(tick); }
   function stopLoop(){ if(R.raf){ cancelAnimationFrame(R.raf); R.raf=0; } }
   function tick(now){
     R.raf=requestAnimationFrame(tick); var dt=Math.min(0.05,(now-R.last)/1000); R.last=now; R.clock+=dt; var t=R.clock;
-    if(R.autoSpin&&!R.dragging&&R.mode!=="studio") R.targetYaw+=dt*0.5; R.yaw+=(R.targetYaw-R.yaw)*Math.min(1,dt*8); if(R.root) R.root.rotation.y=R.yaw;
-    var sp=R.running?2.2:1.0, amp=R.running?1.4:1.0;
-    if(R.heroRig){ var h=R.heroRig, bob=Math.sin(t*2.0*sp)*0.014*amp;
-      if(h.userData.torso){ h.userData.torso.position.y=1.12+bob; h.userData.torso.rotation.y=Math.sin(t*1.0)*0.035; }
-      if(h.userData.headG){ h.userData.headG.position.y=1.59+bob; h.userData.headG.rotation.y=Math.sin(t*0.7)*0.08; h.userData.headG.rotation.x=Math.sin(t*1.2)*0.02; }
-      if(!R.mounted){ if(h.userData.armL) h.userData.armL.rotation.x=Math.sin(t*1.5*sp)*0.1*amp; if(h.userData.armR) h.userData.armR.rotation.x=-Math.sin(t*1.5*sp)*0.1*amp; }
-      else { if(h.userData.armL) h.userData.armL.rotation.x=-0.42+Math.sin(t*1.15)*0.025; if(h.userData.armR) h.userData.armR.rotation.x=-0.42-Math.sin(t*1.15)*0.025; }
-      if(h.userData.cloak) h.userData.cloak.rotation.x=Math.sin(t*1.3)*0.05+0.04;
+    if(R.reduced){ if(R.renderer&&R.scene&&R.camera){ try{ R.renderer.render(R.scene,R.camera); if(R.container){ R.container.setAttribute("data-fh3d-ready","1"); R.container.classList.add("fh3d-ready"); } }catch(e){ stopLoop(); } } return; }
+    if(R.autoSpin&&!R.dragging&&R.mode!=="studio") R.targetYaw+=dt*0.45;
+    R.yaw+=(R.targetYaw-R.yaw)*Math.min(1,dt*8); if(R.root) R.root.rotation.y=R.yaw;
+    R.pitch+=((R.targetPitch||0)-R.pitch)*Math.min(1,dt*8);
+    if(R.targetDist){ R.dist+=(R.targetDist-R.dist)*Math.min(1,dt*8); R.camera.position.set(0,1.16+R.pitch*0.6,R.dist); R.camera.lookAt(0,R.lookY,0); }
+    var sp=R.running?2.1:1.0, amp=R.running?1.5:1.0;
+    if(R.heroRig){ var h=R.heroRig, ud=h.userData, bob=Math.sin(t*1.9*sp)*0.011*amp;
+      var tb=ud.torsoBaseY||1.12, hb=ud.headBaseY||1.76;
+      if(ud.torso){ ud.torso.position.y=tb+bob; ud.torso.rotation.y=Math.sin(t*0.9)*0.03; if(!ud.mounted) ud.torso.rotation.x=Math.sin(t*1.9*sp)*0.008; }
+      if(ud.headG){ ud.headG.position.y=hb+bob*1.15; ud.headG.rotation.y=Math.sin(t*0.62)*0.09; ud.headG.rotation.x=Math.sin(t*1.1)*0.02;
+        /* blink */
+        R.blinkT-=dt; if(R.blinkT<=0){ R.blinkPhase=0.14; R.blinkT=2.2+Math.random()*3.2; }
+        if(R.blinkPhase>0){ R.blinkPhase-=dt; var k=Math.max(0,R.blinkPhase)/0.14, open=Math.abs(k-0.5)*2;
+          var lids=ud.headG.userData.lids||[]; for(var li=0;li<lids.length;li++){ lids[li].scale.y=1+(1-open)*2.6; lids[li].position.y=(0.148*0.12)+0.019-(1-open)*0.012; } }
+      }
+      if(!R.mounted){
+        var runsw=R.running?Math.sin(t*5.2):0;
+        if(ud.armL){ ud.armL.rotation.x=(R.running?runsw*0.5:Math.sin(t*1.5)*0.06); ud.armL.rotation.z=0.1+Math.sin(t*1.3)*0.01; }
+        if(ud.armR){ ud.armR.rotation.x=(R.running?-runsw*0.5:-Math.sin(t*1.5)*0.06); ud.armR.rotation.z=-0.1-Math.sin(t*1.3)*0.01; }
+        var legAmp=ud.robed?0.12:0.45;
+        if(ud.legL) ud.legL.rotation.x=R.running?-runsw*legAmp:0;
+        if(ud.legR) ud.legR.rotation.x=R.running?runsw*legAmp:0;
+        if(R.running) h.position.y=Math.abs(Math.sin(t*5.2))*0.035;
+        else if(!ud.mounted) h.position.y=0;
+      } else {
+        if(ud.armL) ud.armL.rotation.x=0.55+Math.sin(t*1.1)*0.02;
+        if(ud.armR) ud.armR.rotation.x=0.55-Math.sin(t*1.1)*0.02;
+      }
+      if(ud.cloak){ ud.cloak.rotation.x=Math.sin(t*1.25)*0.04+(R.running?0.14:0.03); }
+      if(ud.tail){ ud.tail.rotation.y=Math.sin(t*1.6)*0.25; ud.tail.rotation.x=Math.sin(t*1.1)*0.06; }
+      if(ud.wings){ for(var wi=0;wi<ud.wings.length;wi++){ var sgn=wi===0?-1:1; ud.wings[wi].rotation.y=0.5*sgn+Math.sin(t*6+wi)*0.25*sgn; } }
+      if(ud.headG&&ud.headG.userData.halo){ ud.headG.userData.halo.rotation.z=t*0.6; ud.headG.userData.halo.position.y=0.148*1.45+Math.sin(t*1.8)*0.008; }
     }
+    if(R.floaters){ for(var fi=0;fi<R.floaters.length;fi++){ var fo=R.floaters[fi]; fo.position.y+= Math.sin(t*2.2+fi)*0.0009; fo.rotation.y=t*0.9; } }
+    if(R.auraRing&&R.auraRing.material.opacity>0){ R.auraRing.material.opacity*= (1+Math.sin(t*2.4)*0.004); R.auraRing.rotation.z=t*0.25; }
     if(R.mountGroup){ var mg=R.mountGroup;
-      if(mg.userData.skiff){ mg.position.y=Math.sin(t*1.4)*0.05; if(R.heroRig) R.heroRig.position.y=((R.heroRig.userData.mountBaseY!==undefined)?R.heroRig.userData.mountBaseY:(mg.userData.seatY-0.86))+Math.sin(t*1.4)*0.05; }
-      else { var run=R.running, gy=run?Math.abs(Math.sin(t*6))*0.06:Math.sin(t*1.8)*0.02; mg.position.y=gy; if(R.heroRig) R.heroRig.position.y=((R.heroRig.userData.mountBaseY!==undefined)?R.heroRig.userData.mountBaseY:(mg.userData.seatY-0.86))+gy;
-        var legs=mg.userData.legs||[]; for(var i=0;i<legs.length;i++) legs[i].rotation.x=Math.sin(t*(run?8:2.2)+(i<2?0:Math.PI))*(run?0.5:0.12);
-        if(mg.userData.wing){ var fl=Math.sin(t*(run?6:2.6)); mg.userData.wing[0].rotation.z=0.25+fl*0.4; mg.userData.wing[1].rotation.z=-0.25-fl*0.4; if(mg.userData.wing[0].rotation.z!==undefined){} } }
+      if(mg.userData.skiff){ mg.position.y=Math.sin(t*1.4)*0.05; if(mg.userData.core){ mg.userData.core.rotation.y=t*2; }
+        if(R.heroRig) R.heroRig.position.y=((R.heroRig.userData.mountBaseY!==undefined)?R.heroRig.userData.mountBaseY:0.62)+Math.sin(t*1.4)*0.05; }
+      else { var run=R.running, gy=run?Math.abs(Math.sin(t*6))*0.05:Math.sin(t*1.7)*0.015; mg.position.y=gy;
+        if(R.heroRig&&R.heroRig.userData.mounted) R.heroRig.position.y=((R.heroRig.userData.mountBaseY!==undefined)?R.heroRig.userData.mountBaseY:0.5)+gy;
+        var legs=mg.userData.legs||[]; for(var i=0;i<legs.length;i++) legs[i].rotation.x=Math.sin(t*(run?7.5:2.0)+(i<2?0:Math.PI))*(run?0.5:0.1);
+        if(mg.userData.wing){ var fl=Math.sin(t*(run?5.5:2.4));
+          for(var wj=0;wj<mg.userData.wing.length;wj++){ var sg2=wj===0?1:-1; mg.userData.wing[wj].rotation.z=(0.12+fl*0.35)*sg2; } }
+      }
     }
-    if(R.petGroup){ var pa=t*0.8; R.petGroup.position.set(Math.cos(pa)*0.9,1.5+Math.sin(t*2)*0.08,Math.sin(pa)*0.55-0.2); R.petGroup.rotation.y=-pa+Math.PI/2; }
+    if(R.petGroup){ var pa=t*0.75; R.petGroup.position.set(Math.cos(pa)*0.72,1.28+Math.sin(t*2)*0.06,Math.sin(pa)*0.45-0.12); R.petGroup.rotation.y=-pa+HPI;
+      if(R.petGroup.userData.wings){ for(var pw=0;pw<R.petGroup.userData.wings.length;pw++){ var ps=pw===0?-1:1; R.petGroup.userData.wings[pw].rotation.z=-1.1*ps+Math.sin(t*9)*0.35*ps; } }
+      if(R.petGroup.userData.spinAll){ R.petGroup.rotation.x=Math.sin(t*1.3)*0.2; }
+    }
     if(R.renderer&&R.scene&&R.camera){ try{ R.renderer.render(R.scene,R.camera); if(R.container){ R.container.setAttribute("data-fh3d-ready","1"); R.container.classList.add("fh3d-ready"); } }catch(e){ if(R.container){ R.container.setAttribute("data-fh3d-ready","0"); R.container.classList.remove("fh3d-ready"); } stopLoop(); } }
   }
   FH3D.wireModal=function(modalId, studioHostId, homeHostId){ var modal=document.getElementById(modalId); if(!modal||!window.MutationObserver) return;
