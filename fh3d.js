@@ -299,7 +299,8 @@
     function mkArmAt(side){
       var g=new THREE.Group(); g.position.set(P.shoulderW*side,P.shoulderY,0);
       var sleeves=(kit==="plate")?mats.armor:(kit==="robe")?mats.clothHi:(kit==="shade")?mats.clothDk:(kit==="doublet")?mats.clothHi:mats.cloth;
-      var elbow=[0.05*side,-0.26,0.025], wrist=[0.068*side,-0.475,0.095];
+      var asy=P.sy||1;
+      var elbow=[0.05*side,-0.26*asy,0.025], wrist=[0.068*side,-0.475*asy,0.095];
       g.add(joint([0,0,0],0.072*th,(kit==="plate")?mats.armorHi:sleeves,1.0)); /* deltoid */
       g.add(seg3([0,0,0],elbow,0.062*th,0.047*th,sleeves,20));
       g.add(joint(elbow,0.046*th,(kit==="plate")?mats.armorHi:sleeves));
@@ -314,7 +315,7 @@
       g.add(torus(0.048*th,0.007,(kit==="plate")?mats.armorDk:mats.leatherHi,elbow[0],elbow[1]+0.045,elbow[2]-0.004,HPI*0.9,0,0.1*side));
       g.add(Ball(0.008,0.008,0.006,mats.trim,0.012*side,-0.015,0.055,6));
       /* hand at wrist */
-      var hand=new THREE.Group(); hand.position.set(wrist[0],wrist[1],wrist[2]);
+      var hand=new THREE.Group(); hand.position.set(wrist[0],wrist[1],wrist[2]); hand.scale.setScalar(0.82+0.18*asy);
       var palm=Ball(0.035,0.048,0.026,mats.skin,0.006*side,-0.035,0.006,16); hand.add(palm);
       for(var f=0;f<4;f++){
         var fx=(-0.018+f*0.013)*1.0;
@@ -1377,8 +1378,9 @@
     var sp=R.running?2.1:1.0, amp=R.running?1.5:1.0;
     if(R.heroRig){ var h=R.heroRig, ud=h.userData, bob=Math.sin(t*1.9*sp)*0.011*amp;
       var tb=ud.torsoBaseY||1.12, hb=ud.headBaseY||1.76;
-      if(ud.torso){ ud.torso.position.y=tb+bob; ud.torso.rotation.y=Math.sin(t*0.9)*0.03; if(!ud.mounted) ud.torso.rotation.x=Math.sin(t*1.9*sp)*0.008; }
-      if(ud.headG){ ud.headG.position.y=hb+bob*1.15; ud.headG.rotation.y=Math.sin(t*0.62)*0.09; ud.headG.rotation.x=Math.sin(t*1.1)*0.02;
+      var idleK=R.running?1:0.35;
+      if(ud.torso){ ud.torso.position.y=tb+bob*idleK; ud.torso.rotation.y=Math.sin(t*0.9)*0.012*idleK; if(!ud.mounted) ud.torso.rotation.x=Math.sin(t*1.9*sp)*0.008*idleK; }
+      if(ud.headG){ ud.headG.position.y=hb+bob*1.15*idleK; ud.headG.rotation.y=Math.sin(t*0.62)*0.035*idleK; ud.headG.rotation.x=Math.sin(t*1.1)*0.012*idleK;
         /* blink */
         R.blinkT-=dt; if(R.blinkT<=0){ R.blinkPhase=0.14; R.blinkT=2.2+Math.random()*3.2; }
         if(R.blinkPhase>0){ R.blinkPhase-=dt; var k=Math.max(0,R.blinkPhase)/0.14, open=Math.abs(k-0.5)*2;
@@ -1386,8 +1388,8 @@
       }
       if(!R.mounted){
         var runsw=R.running?Math.sin(t*5.2):0;
-        if(ud.armL){ ud.armL.rotation.x=(R.running?runsw*0.5:Math.sin(t*1.5)*0.06); ud.armL.rotation.z=0.1+Math.sin(t*1.3)*0.01; }
-        if(ud.armR){ ud.armR.rotation.x=(R.running?-runsw*0.5:-Math.sin(t*1.5)*0.06); ud.armR.rotation.z=-0.1-Math.sin(t*1.3)*0.01; }
+        if(ud.armL){ ud.armL.rotation.x=(R.running?runsw*0.5:Math.sin(t*1.5)*0.02); ud.armL.rotation.z=0.07+Math.sin(t*1.3)*0.004; }
+        if(ud.armR){ ud.armR.rotation.x=(R.running?-runsw*0.5:-Math.sin(t*1.5)*0.02); ud.armR.rotation.z=-0.07-Math.sin(t*1.3)*0.004; }
         var legAmp=ud.robed?0.12:0.45;
         if(ud.legL) ud.legL.rotation.x=R.running?-runsw*legAmp:0;
         if(ud.legR) ud.legR.rotation.x=R.running?runsw*legAmp:0;

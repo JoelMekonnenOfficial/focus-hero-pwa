@@ -1,3 +1,11 @@
+## v9.9.3 - arm proportions on short races, action-aware mount, calmer idle, bigger minutes box
+
+- Fixed remaining "stretched limbs": arm bone lengths now scale with race height (goblin/dwarf arms were staying human-length after the v9.9.2 shear fix). Hands scale down to match.
+- The home-card hero only rides the mount while the Travel action is active - resting/meditating/crafting shows the hero on foot. Character Studio full-loadout preview still shows the mount.
+- Idle animation calmed way down (subtle breathing only); the energetic jog/gallop still kicks in while a session is running.
+- Custom live-minutes input enlarged for easier tapping.
+- sw.js BUILD_ID -> fh-2026-07-02-v9-9-3.
+
 ## v9.9.2 - limb-shear fix, honest headwear, custom live minutes, detail pass
 
 - Fixed the "stretched limbs": goblin/dwarf/orc/fae body scaling used a non-uniform rig scale which sheared rotated limbs (worst while mounted/running). Race proportions are now baked into the joint plan; all transforms stay uniform.

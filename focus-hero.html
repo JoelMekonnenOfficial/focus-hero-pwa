@@ -3240,7 +3240,7 @@ svg{shape-rendering:geometricPrecision}
 }
 </style>
 <script src="three.min.js"></script>
-<script src="fh3d.js?v=fh-2026-07-02-v9-9-2"></script>
+<script src="fh3d.js?v=fh-2026-07-02-v9-9-3"></script>
 <script>
 /* v7.9: zoom-lock - block pinch + double-tap zoom; single-finger scroll stays. */
 (function(){
@@ -3310,7 +3310,7 @@ svg{shape-rendering:geometricPrecision}
           <button type="button" data-live-delta="15">+15m</button>
           <span id="live-custom-wrap" style="display:inline-flex;gap:4px;align-items:center">
             <button type="button" id="live-custom-sign" aria-label="Toggle add or subtract" style="min-width:34px">+</button>
-            <input type="number" id="live-custom-min" min="1" max="1440" step="1" placeholder="min" inputmode="numeric" aria-label="Custom minutes" style="width:62px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.18);border-radius:8px;color:inherit;padding:4px 6px;font:inherit">
+            <input type="number" id="live-custom-min" min="1" max="1440" step="1" placeholder="min" inputmode="numeric" aria-label="Custom minutes" style="width:96px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.22);border-radius:8px;color:inherit;padding:8px 10px;font:inherit;font-size:.95rem">
             <button type="button" id="live-custom-apply">Apply</button>
           </span>
         </div>
@@ -7673,7 +7673,16 @@ function fh3dSpec(opts={}){
       accent: secondary, cloak: kl.cape || primary || "#2563eb" },
     traits:{ race: speciesKey, body, hair: a.hair || "short", helm, face: a.face || "calm", eyeShape: a.eyeShape || "focused" },
     equipped:{ weapon: gearInfo(eq.weapon), helmet: gearInfo(eq.helmet), armor: gearInfo(eq.armor), pet: characterOnly ? null : gearInfo(eq.pet) },
-    mount: characterOnly ? null : fh3dMountFor(eq.mount || (state.hero.equipped && state.hero.equipped.mount))
+    mount: (function(){
+      if (characterOnly) return null;
+      const inStudio = (typeof fh3dStudioOpen === "function") && fh3dStudioOpen();
+      if (!inStudio){
+        /* v9.9.3: on the home card the mount only appears while actually travelling */
+        const scene = document.querySelector(".encounter-stage")?.dataset?.scene || "resting";
+        if (scene !== "travel") return null;
+      }
+      return fh3dMountFor(eq.mount || (state.hero.equipped && state.hero.equipped.mount));
+    })()
   };
 }
 function fhV98HeroCardSvg(opts={}){
