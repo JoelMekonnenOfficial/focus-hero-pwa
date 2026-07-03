@@ -5951,7 +5951,8 @@ function finalizeStopwatch(){
   state.completedFocusSessions = (state.completedFocusSessions|0) + 1;
   logMinutesToTask(state.timer.activeTaskId, minutes);
   const floor = Math.max(1, state.settings.minRewardMinutes|0 || 5);
-  const earnedRewards = minutes >= floor;
+  const __timeOnly = taskIsTimeOnly(state.timer.activeTaskId);
+  const earnedRewards = !__timeOnly && minutes >= floor;
   let breakdownMeta = null;
   if (earnedRewards){
     const xpAwarded = awardXp(xp.total);
@@ -5978,6 +5979,11 @@ function finalizeStopwatch(){
       logLine(`No loot dropped this time (${minutes}m roll completed).`);
     }
     notify("Stopwatch logged!", `+${xpAwarded} XP · ${minutes}m saved`);
+  } else if (__timeOnly){
+    breakdownMeta = { timeOnly: true, reasonShort: true };
+    logLine(`Stopwatch logged: ${minutes}m · 🌿 time-only task (no XP/loot by design)`);
+    logBattle(`Hero logged ${taskLabel} — ${minutes}m of living well. That is the reward.`, "switch");
+    notify("Logged", `${minutes}m added · 🌿 time-only task`);
   } else {
     breakdownMeta = { reasonShort: true };
     logLine(`Stopwatch logged: ${minutes}m (no rewards — below ${floor}m floor)`);
@@ -5998,6 +6004,7 @@ function finalizeStopwatch(){
     extendedStreak: lastFocusDateBefore !== state.lastFocusDate, lootItem, achievementsUnlockedHere,
     action: currentAdventureActionId()
   });
+  if (__timeOnly) sessionRecord.timeOnly = true;
   pushSessionLog(sessionRecord);
   if (earnedRewards && typeof window.eggRecordCompletedSession === "function") window.eggRecordCompletedSession(sessionRecord, __lrSwRun);
   showXpBreakdown(xp, Object.assign({}, breakdownMeta, { sessionId: sessionRecord.id }));
@@ -6119,7 +6126,8 @@ function commitFocusTimerSession(claim, minutes){
   state.completedFocusSessions = (state.completedFocusSessions|0) + 1;
   logMinutesToTask(claim.taskId, minutes);
   const floor = Math.max(1, state.settings.minRewardMinutes|0 || 5);
-  const earnedRewards = minutes >= floor;
+  const __timeOnly = taskIsTimeOnly(claim.taskId);
+  const earnedRewards = !__timeOnly && minutes >= floor;
   let breakdownMeta = null;
   if (earnedRewards){
     const xpAwarded = awardXp(xp.total);
@@ -6147,10 +6155,17 @@ function commitFocusTimerSession(claim, minutes){
     notify("Focus complete!", `+${xpAwarded} XP · time for a break`);
   } else {
     state.combo.count = comboPriorCount;
-    breakdownMeta = { reasonShort: true };
-    logLine(`Focus complete: ${minutes}m logged (no rewards — below ${floor}m floor)`);
-    logBattle(`Hero completed ${taskLabel} for ${minutes}m. No rewards below ${floor}m.`, "switch");
-    notify("Focus session logged", `${minutes}m added to your totals (below ${floor}m reward floor)`);
+    if (__timeOnly){
+      breakdownMeta = { timeOnly: true, reasonShort: true };
+      logLine(`Focus complete: ${minutes}m · 🌿 time-only task (no XP/loot by design)`);
+      logBattle(`Hero completed ${taskLabel} — ${minutes}m of living well. That is the reward.`, "switch");
+      notify("Logged", `${minutes}m added · 🌿 time-only task`);
+    } else {
+      breakdownMeta = { reasonShort: true };
+      logLine(`Focus complete: ${minutes}m logged (no rewards — below ${floor}m floor)`);
+      logBattle(`Hero completed ${taskLabel} for ${minutes}m. No rewards below ${floor}m.`, "switch");
+      notify("Focus session logged", `${minutes}m added to your totals (below ${floor}m reward floor)`);
+    }
   }
   recordAdventureMinutes(minutes);
   if (earnedRewards) maybeRecordActionEncounter("sessionComplete");
@@ -6167,6 +6182,7 @@ function commitFocusTimerSession(claim, minutes){
     extendedStreak: lastFocusDateBefore !== state.lastFocusDate, lootItem, achievementsUnlockedHere,
     action: claim.action || currentAdventureActionId()
   });
+  if (__timeOnly) sessionRecord.timeOnly = true;
   pushSessionLog(sessionRecord);
   if (earnedRewards && typeof window.eggRecordCompletedSession === "function") window.eggRecordCompletedSession(sessionRecord, __lrRun);
   showXpBreakdown(xp, Object.assign({}, breakdownMeta, { sessionId: sessionRecord.id }));
@@ -6548,6 +6564,80 @@ function setActiveTask(id){
     }
   }
   saveState(); renderTasks(); renderActiveTaskRow(); renderAvatar();
+}
+/* ===== v10.1: TIME-ONLY tasks (LIFEMAXXING) =====
+   A time-only task logs minutes and keeps your streak, but NEVER earns XP,
+   loot or coins - living well is its own reward. Auto-detected by name
+   (life max / lifemaxxing) or an explicit task.timeOnly flag. */
+function taskIsTimeOnlyByName(name){ return /life\s*[-_]?\s*max/i.test(String(name||"")); }
+function taskIsTimeOnly(taskId){
+  try {
+    const t = taskId ? (state.tasks||[]).find(x=>x&&x.id===taskId) : null;
+    if (!t) return false;
+    if (t.timeOnly === true) return true;
+    if (t.timeOnly === false) return false;
+    return taskIsTimeOnlyByName(t.name);
+  } catch(_){ return false; }
+}
+function ensureTimeOnlyFlags(){
+  try {
+    let changed = false;
+    (state.tasks||[]).forEach(t=>{
+      if (t && t.timeOnly === undefined && taskIsTimeOnlyByName(t.name)){
+        t.timeOnly = true; changed = true;
+        logLine(`🌿 ${t.name} marked Time-only - logs minutes + streak, never XP/loot/coins.`);
+      }
+    });
+    if (changed) saveState();
+  } catch(_){}
+}
+/* v10.1 ONE-SHOT: retroactively strip XP + loot from every time-only session.
+   Minutes, streak and history are NOT touched. State is backed up first. */
+function runLifemaxxRetroPurgeOnce(){
+  try {
+    const FLAG = "fh_v10_1_lifemax_purge_done";
+    if (localStorage.getItem(FLAG)) return;
+    const recs = (state.sessionsLog||[]).filter(r => r && r.type === "focus" &&
+      (r.timeOnly || (r.taskId && taskIsTimeOnly(r.taskId)) || taskIsTimeOnlyByName(r.taskName)));
+    if (!recs.length){ localStorage.setItem(FLAG, "1"); return; }
+    try { localStorage.setItem("focusHero.v4.state.pre_lifemax_purge", JSON.stringify(state)); } catch(_){}
+    let xpTotal = 0; const lootRemoved = [];
+    recs.forEach(rec => {
+      if ((rec.xp|0) > 0){ xpTotal += rec.xp|0; removeXpQuiet(rec.xp|0); }
+      rec.xp = 0; rec.rewarded = false; rec.timeOnly = true; rec.edited = true; rec.editedAt = now();
+      if (state.loot && Array.isArray(state.loot.drops)){
+        const remaining = [];
+        for (const d of state.loot.drops){
+          if (!d || d.sessionId !== rec.id){ remaining.push(d); continue; }
+          const tmpl = (typeof window.lootById === "function") ? window.lootById(d.templateId) : null;
+          const nm = (tmpl && tmpl[1]) || d.templateId;
+          if (d.iid && state.lootInstances && state.lootInstances[d.iid]) delete state.lootInstances[d.iid];
+          if (d.templateId && state.lootOwned && (state.lootOwned[d.templateId]|0) > 0){
+            state.lootOwned[d.templateId] = Math.max(0, (state.lootOwned[d.templateId]|0) - 1);
+            if (state.lootOwned[d.templateId] === 0) delete state.lootOwned[d.templateId];
+          }
+          try { const eqs = (state.hero && state.hero.equipped) || {};
+            for (const k in eqs){ const s = eqs[k];
+              if (s && ((d.iid && s.iid === d.iid) || (!s.iid && s.lootId === d.templateId))){
+                eqs[k] = null; logLine(`Unequipped ${nm} (returned by time-only cleanup).`);
+              } } } catch(_){}
+          lootRemoved.push(nm + " (" + d.rarity + ")");
+          logActivity({ category:"loot", action:"loot_clawback", sessionId:rec.id, taskId:rec.taskId||null, before:{templateId:d.templateId,rarity:d.rarity,name:nm}, after:null, source:"admin", note:"v10.1 retro - time-only task earns no loot" });
+        }
+        state.loot.drops = remaining;
+      }
+      if (rec.loot) rec.loot = null;
+    });
+    localStorage.setItem(FLAG, "1");
+    saveState();
+    if (xpTotal || lootRemoved.length){
+      logLine(`🌿 Time-only cleanup: reversed ${xpTotal} XP and ${lootRemoved.length} loot item(s) across ${recs.length} LIFEMAXXING session(s)${lootRemoved.length ? " - " + lootRemoved.join(", ") : ""}. Minutes untouched.`);
+      toast(`🌿 LIFEMAXXING cleaned: -${xpTotal} XP, ${lootRemoved.length} loot returned. Minutes kept.`, "info");
+    } else {
+      logLine(`🌿 Time-only cleanup ran: ${recs.length} LIFEMAXXING session(s) marked, nothing to reverse.`);
+    }
+    renderAll();
+  } catch(e){ console.warn("lifemax purge failed", e); }
 }
 function logMinutesToTask(taskId, minutes){
   if (!taskId || !(minutes>0)) return;
@@ -9050,6 +9140,7 @@ function renderTasks(){
     emo.onclick = (e)=>{ e.stopPropagation(); openEmojiPicker(t.id, emo); };
     const name = document.createElement("div"); name.className = "name";
     name.textContent = t.name;
+    if (taskIsTimeOnly(t.id)){ const chip=document.createElement("span"); chip.textContent=" 🌿"; chip.title="Time-only: logs minutes + streak, never XP/loot/coins"; name.appendChild(chip); }
     name.title = "Click to edit · Double-click to make active";
     name.onclick = ()=>startInlineRenameTask(t.id, name);
     name.ondblclick = ()=>setActiveTask(t.id);
@@ -10938,8 +11029,9 @@ function sessionEditXpPreview(rec, minutes){
   const streakDays = Math.max(0, (typeof rec.streakForCalc === "number" ? rec.streakForCalc : rec.streakBefore)|0);
   const xp = computeXpBreakdown(minutes, { comboCount, streakDays, settings: state.settings });
   const floor = Math.max(1, state.settings.minRewardMinutes|0 || 5);
-  const willReward = minutes >= floor;
-  return { xp, floor, willReward, xpAfter: willReward ? xp.total : 0 };
+  const timeOnly = !!rec.timeOnly || !!(rec.taskId && typeof taskIsTimeOnly === "function" && taskIsTimeOnly(rec.taskId)) || (typeof taskIsTimeOnlyByName === "function" && taskIsTimeOnlyByName(rec.taskName));
+  const willReward = !timeOnly && minutes >= floor;
+  return { xp, floor, willReward, timeOnly, xpAfter: willReward ? xp.total : 0 };
 }
 function removeXpQuiet(amount){
   if (!(amount > 0)) return;
@@ -11079,7 +11171,7 @@ function applySessionEdit(sessionId,newMinutes){
       if (__clawbackResult.removed.length && typeof toast === "function"){
         toast("Loot clawback: "+__clawbackResult.removed.length+" item(s) removed (session edited down).", "warn");
       }
-    } else if (delta < 0 && typeof window.lrSessionEndLootPipeline === "function"){
+    } else if (delta < 0 && !(xpInfo && xpInfo.timeOnly) && typeof window.lrSessionEndLootPipeline === "function"){
       /* Edit UP: roll for additional loot using the delta as a bonus mini-session.
          allowedRaritiesForMinutes(nm) tightens or loosens via the pipeline's
          internal gate. Use a new sessionId so eggs/loot dedup doesn't reject. */
@@ -12633,6 +12725,8 @@ async function boot(){
     bindTasks(); bindQuests(); bindTimer(); bindBattleLog(); bindKeys(); bindMultiTab(); bindSecretAchievementListeners();
     $("#btn-theme").onclick = toggleTheme;
     renderAll();
+    /* v10.1: time-only task flags + one-shot LIFEMAXXING XP/loot reversal */
+    try { ensureTimeOnlyFlags(); runLifemaxxRetroPurgeOnce(); } catch(_){}
     /* v10: retro-check achievements every boot - anything already earned
        (existing tasks, owned loot, streaks...) unlocks immediately. */
     try { checkAchievements(); } catch(_){}
@@ -12959,8 +13053,9 @@ function applyTaskTimeAdjustment(taskId, deltaMin){
   }
   const action = normalizeAdventureAction(state.adventure.action);
   state.adventure.actionMin[action] = Math.max(0, (state.adventure.actionMin[action]|0) + d);
-  const xpDelta = ledgerXpForMinutes(d);
-  if (d > 0) addXpQuiet(xpDelta);
+  const __timeOnlyLedger = taskIsTimeOnly(taskId);
+  const xpDelta = __timeOnlyLedger ? 0 : ledgerXpForMinutes(d);
+  if (d > 0 && xpDelta > 0) addXpQuiet(xpDelta);
   else if (xpDelta > 0) removeXpQuiet(xpDelta);
   var __dailyApplied = 0;
   if (d > 0) __dailyApplied = addDailyProgressForSession(day, "minutes", d) || 0;
@@ -12971,7 +13066,7 @@ function applyTaskTimeAdjustment(taskId, deltaMin){
      edited down. Logged user minutes are never modified here beyond the
      requested delta itself. */
   var __ledgerLoot = null;
-  if (d > 0){
+  if (d > 0 && !__timeOnlyLedger){
     try {
       const __floor = Math.max(1, state.settings.minRewardMinutes|0 || 5);
       if (d >= __floor && typeof runSessionRewardPipeline === "function"){

@@ -1,3 +1,10 @@
+# v10.1.0 — 2026-07-02
+
+**🌿 Time-only tasks (LIFEMAXXING)**
+- Tasks named like "LIFEMAXXING" are now time-only: sessions log minutes and keep your streak, but never award XP, loot or coins — living well is its own reward. Applies to live sessions (stopwatch + timer), edit-tab minute additions, and session edit-ups (no reward re-grants, no bonus rolls).
+- One-shot cleanup on first open: every past LIFEMAXXING session is stripped of its XP and loot (Midas gauntlet and friends go back to the void, unequipped if worn). Minutes, streak and history are untouched. State is backed up locally first; a log line lists exactly what was reversed.
+- 🌿 badge on time-only tasks in the task list.
+
 # v10.0.0 — 2026-07-02
 
 **FH3D "Forge" — the hero actually DOES things now**
