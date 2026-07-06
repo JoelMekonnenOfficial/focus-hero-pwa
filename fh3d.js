@@ -27,6 +27,22 @@
     mode:"home", mounted:false, running:false, actScene:"resting", lookY:1.0, sig:"", container:null, ro:null, io:null, initialized:false, reduced:false,
     blinkT:2.2, blinkPhase:0, lids:null, jawPulse:0, pose:{}, sceneT:0 };
   try { R.reduced = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches); } catch(e){}
+  /* v10.1.1: keep R.reduced live. The one-shot read above only reflects the
+     OS "reduce motion" setting AT LOAD; CSS media queries update live but the
+     3D loop did not, so toggling the setting mid-session was ignored. This
+     listener tracks changes and resumes the loop when motion is re-enabled.
+     Pure render gate: touches no app state. */
+  try {
+    if (window.matchMedia) {
+      var __rmq = window.matchMedia("(prefers-reduced-motion: reduce)");
+      var __rmOnChange = function(e){
+        R.reduced = !!(e && e.matches);
+        if (!R.reduced) { try { startLoop(); } catch(_e){} }
+      };
+      if (__rmq.addEventListener) __rmq.addEventListener("change", __rmOnChange);
+      else if (__rmq.addListener) __rmq.addListener(__rmOnChange);
+    }
+  } catch(e){}
 
   /* ---------------- engine ---------------- */
   function initEngine(){

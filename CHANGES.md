@@ -1,3 +1,10 @@
+# v10.1.1 — 2026-07-06
+
+**♿ Live reduce-motion for the 3D hero**
+- The FH3D renderer now honors your OS "reduce motion" setting *live*. Previously it only checked once when the app loaded — so turning the setting on or off while Focus Hero was open didn't change the hero animation (the rest of the UI already updated live via CSS). Now the 3D loop tracks the change: enable reduce-motion and the hero holds a calm static pose; turn it back off and the animation resumes. Renderer-only gate; no session, minute, XP, loot or streak logic is touched.
+- Under the hood: `fh3d.js?v=` and `sw.js` BUILD_ID bumped to `fh-2026-07-06-v10-1-1`; `index.html` and `focus-hero.html` remain byte-identical.
+- Verification: `node --check` on `fh3d.js` and both inline `<script>` blocks; behavioral regression suite (48 assertions) green — 660-minute ledger credit exact, session edit up/down, full session-delete reversal, LIFEMAXXING time-only gate (minutes yes, XP/loot zero), and `sum(dailyMin)==totalFocusMin`. Live user data confirmed unchanged before/after deploy.
+
 # v10.1.0 — 2026-07-02
 
 **🌿 Time-only tasks (LIFEMAXXING)**
