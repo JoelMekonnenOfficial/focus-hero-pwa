@@ -1,3 +1,16 @@
+# v10.2.0 — 2026-07-09
+
+**🎯 Daily & Weekly Focus Targets (adaptive)**
+- New goal system on the dashboard: a **Today** bar and a **This week** bar, each with three stacked tiers — **Easy / Medium / Hard**. Cross a tier and you’re rewarded through the *exact same engine as a real session*: session-scale XP (`awardXp`) **plus** a real loot roll (`runSessionRewardPipeline`) sized to that tier’s minutes, so the loot quality matches a session of that length. Bigger tier = bigger reward. Missing a target costs nothing.
+- **Adaptive sizing:** tiers auto-calibrate to your own rolling average (last 21 active days). Medium ≈ a typical day, Easy ≈ half, Hard ≈ 1.5×; weekly scales from your daily Medium (×3 / ×5 / ×7). With little history it starts gentle (30/60/90 min) and tunes up as you log more. Recalibrates once per day/week so thresholds never move under your feet mid-day.
+- **No retro-burst:** on first install, any tier you’ve *already* met today/this week is baselined as claimed — you earn from your next crossing forward, not from past minutes. Rewards are claimed-once and reset each day / ISO week.
+- Time-only (LIFEMAXXING) minutes still count toward your hours goal (consistent with how achievements count all focused time); no individual time-only session earns loot/XP — those gates are untouched.
+
+**How it’s built (safety):**
+- Implemented as a single self-contained trailing `<script>` module that *wraps* existing globals (`commitFocusTimerSession`, `finalizeStopwatch`, `applyTaskTimeAdjustment`, `applySessionEdit`, `deleteSessionRecord`, `renderAll`) and renders its own card. **Zero edits to the core app script** — verified byte-identical to a pristine clone. Fully reversible (delete the block).
+- Reads `state.history` only; never writes logged minutes. `sw.js` BUILD_ID -> `fh-2026-07-09-v10-2-0`. `fh3d.js` unchanged (its `?v=` intentionally left as-is).
+- Verification: `node --check` on all three inline `<script>` blocks + `sw.js`; targets module behavioral suite (21 assertions) green — adaptive calibration, anti-retro-burst baseline, grant-once (no double), XP/loot session-parity, weekly summing, day/week reset; core 41-assertion regression still holds because the main script is unchanged.
+
 # v10.1.2 — 2026-07-09
 
 **🗑️ Removed the "VS" encounter card**

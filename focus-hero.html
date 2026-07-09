@@ -13606,5 +13606,176 @@ window.addEventListener("unhandledrejection", (ev)=>{ if (!document.getElementBy
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
 else boot();
 </script>
+<script>
+/* ============================================================
+ * v10.2.0 — Daily & Weekly Focus Targets (adaptive thresholds)
+ * Self-contained bolt-on: wraps existing globals, never edits the
+ * core app script. Rewards run through the SAME engine as sessions
+ * (awardXp + runSessionRewardPipeline). Non-punitive, claimed-once.
+ * Reversible: delete this <script> block to remove the feature.
+ * Iron rules: reads state.history (never writes logged minutes);
+ * only additive XP/loot on a newly-reached tier.
+ * ============================================================ */
+(function(){
+  "use strict";
+  if (typeof window === "undefined") return;
+  if (window.__fhTargetsInstalled) return; window.__fhTargetsInstalled = true;
+
+  var XP_FACTOR = 1.0;      // session-parity XP for the tier's minutes (tunable)
+  var CALIB_DAYS = 21;      // rolling window for the adaptive average
+  var DEFAULT_MEDIUM = 60;  // gentle starting daily goal (min) until >=3 logged days
+  var ORDER = ["easy","medium","hard"];
+  function round5(n){ return Math.max(0, Math.round(n/5)*5); }
+  function round15(n){ return Math.max(0, Math.round(n/15)*15); }
+
+  function tk(d){ try { return (typeof todayKey==="function") ? todayKey(d) : new Date(d||Date.now()).toISOString().slice(0,10); } catch(_){ return new Date(d||Date.now()).toISOString().slice(0,10); } }
+  function weekInfo(dateOpt){
+    var d = dateOpt ? new Date(dateOpt) : new Date(); d.setHours(0,0,0,0);
+    var dow = (d.getDay()+6)%7;              // 0=Mon .. 6=Sun
+    var mon = new Date(d); mon.setDate(d.getDate()-dow);
+    var keys=[]; for (var i=0;i<7;i++){ var x=new Date(mon); x.setDate(mon.getDate()+i); keys.push(tk(x)); }
+    return { key: tk(mon), days: keys };
+  }
+  function hist(){ return (window.state && state.history && typeof state.history==="object") ? state.history : {}; }
+  function dayMinutes(k){ return Math.max(0,(hist()[k])|0); }
+  function dailyProgress(){ return dayMinutes(tk()); }
+  function weeklyProgress(){ return weekInfo().days.reduce(function(a,k){ return a+dayMinutes(k); },0); }
+
+  function rollingAvg(){
+    var h=hist(), vals=[], today=new Date(); today.setHours(0,0,0,0);
+    for (var i=0;i<CALIB_DAYS;i++){ var x=new Date(today); x.setDate(today.getDate()-i); var v=(h[tk(x)])|0; if (v>0) vals.push(v); }
+    if (vals.length<3) return null;
+    var s=0; for (var j=0;j<vals.length;j++) s+=vals[j];
+    return s/vals.length;
+  }
+  function computeDailyTiers(){
+    var avg=rollingAvg();
+    var med = (avg==null) ? DEFAULT_MEDIUM : Math.min(600, Math.max(30, round5(avg)));
+    return { easy: Math.max(15, round5(med*0.5)), medium: med, hard: round5(med*1.5) };
+  }
+  function computeWeeklyTiers(dailyMed){
+    return { easy: round15(dailyMed*3), medium: round15(dailyMed*5), hard: round15(dailyMed*7) };
+  }
+
+  function ensureShape(){
+    if (!window.state) return null;
+    if (!state.targets || typeof state.targets!=="object") state.targets={};
+    var T=state.targets;
+    if (T.mode!=="fixed") T.mode="adaptive";
+    var dk=tk(), wk=weekInfo().key, firstInstall=!T.__init;
+    if (!T.daily || T.daily.date!==dk){
+      var dt=computeDailyTiers();
+      T.daily={ date:dk, easy:dt.easy, medium:dt.medium, hard:dt.hard, claimed:{easy:false,medium:false,hard:false} };
+    }
+    if (!T.weekly || T.weekly.week!==wk){
+      var wt=computeWeeklyTiers(T.daily.medium);
+      T.weekly={ week:wk, easy:wt.easy, medium:wt.medium, hard:wt.hard, claimed:{easy:false,medium:false,hard:false} };
+    }
+    if (firstInstall){
+      // Baseline existing progress so we reward FUTURE crossings only (no retro burst).
+      var dp=dailyProgress(); ORDER.forEach(function(n){ if ((T.daily[n]|0) && dp>=(T.daily[n]|0)) T.daily.claimed[n]=true; });
+      var wp=weeklyProgress(); ORDER.forEach(function(n){ if ((T.weekly[n]|0) && wp>=(T.weekly[n]|0)) T.weekly.claimed[n]=true; });
+      T.__init=true;
+    }
+    return T;
+  }
+
+  function grantReward(scope, tierName, minutesForRoll){
+    var xp=0;
+    try { if (typeof computeXpBreakdown==="function"){ var b=computeXpBreakdown(minutesForRoll,{comboCount:0,streakDays:0,settings:(window.state&&state.settings)}); xp=Math.max(0, Math.round((b.base|0)*XP_FACTOR)); } } catch(_){}
+    if (xp>0 && typeof awardXp==="function"){ try{ awardXp(xp); }catch(_){} }
+    var lootName=null;
+    try {
+      if (typeof runSessionRewardPipeline==="function"){
+        var action=(typeof currentAdventureActionId==="function")?currentAdventureActionId():"Rest";
+        var id="target_"+scope+"_"+tierName+"_"+(scope==="weekly"?weekInfo().key:tk());
+        var run=runSessionRewardPipeline(action, minutesForRoll, id)||{};
+        var it=run.legacyItem || (run.drops&&run.drops[0]&&run.drops[0].item) || null;
+        if (it && it[1]) lootName=it[1]+(it[2]?(" ("+it[2]+")"):"");
+      }
+    } catch(_){}
+    var label=(scope==="weekly"?"Weekly":"Daily")+" "+tierName+" goal";
+    try { if (typeof toast==="function") toast("🎯 "+label+" hit! +"+xp+" XP"+(lootName?(" · "+lootName):""), "good"); } catch(_){}
+    try { if (typeof logLine==="function") logLine(label+" reached — +"+xp+" XP"+(lootName?(", loot: "+lootName):"")+"."); } catch(_){}
+    return { xp: xp, loot: lootName };
+  }
+
+  function checkScope(scope){
+    var T=state.targets, block=(scope==="daily")?T.daily:T.weekly;
+    if (!block) return false;
+    var progress=(scope==="daily")?dailyProgress():weeklyProgress();
+    var granted=false;
+    for (var i=0;i<ORDER.length;i++){
+      var name=ORDER[i], thr=block[name]|0;
+      if (thr>0 && progress>=thr && !(block.claimed && block.claimed[name])){
+        if (!block.claimed) block.claimed={};
+        block.claimed[name]=true;
+        grantReward(scope, name, thr);
+        granted=true;
+      }
+    }
+    return granted;
+  }
+
+  function fhTargetsCheck(){
+    if (!ensureShape()) return;
+    var g1=checkScope("daily"), g2=checkScope("weekly");
+    if (g1||g2){ try{ if (typeof saveState==="function") saveState(); }catch(_){} }
+    renderCard();
+  }
+  window.fhTargetsCheck=fhTargetsCheck;
+
+  function ensureStyle(){
+    if (typeof document==="undefined" || document.getElementById("fht-style")) return;
+    var s=document.createElement("style"); s.id="fht-style";
+    s.textContent=".fht-card{border:1px solid var(--border,rgba(255,255,255,.14));border-radius:14px;padding:11px 13px;margin:10px 0;background:var(--panel-2,rgba(255,255,255,.03))}"
+    +".fht-card>h3{margin:0 0 8px;font-size:.92rem;display:flex;align-items:center;gap:6px}"
+    +".fht-row{margin:9px 0}.fht-head{display:flex;justify-content:space-between;font-size:.78rem;color:var(--ink-dim,#9aa)}"
+    +".fht-head b{color:var(--ink,#fff);font-size:.82rem}"
+    +".fht-track{position:relative;height:12px;border-radius:8px;background:rgba(0,0,0,.28);margin:6px 0 4px;overflow:visible}"
+    +".fht-fill{position:absolute;left:0;top:0;bottom:0;border-radius:8px;background:linear-gradient(90deg,#22d3ee,#a78bfa);transition:width .4s ease;max-width:100%}"
+    +".fht-mark{position:absolute;top:-3px;width:18px;height:18px;margin-left:-9px;border-radius:50%;background:rgba(0,0,0,.5);border:2px solid rgba(255,255,255,.35);font-size:.6rem;line-height:15px;text-align:center;color:#fff}"
+    +".fht-mark.done{background:#34d399;border-color:#065f46}"
+    +".fht-tiers{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}"
+    +".fht-tier{font-size:.68rem;color:var(--ink-dim,#9aa);background:rgba(255,255,255,.05);border-radius:20px;padding:2px 8px}"
+    +".fht-tier.done{color:#053;background:#34d399;font-weight:600}";
+    (document.head||document.documentElement).appendChild(s);
+  }
+  function fmtH(m){ var h=(m||0)/60; return h>=10?h.toFixed(0)+"h":(h>=1?h.toFixed(1)+"h":(m|0)+"m"); }
+  function barHtml(scope){
+    var T=state.targets, block=(scope==="daily")?T.daily:T.weekly;
+    var progress=(scope==="daily")?dailyProgress():weeklyProgress();
+    var max=Math.max(block.hard|0,1), pct=Math.min(100,Math.round(progress/max*100));
+    var marks=ORDER.map(function(n){ var thr=block[n]|0, left=Math.min(100,Math.round(thr/max*100)), done=!!(block.claimed&&block.claimed[n]); return '<div class="fht-mark'+(done?" done":"")+'" style="left:'+left+'%" title="'+n+' '+fmtH(thr)+'">'+(done?"✓":"")+'</div>'; }).join("");
+    var tiers=ORDER.map(function(n){ var done=!!(block.claimed&&block.claimed[n]); return '<span class="fht-tier'+(done?" done":"")+'">'+n.charAt(0).toUpperCase()+n.slice(1)+' '+fmtH(block[n]|0)+(done?" ✓":"")+'</span>'; }).join("");
+    return '<div class="fht-row"><div class="fht-head"><b>'+(scope==="daily"?"Today":"This week")+'</b><span>'+fmtH(progress)+' / '+fmtH(block.hard|0)+'</span></div>'
+      +'<div class="fht-track"><div class="fht-fill" style="width:'+pct+'%"></div>'+marks+'</div><div class="fht-tiers">'+tiers+'</div></div>';
+  }
+  function renderCard(){
+    if (typeof document==="undefined") return;
+    if (!ensureShape()) return;
+    ensureStyle();
+    var card=document.getElementById("fht-card");
+    if (!card){
+      card=document.createElement("div"); card.className="fht-card"; card.id="fht-card";
+      var anchor=document.getElementById("daily-recap");
+      if (anchor && anchor.parentNode){ anchor.parentNode.insertBefore(card, anchor); }
+      else { var hc=document.querySelector(".hero-card"); if (hc){ var dh=hc.querySelector(".daily-hours-card"); if (dh&&dh.nextSibling) dh.parentNode.insertBefore(card,dh.nextSibling); else hc.appendChild(card); } else document.body.appendChild(card); }
+    }
+    card.innerHTML='<h3>🎯 Focus Targets <span style="font-size:.62rem;color:var(--ink-dim,#9aa);font-weight:400">adaptive</span></h3>'+barHtml("daily")+barHtml("weekly");
+  }
+  window.fhRenderTargetsCard=renderCard;
+
+  function wrap(name){ var orig=window[name]; if (typeof orig!=="function"||orig.__fhtWrapped) return; var w=function(){ var r=orig.apply(this,arguments); try{ fhTargetsCheck(); }catch(_){} return r; }; w.__fhtWrapped=true; try{ window[name]=w; }catch(_){} }
+  ["commitFocusTimerSession","finalizeStopwatch","applyTaskTimeAdjustment","applySessionEdit","deleteSessionRecord"].forEach(wrap);
+  (function(){ var orig=window.renderAll; if (typeof orig==="function" && !orig.__fhtWrapped){ var w=function(){ var r=orig.apply(this,arguments); try{ renderCard(); }catch(_){} return r; }; w.__fhtWrapped=true; window.renderAll=w; } })();
+
+  window.__fhtTest={ computeDailyTiers:computeDailyTiers, computeWeeklyTiers:computeWeeklyTiers, weekInfo:weekInfo, ensureShape:ensureShape, checkScope:checkScope, dailyProgress:dailyProgress, weeklyProgress:weeklyProgress };
+  function boot(){ try{ if (window.state) fhTargetsCheck(); }catch(_){} }
+  if (typeof document==="undefined") { /* test env */ }
+  else if (document.readyState==="complete"||document.readyState==="interactive") setTimeout(boot,300);
+  else window.addEventListener("load", function(){ setTimeout(boot,300); });
+})();
+</script>
 </body>
 </html>
