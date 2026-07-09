@@ -1,3 +1,11 @@
+# v10.1.2 — 2026-07-09
+
+**🗑️ Removed the "VS" encounter card**
+- The little card on the timer screen that pitted your Hero against an action-flavored "objective" — Open Road while travelling, Reward Cache while looting, Trail Signs while hunting, Forge Bench / Focus Orb, or a monster-of-the-day while fighting — has been removed. You said it was distracting and didn't add anything, so it's gone. The 3D hero, the progress bar, the active-task row and the Daily Recap are all untouched.
+- Pure presentational change: only the card's markup was deleted. `renderEncounterStage()` already self-guards (`if(!stage) return`), so no code path breaks; the now-unused CSS is left in place (harmless) to keep the change tiny and reversible.
+- Under the hood: markup removed from `index.html` and `focus-hero.html` (still byte-identical); `sw.js` BUILD_ID -> `fh-2026-07-09-v10-1-2`. `fh3d.js` is unchanged, so its `?v=` query is intentionally left as-is.
+- Verification: `node --check` on `fh3d.js`, `sw.js`, and both inline `<script>` blocks; behavioral regression suite (41 assertions) green — 660-minute ledger credit exact, session edit up/down absolute set, full session-delete reversal, LIFEMAXXING time-only gate (minutes yes, XP/loot zero), and `sum(dailyMin)==totalFocusMin`. No session, minute, XP, loot, coin or streak logic was touched; live user data confirmed unchanged before/after deploy.
+
 # v10.1.1 — 2026-07-06
 
 **♿ Live reduce-motion for the 3D hero**
