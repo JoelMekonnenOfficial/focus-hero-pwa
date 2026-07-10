@@ -20,18 +20,20 @@
  * if the nav markup isn't found — it can never break the app. No app code
  * or user data is touched by this worker.
  *
+ * v10.4.0: injects data-guard.js — IndexedDB snapshot ring + wipe alarm.
  * v10.3.4 fix: rewrap redirected responses for navigations (iOS strict).
  * v10.3.3 fix: re-fetching a navigate-mode Request with a RequestInit throws
  * in Chrome/Safari, which silently forced every launch onto the cache
  * fallback (and skipped injection). Fetch by URL string instead, and inject
  * into cache-served HTML too.
  */
-const BUILD_ID    = "fh-2026-07-10-v10-3-4-recovery3";
+const BUILD_ID    = "fh-2026-07-10-v10-4-0-guard";
 const CACHE_NAME  = `focus-hero-${BUILD_ID}`;
 const PRECACHE = [
   "./",
   "./focus-hero.html",
   "./recover.html",
+  "./data-guard.js",
   "./focus-hero-logo.svg",
   "./loot-rework.js",
   "./character-rebuild.js",
@@ -70,17 +72,24 @@ async function unredirect(resp){
   } catch(_) { return resp; }
 }
 
+const GUARD_TAG = '<script src="./data-guard.js" defer><\/script>';
 async function withRecoverLink(resp){
   try {
     const ct = (resp.headers.get("content-type") || "");
     if (!ct.includes("text/html")) return resp;
     const text = await resp.clone().text();
-    if (text.includes("data-nav-recover")) return resp;           // already present
-    if (!NAV_BTN_RE.test(text)) return resp;                       // markup changed — do nothing
-    const injected = text.replace(NAV_BTN_RE, "$1" + RECOVER_LINK);
+    let out = text;
+    if (!out.includes("data-nav-recover") && NAV_BTN_RE.test(out)){
+      out = out.replace(NAV_BTN_RE, "$1" + RECOVER_LINK);
+    }
+    /* v10.4.0: inject the data-guard layer (rolling snapshots + wipe alarm). */
+    if (!out.includes("data-guard.js") && out.includes("</body>")){
+      out = out.replace("</body>", GUARD_TAG.replace("<\\/script>", "</scr" + "ipt>") + "</body>");
+    }
+    if (out === text) return resp;
     const headers = new Headers(resp.headers);
     headers.delete("content-length");
-    return new Response(injected, { status: resp.status, statusText: resp.statusText, headers });
+    return new Response(out, { status: resp.status, statusText: resp.statusText, headers });
   } catch (_) {
     return resp; // any failure: serve the untouched original
   }
