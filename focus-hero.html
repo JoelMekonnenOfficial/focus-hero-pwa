@@ -16,6 +16,7 @@
 <title>Focus Hero</title>
 <style>
 /* ================================================================
+ * Focus Hero v10.3.1 - battle-report edit loot threshold clawback
  * Focus Hero v10.3.0 - target chests + visible Targets/Sessions shortcuts
  * Focus Hero v9.8.10 - live minute controls now cover Stopwatch sessions too
  * Focus Hero v9.8.9 - real app logo + live focus minute adjustments wired into XP/loot math
@@ -7106,6 +7107,8 @@ function openSessionEndEditTime(sessionId){
       }
       if (!info.willReward && rec.rewarded) html += ` <span class="xp-pill floor">drops below ${info.floor}m floor</span>`;
       if (info.willReward && !rec.rewarded) html += ` <span class="xp-pill">back above ${info.floor}m floor</span>`;
+      const claw = delta < 0 ? lootClawbackPreviewForSession(rec.id, n, rec) : { removed: [] };
+      if (claw.removed.length) html += ` <span class="xp-pill floor">removes ${claw.removed.length} loot item${claw.removed.length === 1 ? "" : "s"}</span>`;
       preview.innerHTML = html;
     }
     save.disabled = (delta === 0);
@@ -11021,6 +11024,31 @@ function sessionEditXpPreview(rec, minutes){
   const willReward = !timeOnly && minutes >= floor;
   return { xp, floor, willReward, timeOnly, xpAfter: willReward ? xp.total : 0 };
 }
+function sessionLootDrops(sessionId){
+  if (!sessionId || !state.loot || !Array.isArray(state.loot.drops)) return [];
+  return state.loot.drops.filter(d => d && d.sessionId === sessionId);
+}
+function lootClawbackPreviewForSession(sessionId, minutes, rec){
+  const allowed = (typeof allowedRaritiesForMinutes === "function") ? allowedRaritiesForMinutes(minutes) : new Set();
+  const trackedDrops = sessionLootDrops(sessionId);
+  const removed = trackedDrops.filter(d => !allowed.has(String(d.rarity || "").toLowerCase()));
+  if (!trackedDrops.length && rec && rec.loot && !allowed.has(String(rec.loot.rarity || "").toLowerCase())){
+    removed.push({
+      legacyOnly: true,
+      sessionId,
+      templateId: rec.loot.id,
+      rarity: rec.loot.rarity
+    });
+  }
+  return { allowed, trackedDrops, removed };
+}
+function refreshSessionLegacyLoot(rec, sessionId){
+  if (!rec) return;
+  const drops = sessionLootDrops(sessionId).filter(d => d && d.templateId);
+  if (!drops.length){ rec.loot = null; return; }
+  drops.sort((a,b) => rarityRank(b.rarity) - rarityRank(a.rarity));
+  rec.loot = { id: drops[0].templateId, rarity: drops[0].rarity };
+}
 function removeXpQuiet(amount){
   if (!(amount > 0)) return;
   const curTotal = totalXpForLevel(state.hero.level) + state.hero.xp;
@@ -11136,12 +11164,14 @@ function applySessionEdit(sessionId,newMinutes){
   var __clawbackResult = { removed: [], gained: [] };
   try {
     if (delta > 0 && typeof allowedRaritiesForMinutes === "function" && state.loot && Array.isArray(state.loot.drops)){
-      var allowedNow = allowedRaritiesForMinutes(nm);
+      var __lootPreview = lootClawbackPreviewForSession(sessionId, nm, rec);
+      var allowedNow = __lootPreview.allowed;
+      var __hadTrackedDrops = __lootPreview.trackedDrops.length > 0;
       var remaining = [];
       for (var __di = 0; __di < state.loot.drops.length; __di++){
         var __d = state.loot.drops[__di];
         if (!__d || __d.sessionId !== sessionId){ remaining.push(__d); continue; }
-        if (allowedNow.has(__d.rarity)){ remaining.push(__d); continue; }
+        if (allowedNow.has(String(__d.rarity || "").toLowerCase())){ remaining.push(__d); continue; }
         /* Claw back this drop */
         var __tmpl = (typeof window.lootById === "function") ? window.lootById(__d.templateId) : null;
         var __name = (__tmpl && __tmpl[1]) || __d.templateId;
@@ -11156,6 +11186,21 @@ function applySessionEdit(sessionId,newMinutes){
         logActivity({ category:"loot", action:"loot_clawback", sessionId:sessionId, taskId:rec.taskId||null, before:{templateId:__d.templateId,rarity:__d.rarity,name:__name}, after:null, source:"session-editor", note:"session edited "+oldMinutes+"m → "+nm+"m" });
       }
       state.loot.drops = remaining;
+      if (!__hadTrackedDrops && rec.loot && !allowedNow.has(String(rec.loot.rarity || "").toLowerCase())){
+        var __legacyId = rec.loot.id;
+        var __legacyRarity = rec.loot.rarity;
+        var __legacyTemplate = (typeof window.lootById === "function") ? window.lootById(__legacyId) : null;
+        var __legacyName = (__legacyTemplate && __legacyTemplate[1]) || __legacyId;
+        if (__legacyId && state.lootOwned && (state.lootOwned[__legacyId]|0) > 0){
+          state.lootOwned[__legacyId] = Math.max(0, (state.lootOwned[__legacyId]|0) - 1);
+          if (state.lootOwned[__legacyId] === 0) delete state.lootOwned[__legacyId];
+        }
+        rec.loot = null;
+        __clawbackResult.removed.push({ iid:null, templateId:__legacyId, rarity:__legacyRarity, name:__legacyName, legacyOnly:true });
+        logActivity({ category:"loot", action:"loot_clawback", sessionId:sessionId, taskId:rec.taskId||null, before:{templateId:__legacyId,rarity:__legacyRarity,name:__legacyName}, after:null, source:"session-editor", note:"legacy session edited "+oldMinutes+"m → "+nm+"m" });
+      } else if (__clawbackResult.removed.length){
+        refreshSessionLegacyLoot(rec, sessionId);
+      }
       if (__clawbackResult.removed.length && typeof toast === "function"){
         toast("Loot clawback: "+__clawbackResult.removed.length+" item(s) removed (session edited down).", "warn");
       }
@@ -11249,7 +11294,9 @@ function renderSessionEditModal(){
     } else {
       const signed = delta > 0 ? `+${delta}` : `−${Math.abs(delta)}`;
       const info = sessionEditXpPreview(rec, next);
-      preview.innerHTML = `Will apply <b>${signed}m</b> and save this session as <b>${next}m</b>. Awarded XP after edit: <b>${info.xpAfter} XP</b>.`;
+      const claw = delta < 0 ? lootClawbackPreviewForSession(rec.id, next, rec) : { removed: [] };
+      preview.innerHTML = `Will apply <b>${signed}m</b> and save this session as <b>${next}m</b>. Awarded XP after edit: <b>${info.xpAfter} XP</b>.` +
+        (claw.removed.length ? ` Lowering below a loot tier will remove <b>${claw.removed.length}</b> item${claw.removed.length === 1 ? "" : "s"} from this session.` : "");
     }
   }
 }
@@ -12137,6 +12184,7 @@ const __FocusHero = {
 };
 Object.assign(__FocusHero, {
   applySessionEdit, setAdventureAction, currentAdventureActionId,
+  lootClawbackPreviewForSession, sessionLootDrops,
   ACHIEVEMENTS_V76, MONSTERS, ACTION_LIST, pickMonster, recordEncounter,
   checkAchievementsV76, unlockSecretAchievement, isPalindrome, _achCtx, _condMet,
   defaultAdventure, defaultBestiary, defaultAchievementProgress
@@ -12386,6 +12434,87 @@ async function runSmokeTests(){
       && (task?.totalFocusMin|0) === before.taskMin + 12
       && (state.history[todayKey()]|0) >= 12;
     add("Focus claim: reduced minutes are the saved minutes", ok);
+    state = snapshot; saveState(); renderAll();
+  }
+  {
+    const snapshot = deepClone(state);
+    try {
+      ensureV76StateShape(state);
+      state.settings.minRewardMinutes = 5;
+      state.lootOwned = {};
+      state.lootInstances = {};
+      state.loot = {
+        drops: [],
+        pity: { common:0, uncommon:0, rare:0, epic:0, legendary:0, mythic:0 },
+        materials: { dust:0, shards:0, essence:0 },
+        dyesOwned: {},
+        gemsOwned: {},
+        consumables: {},
+        loadout: { slot1:null, slot2:null, slot3:null },
+        loadoutUpdatedAt: 0
+      };
+      const day = todayKey();
+      const t = createTask({ name:"ThresholdClawbackTask", emoji:"🧪" });
+      const task = state.tasks.find(x => x.id === t.id);
+      const sid = "smoke_threshold_clawback";
+      const otherSid = "smoke_other_session";
+      const xp95 = computeXpBreakdown(95, { comboCount:0, streakDays:0, settings: state.settings });
+      state.totalFocusMin = (state.totalFocusMin|0) + 95;
+      state.history[day] = (state.history[day]||0) + 95;
+      task.totalFocusMin = (task.totalFocusMin|0) + 95;
+      task.dailyMin = task.dailyMin || {};
+      task.dailyMin[day] = (task.dailyMin[day]||0) + 95;
+      state.adventure.actionMin.Travel = (state.adventure.actionMin.Travel||0) + 95;
+      const rec = buildSessionLogRecordV76({
+        id:sid, type:"focus", source:"smoke", minutes:95,
+        taskId:t.id, taskName:t.name, action:"Travel",
+        xpBreakdown:xp95, rewarded:true,
+        comboPriorCount:0, streakBefore:0, streakForCalc:0,
+        comboApplied:0, dailyFocusApplied:0, dailyMinApplied:0,
+        extendedStreak:false, lootItem:lootById("crown_of_flow")
+      });
+      state.sessionsLog.push(rec);
+      const drops = [
+        { id:"drop-common", at:now(), sessionId:sid, iid:"iid-common", templateId:"copper_coin", rarity:"common" },
+        { id:"drop-rare", at:now(), sessionId:sid, iid:"iid-rare", templateId:"whetstone_blade", rarity:"rare" },
+        { id:"drop-legendary", at:now(), sessionId:sid, iid:"iid-legendary", templateId:"crown_of_flow", rarity:"legendary" },
+        { id:"drop-other", at:now(), sessionId:otherSid, iid:"iid-other", templateId:"key_of_worlds", rarity:"legendary" }
+      ];
+      state.loot.drops = drops.slice();
+      state.lootOwned.copper_coin = 1;
+      state.lootOwned.whetstone_blade = 1;
+      state.lootOwned.crown_of_flow = 1;
+      state.lootOwned.key_of_worlds = 1;
+      const smokeInst = (iid, lootId, rarity) => ({
+        iid, lootId, tier:rarity, level:0, affixes:[], sockets:[],
+        dyeId:null, createdAt:now(), source:{ kind:"smoke" }, locked:false
+      });
+      state.lootInstances["iid-common"] = smokeInst("iid-common", "copper_coin", "common");
+      state.lootInstances["iid-rare"] = smokeInst("iid-rare", "whetstone_blade", "rare");
+      state.lootInstances["iid-legendary"] = smokeInst("iid-legendary", "crown_of_flow", "legendary");
+      state.lootInstances["iid-other"] = smokeInst("iid-other", "key_of_worlds", "legendary");
+      const preview = lootClawbackPreviewForSession(sid, 60, rec);
+      const result = applySessionEdit(sid, 60);
+      const remainingIds = new Set(state.loot.drops.map(d => d.id));
+      const recAfter = sessionRecordById(sid);
+      const keptAllowed = remainingIds.has("drop-common") && remainingIds.has("drop-rare");
+      const removedOnlyLegendary = !remainingIds.has("drop-legendary") && remainingIds.has("drop-other");
+      const inventoryOk = state.lootOwned.copper_coin === 1
+        && state.lootOwned.whetstone_blade === 1
+        && !("crown_of_flow" in state.lootOwned)
+        && state.lootOwned.key_of_worlds === 1
+        && !!state.lootInstances["iid-common"]
+        && !!state.lootInstances["iid-rare"]
+        && !state.lootInstances["iid-legendary"]
+        && !!state.lootInstances["iid-other"];
+      const recLootOk = recAfter && recAfter.loot && recAfter.loot.id === "whetstone_blade" && recAfter.loot.rarity === "rare";
+      const returnedRemoved = (result && result.clawback && Array.isArray(result.clawback.removed)) ? result.clawback.removed.length : -1;
+      add("Session edit: lowering minutes claws back only loot above new threshold",
+        result.ok && preview.removed.length === 1 && returnedRemoved === 1 && keptAllowed && removedOnlyLegendary && inventoryOk && recLootOk,
+        `preview=${preview.removed.length} returned=${returnedRemoved} state=${keptAllowed}/${removedOnlyLegendary}/${inventoryOk}/${recLootOk}`);
+    } catch(e){
+      add("Session edit: lowering minutes claws back only loot above new threshold", false, e.message || String(e));
+    }
     state = snapshot; saveState(); renderAll();
   }
   /* v7.3: cancelSession must be a true zero-credit no-op. Snapshot every stat

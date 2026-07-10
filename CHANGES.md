@@ -1,3 +1,12 @@
+# v10.3.1 — 2026-07-10
+
+**🧾 Battle Report edit loot clawback**
+- Reducing a session's minutes from the post-session edit flow or Sessions tab now previews any loot that will be removed if the corrected minutes fall below that loot tier's threshold.
+- The save path re-checks the session's drops by rarity threshold and removes only drops from that exact session that are no longer eligible. Allowed lower-tier drops stay; unrelated sessions stay untouched.
+- Session summaries now refresh their displayed loot after a clawback, so they do not keep pointing at an item that was removed.
+- Safety: this only responds to an intentional session-minute edit and only mutates loot that was earned by that edited session. Logged minutes/history are still changed only by the edit value itself.
+- `sw.js` BUILD_ID -> `fh-2026-07-10-v10-3-1`.
+
 # v10.3.0 — 2026-07-10
 
 **🎁 Target Chests + visible Sessions**
