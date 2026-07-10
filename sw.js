@@ -19,8 +19,13 @@
  * injection is wrapped in try/catch and falls back to the ORIGINAL response
  * if the nav markup isn't found — it can never break the app. No app code
  * or user data is touched by this worker.
+ *
+ * v10.3.3 fix: re-fetching a navigate-mode Request with a RequestInit throws
+ * in Chrome/Safari, which silently forced every launch onto the cache
+ * fallback (and skipped injection). Fetch by URL string instead, and inject
+ * into cache-served HTML too.
  */
-const BUILD_ID    = "fh-2026-07-10-v10-3-2-recovery";
+const BUILD_ID    = "fh-2026-07-10-v10-3-3-recovery2";
 const CACHE_NAME  = `focus-hero-${BUILD_ID}`;
 const PRECACHE = [
   "./",
@@ -104,13 +109,13 @@ self.addEventListener("fetch", event => {
 
   if (isHTML) {
     // NETWORK-FIRST for HTML. Always try fresh first; only fall back to cache
-    // when the network is unreachable. This is the fix for "app won't open
-    // after an update" — there is no scenario where a stale cached HTML wins.
+    // when the network is unreachable.
     event.respondWith((async () => {
       const cache = await caches.open(CACHE_NAME);
       const injectHere = isAppDocPath(url.pathname);
       try {
-        let fresh = await fetch(req, { cache: "no-store" });
+        /* v10.3.3: fetch by URL string — see header comment. */
+        let fresh = await fetch(req.url, { cache: "no-store", credentials: "same-origin" });
         if (fresh && fresh.ok) {
           if (injectHere) fresh = await withRecoverLink(fresh);
           // Mirror under both keys so the next offline launch works regardless
@@ -129,6 +134,7 @@ self.addEventListener("fetch", event => {
         const cached = await cache.match(req, { ignoreSearch:true })
           || (injectHere && (await cache.match("./focus-hero.html") || await cache.match("./")))
           || null;
+        if (cached && injectHere) return withRecoverLink(cached); // inject cache-served HTML too
         return cached || new Response("Offline", { status: 503 });
       }
     })());
