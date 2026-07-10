@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Focus Hero — Data Recovery</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    font: 16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background: #0b0d1a; color: #e8eaf6;
+    margin: 0; padding: 16px; max-width: 720px; margin-left: auto; margin-right: auto;
+    padding-bottom: 80px;
+  }
+  h1 { margin: 8px 0 4px; font-size: 22px; }
+  .sub { opacity: .75; margin-bottom: 18px; font-size: 13.5px; line-height: 1.45; }
+  .banner {
+    border-radius: 10px; padding: 10px 14px; margin: 10px 0; font-size: 14px;
+    background: #1a2046; border: 1px solid #33407f;
+  }
+  .banner.ok  { background: #0e2b1c; border-color: #1d6f43; color: #8affc0; }
+  .banner.bad { background: #33101a; border-color: #8a2438; color: #ffb3c0; }
+  .snap {
+    border: 1px solid #232850; border-radius: 12px; background: #121631;
+    padding: 14px; margin: 12px 0;
+  }
+  .snap.best { border-color: #f5b942; box-shadow: 0 0 0 1px #f5b94255; }
+  .snap h3 { margin: 0 0 2px; font-size: 15px; word-break: break-all; }
+  .tag { display:inline-block; font-size: 11px; padding: 1px 8px; border-radius: 99px;
+         background:#2a2f55; margin-left: 6px; vertical-align: middle; }
+  .tag.gold { background:#5c4508; color:#ffd97a; }
+  .tag.grey { background:#22263f; color:#9aa3c7; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fill,minmax(130px,1fr));
+           gap: 4px 12px; margin: 10px 0; font-size: 13.5px; }
+  .stats b { font-size: 15px; }
+  .stats span { color: #8a93b3; display: block; font-size: 11px; text-transform: uppercase; letter-spacing:.04em; }
+  .row-dates { font-size: 12.5px; color: #9aa3c7; margin-bottom: 8px; }
+  .btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+  button, .btn {
+    font: inherit; font-size: 14px; border: 0; border-radius: 9px;
+    padding: 10px 16px; cursor: pointer; color: #fff; background: #2a2f55;
+  }
+  .restore { background: #2456d9; font-weight: 600; }
+  .restore:disabled { opacity:.45 }
+  .dl { background: #22263f; }
+  .danger-note { font-size: 12px; color:#8a93b3; margin-top: 8px; }
+  .empty { color: #ff9daa; }
+  pre { background:#0a0c1c; border:1px solid #232850; border-radius:8px; padding:10px;
+        font-size:12px; overflow:auto; }
+  .footer { margin-top: 26px; font-size: 12px; color: #707899; }
+  a { color: #8a99ff; }
+</style>
+</head>
+<body>
+<h1>🚑 Focus Hero — Data Recovery</h1>
+<div class="sub">
+  This page only <b>reads</b> your device storage and lists every Focus Hero snapshot it finds,
+  with its real numbers. Nothing is changed unless you press <b>Restore</b>.
+  Restoring first saves the current state to a new backup key, so it is always reversible.
+</div>
+<div id="status"></div>
+<div id="list"></div>
+
+<div class="footer">
+  Keys scanned: any localStorage key starting with <code>focusHero.</code> ·
+  <a href="./focus-hero.html">Open Focus Hero</a>
+</div>
+
+<script>
+"use strict";
+/* ============================================================
+ * Focus Hero standalone recovery page.
+ * - READ-ONLY on load: enumerates focusHero.* keys, parses each,
+ *   shows minutes / level / sessions / history range.
+ * - Restore: backs up current main state to
+ *   focusHero.v4.state.pre-recovery-<ts>, then writes the chosen
+ *   snapshot to focusHero.v4.state, then verifies by re-reading.
+ * - No network calls. No app code. No automatic writes.
+ * ============================================================ */
+var MAIN_KEY = "focusHero.v4.state";
+
+function fmtMin(m){
+  m = m|0;
+  var h = Math.floor(m/60), r = m%60;
+  return h > 0 ? (h + "h " + r + "m") : (r + "m");
+}
+function fmtBytes(n){
+  if (n > 1048576) return (n/1048576).toFixed(1)+" MB";
+  if (n > 1024) return (n/1024).toFixed(1)+" KB";
+  return n + " B";
+}
+function esc(s){
+  return String(s).replace(/[&<>"']/g, function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+  });
+}
+
+/* Accepts a parsed JSON value that may be either a raw state object or a
+   wrapper like {savedAt, state} (LKG format) or {exportedAt, state} (backups).
+   Returns {state, savedAt} or null. */
+function unwrapState(parsed){
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  if (parsed.state && typeof parsed.state === "object" && !Array.isArray(parsed.state)){
+    return { state: parsed.state, savedAt: parsed.savedAt || parsed.exportedAt || null };
+  }
+  // Heuristic: a real state has at least one of these fields.
+  if ("totalFocusMin" in parsed || "hero" in parsed || "dataVersion" in parsed){
+    return { state: parsed, savedAt: null };
+  }
+  return null;
+}
+
+function summarize(state){
+  var hist = (state && typeof state.history === "object" && state.history) ? state.history : {};
+  var days = Object.keys(hist).filter(function(k){ return /^\d{4}-\d{2}-\d{2}$/.test(k); }).sort();
+  var histSum = 0;
+  for (var i=0;i<days.length;i++){ histSum += (hist[days[i]]|0); }
+  return {
+    totalFocusMin: (state && state.totalFocusMin)|0,
+    level: (state && state.hero && state.hero.level)|0,
+    xp: (state && state.hero && state.hero.xp)|0,
+    sessions: (state && Array.isArray(state.sessionsLog)) ? state.sessionsLog.length : 0,
+    tasks: (state && Array.isArray(state.tasks)) ? state.tasks.length : 0,
+    coins: (state && state.coins)|0,
+    streak: (state && state.streak)|0,
+    histDays: days.length,
+    histSum: histSum,
+    firstDay: days[0] || null,
+    lastDay: days[days.length-1] || null,
+    dataVersion: (state && state.dataVersion) || null
+  };
+}
+
+function scan(){
+  var out = [];
+  for (var i = 0; i < localStorage.length; i++){
+    var k = localStorage.key(i);
+    if (!k || k.indexOf("focusHero.") !== 0) continue;
+    var raw = null;
+    try { raw = localStorage.getItem(k); } catch(e){ continue; }
+    if (raw == null) continue;
+    var entry = { key: k, size: raw.length, parsed: null, savedAt: null, sum: null, raw: raw };
+    try {
+      var p = JSON.parse(raw);
+      var un = unwrapState(p);
+      if (un){ entry.parsed = un.state; entry.savedAt = un.savedAt; entry.sum = summarize(un.state); }
+    } catch(e){ /* unparseable — still listed for download */ }
+    out.push(entry);
+  }
+  // Sort: most focus minutes first; unparseable last; main key pinned context handled in render.
+  out.sort(function(a,b){
+    var am = a.sum ? (a.sum.totalFocusMin || a.sum.histSum) : -1;
+    var bm = b.sum ? (b.sum.totalFocusMin || b.sum.histSum) : -1;
+    return bm - am;
+  });
+  return out;
+}
+
+function labelFor(key){
+  if (key === MAIN_KEY) return {t:"CURRENT LIVE STATE", cls:"grey"};
+  if (key === MAIN_KEY + ".lkg") return {t:"LAST KNOWN GOOD", cls:"gold"};
+  if (key.indexOf(MAIN_KEY + ".pre-recovery") === 0) return {t:"PRE-RECOVERY BACKUP", cls:"grey"};
+  if (key.indexOf(MAIN_KEY + ".pre") === 0) return {t:"PRE-MIGRATION SNAPSHOT", cls:"grey"};
+  if (/focusHero\.v[123]\.state/.test(key)) return {t:"LEGACY", cls:"grey"};
+  return {t:"SNAPSHOT", cls:"grey"};
+}
+
+function download(entry){
+  try {
+    var blob = new Blob([entry.raw], {type:"application/json"});
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    var mins = entry.sum ? (entry.sum.totalFocusMin || 0) : 0;
+    a.download = "focus-hero-" + entry.key.replace(/[^a-z0-9.]/gi,"_") + "-" + mins + "min-" +
+      new Date().toISOString().slice(0,10) + ".json";
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+  } catch(e){ alert("Download failed: " + (e.message||e)); }
+}
+
+function restore(entry){
+  if (!entry.parsed){ alert("This snapshot could not be parsed and cannot be restored automatically."); return; }
+  var s = entry.sum;
+  var msg = "Restore this snapshot?\n\n" +
+    "Focus time: " + fmtMin(s.totalFocusMin) + "\n" +
+    "Level " + s.level + " · " + s.sessions + " sessions · " + s.histDays + " days of history\n" +
+    (s.firstDay ? ("From " + s.firstDay + " to " + s.lastDay + "\n") : "") +
+    "\nThe current state will be backed up first. Nothing is lost.";
+  if (!confirm(msg)) return;
+  var status = document.getElementById("status");
+  try {
+    // 1. Back up whatever is currently in the main key (even if blank).
+    var cur = null;
+    try { cur = localStorage.getItem(MAIN_KEY); } catch(e){}
+    var backupKey = MAIN_KEY + ".pre-recovery-" + new Date().toISOString().replace(/[:.]/g,"-");
+    if (cur != null){ localStorage.setItem(backupKey, cur); }
+    // 2. Write the snapshot state (unwrapped) into the main key.
+    var serialized = JSON.stringify(entry.parsed);
+    localStorage.setItem(MAIN_KEY, serialized);
+    // 3. Verify by reading back and comparing the headline number.
+    var check = JSON.parse(localStorage.getItem(MAIN_KEY));
+    var okMin = ((check && check.totalFocusMin)|0) === (s.totalFocusMin|0);
+    var okSess = ((check && Array.isArray(check.sessionsLog)) ? check.sessionsLog.length : 0) === s.sessions;
+    if (!okMin || !okSess) throw new Error("Read-back verification failed — restore NOT confirmed.");
+    status.innerHTML = '<div class="banner ok"><b>✅ Restored & verified.</b> ' +
+      esc(fmtMin(s.totalFocusMin)) + " across " + s.histDays + " days is now the live state " +
+      "(read-back check passed). Your previous state was backed up to a new key.<br><br>" +
+      '<b>Next:</b> <a href="./focus-hero.html">open Focus Hero</a>, confirm your stats look right, ' +
+      "then IMMEDIATELY do Settings → Back up all data to save a copy off-device.</div>";
+    window.scrollTo(0,0);
+    render(); // re-scan so the list reflects the new reality
+  } catch(e){
+    status.innerHTML = '<div class="banner bad"><b>❌ Restore failed:</b> ' + esc(e.message||e) +
+      "<br>Nothing further was changed. Your snapshots are untouched — screenshot this and tell Claude/ChatGPT.</div>";
+  }
+}
+
+function render(){
+  var list = document.getElementById("list");
+  var entries = scan();
+  if (!entries.length){
+    list.innerHTML = '<div class="banner bad">No <code>focusHero.*</code> keys found in this browser context.<br><br>' +
+      "<b>Important:</b> the installed home-screen app and the plain browser have SEPARATE storage. " +
+      "Open this page from INSIDE the app (Settings → 🚑 Recovery) — not in a separate browser tab.</div>";
+    return;
+  }
+  var best = null;
+  for (var i=0;i<entries.length;i++){
+    var e = entries[i];
+    if (e.sum && (best===null || (e.sum.totalFocusMin > best))) best = e.sum.totalFocusMin;
+  }
+  var html = "";
+  entries.forEach(function(e, idx){
+    var lab = labelFor(e.key);
+    var isBest = e.sum && e.sum.totalFocusMin === best && best > 0;
+    html += '<div class="snap' + (isBest ? " best" : "") + '">';
+    html += "<h3>" + esc(e.key) +
+      ' <span class="tag ' + lab.cls + '">' + lab.t + "</span>" +
+      (isBest ? ' <span class="tag gold">MOST DATA</span>' : "") + "</h3>";
+    if (e.savedAt) html += '<div class="row-dates">Snapshot saved: ' + esc(e.savedAt) + "</div>";
+    if (e.sum){
+      var s = e.sum;
+      html += '<div class="stats">' +
+        "<div><span>Total focus</span><b>" + esc(fmtMin(s.totalFocusMin)) + "</b></div>" +
+        "<div><span>Level / XP</span><b>" + s.level + " / " + s.xp + "</b></div>" +
+        "<div><span>Sessions</span><b>" + s.sessions + "</b></div>" +
+        "<div><span>History days</span><b>" + s.histDays + "</b></div>" +
+        "<div><span>Tasks</span><b>" + s.tasks + "</b></div>" +
+        "<div><span>Coins</span><b>" + s.coins + "</b></div>" +
+        "</div>";
+      if (s.firstDay) html += '<div class="row-dates">History: ' + esc(s.firstDay) + " → " + esc(s.lastDay) +
+        " · logged sum " + esc(fmtMin(s.histSum)) + " · v" + esc(String(s.dataVersion)) + "</div>";
+      if (s.totalFocusMin === 0 && s.sessions === 0)
+        html += '<div class="row-dates empty">Empty / blank state</div>';
+    } else {
+      html += '<div class="row-dates empty">Could not parse (' + fmtBytes(e.size) + ") — download it and send it to your assistant.</div>";
+    }
+    html += '<div class="btns">';
+    if (e.key !== MAIN_KEY && e.parsed){
+      html += '<button class="restore" data-idx="' + idx + '">⟲ Restore this</button>';
+    }
+    html += '<button class="dl" data-dl="' + idx + '">⬇ Download copy</button>';
+    html += "</div>";
+    html += '<div class="danger-note">' + fmtBytes(e.size) + "</div>";
+    html += "</div>";
+  });
+  list.innerHTML = html;
+  list.querySelectorAll("button.restore").forEach(function(b){
+    b.addEventListener("click", function(){ restore(entries[b.dataset.idx|0]); });
+  });
+  list.querySelectorAll("button.dl").forEach(function(b){
+    b.addEventListener("click", function(){ download(entries[b.dataset.dl|0]); });
+  });
+}
+
+try { render(); }
+catch(e){
+  document.getElementById("status").innerHTML =
+    '<div class="banner bad">Recovery page error: ' + esc(e.message||e) + "</div>";
+}
+</script>
+</body>
+</html>
