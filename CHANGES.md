@@ -1,3 +1,13 @@
+# v10.3.0 — 2026-07-10
+
+**🎁 Target Chests + visible Sessions**
+- Daily and weekly adaptive Focus Targets now present their Easy / Medium / Hard tiers as actual chest rewards: Daily/Weekly Supply Chest, Royal Chest, and Legendary Chest. Crossing a tier still uses the existing v10.2 reward path, so XP and loot odds stay aligned with the minutes required for that chest.
+- Added a dedicated **🎯 Targets** tab in Progression. The compact dashboard target card now has an **Open Targets** shortcut, and the full tab shows the chest rack plus a plain data-safety note.
+- Added a bottom-nav **Sessions** shortcut that opens the existing Sessions tab directly, so recent sessions are no longer buried in the long rewards tab row.
+- Safety: targets still read `state.history` only for progress/calibration and never edit logged minutes, hours, tasks, sessions, streaks, or history. Chest opening only adds the intended one-time XP/loot reward through the existing reward engine.
+- Rollback: the previous production source is the v10.2.0 commit (`3967a61`) and will be tagged before this deploy as `pre-v10.3-target-chests`.
+- `sw.js` BUILD_ID -> `fh-2026-07-10-v10-3-0`.
+
 # v10.2.0 — 2026-07-09
 
 **🎯 Daily & Weekly Focus Targets (adaptive)**

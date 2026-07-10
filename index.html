@@ -16,6 +16,7 @@
 <title>Focus Hero</title>
 <style>
 /* ================================================================
+ * Focus Hero v10.3.0 - target chests + visible Targets/Sessions shortcuts
  * Focus Hero v9.8.10 - live minute controls now cover Stopwatch sessions too
  * Focus Hero v9.8.9 - real app logo + live focus minute adjustments wired into XP/loot math
  * Focus Hero v9.8.8 - durable 180-day app/session logs + session history tab + avatar battery mode + loot/store expansion
@@ -3441,7 +3442,8 @@ svg{shape-rendering:geometricPrecision}
     <div class="card" id="section-progress" aria-labelledby="tabs-heading">
       <h2 id="tabs-heading" class="sr-only">Progression</h2>
       <div class="tabs" role="tablist" aria-label="Progression">
-        <button role="tab" data-tab="loot" aria-pressed="true">Loot</button>
+        <button role="tab" data-tab="targets" aria-pressed="true">🎯 Targets</button>
+        <button role="tab" data-tab="loot" aria-pressed="false">Loot</button>
         <button role="tab" data-tab="quests-v85" aria-pressed="false">📋 Quests</button>
         <button role="tab" data-tab="world" aria-pressed="false">🌍 World</button>
         <button role="tab" data-tab="vault" aria-pressed="false">🏛️ Vault</button>
@@ -3456,7 +3458,8 @@ svg{shape-rendering:geometricPrecision}
         <button role="tab" data-tab="sessions" aria-pressed="false">🗂️ Sessions</button>
         <button role="tab" data-tab="heat" aria-pressed="false">Heatmap</button>
       </div>
-      <div id="tab-loot" class="tab-panel"><div id="loot-grid" class="loot-grid"></div></div>
+      <div id="tab-targets" class="tab-panel"><div id="fht-tab-panel" class="fht-tab-panel"><div class="muted" style="font-size:.85rem">Adaptive daily and weekly targets load here.</div></div></div>
+      <div id="tab-loot" class="tab-panel" hidden><div id="loot-grid" class="loot-grid"></div></div>
       <div id="tab-mounts" class="tab-panel" hidden><div id="mount-grid" class="loot-grid companion-grid"></div></div>
       <div id="tab-pets" class="tab-panel" hidden><div id="pet-grid" class="loot-grid companion-grid"></div></div>
       <div id="tab-quests-v85" class="tab-panel" hidden><div id="quests-v85-panel"><div class="muted" style="font-size:.85rem;margin-bottom:6px">Daily, weekly, and seasonal quests. Claim rewards when complete.</div></div></div>
@@ -3490,6 +3493,7 @@ svg{shape-rendering:geometricPrecision}
   <button type="button" data-nav-target="section-hero"><span>◇</span><b>Hero</b></button>
   <button type="button" data-nav-target="section-progress"><span>✦</span><b>Rewards</b></button>
   <button type="button" data-nav-target="section-log"><span>▤</span><b>Log</b></button>
+  <button type="button" data-nav-action="sessions"><span>🗂</span><b>Sessions</b></button>
   <button type="button" data-nav-action="all-tasks"><span>☰</span><b>All</b></button>
 </nav>
 
@@ -11471,6 +11475,7 @@ function bindTabs(){
       if (tab === "store" && typeof renderStore === "function") renderStore();
       if (tab === "ledger" && typeof renderLedger === "function") renderLedger();
       if (tab === "sessions" && typeof renderSessionHistoryPanel === "function") renderSessionHistoryPanel();
+      if (tab === "targets" && typeof window.fhRenderTargetsCard === "function") window.fhRenderTargetsCard();
       if (tab === "forge" && typeof window.renderForgePanel === "function") window.renderForgePanel();
       if (tab === "drops" && typeof window.renderDropsPanel === "function") window.renderDropsPanel();
     });
@@ -11903,6 +11908,7 @@ function bindDesignShell(){
   $$("[data-color-choice]").forEach(b=>b.addEventListener("click", ()=>{ setColorPreset(b.dataset.colorChoice); }));
   $$(".app-nav [data-nav-target]").forEach(b=>b.addEventListener("click", ()=>scrollToSection(b.dataset.navTarget)));
   $$(".app-nav [data-nav-action='all-tasks']").forEach(b=>b.addEventListener("click", openAllTasksSheet));
+  $$(".app-nav [data-nav-action='sessions']").forEach(b=>b.addEventListener("click", ()=>openProgressPanel("sessions")));
   const claimSync = e=>setClaimMinutes(e.target.value);
   $("#claim-minutes")?.addEventListener("input", claimSync);
   $("#claim-range")?.addEventListener("input", claimSync);
@@ -13565,7 +13571,7 @@ function openEmojiPicker(taskIdOrOpts, anchor){
 
 /* --- progression sub-tabs (overrides the original; adds store + ledger) --- */
 function bindTabs(){
-  const KEYS = ["loot","quests-v85","world","vault","stable","mounts","pets","drops","forge","ach","store","ledger","sessions","bestiary","heat"];
+  const KEYS = ["targets","loot","quests-v85","world","vault","stable","mounts","pets","drops","forge","ach","store","ledger","sessions","bestiary","heat"];
   $$(".tabs button[role='tab']").forEach(b=>{
     b.addEventListener("click", ()=>{
       const tab = b.dataset.tab;
@@ -13574,6 +13580,7 @@ function bindTabs(){
       if (tab === "store")  { try{renderStore();}  catch(_){} }
       if (tab === "ledger") { try{renderLedger();} catch(_){} }
       if (tab === "sessions") { try{renderSessionHistoryPanel();} catch(_){} }
+      if (tab === "targets" && typeof window.fhRenderTargetsCard === "function") { try{window.fhRenderTargetsCard();} catch(_){} }
       if (tab === "drops" && typeof window.renderDropsPanel === "function") { try{window.renderDropsPanel();} catch(_){} }
       if (tab === "forge" && typeof window.renderForgePanel === "function") { try{window.renderForgePanel();} catch(_){} }
       if (tab === "stable" && typeof window.crRenderStable === "function") { try{window.crRenderStable();} catch(_){} }
@@ -13608,7 +13615,8 @@ else boot();
 </script>
 <script>
 /* ============================================================
- * v10.2.0 — Daily & Weekly Focus Targets (adaptive thresholds)
+ * v10.3.0 — Daily & Weekly Target Chests
+ * Builds on v10.2.0 adaptive Focus Targets.
  * Self-contained bolt-on: wraps existing globals, never edits the
  * core app script. Rewards run through the SAME engine as sessions
  * (awardXp + runSessionRewardPipeline). Non-punitive, claimed-once.
@@ -13627,6 +13635,27 @@ else boot();
   var ORDER = ["easy","medium","hard"];
   function round5(n){ return Math.max(0, Math.round(n/5)*5); }
   function round15(n){ return Math.max(0, Math.round(n/15)*15); }
+  function tierMeta(scope, tierName){
+    var raw = {
+      easy:   { name:"Supply Chest",    rarity:"common",    sym:"🧰" },
+      medium: { name:"Royal Chest",     rarity:"rare",      sym:"🎁" },
+      hard:   { name:"Legendary Chest", rarity:"legendary", sym:"💎" }
+    }[tierName] || { name:"Target Chest", rarity:"common", sym:"🎁" };
+    return {
+      name: (scope==="weekly" ? "Weekly " : "Daily ") + raw.name,
+      rarity: raw.rarity,
+      sym: raw.sym
+    };
+  }
+  function xpForMinutes(minutesForRoll){
+    try {
+      if (typeof computeXpBreakdown === "function"){
+        var b = computeXpBreakdown(minutesForRoll, { comboCount:0, streakDays:0, settings:(window.state&&state.settings) });
+        return Math.max(0, Math.round((b.base|0) * XP_FACTOR));
+      }
+    } catch(_){}
+    return 0;
+  }
 
   function tk(d){ try { return (typeof todayKey==="function") ? todayKey(d) : new Date(d||Date.now()).toISOString().slice(0,10); } catch(_){ return new Date(d||Date.now()).toISOString().slice(0,10); } }
   function weekInfo(dateOpt){
@@ -13681,22 +13710,28 @@ else boot();
   }
 
   function grantReward(scope, tierName, minutesForRoll){
-    var xp=0;
-    try { if (typeof computeXpBreakdown==="function"){ var b=computeXpBreakdown(minutesForRoll,{comboCount:0,streakDays:0,settings:(window.state&&state.settings)}); xp=Math.max(0, Math.round((b.base|0)*XP_FACTOR)); } } catch(_){}
+    var meta=tierMeta(scope, tierName);
+    var rewardId="target_"+scope+"_"+tierName+"_"+(scope==="weekly"?weekInfo().key:tk());
+    var xp=xpForMinutes(minutesForRoll);
     if (xp>0 && typeof awardXp==="function"){ try{ awardXp(xp); }catch(_){} }
     var lootName=null;
     try {
       if (typeof runSessionRewardPipeline==="function"){
         var action=(typeof currentAdventureActionId==="function")?currentAdventureActionId():"Rest";
-        var id="target_"+scope+"_"+tierName+"_"+(scope==="weekly"?weekInfo().key:tk());
-        var run=runSessionRewardPipeline(action, minutesForRoll, id)||{};
+        var run=runSessionRewardPipeline(action, minutesForRoll, rewardId)||{};
         var it=run.legacyItem || (run.drops&&run.drops[0]&&run.drops[0].item) || null;
         if (it && it[1]) lootName=it[1]+(it[2]?(" ("+it[2]+")"):"");
       }
     } catch(_){}
-    var label=(scope==="weekly"?"Weekly":"Daily")+" "+tierName+" goal";
-    try { if (typeof toast==="function") toast("🎯 "+label+" hit! +"+xp+" XP"+(lootName?(" · "+lootName):""), "good"); } catch(_){}
-    try { if (typeof logLine==="function") logLine(label+" reached — +"+xp+" XP"+(lootName?(", loot: "+lootName):"")+"."); } catch(_){}
+    try {
+      if (typeof logActivity==="function"){
+        logActivity({ category:"loot", action:"target_chest_opened", sessionId:rewardId, before:null,
+          after:{ scope:scope, tier:tierName, chest:meta.name, rarity:meta.rarity, minutes:minutesForRoll|0, xp:xp, loot:lootName },
+          source:"focus-targets", note:"Adaptive target chest; logged minutes unchanged" });
+      }
+    } catch(_){}
+    try { if (typeof toast==="function") toast(meta.sym+" "+meta.name+" opened! +"+xp+" XP"+(lootName?(" · "+lootName):""), "good"); } catch(_){}
+    try { if (typeof logLine==="function") logLine(meta.name+" opened — +"+xp+" XP"+(lootName?(", loot: "+lootName):"")+"."); } catch(_){}
     return { xp: xp, loot: lootName };
   }
 
@@ -13738,7 +13773,18 @@ else boot();
     +".fht-mark.done{background:#34d399;border-color:#065f46}"
     +".fht-tiers{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}"
     +".fht-tier{font-size:.68rem;color:var(--ink-dim,#9aa);background:rgba(255,255,255,.05);border-radius:20px;padding:2px 8px}"
-    +".fht-tier.done{color:#053;background:#34d399;font-weight:600}";
+    +".fht-tier.done{color:#053;background:#34d399;font-weight:600}"
+    +".fht-chests{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-top:8px}"
+    +".fht-chest{border:1px solid rgba(255,255,255,.10);border-radius:12px;background:rgba(255,255,255,.045);padding:8px;min-width:0}"
+    +".fht-chest.opened{border-color:rgba(52,211,153,.55);background:rgba(52,211,153,.12)}"
+    +".fht-chest.ready{border-color:rgba(245,158,11,.62);background:rgba(245,158,11,.11)}"
+    +".fht-chest .sym{font-size:1.25rem;line-height:1;display:block}"
+    +".fht-chest b{display:block;margin-top:4px;font-size:.74rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"
+    +".fht-chest span{display:block;margin-top:2px;font-size:.64rem;color:var(--ink-dim,#9aa)}"
+    +".fht-note{margin-top:8px;font-size:.68rem;color:var(--ink-dim,#9aa);line-height:1.35}"
+    +".fht-actions{display:flex;justify-content:flex-end;margin-top:8px}"
+    +".fht-actions button{font-size:.72rem;padding:.28rem .6rem;border-radius:999px}"
+    +".fht-tab-panel .fht-card{margin:0}";
     (document.head||document.documentElement).appendChild(s);
   }
   function fmtH(m){ var h=(m||0)/60; return h>=10?h.toFixed(0)+"h":(h>=1?h.toFixed(1)+"h":(m|0)+"m"); }
@@ -13751,6 +13797,27 @@ else boot();
     return '<div class="fht-row"><div class="fht-head"><b>'+(scope==="daily"?"Today":"This week")+'</b><span>'+fmtH(progress)+' / '+fmtH(block.hard|0)+'</span></div>'
       +'<div class="fht-track"><div class="fht-fill" style="width:'+pct+'%"></div>'+marks+'</div><div class="fht-tiers">'+tiers+'</div></div>';
   }
+  function chestHtml(scope){
+    var T=state.targets, block=(scope==="daily")?T.daily:T.weekly;
+    var progress=(scope==="daily")?dailyProgress():weeklyProgress();
+    return '<div class="fht-chests">'+ORDER.map(function(n){
+      var thr=block[n]|0, done=!!(block.claimed&&block.claimed[n]), reached=progress>=thr;
+      var meta=tierMeta(scope,n);
+      var status=done ? "Opened" : reached ? "Ready" : (fmtH(Math.max(0,thr-progress))+" left");
+      var cls=done ? " opened" : reached ? " ready" : "";
+      var xp=xpForMinutes(thr);
+      return '<div class="fht-chest'+cls+'" title="'+meta.name+'">'+
+        '<span class="sym">'+meta.sym+'</span><b>'+meta.name+'</b>'+
+        '<span>'+status+' · '+fmtH(thr)+' · +'+xp+' XP roll</span></div>';
+    }).join("")+'</div>';
+  }
+  function targetHtml(full){
+    var note = full
+      ? '<div class="fht-note">Targets read your existing minute history to size goals. They never edit logged minutes, tasks, sessions, streaks, or history; opened chests only add the intended XP/loot reward once.</div>'
+      : '<div class="fht-note">Adaptive daily and weekly chests. Logged minutes are read-only.</div><div class="fht-actions"><button type="button" data-fht-open>Open Targets</button></div>';
+    return '<h3>🎯 Focus Targets <span style="font-size:.62rem;color:var(--ink-dim,#9aa);font-weight:400">adaptive chests</span></h3>'
+      +barHtml("daily")+chestHtml("daily")+barHtml("weekly")+chestHtml("weekly")+note;
+  }
   function renderCard(){
     if (typeof document==="undefined") return;
     if (!ensureShape()) return;
@@ -13762,7 +13829,12 @@ else boot();
       if (anchor && anchor.parentNode){ anchor.parentNode.insertBefore(card, anchor); }
       else { var hc=document.querySelector(".hero-card"); if (hc){ var dh=hc.querySelector(".daily-hours-card"); if (dh&&dh.nextSibling) dh.parentNode.insertBefore(card,dh.nextSibling); else hc.appendChild(card); } else document.body.appendChild(card); }
     }
-    card.innerHTML='<h3>🎯 Focus Targets <span style="font-size:.62rem;color:var(--ink-dim,#9aa);font-weight:400">adaptive</span></h3>'+barHtml("daily")+barHtml("weekly");
+    card.innerHTML=targetHtml(false);
+    var panel=document.getElementById("fht-tab-panel");
+    if (panel) panel.innerHTML='<div class="fht-card fht-card-full">'+targetHtml(true)+'</div>';
+    document.querySelectorAll("[data-fht-open]").forEach(function(btn){
+      btn.onclick=function(){ try{ if (typeof openProgressPanel==="function") openProgressPanel("targets"); }catch(_){} };
+    });
   }
   window.fhRenderTargetsCard=renderCard;
 
@@ -13770,7 +13842,7 @@ else boot();
   ["commitFocusTimerSession","finalizeStopwatch","applyTaskTimeAdjustment","applySessionEdit","deleteSessionRecord"].forEach(wrap);
   (function(){ var orig=window.renderAll; if (typeof orig==="function" && !orig.__fhtWrapped){ var w=function(){ var r=orig.apply(this,arguments); try{ renderCard(); }catch(_){} return r; }; w.__fhtWrapped=true; window.renderAll=w; } })();
 
-  window.__fhtTest={ computeDailyTiers:computeDailyTiers, computeWeeklyTiers:computeWeeklyTiers, weekInfo:weekInfo, ensureShape:ensureShape, checkScope:checkScope, dailyProgress:dailyProgress, weeklyProgress:weeklyProgress };
+  window.__fhtTest={ computeDailyTiers:computeDailyTiers, computeWeeklyTiers:computeWeeklyTiers, weekInfo:weekInfo, ensureShape:ensureShape, checkScope:checkScope, dailyProgress:dailyProgress, weeklyProgress:weeklyProgress, tierMeta:tierMeta, chestHtml:chestHtml, targetHtml:targetHtml, xpForMinutes:xpForMinutes };
   function boot(){ try{ if (window.state) fhTargetsCheck(); }catch(_){} }
   if (typeof document==="undefined") { /* test env */ }
   else if (document.readyState==="complete"||document.readyState==="interactive") setTimeout(boot,300);
