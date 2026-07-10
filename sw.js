@@ -20,12 +20,13 @@
  * if the nav markup isn't found — it can never break the app. No app code
  * or user data is touched by this worker.
  *
+ * v10.3.4 fix: rewrap redirected responses for navigations (iOS strict).
  * v10.3.3 fix: re-fetching a navigate-mode Request with a RequestInit throws
  * in Chrome/Safari, which silently forced every launch onto the cache
  * fallback (and skipped injection). Fetch by URL string instead, and inject
  * into cache-served HTML too.
  */
-const BUILD_ID    = "fh-2026-07-10-v10-3-3-recovery2";
+const BUILD_ID    = "fh-2026-07-10-v10-3-4-recovery3";
 const CACHE_NAME  = `focus-hero-${BUILD_ID}`;
 const PRECACHE = [
   "./",
@@ -51,7 +52,22 @@ const RECOVER_LINK = '<a href="./recover.html" data-nav-recover style="display:f
 const NAV_BTN_RE = /(<button[^>]*data-nav-action="all-tasks"[\s\S]{0,200}?<\/button>)/;
 
 function isAppDocPath(pathname){
-  return pathname === "/" || pathname === "/index.html" || pathname === "/focus-hero.html";
+  return pathname === "/" || pathname === "/index.html" || pathname === "/focus-hero.html"
+      || pathname === "/index" || pathname === "/focus-hero";
+}
+
+/* v10.3.4: iOS Safari rejects redirected responses served to navigations
+   ("response served by service worker has redirections") — Cloudflare
+   pretty-URLs redirect /recover.html -> /recover. Rewrap the final response
+   so the redirected flag is cleared. */
+async function unredirect(resp){
+  try {
+    if (!resp || !resp.redirected) return resp;
+    const body = await resp.clone().blob();
+    const headers = new Headers(resp.headers);
+    headers.delete("content-length");
+    return new Response(body, { status: resp.status, statusText: resp.statusText, headers });
+  } catch(_) { return resp; }
 }
 
 async function withRecoverLink(resp){
@@ -117,6 +133,7 @@ self.addEventListener("fetch", event => {
         /* v10.3.3: fetch by URL string — see header comment. */
         let fresh = await fetch(req.url, { cache: "no-store", credentials: "same-origin" });
         if (fresh && fresh.ok) {
+          fresh = await unredirect(fresh);
           if (injectHere) fresh = await withRecoverLink(fresh);
           // Mirror under both keys so the next offline launch works regardless
           // of whether the request was for "/" or "/focus-hero.html".
@@ -134,8 +151,9 @@ self.addEventListener("fetch", event => {
         const cached = await cache.match(req, { ignoreSearch:true })
           || (injectHere && (await cache.match("./focus-hero.html") || await cache.match("./")))
           || null;
-        if (cached && injectHere) return withRecoverLink(cached); // inject cache-served HTML too
-        return cached || new Response("Offline", { status: 503 });
+        if (cached && injectHere) return withRecoverLink(await unredirect(cached)); // inject cache-served HTML too
+        if (cached) return unredirect(cached);
+        return new Response("Offline", { status: 503 });
       }
     })());
     return;
