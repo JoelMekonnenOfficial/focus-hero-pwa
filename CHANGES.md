@@ -1,3 +1,11 @@
+# v10.4.1 — 2026-07-11
+
+**🔒 Private cloud-backup readiness check**
+- The scheduled Supabase verifier now records only aggregate status (`rowCount` and newest `updated_at`). It never downloads or commits player rows, encrypted state blobs, row IDs, or sync-secret hashes into this public repository.
+- A missing service-role secret still fails loudly, and the public status trail remains useful for confirming that protected cloud rows exist and are fresh.
+- Fixed a time-only reward leak: LIFEMAXXING/time-only timer and stopwatch sessions can still unlock earned achievement badges and advance target bars, but those paths now suppress achievement XP and target-chest XP/loot. They remain minutes/streak only, including edit-up and ledger paths.
+- Existing XP, loot, minutes, sessions, history, and cloud data are not clawed back or rewritten. `sw.js` BUILD_ID -> `fh-2026-07-11-v10-4-1-safety`.
+
 # v10.3.1 — 2026-07-10
 
 **🧾 Battle Report edit loot clawback**
