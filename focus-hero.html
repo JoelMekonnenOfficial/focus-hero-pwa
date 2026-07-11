@@ -5940,7 +5940,7 @@ function finalizeStopwatch(){
   state.completedFocusSessions = (state.completedFocusSessions|0) + 1;
   logMinutesToTask(state.timer.activeTaskId, minutes);
   const floor = Math.max(1, state.settings.minRewardMinutes|0 || 5);
-  const __timeOnly = taskIsTimeOnly(state.timer.activeTaskId);
+  const __timeOnly = taskIsTimeOnly(state.timer.activeTaskId) || taskIsTimeOnlyByName(taskLabel);
   const earnedRewards = !__timeOnly && minutes >= floor;
   let breakdownMeta = null;
   if (earnedRewards){
@@ -5981,7 +5981,7 @@ function finalizeStopwatch(){
   }
   recordAdventureMinutes(minutes);
   if (earnedRewards) maybeRecordActionEncounter("stopwatchComplete");
-  if (typeof checkAchievementsV76 === "function") achievementsUnlockedHere = checkAchievementsV76("stopwatchComplete") || [];
+  if (typeof checkAchievementsV76 === "function") achievementsUnlockedHere = checkAchievementsV76({ source:"stopwatchComplete", suppressRewards:__timeOnly }) || [];
   const sessionRecord = buildSessionLogRecordV76({
     id: earnedRewards ? __lrSwSessId : undefined,
     type:"focus", source:"stopwatch", minutes, taskId: state.timer.activeTaskId||null,
@@ -6010,7 +6010,7 @@ function finalizeStopwatch(){
   state.timer.activeTaskId = null;
   state.timer.activeTaskNameAtStart = null;
   stopKeepalive(); releaseWakeLock();
-  checkAchievements();
+  checkAchievements({ source:"stopwatchComplete", suppressRewards:__timeOnly });
   saveState(); renderAll();
 }
 function ensureTickInterval(){
@@ -6115,7 +6115,7 @@ function commitFocusTimerSession(claim, minutes){
   state.completedFocusSessions = (state.completedFocusSessions|0) + 1;
   logMinutesToTask(claim.taskId, minutes);
   const floor = Math.max(1, state.settings.minRewardMinutes|0 || 5);
-  const __timeOnly = taskIsTimeOnly(claim.taskId);
+  const __timeOnly = taskIsTimeOnly(claim.taskId) || taskIsTimeOnlyByName(taskLabel);
   const earnedRewards = !__timeOnly && minutes >= floor;
   let breakdownMeta = null;
   if (earnedRewards){
@@ -6158,7 +6158,7 @@ function commitFocusTimerSession(claim, minutes){
   }
   recordAdventureMinutes(minutes);
   if (earnedRewards) maybeRecordActionEncounter("sessionComplete");
-  if (typeof checkAchievementsV76 === "function") achievementsUnlockedHere = checkAchievementsV76("sessionComplete") || [];
+  if (typeof checkAchievementsV76 === "function") achievementsUnlockedHere = checkAchievementsV76({ source:"sessionComplete", suppressRewards:__timeOnly }) || [];
   const sessionRecord = buildSessionLogRecordV76({
     id: earnedRewards ? __lrSessId : undefined,
     type:"focus", source:"timer", minutes, taskId: claim.taskId||null,
@@ -6181,7 +6181,7 @@ function commitFocusTimerSession(claim, minutes){
   setMode(nextIsLong ? "long" : "short");
   state.timer.activeTaskId = null;
   state.timer.activeTaskNameAtStart = null;
-  checkAchievements();
+  checkAchievements({ source:"sessionComplete", suppressRewards:__timeOnly });
   renderAll();
   if (state.settings.autoStart){ setTimeout(startTimer, 900); }
 }
@@ -6564,7 +6564,6 @@ function taskIsTimeOnly(taskId){
     const t = taskId ? (state.tasks||[]).find(x=>x&&x.id===taskId) : null;
     if (!t) return false;
     if (t.timeOnly === true) return true;
-    if (t.timeOnly === false) return false;
     return taskIsTimeOnlyByName(t.name);
   } catch(_){ return false; }
 }
@@ -10863,15 +10862,19 @@ function _condProgress(cond,c){
   if(cond.ironWill!=null)return[c.ironWill,cond.ironWill];
   return null;
 }
-function _achUnlock(id){
+function _achUnlock(id, opts){
   if(state.achievements[id])return false;
   const meta = ACHIEVEMENTS_V76.find(a=>a[0]===id); if(!meta)return false;
   state.achievements[id]=now();
   const tier=ACHIEVEMENT_TIERS[meta[2]]||ACHIEVEMENT_TIERS.bronze;
-  if(tier.xp>0)awardXp(tier.xp);
+  const suppressRewards=!!(opts&&opts.suppressRewards);
+  const awardedXp=suppressRewards?0:tier.xp;
+  if(awardedXp>0)awardXp(awardedXp);
   if(["gold","platinum","mythic"].includes(meta[2]))showAchievementBanner(meta[1],meta[2]);
   else toast(`${meta[3]} Achievement: ${meta[1]}`,"good");
-  logLine(`Unlocked: ${meta[1]} (${meta[2]} · +${tier.xp} XP)`);
+  logLine(suppressRewards
+    ? `Unlocked: ${meta[1]} (${meta[2]} · no XP from time-only session)`
+    : `Unlocked: ${meta[1]} (${meta[2]} · +${tier.xp} XP)`);
   return true;
 }
 function showAchievementBanner(name,tier){
@@ -10881,13 +10884,14 @@ function showAchievementBanner(name,tier){
   document.body.appendChild(b);
   setTimeout(()=>{try{b.remove();}catch(_){}},tier==="mythic"?4000:3000);
 }
-function checkAchievementsV76(){
+function checkAchievementsV76(opts){
   ensureV76StateShape(state);
+  const suppressRewards=!!(opts&&opts.suppressRewards);
   const c=_achCtx(), unlocked=[];
   for(const meta of ACHIEVEMENTS_V76){
     const [id,,,,,cond]=meta;
     if(state.achievements[id]||cond.hidden)continue;
-    if(_condMet(cond,c)){ if(_achUnlock(id))unlocked.push(id); }
+    if(_condMet(cond,c)){ if(_achUnlock(id,{suppressRewards}))unlocked.push(id); }
     else {
       const p=_condProgress(cond,c);
       if(p)state.achievementProgress[id]=p[0];
@@ -10896,7 +10900,7 @@ function checkAchievementsV76(){
   saveState(); renderAchievements();
   return unlocked;
 }
-function checkAchievements(){ return checkAchievementsV76(); }
+function checkAchievements(opts){ return checkAchievementsV76(opts); }
 function unlockSecretAchievement(secretKey){
   const meta=ACHIEVEMENTS_V76.find(a=>a[5].hidden&&a[5].secretKey===secretKey);
   if(!meta)return false;
@@ -11225,6 +11229,9 @@ function applySessionEdit(sessionId,newMinutes){
       }
     }
   } catch(__e){ console.warn("v8.7.0 loot clawback/reroll failed", __e); }
+  if (delta < 0 && xpInfo && xpInfo.timeOnly && typeof checkAchievements === "function"){
+    try { checkAchievements({ source:"timeOnlySessionEdit", suppressRewards:true }); } catch(_){}
+  }
   appendEditLog({ taskName:(task&&task.name)||rec.action||"Focus", before:oldMinutes, after:nm, source:"session-editor", sessionId:sessionId, taskId:rec.taskId||null });
   saveState(); renderAll();
   return{ok:true,sessionId,oldMinutes,newMinutes:nm,newMinutesCap:cap,minutesDelta:-delta,xpDelta:-xpDelta,rewardedAfter:xpInfo.willReward, clawback:__clawbackResult, clamped:__clampedEdit, requested:raw};
@@ -13210,6 +13217,9 @@ function applyTaskTimeAdjustment(taskId, deltaMin){
       }
     } catch(__e){ console.warn("ledger reward pipeline failed", __e); }
   }
+  if (d > 0 && __timeOnlyLedger && typeof checkAchievements === "function"){
+    try { checkAchievements({ source:"timeOnlyLedger", suppressRewards:true }); } catch(_){}
+  }
   const after = task.totalFocusMin|0;
   appendEditLog({ taskName: task.name, before: before, after: after, source:"ledger" });
   saveState(); renderAll();
@@ -13864,7 +13874,7 @@ else boot();
     return { xp: xp, loot: lootName };
   }
 
-  function checkScope(scope){
+  function checkScope(scope, suppressRewards){
     var T=state.targets, block=(scope==="daily")?T.daily:T.weekly;
     if (!block) return false;
     var progress=(scope==="daily")?dailyProgress():weeklyProgress();
@@ -13874,16 +13884,17 @@ else boot();
       if (thr>0 && progress>=thr && !(block.claimed && block.claimed[name])){
         if (!block.claimed) block.claimed={};
         block.claimed[name]=true;
-        grantReward(scope, name, thr);
+        if (!suppressRewards) grantReward(scope, name, thr);
         granted=true;
       }
     }
     return granted;
   }
 
-  function fhTargetsCheck(){
+  function fhTargetsCheck(opts){
     if (!ensureShape()) return;
-    var g1=checkScope("daily"), g2=checkScope("weekly");
+    var suppressRewards=!!(opts&&opts.suppressRewards);
+    var g1=checkScope("daily",suppressRewards), g2=checkScope("weekly",suppressRewards);
     if (g1||g2){ try{ if (typeof saveState==="function") saveState(); }catch(_){} }
     renderCard();
   }
@@ -13967,7 +13978,20 @@ else boot();
   }
   window.fhRenderTargetsCard=renderCard;
 
-  function wrap(name){ var orig=window[name]; if (typeof orig!=="function"||orig.__fhtWrapped) return; var w=function(){ var r=orig.apply(this,arguments); try{ fhTargetsCheck(); }catch(_){} return r; }; w.__fhtWrapped=true; try{ window[name]=w; }catch(_){} }
+  function wrappedMutationIsTimeOnly(name,args){
+    try {
+      if (typeof taskIsTimeOnly!=="function") return false;
+      if (name==="commitFocusTimerSession") return taskIsTimeOnly(args[0]&&args[0].taskId) || (typeof taskIsTimeOnlyByName==="function"&&taskIsTimeOnlyByName(args[0]&&args[0].taskLabel));
+      if (name==="finalizeStopwatch") return taskIsTimeOnly(state&&state.timer&&state.timer.activeTaskId) || (typeof taskIsTimeOnlyByName==="function"&&taskIsTimeOnlyByName(typeof currentSessionTaskLabel==="function"?currentSessionTaskLabel():""));
+      if (name==="applyTaskTimeAdjustment") return taskIsTimeOnly(args[0]);
+      if (name==="applySessionEdit"){
+        var rec=(state.sessionsLog||[]).find(function(r){return r&&r.id===args[0];});
+        return !!(rec&&(rec.timeOnly||taskIsTimeOnly(rec.taskId)||(typeof taskIsTimeOnlyByName==="function"&&taskIsTimeOnlyByName(rec.taskName))));
+      }
+    } catch(_){}
+    return false;
+  }
+  function wrap(name){ var orig=window[name]; if (typeof orig!=="function"||orig.__fhtWrapped) return; var w=function(){ var suppressRewards=wrappedMutationIsTimeOnly(name,arguments); var r=orig.apply(this,arguments); try{ fhTargetsCheck({suppressRewards:suppressRewards}); }catch(_){} return r; }; w.__fhtWrapped=true; try{ window[name]=w; }catch(_){} }
   ["commitFocusTimerSession","finalizeStopwatch","applyTaskTimeAdjustment","applySessionEdit","deleteSessionRecord"].forEach(wrap);
   (function(){ var orig=window.renderAll; if (typeof orig==="function" && !orig.__fhtWrapped){ var w=function(){ var r=orig.apply(this,arguments); try{ renderCard(); }catch(_){} return r; }; w.__fhtWrapped=true; window.renderAll=w; } })();
 

@@ -1,4 +1,4 @@
-name: Supabase heartbeat and backup
+name: Supabase heartbeat and backup readiness
 
 on:
   schedule:
@@ -18,20 +18,20 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Heartbeat Supabase and dump player rows (fails loud if backup is blind)
+      - name: Verify Supabase metadata without exporting player rows
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: node .github/scripts/supabase-heartbeat-backup.mjs
 
-      - name: Commit backup and status (runs even on failure so the status trail is honest)
+      - name: Commit aggregate status (runs even on failure so the trail is honest)
         if: always()
         run: |
-          if [ -z "$(git status --porcelain -- backups/)" ]; then
-            echo "No backup changes to commit."
+          if [ -z "$(git status --porcelain -- backups/backup-status.json)" ]; then
+            echo "No aggregate status changes to commit."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add backups/
-          git commit -m "backup: daily Supabase player rows + status"
+          git add -- backups/backup-status.json
+          git commit -m "ops: daily Supabase aggregate status"
           git push
