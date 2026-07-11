@@ -3610,10 +3610,13 @@ svg{shape-rendering:geometricPrecision}
     <div id="sync-active" hidden>
       <p class="muted" style="font-size:.85rem">Syncing via <b id="sync-backend">—</b>. Last pushed <span id="sync-last">never</span>.</p>
       <div class="row" style="gap:8px">
-        <button id="btn-gen-code">Generate sync code</button>
+        <button id="btn-gen-code">Generate new sync code</button>
         <button id="btn-enter-code">Enter code from other device</button>
         <button id="btn-sync-now">Sync now</button>
         <button id="btn-disconnect" style="margin-left:auto">Disconnect</button>
+      </div>
+      <div class="muted" style="font-size:.76rem;margin-top:7px">
+        Generate creates a new cloud identity and uploads this device. If your hours are missing or this device looks blank, open Recovery first or claim the code from the device that still has your data.
       </div>
       <div id="code-area" hidden style="margin-top:10px">
         <div class="sync-code" id="code-text">—</div>
@@ -4074,6 +4077,7 @@ const DEFAULTS = {
     enabled: false, backend: null,
     playerId: null, cloudRev: 0, lastPushedAt: 0, lastPulledAt: 0,
     syncCode: null, syncSecret: null, syncSecretHash: null, userId: null,
+    userToken: null, refreshToken: null, tokenExpiresAt: 0,
     jsonstorageUrl: null,
     saltB64: null,
     pendingSync: false, retryCount: 0, retryAfter: 0,
@@ -7217,7 +7221,7 @@ function buildBackupBlob({ labelSuffix="" } = {}){
     appVersion: "focus-hero",
     exportedAt: new Date().toISOString(),
     dataVersion: state.dataVersion,
-    state
+    state: sanitizeForExport(state)
   };
   const blob = new Blob([JSON.stringify(payload,null,2)], {type:"application/json"});
   const fname = `focus-hero-backup-${todayKey()}${labelSuffix}.json`;
@@ -7308,6 +7312,21 @@ function sanitizeForCloud(s){
     delete out.sync.syncSecret;
     delete out.sync.syncSecretHash;
     delete out.sync.userToken;
+    delete out.sync.refreshToken;
+    delete out.sync.tokenExpiresAt;
+  }
+  return out;
+}
+/* Auth sessions are device credentials, not backup data. Keep the reusable
+   sync code/secret in a user-requested export, but never export bearer or
+   refresh tokens. */
+function sanitizeForExport(s){
+  if (!s || typeof s !== "object") return s;
+  const out = deepClone(s);
+  if (out.sync && typeof out.sync === "object"){
+    delete out.sync.userToken;
+    delete out.sync.refreshToken;
+    delete out.sync.tokenExpiresAt;
   }
   return out;
 }
@@ -7330,14 +7349,15 @@ async function encryptStateBlob(plainObj){
   const ct = await crypto.subtle.encrypt({ name:"AES-GCM", iv }, key, enc.encode(JSON.stringify(safe)));
   return { e2e: { v:1, alg:"AES-GCM-256", kdf:"PBKDF2-SHA256", iter: PBKDF2_ITERATIONS, ct: b64(ct), iv: b64(iv.buffer), salt: saltB64 } };
 }
-async function decryptStateBlob(blob){
+async function decryptStateBlob(blob, syncContext){
   if (!blob || typeof blob !== "object") return blob;
   if (!blob.e2e) return blob.plain || blob;     // plaintext or legacy (state was top-level data)
   const e = blob.e2e;
-  if (!state.sync.syncCode || !state.sync.syncSecret){
+  const sync = syncContext || state.sync;
+  if (!sync.syncCode || !sync.syncSecret){
     throw new Error("Cannot decrypt — missing sync code/secret on this device");
   }
-  const key = await deriveE2EKey({ code: state.sync.syncCode, secret: state.sync.syncSecret, saltB64: e.salt });
+  const key = await deriveE2EKey({ code: sync.syncCode, secret: sync.syncSecret, saltB64: e.salt });
   const ct = unb64(e.ct); const iv = unb64(e.iv);
   const plain = await crypto.subtle.decrypt({ name:"AES-GCM", iv: new Uint8Array(iv) }, key, ct);
   return JSON.parse(new TextDecoder().decode(plain));
@@ -9391,41 +9411,141 @@ function skipTimer(){
 function hasSupabase(){ return !!(SUPABASE_URL && SUPABASE_ANON_KEY); }
 function currentBackend(){ return state.sync.backend || (hasSupabase() ? "supabase" : "jsonstorage"); }
 
-async function supabaseRequest(path, init){
-  init = init||{};
-  const url = `${SUPABASE_URL}/rest/v1/${path}`;
-  const headers = Object.assign({
-    "apikey": SUPABASE_ANON_KEY,
-    "Authorization": `Bearer ${state.sync.userToken || SUPABASE_ANON_KEY}`,
-    "Content-Type": "application/json",
-    "Prefer": init.prefer || "return=representation"
-  }, init.headers||{});
-  /* v4.2: send the sync_secret_hash as a custom header so RLS policies on
-     the server can authorize the request without trusting the JSON body.
-     Without this header the row's secret-protected RLS policies will reject
-     update/select/delete, even with a valid anon key. */
-  if (state.sync && state.sync.syncSecretHash){
-    headers["x-sync-secret-hash"] = state.sync.syncSecretHash;
+let syncIdentityGeneration = 0;
+let syncIdentityOperation = null;
+let syncOperationsPaused = false;
+function syncControlError(code, message){
+  const err = new Error(message);
+  err.code = code;
+  return err;
+}
+function isSyncControlError(err){
+  return err && (err.code === "FH_SYNC_SUPERSEDED" || err.code === "FH_SYNC_IDENTITY_BUSY");
+}
+function assertSyncOperationCurrent(generation){
+  if (generation !== syncIdentityGeneration){
+    throw syncControlError("FH_SYNC_SUPERSEDED", "Cloud result ignored because the sync identity changed");
   }
-  return fetch(url, Object.assign({}, init, { headers }));
+}
+function beginSyncIdentityOperation(kind){
+  if (syncIdentityOperation) return null;
+  const operation = { kind, generation:++syncIdentityGeneration };
+  syncIdentityOperation = operation;
+  syncOperationsPaused = true;
+  try { stopPullPoll(); } catch(_){}
+  try { clearCloudRetryTimer(); } catch(_){}
+  try { clearTimeout(cloudDebounce); } catch(_){}
+  return operation;
+}
+function endSyncIdentityOperation(operation){
+  if (syncIdentityOperation !== operation) return;
+  syncIdentityOperation = null;
+  syncOperationsPaused = false;
+  if (state.sync.enabled) startPullPoll();
+  scheduleCloudRetry();
 }
 
-async function supabaseSignInAnon(){
-  if (!hasSupabase()) return null;
-  if (state.sync.userToken) return state.sync.userToken;
+async function supabaseRequest(path, init){
+  init = init||{};
+  const sync = init.syncContext || state.sync;
+  const persistAuth = init.persistAuth !== false && sync === state.sync;
+  const operationGeneration = init.operationGeneration ?? syncIdentityGeneration;
+  assertSyncOperationCurrent(operationGeneration);
+  const url = `${SUPABASE_URL}/rest/v1/${path}`;
+  await supabaseSignInAnon({ syncContext:sync, persist:persistAuth, operationGeneration });
+  assertSyncOperationCurrent(operationGeneration);
+  const requestOnce = ()=>{
+    const headers = Object.assign({
+      "apikey": SUPABASE_ANON_KEY,
+      "Authorization": `Bearer ${sync.userToken}`,
+      "Content-Type": "application/json",
+      "Prefer": init.prefer || "return=representation"
+    }, init.headers||{});
+    /* v4.2: send the sync_secret_hash as a custom header so RLS policies on
+       the server can authorize the request without trusting the JSON body. */
+    if (sync.syncSecretHash) headers["x-sync-secret-hash"] = sync.syncSecretHash;
+    const fetchInit = Object.assign({}, init, { headers });
+    delete fetchInit.prefer;
+    delete fetchInit.syncContext;
+    delete fetchInit.persistAuth;
+    delete fetchInit.operationGeneration;
+    return fetch(url, fetchInit);
+  };
+  let response = await requestOnce();
+  assertSyncOperationCurrent(operationGeneration);
+  /* A cached JWT can be rejected even when the device clock says it is still
+     usable. Renew once on 401, then replay this exact read/write request. */
+  if (response.status === 401){
+    await supabaseSignInAnon({ syncContext:sync, persist:persistAuth, forceRefresh:true, operationGeneration });
+    assertSyncOperationCurrent(operationGeneration);
+    response = await requestOnce();
+    assertSyncOperationCurrent(operationGeneration);
+  }
+  return response;
+}
+
+function supabaseJwtExpiryMs(token){
   try {
-    const r = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
-      method:"POST", headers:{ "apikey":SUPABASE_ANON_KEY, "Content-Type":"application/json" },
-      body: JSON.stringify({ data:{ app:"focus-hero" } })
-    }).catch(()=>null);
-    let data = r && r.ok ? await r.json() : null;
-    if (data && data.access_token){
-      state.sync.userToken = data.access_token;
-      state.sync.userId = data.user?.id || null;
-      return data.access_token;
-    }
-  } catch(e){ console.warn("supabase signin", e); }
-  return null;
+    const part = String(token||"").split(".")[1];
+    if (!part) return 0;
+    const normalized = part.replace(/-/g,"+").replace(/_/g,"/").padEnd(Math.ceil(part.length/4)*4,"=");
+    const payload = JSON.parse(atob(normalized));
+    return Number(payload.exp) > 0 ? Number(payload.exp) * 1000 : 0;
+  } catch(_){ return 0; }
+}
+function supabaseTokenIsFresh(sync){
+  if (!sync || !sync.userToken) return false;
+  const expiresAt = Number(sync.tokenExpiresAt) || supabaseJwtExpiryMs(sync.userToken);
+  return expiresAt > Date.now() + 60_000;
+}
+function cacheSupabaseSession(sync, data, persist, replaceIdentity){
+  const session = data && data.session ? data.session : data;
+  if (!session || !session.access_token) return false;
+  sync.userToken = session.access_token;
+  sync.refreshToken = session.refresh_token || (replaceIdentity ? null : (sync.refreshToken || null));
+  sync.userId = session.user?.id || (replaceIdentity ? null : (sync.userId || null));
+  const expiresAtSeconds = Number(session.expires_at);
+  const expiresInSeconds = Number(session.expires_in);
+  sync.tokenExpiresAt = expiresAtSeconds > 0
+    ? expiresAtSeconds * 1000
+    : (expiresInSeconds > 0 ? Date.now() + expiresInSeconds * 1000 : supabaseJwtExpiryMs(session.access_token));
+  if (persist) saveState({fromPull:true});
+  return true;
+}
+async function requestSupabaseAuth(url, body){
+  const response = await fetch(url, {
+    method:"POST",
+    headers:{ "apikey":SUPABASE_ANON_KEY, "Content-Type":"application/json" },
+    body:JSON.stringify(body)
+  }).catch(()=>null);
+  if (!response || !response.ok) return null;
+  try { return await response.json(); } catch(_){ return null; }
+}
+async function supabaseSignInAnon(opts){
+  opts = opts||{};
+  if (!hasSupabase()) throw new Error("Supabase not configured");
+  const sync = opts.syncContext || state.sync;
+  const persist = opts.persist !== false && sync === state.sync;
+  const operationGeneration = opts.operationGeneration ?? syncIdentityGeneration;
+  assertSyncOperationCurrent(operationGeneration);
+  if (!opts.forceRefresh && supabaseTokenIsFresh(sync)) return sync.userToken;
+
+  if (sync.refreshToken){
+    const refreshed = await requestSupabaseAuth(
+      `${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`,
+      { refresh_token:sync.refreshToken }
+    );
+    assertSyncOperationCurrent(operationGeneration);
+    if (cacheSupabaseSession(sync, refreshed, persist, false)) return sync.userToken;
+  }
+
+  /* Refresh tokens were not stored by older builds. Expired legacy sessions
+     recover by replacing only the per-device anonymous auth session. Secret-
+     protected row ownership/payload identity is unchanged. */
+  const created = await requestSupabaseAuth(`${SUPABASE_URL}/auth/v1/signup`, { data:{ app:"focus-hero" } });
+  assertSyncOperationCurrent(operationGeneration);
+  if (cacheSupabaseSession(sync, created, persist, true)) return sync.userToken;
+  throw new Error("Cloud authentication could not be renewed; no cloud request was sent");
 }
 
 function newSyncCode(){
@@ -9447,11 +9567,37 @@ async function derivePlayerId(code, secret){
   return (await sha256(`fh-player:${String(code).toUpperCase()}:${String(secret).toUpperCase()}`)).slice(0, 32);
 }
 
+function syncStateLooksBlank(s){
+  if (!s || typeof s !== "object") return true;
+  if ((Number(s.totalFocusMin)||0) > 0 || (Number(s.completedFocusSessions)||0) > 0) return false;
+  if (Object.values(s.history||{}).some(v=>(Number(v)||0) > 0)) return false;
+  if ((s.tasks||[]).some(t=>(Number(t?.totalFocusMin)||0) > 0)) return false;
+  if ((s.sessionsLog||[]).some(r=>(Number(r?.minutes)||0) > 0)) return false;
+  return true;
+}
+
 async function genSyncCode(){
-  const { code, secret } = newSyncCode();
-  state.sync.syncCode = code;
-  state.sync.syncSecret = secret;
-  state.sync.syncSecretHash = await sha256(`${code}:${secret}`);
+  if (syncStateLooksBlank(state)){
+    const typed = window.prompt(
+      "⚠️ This device currently shows 0 focused minutes.\n\n"+
+      "A new sync code cannot recover an older cloud row and may replace this device's sync identity. Open Recovery first if hours are missing.\n\n"+
+      "Only for a genuinely new profile, type NEW PROFILE to continue:"
+    );
+    if (String(typed||"").trim().toUpperCase() !== "NEW PROFILE"){
+      toast("Sync code not generated. Your current identity and local data are unchanged.", "warn");
+      return false;
+    }
+  }
+  const identityOperation = beginSyncIdentityOperation("generate");
+  if (!identityOperation){
+    toast("Finish the current sync identity operation first.", "warn");
+    return false;
+  }
+  try {
+    const { code, secret } = newSyncCode();
+    state.sync.syncCode = code;
+    state.sync.syncSecret = secret;
+    state.sync.syncSecretHash = await sha256(`${code}:${secret}`);
   /* v4.2: a fresh code is a fresh start. Reset cloudRev to 0 (so the first
      push takes the INSERT path) and clear timestamps. Any pre-existing
      cloud row protected by the OLD secret is orphaned — it's encrypted
@@ -9459,24 +9605,38 @@ async function genSyncCode(){
      BEFORE Generate to clean up the old row if you want a tidy database. */
   /* v4.2.1: derive playerId from the code+secret pair so a second device
      claiming this same code lands on the SAME row. */
-  state.sync.playerId = await derivePlayerId(code, secret);
-  state.sync.cloudRev = 0;
-  state.sync.lastPushedAt = 0;
-  state.sync.lastPulledAt = 0;
+    state.sync.playerId = await derivePlayerId(code, secret);
+    state.sync.cloudRev = 0;
+    state.sync.lastPushedAt = 0;
+    state.sync.lastPulledAt = 0;
+    /* A new identity must never reuse the old jsonstorage.net object URL.
+       Clear it only now, after every blank-profile confirmation succeeded. */
+    state.sync.jsonstorageUrl = null;
   /* Generate a fresh salt as well — different code+secret means a different
      KDF input, so a different salt is fine and slightly more defense-in-depth
      (an attacker who somehow learned the old salt can't reuse it). */
-  {
-    const s = new Uint8Array(SALT_BYTES); crypto.getRandomValues(s);
-    state.sync.saltB64 = b64(s.buffer);
+    {
+      const s = new Uint8Array(SALT_BYTES); crypto.getRandomValues(s);
+      state.sync.saltB64 = b64(s.buffer);
+    }
+    saveState({fromPull:true});
+    $("#code-area").hidden = false; $("#enter-area").hidden = true;
+    $("#code-text").textContent = `${code}-${secret}`;
+    drawQr(`${code}-${secret}`);
+    renderSecurityPanel();
+    try {
+      await cloudPush({
+        force:true,
+        allowCreate:true,
+        identityOperation:true,
+        operationGeneration:identityOperation.generation
+      });
+      toast("Sync code generated · state pushed","good");
+    } catch(e){ toast("Code generated, initial push failed: "+(e.message||e),"bad"); }
+    return true;
+  } finally {
+    endSyncIdentityOperation(identityOperation);
   }
-  saveState({fromPull:true});
-  $("#code-area").hidden = false; $("#enter-area").hidden = true;
-  $("#code-text").textContent = `${code}-${secret}`;
-  drawQr(`${code}-${secret}`);
-  renderSecurityPanel();
-  try { await cloudPush({force:true}); toast("Sync code generated · state pushed","good"); }
-  catch(e){ toast("Code generated, initial push failed: "+(e.message||e),"bad"); }
 }
 
 function drawQr(text){
@@ -9486,39 +9646,74 @@ function drawQr(text){
 
 async function claimSyncCode(full){
   const parts = String(full||"").trim().toUpperCase().split(/[-:\s]+/);
-  if (parts.length < 2){ $("#claim-msg").textContent = "Format: CODE-SECRET"; return; }
+  if (parts.length < 2){ $("#claim-msg").textContent = "Format: CODE-SECRET"; return false; }
   const code = parts[0], secret = parts.slice(1).join("");
-  if (code.length < 4 || secret.length < 8){ $("#claim-msg").textContent = "Code/secret too short"; return; }
-  state.sync.syncCode = code; state.sync.syncSecret = secret;
-  state.sync.syncSecretHash = await sha256(`${code}:${secret}`);
+  if (code.length < 4 || secret.length < 8){ $("#claim-msg").textContent = "Code/secret too short"; return false; }
+  const identityOperation = beginSyncIdentityOperation("claim");
+  if (!identityOperation){
+    $("#claim-msg").textContent = "Another sync identity operation is still running.";
+    return false;
+  }
+  try {
+  /* Transactional claim: candidate credentials live only in this detached
+     object until a real row is fetched, authenticated, decrypted and merged.
+     Missing/error paths cannot leak the candidate into a later save/push. */
+  const candidateSync = deepClone(state.sync);
+  candidateSync.syncCode = code;
+  candidateSync.syncSecret = secret;
+  candidateSync.syncSecretHash = await sha256(`${code}:${secret}`);
   /* v4.2.1 (Codex review fix #1+#2): derive playerId from the code+secret
      pair, exactly the same way genSyncCode does, so this device lands on
      the row the GENERATING device created. The previous `sc_${code}` form
      used a different namespace AND was guessable (squatting risk). */
-  state.sync.playerId = await derivePlayerId(code, secret);
+  candidateSync.playerId = await derivePlayerId(code, secret);
   /* v4.2: reset cloudRev so the first push after claim takes the INSERT
      path (rev=0 → POST). cloudPull will overwrite it with the remote rev
      if the row already exists. Without this reset, a device that previously
      had its own sync (cloudRev>0) would push under the new code with a
      stale rev, hitting the conflict branch and failing 3x. */
-  state.sync.cloudRev = 0;
-  state.sync.lastPushedAt = 0;
-  state.sync.lastPulledAt = 0;
+  candidateSync.cloudRev = 0;
+  candidateSync.lastPushedAt = 0;
+  candidateSync.lastPulledAt = 0;
+  candidateSync.backend = candidateSync.backend || (hasSupabase() ? "supabase" : "jsonstorage");
   /* Don't touch saltB64 here — when cloudPull fetches the remote blob, the
      salt is read out of the encrypted envelope and used for the KDF. Local
      saltB64 only matters when WE encrypt, which happens on the next push. */
-  saveState({fromPull:true});
   $("#claim-msg").textContent = "Pulling remote state…";
-  try {
-    const ok = await cloudPull({force:true});
-    if (ok){ $("#claim-msg").textContent = "Claimed · state pulled."; toast("Sync claimed — state merged","good"); }
-    else { $("#claim-msg").textContent = "No state on server — pushing local."; await cloudPush({force:true}); }
+    const pulled = await fetchCloudRemote({
+      force:true,
+      requireRemote:true,
+      persistAuth:false,
+      syncContext:candidateSync,
+      operationGeneration:identityOperation.generation
+    });
+    if (!pulled){
+      $("#claim-msg").textContent = "No cloud state found. Nothing was changed or uploaded.";
+      toast("Claim stopped — no matching cloud state. Local data is unchanged.", "warn");
+      return false;
+    }
+    const merged = mergeRemoteState(state, pulled.remoteState);
+    merged.sync = deepClone(candidateSync);
+    merged.sync.cloudRev = pulled.remotePayload.cloud_rev|0;
+    merged.sync.lastPulledAt = now();
+    state = merged;
+    saveState({fromPull:true});
+    try { renderAll(); renderSyncStatus(); } catch(e){ console.warn("claim render", e); }
+    $("#claim-msg").textContent = "Claimed · state pulled.";
+    toast("Sync claimed — state merged","good");
     renderSecurityPanel();
-  } catch(e){ $("#claim-msg").textContent = "Claim failed: "+(e.message||e); }
+    return true;
+  } catch(e){
+    /* candidateSync was never attached to global state, so failure needs no
+       restore assignment or persistence write. */
+    $("#claim-msg").textContent = "Claim failed safely: "+(e.message||e)+". Nothing was uploaded.";
+    return false;
+  } finally {
+    endSyncIdentityOperation(identityOperation);
+  }
 }
 
 let cloudPushInFlight = null;
-let cloudPushReplayRequested = false;
 let cloudRetryTimer = null;
 
 function clearCloudRetryTimer(){
@@ -9530,7 +9725,7 @@ function cloudRetryDelay(){
 }
 function scheduleCloudRetry(){
   clearCloudRetryTimer();
-  if (!state.sync.enabled || !state.sync.pendingSync || navigator.onLine === false) return;
+  if (syncOperationsPaused || !state.sync.enabled || !state.sync.pendingSync || navigator.onLine === false) return;
   const delay = Math.max(1_000, Number(state.sync.retryAfter||0) - Date.now(), cloudRetryDelay());
   state.sync.retryAfter = Date.now() + delay;
   cloudRetryTimer = setTimeout(()=>{
@@ -9572,30 +9767,65 @@ function markCloudSynced(){
    optimistic-concurrency loop against the same revision. */
 async function cloudPush(opts){
   opts = opts||{};
-  if (!state.sync.enabled && !opts.force) return;
-  if (cloudPushInFlight){
-    cloudPushReplayRequested = true;
-    return cloudPushInFlight;
+  if (syncOperationsPaused && !opts.identityOperation){
+    throw syncControlError("FH_SYNC_IDENTITY_BUSY", "Cloud push paused while sync identity is changing");
   }
-  cloudPushInFlight = (async()=>{
-    let nextOpts = opts;
+  const operationGeneration = opts.operationGeneration ?? syncIdentityGeneration;
+  assertSyncOperationCurrent(operationGeneration);
+  if (!state.sync.enabled && !opts.force) return;
+  if (cloudPushInFlight && cloudPushInFlight.generation === operationGeneration){
+    cloudPushInFlight.replayRequested = true;
+    return cloudPushInFlight.promise;
+  }
+  const record = { generation:operationGeneration, replayRequested:false, promise:null };
+  record.promise = (async()=>{
+    let nextOpts = Object.assign({}, opts, { operationGeneration });
     do {
-      cloudPushReplayRequested = false;
+      record.replayRequested = false;
+      assertSyncOperationCurrent(operationGeneration);
       await cloudPushOnce(nextOpts);
-      nextOpts = { force:true, reason:"coalesced-save" };
-    } while (cloudPushReplayRequested);
+      assertSyncOperationCurrent(operationGeneration);
+      nextOpts = { force:true, reason:"coalesced-save", operationGeneration };
+    } while (record.replayRequested);
+    assertSyncOperationCurrent(operationGeneration);
     markCloudSynced();
   })().catch(err=>{
-    markCloudPending(err);
+    if (!isSyncControlError(err) && operationGeneration === syncIdentityGeneration){
+      markCloudPending(err);
+    }
     throw err;
   }).finally(()=>{
-    cloudPushInFlight = null;
-    if (cloudPushReplayRequested && state.sync.enabled){
-      cloudPushReplayRequested = false;
-      setTimeout(()=>cloudPush({ reason:"late-coalesced-save" }).catch(()=>{}), 0);
-    }
+    if (cloudPushInFlight === record) cloudPushInFlight = null;
   });
-  return cloudPushInFlight;
+  cloudPushInFlight = record;
+  return record.promise;
+}
+
+function lastKnownGoodFocusMinutes(){
+  try {
+    const raw = localStorage.getItem(LKG_KEY);
+    if (!raw) return 0;
+    const parsed = JSON.parse(raw);
+    const saved = parsed && parsed.state ? parsed.state : parsed;
+    return Math.max(0, Number(saved?.totalFocusMin)||0);
+  } catch(_){ return 0; }
+}
+function assertCloudPushPayloadSafe(rev, opts){
+  if (rev === 0 && !opts.allowCreate){
+    throw new Error("Cloud row creation blocked. Generate a new sync code explicitly or claim an existing cloud row first.");
+  }
+  /* A confirmed row must not be overwritten by a suddenly collapsed local
+     profile. Legitimate edits remain allowed; only a >90% anomaly against a
+     substantial local recovery snapshot is blocked. */
+  if (rev > 0 && !opts.allowCreate){
+    const protectedMinutes = lastKnownGoodFocusMinutes();
+    const currentMinutes = Math.max(0, Number(state.totalFocusMin)||0);
+    if (protectedMinutes >= 60 && currentMinutes < protectedMinutes * 0.10){
+      throw new Error(
+        `Cloud upload blocked: this device fell from ${Math.round(protectedMinutes)}m in its recovery snapshot to ${Math.round(currentMinutes)}m. Open Recover before syncing.`
+      );
+    }
+  }
 }
 
 async function cloudPushOnce(opts){
@@ -9605,10 +9835,15 @@ async function cloudPushOnce(opts){
      and the cloud row never gets created. Until v4.2 this flag was passed
      in but never read; now it gates the early-return below. */
   if (!state.sync.enabled && !opts.force) return;
+  const operationGeneration = opts.operationGeneration ?? syncIdentityGeneration;
+  assertSyncOperationCurrent(operationGeneration);
   const backend = currentBackend();
   state.sync.backend = backend;
   const rev = (state.sync.cloudRev|0);
+  assertCloudPushPayloadSafe(rev, opts);
+  if (!state.sync.playerId) throw new Error("Cloud push blocked: sync identity is incomplete");
   const blob = await encryptStateBlob(state);
+  assertSyncOperationCurrent(operationGeneration);
   const payload = {
     id: state.sync.playerId,
     data: blob,
@@ -9618,7 +9853,8 @@ async function cloudPushOnce(opts){
   };
   if (backend === "supabase"){
     if (!hasSupabase()) throw new Error("Supabase not configured");
-    await supabaseSignInAnon();
+    await supabaseSignInAnon({ operationGeneration });
+    assertSyncOperationCurrent(operationGeneration);
     if (state.sync.userId) payload.user_id = state.sync.userId;
 
     /* v4.2: optimistic-concurrency PATCH guarded by cloud_rev=eq.{rev}.
@@ -9641,7 +9877,7 @@ async function cloudPushOnce(opts){
        row. The row keeps its original owner while the secret grants access. */
     const patchResp = await supabaseRequest(
       `players?id=eq.${encodeURIComponent(payload.id)}&cloud_rev=eq.${rev}`,
-      { method:"PATCH", body: JSON.stringify(updateBody) }
+      { method:"PATCH", body: JSON.stringify(updateBody), operationGeneration }
     );
     if (!patchResp.ok){
       const msg = await patchResp.text().catch(()=>patchResp.statusText);
@@ -9649,6 +9885,7 @@ async function cloudPushOnce(opts){
     }
     let patchedRows = [];
     try { patchedRows = await patchResp.json(); } catch(_){ patchedRows = []; }
+    assertSyncOperationCurrent(operationGeneration);
     if (Array.isArray(patchedRows) && patchedRows.length > 0){
       state.sync.cloudRev = payload.cloud_rev; state.sync.lastPushedAt = now();
       saveState({fromPull:true}); renderSyncStatus(); return;
@@ -9658,8 +9895,9 @@ async function cloudPushOnce(opts){
       // First push for this player_id: try INSERT. Use return=minimal so we
       // don't pay egress to read back what we just wrote.
       const insertResp = await supabaseRequest(`players`, {
-        method:"POST", prefer:"return=minimal", body: JSON.stringify(payload)
+        method:"POST", prefer:"return=minimal", body: JSON.stringify(payload), operationGeneration
       });
+      assertSyncOperationCurrent(operationGeneration);
       if (insertResp.ok){
         state.sync.cloudRev = payload.cloud_rev; state.sync.lastPushedAt = now();
         saveState({fromPull:true}); renderSyncStatus(); return;
@@ -9668,14 +9906,14 @@ async function cloudPushOnce(opts){
         // Row was created by another device between our PATCH and POST — pull and retry.
         if ((opts._retry|0) < 4){
           console.info(`First push raced another device; refreshing revision (attempt ${(opts._retry|0)+1}/4)`);
-          await cloudPull({force:true, reason:"insert-race"});
+          await cloudPull({force:true, reason:"insert-race", operationGeneration, identityOperation:opts.identityOperation});
           if ((state.sync.cloudRev|0) === 0){
             // Pull found no row — the 409 wasn't from a racing device. Bail rather
             // than re-attempting INSERT in a tight loop.
             throw new Error("insert returned 409 but remote row not pullable — refusing to retry");
           }
           await new Promise(resolve=>setTimeout(resolve, 120 * ((opts._retry|0)+1)));
-          return cloudPushOnce({_retry:(opts._retry|0)+1, force:true, reason:"insert-race"});
+          return cloudPushOnce({_retry:(opts._retry|0)+1, force:true, reason:"insert-race", operationGeneration});
         }
         throw new Error("First cloud push kept racing; local progress is safe and queued");
       }
@@ -9687,13 +9925,13 @@ async function cloudPushOnce(opts){
     // Pull their state, merge with ours, retry the push at the new cloud_rev.
     if ((opts._retry|0) < 4){
       console.info(`Cloud revision changed from ${rev}; merging before retry ${(opts._retry|0)+1}/4`);
-      const pulled = await cloudPull({force:true, reason:"push-conflict"});
+      const pulled = await cloudPull({force:true, reason:"push-conflict", operationGeneration});
       const refreshedRev = state.sync.cloudRev|0;
       if (!pulled || refreshedRev <= rev){
         throw new Error(`Cloud update was not accepted at revision ${rev}; local progress is safe and queued`);
       }
       await new Promise(resolve=>setTimeout(resolve, 120 * ((opts._retry|0)+1)));
-      return cloudPushOnce({_retry:(opts._retry|0)+1, force:true, reason:"push-conflict"});
+      return cloudPushOnce({_retry:(opts._retry|0)+1, force:true, reason:"push-conflict", operationGeneration});
     }
     throw new Error("Cloud stayed busy after 4 merge attempts; local progress is safe and queued");
   }
@@ -9702,15 +9940,88 @@ async function cloudPushOnce(opts){
     const resp = await fetch(`${key}?name=fh_${state.sync.syncSecretHash?.slice(0,16)||"anon"}`, {
       method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(payload)
     });
+    assertSyncOperationCurrent(operationGeneration);
     if (!resp.ok){ const t = await resp.text().catch(()=>resp.statusText); throw new Error(`jsonstorage create ${resp.status}: ${t.slice(0,120)}`); }
     const d = await resp.json();
+    assertSyncOperationCurrent(operationGeneration);
     state.sync.jsonstorageUrl = d.uri || d.url || null;
   } else {
     const resp = await fetch(state.sync.jsonstorageUrl, { method:"PUT", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(payload) });
+    assertSyncOperationCurrent(operationGeneration);
     if (!resp.ok){ const t = await resp.text().catch(()=>resp.statusText); throw new Error(`jsonstorage put ${resp.status}: ${t.slice(0,120)}`); }
   }
+  assertSyncOperationCurrent(operationGeneration);
   state.sync.cloudRev = payload.cloud_rev; state.sync.lastPushedAt = now();
   saveState({fromPull:true}); renderSyncStatus();
+}
+
+async function fetchCloudRemote(opts){
+  opts = opts||{};
+  const operationGeneration = opts.operationGeneration ?? syncIdentityGeneration;
+  assertSyncOperationCurrent(operationGeneration);
+  const sync = opts.syncContext || state.sync;
+  const persistAuth = opts.persistAuth !== false && sync === state.sync;
+  const backend = sync.backend || (hasSupabase() ? "supabase" : "jsonstorage");
+  sync.backend = backend;
+  let remotePayload = null;
+  if (backend === "supabase"){
+    if (!hasSupabase()){
+      if (opts.requireRemote) throw new Error("Supabase not configured");
+      return null;
+    }
+    const id = sync.playerId;
+    if (!id){
+      if (opts.requireRemote) throw new Error("Sync identity is incomplete");
+      return null;
+    }
+    const resp = await supabaseRequest(
+      `players?id=eq.${encodeURIComponent(id)}&select=*`,
+      { method:"GET", syncContext:sync, persistAuth, operationGeneration }
+    );
+    if (!resp.ok){
+      if (opts.requireRemote){
+        const msg = await resp.text().catch(()=>resp.statusText);
+        throw new Error(`cloud pull ${resp.status}: ${String(msg||resp.statusText).slice(0,120)}`);
+      }
+      return null;
+    }
+    let rows;
+    try { rows = await resp.json(); }
+    catch(_){
+      if (opts.requireRemote) throw new Error("Cloud returned an unreadable response");
+      return null;
+    }
+    assertSyncOperationCurrent(operationGeneration);
+    if (!rows || !rows.length) return null;
+    remotePayload = rows[0];
+  } else {
+    if (!sync.jsonstorageUrl) return null;
+    const resp = await fetch(sync.jsonstorageUrl, { method:"GET" });
+    assertSyncOperationCurrent(operationGeneration);
+    if (!resp.ok){
+      if (opts.requireRemote) throw new Error(`cloud pull ${resp.status}`);
+      return null;
+    }
+    remotePayload = await resp.json();
+    assertSyncOperationCurrent(operationGeneration);
+  }
+  assertSyncOperationCurrent(operationGeneration);
+  if (!remotePayload || !remotePayload.data){
+    if (opts.requireRemote) throw new Error("Cloud row has no state payload");
+    return null;
+  }
+  if (remotePayload.sync_secret_hash && sync.syncSecretHash && remotePayload.sync_secret_hash !== sync.syncSecretHash){
+    throw new Error("Remote secret hash mismatch — refusing to merge");
+  }
+  let remoteState;
+  try { remoteState = await decryptStateBlob(remotePayload.data, sync); }
+  catch(e){ throw new Error("Decrypt failed: "+(e.message||e)); }
+  assertSyncOperationCurrent(operationGeneration);
+  if (!remoteState || typeof remoteState !== "object"){
+    if (opts.requireRemote) throw new Error("Cloud state payload is invalid");
+    return null;
+  }
+  return { remotePayload, remoteState };
 }
 
 async function cloudPull(opts){
@@ -9718,40 +10029,22 @@ async function cloudPull(opts){
   /* v4.2: opts.force lets claim/disconnect/manual flows pull regardless of
      state.sync.enabled — the toggle gates BACKGROUND polling, not user-
      initiated operations. */
+  if (syncOperationsPaused && !opts.identityOperation) return false;
   if (!state.sync.enabled && !opts.force) return false;
-  const backend = currentBackend();
-  state.sync.backend = backend;
-  let remotePayload = null;
-  if (backend === "supabase"){
-    if (!hasSupabase()) return false;
-    await supabaseSignInAnon();
-    const id = state.sync.playerId;
-    if (!id) return false;
-    const resp = await supabaseRequest(`players?id=eq.${encodeURIComponent(id)}&select=*`, { method:"GET" });
-    if (!resp.ok) return false;
-    const rows = await resp.json();
-    if (!rows || !rows.length) return false;
-    remotePayload = rows[0];
-  } else {
-    if (!state.sync.jsonstorageUrl) return false;
-    const resp = await fetch(state.sync.jsonstorageUrl, { method:"GET" });
-    if (!resp.ok) return false;
-    remotePayload = await resp.json();
-  }
-  if (!remotePayload || !remotePayload.data) return false;
-  if (remotePayload.sync_secret_hash && state.sync.syncSecretHash && remotePayload.sync_secret_hash !== state.sync.syncSecretHash){
-    throw new Error("Remote secret hash mismatch — refusing to merge");
-  }
-  let remoteState;
-  try { remoteState = await decryptStateBlob(remotePayload.data); }
-  catch(e){ throw new Error("Decrypt failed: "+(e.message||e)); }
-  if (!remoteState || typeof remoteState !== "object") return false;
+  const operationGeneration = opts.operationGeneration ?? syncIdentityGeneration;
+  assertSyncOperationCurrent(operationGeneration);
+  const pulled = await fetchCloudRemote(Object.assign({}, opts, { operationGeneration }));
+  assertSyncOperationCurrent(operationGeneration);
+  if (!pulled) return false;
+  const remotePayload = pulled.remotePayload;
+  const remoteState = pulled.remoteState;
   const merged = mergeRemoteState(state, remoteState);
+  assertSyncOperationCurrent(operationGeneration);
   state = merged;
   state.sync.cloudRev = remotePayload.cloud_rev|0;
   state.sync.lastPulledAt = now();
   saveState({fromPull:true});
-  renderAll(); renderSyncStatus();
+  try { renderAll(); renderSyncStatus(); } catch(e){ console.warn("cloud pull render", e); }
   return true;
 }
 
@@ -10005,14 +10298,14 @@ function renderSyncStatus(){
 let pullPollTimer = null;
 function startPullPoll(){
   stopPullPoll();
-  if (!state.sync.enabled) return;
-  pullPollTimer = setInterval(()=>{ if (!cloudPushInFlight) cloudPull().catch(e=>console.warn("pull poll",e)); }, 30000);
+  if (syncOperationsPaused || !state.sync.enabled) return;
+  pullPollTimer = setInterval(()=>{ if (!syncOperationsPaused && !cloudPushInFlight) cloudPull().catch(e=>console.warn("pull poll",e)); }, 30000);
   // v5: heartbeat auto-save during active focus sessions (every 60s) so cloud snapshots
   // stay fresh even if no other state mutation triggers a push.
   if (!startPullPoll._heartbeat){
     startPullPoll._heartbeat = setInterval(()=>{
       try {
-        if (state && state.timer && state.timer.running && state.timer.mode === "focus" && state.sync && state.sync.enabled){
+        if (!syncOperationsPaused && state && state.timer && state.timer.running && state.timer.mode === "focus" && state.sync && state.sync.enabled){
           saveState();
         }
       } catch(_){}
@@ -10166,7 +10459,16 @@ function bindSync(){
   $("#btn-enter-code").onclick = ()=>{ $("#enter-area").hidden = false; $("#code-area").hidden = true; };
   $("#btn-claim").onclick = ()=>{ const v = $("#enter-code").value||""; claimSyncCode(v); };
   $("#btn-sync-now").onclick = async ()=>{
-    try { await cloudPull(); await cloudPush({force:true}); toast("Synced.","good"); }
+    try {
+      const pulled = await cloudPull();
+      const hasConfirmedRow = !!state.sync.playerId && (state.sync.cloudRev|0) > 0;
+      if (!pulled && !hasConfirmedRow){
+        toast("Sync stopped — no confirmed cloud state was found, so nothing was uploaded.", "warn");
+        return;
+      }
+      await cloudPush({force:true});
+      toast("Synced.","good");
+    }
     catch(e){ toast("Saved locally. Cloud retry is queued.","warn"); }
   };
   $("#btn-disconnect").onclick = ()=>{

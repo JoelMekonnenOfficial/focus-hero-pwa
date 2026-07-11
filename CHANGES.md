@@ -1,3 +1,13 @@
+# v10.4.2 — 2026-07-11
+
+**🔐 Cloud claim and token safety**
+- Claim is now transactional and identity-serialized: a missing, rejected, malformed, or undecryptable cloud row leaves existing data/credentials unchanged, Claim never uploads, and delayed responses from the prior identity cannot overwrite a completed claim.
+- Expired anonymous Supabase sessions refresh with their cached refresh token or obtain a new anonymous session once; authentication failure stops the cloud request instead of reusing an expired bearer token.
+- A blank-looking 0-minute profile requires typing `NEW PROFILE` before Generate can create a new cloud identity. The Sync panel tells users to open Recovery or claim from the data-bearing device when hours are missing.
+- Only Generate receives one-time permission to create a missing row; rev-zero automatic saves/heartbeats fail closed. Generate also clears the old JSONStorage URL only after committing the new identity.
+- Sync now refuses its force-push path when there is neither a successful pull nor a previously confirmed cloud revision. A confirmed row is protected from a >90% local-total collapse relative to the local recovery snapshot. Exported backups and encrypted cloud blobs omit device bearer/refresh credentials.
+- No Supabase schema, minute accounting, XP, loot, inventory, or renderer behavior changed. `sw.js` BUILD_ID -> `fh-2026-07-11-v10-4-2-sync-safety`.
+
 # v10.4.1 — 2026-07-11
 
 **🔒 Private cloud-backup readiness check**
