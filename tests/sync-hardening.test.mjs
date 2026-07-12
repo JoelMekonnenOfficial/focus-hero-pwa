@@ -498,6 +498,34 @@ try {
     });
   });
 
+  await test("Claim ignores a stale JSONStorage backend and reads the generated Supabase row", async () => {
+    let rows = [];
+    const staleUrl = "https://api.jsonstorage.net/v1/json/months-old-row";
+    await scenario(async (route, req) => {
+      if (req.url.includes("/rest/v1/players") && req.method === "GET") return json(route, rows);
+      throw new Error(`Claim must use Supabase, not stale JSONStorage: ${req.method} ${req.url}`);
+    }, async (page, traffic) => {
+      await fixture(page, { backend:"jsonstorage", jsonstorageUrl:staleUrl });
+      rows = await page.evaluate(() => {
+        const remote = JSON.parse(JSON.stringify(window.__FocusHero.DEFAULTS));
+        remote.totalFocusMin = 240;
+        remote.completedFocusSessions = 8;
+        remote.history = { "2026-07-10":120, "2026-07-11":120 };
+        remote.settings.e2eEncryption = false;
+        return [{ data:{ plain:remote }, cloud_rev:7 }];
+      });
+      const result = await page.evaluate(() => window.claimSyncCode("NEWCODE1-NEWSECRET12345678"));
+      const sync = await page.evaluate(() => window.__FocusHero.stateRef().sync);
+      assert.equal(result, true);
+      assert.equal(sync.backend, "supabase");
+      assert.equal(sync.jsonstorageUrl, null);
+      assert.equal(sync.cloudRev, 7);
+      assert.equal(traffic.filter(x => x.url.includes("/rest/v1/players") && x.method === "GET").length, 1);
+      assert.equal(traffic.some(x => x.url.includes("api.jsonstorage.net")), false);
+      assert.equal(restWrites(traffic).length, 0);
+    });
+  });
+
   await test("Blank Generate requires the exact typed confirmation before mutation", async () => {
     await scenario(async (_route, req) => {
       throw new Error(`blank Generate must not reach network: ${req.method} ${req.url}`);

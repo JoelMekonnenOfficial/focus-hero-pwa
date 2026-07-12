@@ -1,3 +1,12 @@
+# v10.4.3 — 2026-07-12
+
+**☁️ Claim routes to the generated Supabase row**
+- Entering a code from another device now selects the configured Supabase backend instead of inheriting a stale legacy JSONStorage backend and URL from the claiming device.
+- This fixes the misleading "no cloud state" failure when Generate created the encrypted Supabase row successfully but an older PC profile was still pointed at JSONStorage.
+- Claim remains transactional and read-only until a matching row is fetched, authenticated, decrypted, and merged. A failed Claim leaves local data, credentials, minutes, history, XP, and inventory unchanged and never uploads.
+- Expired Supabase sessions still renew automatically; deleting browser `sb-*` localStorage keys is neither required nor used by Focus Hero's sync implementation.
+- `sw.js` BUILD_ID -> `fh-2026-07-12-v10-4-3-claim-routing`.
+
 # v10.4.2 — 2026-07-11
 
 **🔐 Cloud claim and token safety**

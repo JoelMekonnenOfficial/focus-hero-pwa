@@ -9675,7 +9675,13 @@ async function claimSyncCode(full){
   candidateSync.cloudRev = 0;
   candidateSync.lastPushedAt = 0;
   candidateSync.lastPulledAt = 0;
-  candidateSync.backend = candidateSync.backend || (hasSupabase() ? "supabase" : "jsonstorage");
+  /* Enter-code identities are created by the configured Supabase backend.
+     Do not inherit a months-old JSONStorage backend/URL from this device:
+     that makes Claim look in the wrong service and report a missing row even
+     though Generate successfully created the Supabase row. The candidate is
+     detached, so a failed Claim still leaves the prior identity untouched. */
+  candidateSync.backend = hasSupabase() ? "supabase" : (candidateSync.backend || "jsonstorage");
+  if (candidateSync.backend === "supabase") candidateSync.jsonstorageUrl = null;
   /* Don't touch saltB64 here — when cloudPull fetches the remote blob, the
      salt is read out of the encrypted envelope and used for the KDF. Local
      saltB64 only matters when WE encrypt, which happens on the next push. */
