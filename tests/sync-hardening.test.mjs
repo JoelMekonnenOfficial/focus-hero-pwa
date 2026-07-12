@@ -526,6 +526,85 @@ try {
     });
   });
 
+  await test("Claim decrypts an E2E envelope returned as Supabase JSON text", async () => {
+    let rows = [];
+    await scenario(async (route, req) => {
+      if (req.url.includes("/rest/v1/players") && req.method === "GET") return json(route, rows);
+      throw new Error(`unexpected request ${req.method} ${req.url}`);
+    }, async (page, traffic) => {
+      await fixture(page, { backend:"jsonstorage", jsonstorageUrl:"https://api.jsonstorage.net/v1/json/stale" });
+      rows = await page.evaluate(async () => {
+        const s = window.__FocusHero.stateRef();
+        const priorSync = JSON.parse(JSON.stringify(s.sync));
+        const priorE2E = s.settings.e2eEncryption;
+        s.sync.syncCode = "NEWCODE1";
+        s.sync.syncSecret = "NEWSECRET12345678";
+        s.sync.saltB64 = null;
+        s.settings.e2eEncryption = true;
+        const remote = JSON.parse(JSON.stringify(window.__FocusHero.DEFAULTS));
+        remote.totalFocusMin = 480;
+        remote.completedFocusSessions = 16;
+        remote.history = { "2026-07-11":480 };
+        const envelope = await window.encryptStateBlob(JSON.stringify(remote));
+        s.sync = priorSync;
+        s.settings.e2eEncryption = priorE2E;
+        window.saveState({fromPull:true});
+        return [{ data:JSON.stringify(envelope), cloud_rev:11 }];
+      });
+      const result = await page.evaluate(() => window.claimSyncCode("NEWCODE1-NEWSECRET12345678"));
+      const current = await page.evaluate(() => {
+        const s = window.__FocusHero.stateRef();
+        return { total:s.totalFocusMin, completed:s.completedFocusSessions, rev:s.sync.cloudRev, backend:s.sync.backend };
+      });
+      assert.equal(result, true);
+      assert.deepEqual(current, { total:480, completed:16, rev:11, backend:"supabase" });
+      assert.equal(traffic.some(x => x.url.includes("api.jsonstorage.net")), false);
+      assert.equal(restWrites(traffic).length, 0);
+    });
+  });
+
+  await test("Malformed serialized cloud payload fails closed without a write", async () => {
+    await scenario(async (route, req) => {
+      if (req.url.includes("/rest/v1/players") && req.method === "GET"){
+        return json(route, [{ data:'{"e2e":', cloud_rev:11 }]);
+      }
+      throw new Error(`unexpected request ${req.method} ${req.url}`);
+    }, async (page, traffic) => {
+      await fixture(page);
+      const before = await snapshots(page);
+      const result = await page.evaluate(() => window.claimSyncCode("NEWCODE1-NEWSECRET12345678"));
+      const after = await snapshots(page);
+      const message = await page.evaluate(() => document.querySelector("#claim-msg").textContent);
+      assert.equal(result, false);
+      assert.match(message, /not valid JSON/i);
+      assert.equal(after.accounting, before.accounting);
+      assert.equal(after.sync, before.sync);
+      assert.equal(after.stored, before.stored);
+      assert.equal(restWrites(traffic).length, 0);
+    });
+  });
+
+  await test("Serialized primitives and arrays are rejected as non-state payloads", async () => {
+    for (const serialized of ["[]", "42", "null", '{"hero":{}}']){
+      await scenario(async (route, req) => {
+        if (req.url.includes("/rest/v1/players") && req.method === "GET"){
+          return json(route, [{ data:serialized, cloud_rev:11 }]);
+        }
+        throw new Error(`unexpected request ${req.method} ${req.url}`);
+      }, async (page, traffic) => {
+        await fixture(page);
+        const before = await snapshots(page);
+        const result = await page.evaluate(() => window.claimSyncCode("NEWCODE1-NEWSECRET12345678"));
+        const after = await snapshots(page);
+        assert.equal(result, false);
+        assert.equal(after.accounting, before.accounting);
+        assert.equal(after.sync, before.sync);
+        assert.equal(after.stored, before.stored);
+        assert.equal(restWrites(traffic).length, 0);
+      });
+    }
+  });
+
   await test("Blank Generate requires the exact typed confirmation before mutation", async () => {
     await scenario(async (_route, req) => {
       throw new Error(`blank Generate must not reach network: ${req.method} ${req.url}`);

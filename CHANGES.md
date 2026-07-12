@@ -1,3 +1,11 @@
+# v10.4.4 — 2026-07-12
+
+**🔓 Supabase JSON-text payload compatibility**
+- Claim now accepts an encrypted cloud envelope when a Supabase row's `data` field is returned as serialized JSON text, including bounded legacy double-serialization, before performing the existing AES-GCM authentication/decryption.
+- Malformed or primitive payloads still fail closed. Claim remains read-only until a real object is authenticated, decrypted, and merged; failures never upload or alter the current local identity/data.
+- Added an end-to-end encrypted regression fixture matching the production failure plus a malformed-text fail-closed case. No Supabase row/schema, logged minutes, sessions, history, XP, loot, inventory, or renderer behavior changed.
+- `sw.js` BUILD_ID -> `fh-2026-07-12-v10-4-4-cloud-payload`.
+
 # v10.4.3 — 2026-07-12
 
 **☁️ Claim routes to the generated Supabase row**

@@ -7349,9 +7349,34 @@ async function encryptStateBlob(plainObj){
   const ct = await crypto.subtle.encrypt({ name:"AES-GCM", iv }, key, enc.encode(JSON.stringify(safe)));
   return { e2e: { v:1, alg:"AES-GCM-256", kdf:"PBKDF2-SHA256", iter: PBKDF2_ITERATIONS, ct: b64(ct), iv: b64(iv.buffer), salt: saltB64 } };
 }
+function parseSerializedCloudValue(value){
+  /* A Supabase row or legacy wrapper can surface `data` as JSON text rather
+     than a decoded JSON object. Accept up to two serialization
+     layers (text column, legacy wrapper, state) without mutating the value or
+     weakening AES-GCM authentication. Malformed text fails closed. */
+  let parsed = value;
+  for (let depth=0; depth<2 && typeof parsed === "string"; depth++){
+    try { parsed = JSON.parse(parsed); }
+    catch(_){ throw new Error("Cloud state payload is not valid JSON"); }
+  }
+  return parsed;
+}
+function isRecognizableCloudState(value){
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const total = Number(value.totalFocusMin);
+  return Number.isFinite(total) && total >= 0 &&
+    !!value.history && typeof value.history === "object" && !Array.isArray(value.history) &&
+    Array.isArray(value.tasks) &&
+    !!value.hero && typeof value.hero === "object" && !Array.isArray(value.hero) &&
+    !!value.settings && typeof value.settings === "object" && !Array.isArray(value.settings);
+}
 async function decryptStateBlob(blob, syncContext){
+  blob = parseSerializedCloudValue(blob);
   if (!blob || typeof blob !== "object") return blob;
-  if (!blob.e2e) return blob.plain || blob;     // plaintext or legacy (state was top-level data)
+  if (!blob.e2e){
+    const plain = Object.prototype.hasOwnProperty.call(blob, "plain") ? blob.plain : blob;
+    return parseSerializedCloudValue(plain);   // plaintext or legacy (state was top-level data)
+  }
   const e = blob.e2e;
   const sync = syncContext || state.sync;
   if (!sync.syncCode || !sync.syncSecret){
@@ -7360,7 +7385,7 @@ async function decryptStateBlob(blob, syncContext){
   const key = await deriveE2EKey({ code: sync.syncCode, secret: sync.syncSecret, saltB64: e.salt });
   const ct = unb64(e.ct); const iv = unb64(e.iv);
   const plain = await crypto.subtle.decrypt({ name:"AES-GCM", iv: new Uint8Array(iv) }, key, ct);
-  return JSON.parse(new TextDecoder().decode(plain));
+  return parseSerializedCloudValue(JSON.parse(new TextDecoder().decode(plain)));
 }
 function renderSecurityPanel(){
   const panel = $("#sec-panel"); if (!panel) return;
@@ -10023,7 +10048,7 @@ async function fetchCloudRemote(opts){
   try { remoteState = await decryptStateBlob(remotePayload.data, sync); }
   catch(e){ throw new Error("Decrypt failed: "+(e.message||e)); }
   assertSyncOperationCurrent(operationGeneration);
-  if (!remoteState || typeof remoteState !== "object"){
+  if (!isRecognizableCloudState(remoteState)){
     if (opts.requireRemote) throw new Error("Cloud state payload is invalid");
     return null;
   }
