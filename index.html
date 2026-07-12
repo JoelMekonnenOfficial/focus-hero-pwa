@@ -7363,8 +7363,9 @@ function parseSerializedCloudValue(value){
 }
 function isRecognizableCloudState(value){
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const total = Number(value.totalFocusMin);
-  return Number.isFinite(total) && total >= 0 &&
+  const total = value.totalFocusMin;
+  return typeof total === "number" && Number.isFinite(total) && total >= 0 &&
+    typeof value.dataVersion === "number" && Number.isFinite(value.dataVersion) &&
     !!value.history && typeof value.history === "object" && !Array.isArray(value.history) &&
     Array.isArray(value.tasks) &&
     !!value.hero && typeof value.hero === "object" && !Array.isArray(value.hero) &&
@@ -9724,6 +9725,7 @@ async function claimSyncCode(full){
       return false;
     }
     const merged = mergeRemoteState(state, pulled.remoteState);
+    if (pulled.sourceEncrypted) merged.settings.e2eEncryption = true;
     merged.sync = deepClone(candidateSync);
     merged.sync.cloudRev = pulled.remotePayload.cloud_rev|0;
     merged.sync.lastPulledAt = now();
@@ -10045,14 +10047,20 @@ async function fetchCloudRemote(opts){
     throw new Error("Remote secret hash mismatch — refusing to merge");
   }
   let remoteState;
-  try { remoteState = await decryptStateBlob(remotePayload.data, sync); }
+  let sourceEncrypted = false;
+  try {
+    const normalizedData = parseSerializedCloudValue(remotePayload.data);
+    sourceEncrypted = !!normalizedData && typeof normalizedData === "object" &&
+      !Array.isArray(normalizedData) && !!normalizedData.e2e;
+    remoteState = await decryptStateBlob(normalizedData, sync);
+  }
   catch(e){ throw new Error("Decrypt failed: "+(e.message||e)); }
   assertSyncOperationCurrent(operationGeneration);
   if (!isRecognizableCloudState(remoteState)){
     if (opts.requireRemote) throw new Error("Cloud state payload is invalid");
     return null;
   }
-  return { remotePayload, remoteState };
+  return { remotePayload, remoteState, sourceEncrypted };
 }
 
 async function cloudPull(opts){
@@ -10070,6 +10078,7 @@ async function cloudPull(opts){
   const remotePayload = pulled.remotePayload;
   const remoteState = pulled.remoteState;
   const merged = mergeRemoteState(state, remoteState);
+  if (pulled.sourceEncrypted) merged.settings.e2eEncryption = true;
   assertSyncOperationCurrent(operationGeneration);
   state = merged;
   state.sync.cloudRev = remotePayload.cloud_rev|0;

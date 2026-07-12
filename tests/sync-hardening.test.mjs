@@ -526,13 +526,18 @@ try {
     });
   });
 
-  await test("Claim decrypts an E2E envelope returned as Supabase JSON text", async () => {
+  await test("Claim decrypts a normal E2E envelope returned as Supabase JSON text", async () => {
     let rows = [];
     await scenario(async (route, req) => {
       if (req.url.includes("/rest/v1/players") && req.method === "GET") return json(route, rows);
       throw new Error(`unexpected request ${req.method} ${req.url}`);
     }, async (page, traffic) => {
       await fixture(page, { backend:"jsonstorage", jsonstorageUrl:"https://api.jsonstorage.net/v1/json/stale" });
+      await page.evaluate(() => {
+        const s = window.__FocusHero.stateRef();
+        s.settings.e2eEncryption = false;
+        window.saveState({fromPull:true});
+      });
       rows = await page.evaluate(async () => {
         const s = window.__FocusHero.stateRef();
         const priorSync = JSON.parse(JSON.stringify(s.sync));
@@ -545,7 +550,7 @@ try {
         remote.totalFocusMin = 480;
         remote.completedFocusSessions = 16;
         remote.history = { "2026-07-11":480 };
-        const envelope = await window.encryptStateBlob(JSON.stringify(remote));
+        const envelope = await window.encryptStateBlob(remote);
         s.sync = priorSync;
         s.settings.e2eEncryption = priorE2E;
         window.saveState({fromPull:true});
@@ -554,11 +559,47 @@ try {
       const result = await page.evaluate(() => window.claimSyncCode("NEWCODE1-NEWSECRET12345678"));
       const current = await page.evaluate(() => {
         const s = window.__FocusHero.stateRef();
-        return { total:s.totalFocusMin, completed:s.completedFocusSessions, rev:s.sync.cloudRev, backend:s.sync.backend };
+        return {
+          total:s.totalFocusMin, completed:s.completedFocusSessions,
+          rev:s.sync.cloudRev, backend:s.sync.backend, e2e:s.settings.e2eEncryption
+        };
       });
       assert.equal(result, true);
-      assert.deepEqual(current, { total:480, completed:16, rev:11, backend:"supabase" });
+      assert.deepEqual(current, { total:480, completed:16, rev:11, backend:"supabase", e2e:true });
       assert.equal(traffic.some(x => x.url.includes("api.jsonstorage.net")), false);
+      assert.equal(restWrites(traffic).length, 0);
+    });
+  });
+
+  await test("Claim accepts an authenticated legacy serialized inner state", async () => {
+    let rows = [];
+    await scenario(async (route, req) => {
+      if (req.url.includes("/rest/v1/players") && req.method === "GET") return json(route, rows);
+      throw new Error(`unexpected request ${req.method} ${req.url}`);
+    }, async (page, traffic) => {
+      await fixture(page);
+      rows = await page.evaluate(async () => {
+        const s = window.__FocusHero.stateRef();
+        const priorSync = JSON.parse(JSON.stringify(s.sync));
+        const priorE2E = s.settings.e2eEncryption;
+        s.sync.syncCode = "NEWCODE1";
+        s.sync.syncSecret = "NEWSECRET12345678";
+        s.sync.saltB64 = null;
+        s.settings.e2eEncryption = true;
+        const remote = JSON.parse(JSON.stringify(window.__FocusHero.DEFAULTS));
+        remote.totalFocusMin = 360;
+        remote.history = { "2026-07-11":360 };
+        const envelope = await window.encryptStateBlob(JSON.stringify(remote));
+        s.sync = priorSync;
+        s.settings.e2eEncryption = priorE2E;
+        window.saveState({fromPull:true});
+        return [{ data:envelope, cloud_rev:9 }];
+      });
+      const result = await page.evaluate(() => window.claimSyncCode("NEWCODE1-NEWSECRET12345678"));
+      const current = await page.evaluate(() => window.__FocusHero.stateRef());
+      assert.equal(result, true);
+      assert.equal(current.totalFocusMin, 360);
+      assert.equal(current.sync.cloudRev, 9);
       assert.equal(restWrites(traffic).length, 0);
     });
   });

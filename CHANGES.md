@@ -1,3 +1,10 @@
+# v10.4.5 — 2026-07-12
+
+**🔐 Encrypted Claim stays encrypted**
+- A successful Claim from an AES-GCM envelope now forces end-to-end encryption to remain enabled on the claiming device, even if an older local profile had the toggle off.
+- This prevents the next legitimate sync from downgrading an encrypted row to plaintext. Claim itself remains GET-only; no existing cloud row or local state is changed until authentication, decryption, and strict state validation all succeed.
+- `sw.js` BUILD_ID -> `fh-2026-07-12-v10-4-5-encrypted-claim`.
+
 # v10.4.4 — 2026-07-12
 
 **🔓 Supabase JSON-text payload compatibility**
