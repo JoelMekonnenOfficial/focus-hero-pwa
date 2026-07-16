@@ -27,7 +27,7 @@
  * fallback (and skipped injection). Fetch by URL string instead, and inject
  * into cache-served HTML too.
  */
-const BUILD_ID    = "fh-2026-07-12-v10-4-5-encrypted-claim";
+const BUILD_ID    = "fh-2026-07-16-v10-4-6-minute-accounting";
 const CACHE_NAME  = `focus-hero-${BUILD_ID}`;
 const PRECACHE = [
   "./",

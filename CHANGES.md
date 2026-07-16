@@ -1,3 +1,12 @@
+# v10.4.6 — 2026-07-16
+
+**🧮 Exact minute accounting + clearer session controls**
+- Daily Recap and the Sessions 30-day cards now read their minute/session totals from the authoritative `history` and `sessionHistory` ledgers. Standalone negative Time Ledger corrections no longer leave recap cards showing a larger stale sum of positive records.
+- The Sessions timeline now includes standalone negative Time Ledger corrections (for example `−5m`) beside session records, so the visible history explains how the authoritative total was reached without rewriting past sessions.
+- The session editor now labels the two supported paths explicitly: **Option 1 — add/subtract minutes** and **Option 2 — set the exact session total**. The exact-total field is prefilled with the current value, and the task-minute sheet links directly to Session History.
+- Added an isolated regression for `19 + 6 + 70 + 10 − 5 = 100`, authoritative recap/session cards, visible `−5m` correction history, and both exact-total and ± session editing. No production player data is migrated or rewritten.
+- `sw.js` BUILD_ID -> `fh-2026-07-16-v10-4-6-minute-accounting`.
+
 # v10.4.5 — 2026-07-12
 
 **🔐 Encrypted Claim stays encrypted**

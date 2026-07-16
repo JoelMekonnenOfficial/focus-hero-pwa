@@ -16,6 +16,7 @@
 <title>Focus Hero</title>
 <style>
 /* ================================================================
+ * Focus Hero v10.4.6 - authoritative recap/history totals + clearer exact session editing
  * Focus Hero v10.3.1 - battle-report edit loot threshold clawback
  * Focus Hero v10.3.0 - target chests + visible Targets/Sessions shortcuts
  * Focus Hero v9.8.10 - live minute controls now cover Stopwatch sessions too
@@ -1403,6 +1404,8 @@ html{touch-action:manipulation}
 .daily-recap .dr-loot{margin-top:8px;font-size:.78rem;color:var(--ink-dim)}
 .session-history-actions .session-del{font-size:.7rem;padding:2px 8px;border-radius:8px;color:#ff9d9d;border:1px solid rgba(255,120,120,.4);background:rgba(255,80,80,.08)}
 .session-exact-row{display:flex;gap:8px;align-items:center;margin-top:10px}
+.session-exact-row label b,.session-exact-row label span{display:block}
+.session-exact-row label span{margin:2px 0 6px;font-size:.72rem;color:var(--ink-dim)}
 .session-exact-row input{flex:1;min-width:0}
 .session-danger-row{display:flex;justify-content:flex-end;margin-top:12px}
 .task-quickstart-row{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;text-align:left;border-radius:10px;background:var(--panel-2)}
@@ -2150,6 +2153,7 @@ body.lr-screen-shake { animation: lr-shake .25s ease-in-out }
 .session-history-pill{display:inline-flex;align-items:center;justify-content:center;min-height:22px;border-radius:999px;border:1px solid var(--border);padding:1px 8px;font-size:.72rem;color:var(--ink-dim);background:rgba(0,0,0,.12)}
 .session-history-pill.rewarded{border-color:rgba(var(--accent-rgb),.45);color:var(--accent)}
 .session-history-pill.edited{border-color:rgba(244,191,104,.55);color:var(--warn)}
+.session-history-pill.correction{border-color:rgba(244,191,104,.55);color:var(--warn);background:rgba(244,191,104,.08)}
 .session-history-actions button{padding:3px 8px;font-size:.72rem;border-radius:8px}
 .app-log-meta{display:flex;justify-content:space-between;gap:8px;align-items:center;margin:-2px 0 8px;font-size:.74rem;color:var(--ink-mute)}
 .app-log{max-height:260px;overflow:auto;font-size:.85rem;color:var(--ink-dim);font-family:var(--mono);line-height:1.45}
@@ -3731,7 +3735,8 @@ svg{shape-rendering:geometricPrecision}
       <button type="button" class="primary" id="btn-minute-apply">Apply</button>
     </div>
     <div class="minute-actions">
-      <button type="button" id="btn-minute-ledger">View edit history</button>
+      <button type="button" id="btn-minute-ledger">View +/- edit history</button>
+      <button type="button" id="btn-minute-sessions">View session history</button>
       <button type="button" id="btn-minute-stats">View updated Stats</button>
     </div>
   </div>
@@ -3746,7 +3751,7 @@ svg{shape-rendering:geometricPrecision}
       <div class="minute-edit-stat"><b id="session-edit-current">0m</b><span>Current</span></div>
       <div class="minute-edit-stat"><b id="session-edit-new">0m</b><span>After edit</span></div>
     </div>
-    <p class="muted" style="font-size:.8rem">Use the sign toggle for quick +/− corrections. This recalculates task minutes, daily totals, XP and eligible loot safely.</p>
+    <p class="muted" style="font-size:.8rem"><b>Option 1 — add or subtract minutes.</b> Use the sign toggle for a relative correction. This recalculates task minutes, daily totals, XP and eligible loot safely.</p>
     <div class="minute-quick" aria-label="Quick session minute corrections">
       <button type="button" data-session-delta="-30">-30</button>
       <button type="button" data-session-delta="-15">-15</button>
@@ -3765,10 +3770,11 @@ svg{shape-rendering:geometricPrecision}
       <button type="button" class="primary" id="btn-session-edit-apply">Save edit</button>
     </div>
     <div class="session-exact-row">
-      <label style="flex:1">Or set the exact total
+      <label style="flex:1"><b>Option 2 — set the exact session total</b>
+        <span>Replace the current value directly — for example, change 120 minutes to 90.</span>
         <input id="session-edit-exact" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="e.g. 90 = this session counts as 90m">
       </label>
-      <button type="button" id="btn-session-edit-exact">Set total</button>
+      <button type="button" class="primary" id="btn-session-edit-exact">Set exact total</button>
     </div>
     <div class="session-edit-preview" id="session-edit-preview">No correction entered yet.</div>
     <div class="session-danger-row">
@@ -10577,14 +10583,24 @@ function fmtMin(min){
 /* ===== v10: Daily Recap - a per-day summary of what the hero earned ===== */
 function daySummary(dk){
   const recs=(state.sessionsLog||[]).filter(r=>r&&r.type==="focus"&&todayKey(new Date(r.at||0))===dk);
-  const minutes=recs.reduce((a,r)=>a+(r.minutes|0),0);
+  const recordedMinutes=recs.reduce((a,r)=>a+(r.minutes|0),0);
   const xp=recs.reduce((a,r)=>a+(r.rewarded?(r.xp|0):0),0);
   const loot=recs.filter(r=>r.loot).length;
   const byTask={};
-  recs.forEach(r=>{ const n=r.taskName||r.action||"Focus"; byTask[n]=(byTask[n]||0)+(r.minutes|0); });
+  (state.tasks||[]).forEach(t=>{
+    const minutes=(t&&t.dailyMin&&t.dailyMin[dk])|0;
+    if(minutes>0) byTask[t.name||"Focus"]=(byTask[t.name||"Focus"]||0)+minutes;
+  });
+  if(!Object.keys(byTask).length){
+    recs.forEach(r=>{ const n=r.taskName||r.action||"Focus"; byTask[n]=(byTask[n]||0)+(r.minutes|0); });
+  }
   let top=null; Object.keys(byTask).forEach(n=>{ if(!top||byTask[n]>byTask[top]) top=n; });
-  const histMin=(state.history&&state.history[dk])|0;
-  return { day:dk, sessions:recs.length, minutes, histMinutes:Math.max(minutes,histMin), xp, loot, topTask:top };
+  const histMin=Math.max(0,(state.history&&state.history[dk])|0);
+  const storedSessions=Number(state.sessionHistory&&state.sessionHistory[dk]);
+  const sessions=Number.isFinite(storedSessions)&&storedSessions>=0
+    ? Math.floor(storedSessions)
+    : recs.filter(r=>r.source!=="ledger").length;
+  return { day:dk, sessions, minutes:histMin, recordedMinutes, histMinutes:histMin, xp, loot, topTask:top };
 }
 function renderDailyRecap(){
   const host=document.getElementById("daily-recap"); if(!host) return;
@@ -11613,6 +11629,8 @@ function openSessionEditModal(sessionId){
   sessionEditModalId = sessionId;
   const inp = $("#session-edit-delta");
   if (inp) inp.value = "";
+  const exact = $("#session-edit-exact");
+  if (exact) exact.value = String(Math.max(0, rec.minutes|0));
   refreshSessionEditSign();
   renderSessionEditModal();
   openModal("session-edit-modal");
@@ -12283,6 +12301,7 @@ function bindDesignShell(){
   })();
   $("#btn-minute-stats")?.addEventListener("click", ()=>openModal("analytics-modal"));
   $("#btn-minute-ledger")?.addEventListener("click", ()=>{ closeModal("task-minutes-modal"); openProgressPanel("ledger"); });
+  $("#btn-minute-sessions")?.addEventListener("click", ()=>{ closeModal("task-minutes-modal"); openProgressPanel("sessions"); });
   $$("[data-session-delta]").forEach(b=>b.addEventListener("click", ()=>setSessionEditDelta((signedSessionEditDelta() || 0) + (Number(b.dataset.sessionDelta)||0))));
   $("#btn-session-edit-apply")?.addEventListener("click", applySessionEditFromModal);
   $("#btn-session-edit-exact")?.addEventListener("click", applySessionExactFromModal);
@@ -13563,7 +13582,7 @@ function applyTaskTimeAdjustment(taskId, deltaMin){
     try { checkAchievements({ source:"timeOnlyLedger", suppressRewards:true }); } catch(_){}
   }
   const after = task.totalFocusMin|0;
-  appendEditLog({ taskName: task.name, before: before, after: after, source:"ledger" });
+  appendEditLog({ taskName: task.name, taskId: task.id, before: before, after: after, source:"ledger" });
   saveState(); renderAll();
   return { ok:true, delta:d, before:before, after:after, requested:__requested, clamped:__capClamped, loot:__ledgerLoot };
 }
@@ -13650,21 +13669,49 @@ function renderSessionHistoryPanel(){
   const cutoff30 = Date.now() - 30 * 24 * 60 * 60 * 1000;
   const last30 = focus.filter(r=>!entryTimeMs(r) || entryTimeMs(r) >= cutoff30);
   const sum = (arr, fn)=>arr.reduce((a,x)=>a + (Number(fn(x)) || 0), 0);
-  const min30 = sum(last30, r=>r.minutes|0);
+  const last30Keys = new Set(lastNDayKeys(30));
+  const min30 = Object.keys(state.history||{}).reduce((total,day)=>total+(last30Keys.has(day)?Math.max(0,(state.history[day]|0)):0),0);
+  const hasSessionLedger = !!(state.sessionHistory && Object.keys(state.sessionHistory).some(day=>last30Keys.has(day)));
+  const sessions30 = hasSessionLedger
+    ? Object.keys(state.sessionHistory||{}).reduce((total,day)=>total+(last30Keys.has(day)?Math.max(0,(state.sessionHistory[day]|0)):0),0)
+    : last30.filter(r=>r.source!=="ledger").length;
   const xp30 = sum(last30, r=>r.xp || r.xpBreakdown?.total || 0);
   const rewarded30 = last30.filter(r=>r.rewarded).length;
+  const corrections = (state.activityLog||[]).filter(a=>a&&a.category==="edit"&&a.action==="time_edit"&&a.source==="ledger"&&(a.delta|0)<0);
+  const correctionTask = a=>{
+    const task = a.taskId ? state.tasks.find(t=>t&&t.id===a.taskId) : null;
+    if (task&&task.name) return task.name;
+    const match = String(a.note||"").match(/task='([^']*)'/);
+    return match&&match[1] ? match[1] : "Time correction";
+  };
   const fmt = (typeof formatHours === "function") ? formatHours : (m=>`${m|0}m`);
   const cards = [
-    ["30d sessions", String(last30.length)],
+    ["30d sessions", String(sessions30)],
     ["30d time", fmt(min30)],
     ["30d XP", String(xp30)],
     ["Rewarded", String(rewarded30)]
   ].map(([label,value])=>`<div class="session-history-card"><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b></div>`).join("");
-  const rows = focus.slice(0, 300).map(rec=>{
+  const timeline = focus.map(rec=>({ kind:"session", at:entryTimeMs(rec)||0, rec }))
+    .concat(corrections.map(correction=>({ kind:"correction", at:entryTimeMs(correction)||0, correction })))
+    .sort((a,b)=>b.at-a.at);
+  const rows = timeline.slice(0, 300).map(item=>{
+    if(item.kind==="correction"){
+      const correction=item.correction;
+      const delta=Math.abs(correction.delta|0);
+      return `<div class="session-history-row">
+        <div class="session-history-date">${escapeHtml(sessionHistoryDateLabel(correction.at||correction.timestamp))}</div>
+        <div class="session-history-task"><b>${escapeHtml(correctionTask(correction))}</b><span>Standalone Time Ledger correction</span></div>
+        <div class="session-history-meta">−${delta}m</div>
+        <div class="session-history-meta">Accounting</div>
+        <div class="session-history-meta">No new loot</div>
+        <div class="session-history-actions"><span class="session-history-pill correction">correction</span></div>
+      </div>`;
+    }
+    const rec=item.rec;
     const task = sessionHistoryTaskLabel(rec);
     const mins = Math.max(0, rec.minutes|0);
     const xp = rec.rewarded ? Math.max(0, (rec.xp || rec.xpBreakdown?.total || 0)|0) : 0;
-    const source = rec.source === "stopwatch" ? "Stopwatch" : rec.source === "timer" ? "Timer" : (rec.source || rec.type || "Session");
+    const source = rec.source === "stopwatch" ? "Stopwatch" : rec.source === "timer" ? "Timer" : rec.source === "ledger" ? "Time ledger" : (rec.source || rec.type || "Session");
     const action = rec.action || "Focus";
     const loot = rec.loot ? `${rec.loot.rarity || ""} ${rec.loot.id || ""}`.trim() : "No loot";
     const pillCls = rec.edited ? " edited" : rec.rewarded ? " rewarded" : "";
@@ -13683,9 +13730,9 @@ function renderSessionHistoryPanel(){
     </div>`;
   }).join("");
   host.innerHTML = `
-    <div class="ledger-intro">Session history is saved locally and included in cloud sync. Retention: ${LOG_RETENTION_DAYS} days, capped at ${SESSION_LOG_CAP.toLocaleString()} records.</div>
+    <div class="ledger-intro">Session history is saved locally and included in cloud sync. Time cards use the authoritative daily ledger; standalone reductions appear as correction rows instead of silently inflating totals. Retention: ${LOG_RETENTION_DAYS} days, capped at ${SESSION_LOG_CAP.toLocaleString()} records.</div>
     <div class="session-history-summary">${cards}</div>
-    <div class="activity-head">Recent sessions <span class="activity-hint">showing ${Math.min(focus.length,300)} of ${focus.length}</span></div>
+    <div class="activity-head">Recent sessions & corrections <span class="activity-hint">showing ${Math.min(timeline.length,300)} of ${timeline.length}</span></div>
     <div class="session-history-list">${rows || `<div class="ledger-empty">No sessions logged yet.</div>`}</div>`;
   if (!host.dataset.bound){
     host.dataset.bound = "1";
