@@ -14,11 +14,9 @@
  * deliberately invisible to users — the only place a version-looking string
  * lives is in the cache name in DevTools.
  *
- * v10.3.2-recovery: adds ./recover.html (standalone data-recovery page) and
- * injects a "🚑 Recover" item into the app's bottom nav at serve time. The
- * injection is wrapped in try/catch and falls back to the ORIGINAL response
- * if the nav markup isn't found — it can never break the app. No app code
- * or user data is touched by this worker.
+ * v10.4.7: recovery stays available from Settings, while the old oversized
+ * runtime-injected bottom-nav link is retired. The recovery page remains
+ * precached and the data guard remains active.
  *
  * v10.4.0: injects data-guard.js — IndexedDB snapshot ring + wipe alarm.
  * v10.3.4 fix: rewrap redirected responses for navigations (iOS strict).
@@ -27,7 +25,7 @@
  * fallback (and skipped injection). Fetch by URL string instead, and inject
  * into cache-served HTML too.
  */
-const BUILD_ID    = "fh-2026-07-16-v10-4-6-minute-accounting";
+const BUILD_ID    = "fh-2026-07-17-v10-4-7-ui-refinement";
 const CACHE_NAME  = `focus-hero-${BUILD_ID}`;
 const PRECACHE = [
   "./",
@@ -49,10 +47,6 @@ const PRECACHE = [
   "./fh3d.js"
 ];
 
-/* ---- v10.3.2 recovery-link injection ------------------------------------ */
-const RECOVER_LINK = '<a href="./recover.html" data-nav-recover style="display:flex;flex-direction:column;align-items:center;gap:2px;text-decoration:none;color:inherit;font-size:inherit"><span>\u{1F691}</span><b>Recover</b></a>';
-const NAV_BTN_RE = /(<button[^>]*data-nav-action="all-tasks"[\s\S]{0,200}?<\/button>)/;
-
 function isAppDocPath(pathname){
   return pathname === "/" || pathname === "/index.html" || pathname === "/focus-hero.html"
       || pathname === "/index" || pathname === "/focus-hero";
@@ -73,15 +67,12 @@ async function unredirect(resp){
 }
 
 const GUARD_TAG = '<script src="./data-guard.js" defer><\/script>';
-async function withRecoverLink(resp){
+async function withDataGuard(resp){
   try {
     const ct = (resp.headers.get("content-type") || "");
     if (!ct.includes("text/html")) return resp;
     const text = await resp.clone().text();
     let out = text;
-    if (!out.includes("data-nav-recover") && NAV_BTN_RE.test(out)){
-      out = out.replace(NAV_BTN_RE, "$1" + RECOVER_LINK);
-    }
     /* v10.4.0: inject the data-guard layer (rolling snapshots + wipe alarm). */
     if (!out.includes("data-guard.js") && out.includes("</body>")){
       out = out.replace("</body>", GUARD_TAG.replace("<\\/script>", "</scr" + "ipt>") + "</body>");
@@ -143,7 +134,7 @@ self.addEventListener("fetch", event => {
         let fresh = await fetch(req.url, { cache: "no-store", credentials: "same-origin" });
         if (fresh && fresh.ok) {
           fresh = await unredirect(fresh);
-          if (injectHere) fresh = await withRecoverLink(fresh);
+          if (injectHere) fresh = await withDataGuard(fresh);
           // Mirror under both keys so the next offline launch works regardless
           // of whether the request was for "/" or "/focus-hero.html".
           if (injectHere) {
@@ -160,7 +151,7 @@ self.addEventListener("fetch", event => {
         const cached = await cache.match(req, { ignoreSearch:true })
           || (injectHere && (await cache.match("./focus-hero.html") || await cache.match("./")))
           || null;
-        if (cached && injectHere) return withRecoverLink(await unredirect(cached)); // inject cache-served HTML too
+        if (cached && injectHere) return withDataGuard(await unredirect(cached)); // guard cache-served HTML too
         if (cached) return unredirect(cached);
         return new Response("Offline", { status: 503 });
       }

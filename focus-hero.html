@@ -16,6 +16,7 @@
 <title>Focus Hero</title>
 <style>
 /* ================================================================
+ * Focus Hero v10.4.7 - timer typography controls + calmer navigation/recovery placement
  * Focus Hero v10.4.6 - authoritative recap/history totals + clearer exact session editing
  * Focus Hero v10.3.1 - battle-report edit loot threshold clawback
  * Focus Hero v10.3.0 - target chests + visible Targets/Sessions shortcuts
@@ -2579,6 +2580,9 @@ button.danger:hover{background:rgba(220,38,38,.22);color:#fca5a5;}
   --shadow:0 18px 55px rgba(0,5,16,.34);--radius:20px;
   --font:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   --mono:"SFMono-Regular",Consolas,"Liberation Mono",monospace;
+  --timer-font:"Helvetica Neue","Segoe UI Variable Display","Segoe UI",sans-serif;
+  --timer-weight:200;--timer-letter-spacing:-.045em;
+  --timer-ink:color-mix(in srgb,var(--ink) 82%,var(--bg));
   --accent-rgb:102,227,196;--accent-2-rgb:122,167,255;
 }
 [data-theme="light"],[data-theme="minimal"]{
@@ -2635,7 +2639,10 @@ button.primary{color:#061714;border-color:transparent;background:linear-gradient
 input[type=text],input[type=number],input[type=password],textarea,select{border:1px solid var(--border);border-radius:12px;background:var(--panel-2);font-family:var(--font)}
 .pill,.level-badge,.store-boost{border:1px solid var(--border);border-radius:999px;background:rgba(255,255,255,.045)}
 .timer-card{min-height:490px;display:flex;flex-direction:column;justify-content:center;background:radial-gradient(circle at 50% 25%,rgba(var(--accent-rgb),.12),transparent 45%),var(--panel)}
-.timer-display{font-family:var(--font);font-size:clamp(4.8rem,10vw,8.5rem);font-weight:780;letter-spacing:-.065em;color:var(--ink);text-shadow:0 18px 55px rgba(var(--accent-rgb),.22)}
+.timer-display{font-family:var(--timer-font);font-size:clamp(4.8rem,10vw,8.5rem);font-weight:var(--timer-weight);letter-spacing:var(--timer-letter-spacing);color:var(--timer-ink);text-shadow:0 12px 42px rgba(var(--accent-rgb),.13)}
+.timer-style-preview{display:grid;place-items:center;min-height:92px;margin:8px 0 4px;border:1px solid var(--border);border-radius:16px;background:var(--panel-2);font-family:var(--timer-font);font-size:clamp(2.2rem,8vw,4rem);font-weight:var(--timer-weight);letter-spacing:var(--timer-letter-spacing);color:var(--timer-ink)}
+.settings-action-link{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:.48rem .75rem;border:1px solid var(--border-strong);border-radius:12px;background:rgba(255,255,255,.045);color:var(--ink);font-weight:650;text-decoration:none}
+.settings-action-link:hover{border-color:rgba(var(--accent-rgb),.6);background:rgba(var(--accent-rgb),.10)}
 .progress,.bar{height:8px;border:0;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden}
 .progress>div,.bar>div{border-radius:inherit}.mode-tabs button[aria-pressed="true"]{border-color:rgba(var(--accent-rgb),.65);background:rgba(var(--accent-rgb),.13)}
 .hero-card .avatar{border-radius:24px;outline:0;border:1px solid var(--border);background:radial-gradient(circle at 50% 35%,rgba(var(--accent-rgb),.18),transparent 62%),var(--panel-2);box-shadow:none;image-rendering:auto}
@@ -3359,7 +3366,7 @@ svg{shape-rendering:geometricPrecision}
       </div>
       <div class="timer-controls">
         <button class="primary" id="btn-start">Start</button>
-        <button id="btn-quick-stopwatch" title="One tap: start an open-ended stopwatch session">⏱️ Stopwatch</button>
+        <button id="btn-quick-stopwatch" title="One tap: start an open-ended stopwatch session">Stopwatch</button>
         <button id="btn-stop-log" title="Stop & log this stopwatch session" hidden>Stop & log</button>
         <button id="btn-lap" title="Lap (L) — capture current stopwatch time" hidden>Lap</button>
         <button id="btn-skip" title="Skip (N)">Skip</button>
@@ -3447,20 +3454,20 @@ svg{shape-rendering:geometricPrecision}
     <div class="card" id="section-progress" aria-labelledby="tabs-heading">
       <h2 id="tabs-heading" class="sr-only">Progression</h2>
       <div class="tabs" role="tablist" aria-label="Progression">
-        <button role="tab" data-tab="targets" aria-pressed="true">🎯 Targets</button>
+        <button role="tab" data-tab="targets" aria-pressed="true">Targets</button>
         <button role="tab" data-tab="loot" aria-pressed="false">Loot</button>
-        <button role="tab" data-tab="quests-v85" aria-pressed="false">📋 Quests</button>
-        <button role="tab" data-tab="world" aria-pressed="false">🌍 World</button>
-        <button role="tab" data-tab="vault" aria-pressed="false">🏛️ Vault</button>
-        <button role="tab" data-tab="stable" aria-pressed="false">🐎 Stable</button>
+        <button role="tab" data-tab="quests-v85" aria-pressed="false">Quests</button>
+        <button role="tab" data-tab="world" aria-pressed="false">World</button>
+        <button role="tab" data-tab="vault" aria-pressed="false">Vault</button>
+        <button role="tab" data-tab="stable" aria-pressed="false">Stable</button>
         <button role="tab" data-tab="mounts" aria-pressed="false">Mounts</button>
         <button role="tab" data-tab="pets" aria-pressed="false">Pets</button>
-        <button role="tab" data-tab="drops" aria-pressed="false">📜 Drops</button>
-        <button role="tab" data-tab="forge" aria-pressed="false">🔥 Forge</button>
+        <button role="tab" data-tab="drops" aria-pressed="false">Drops</button>
+        <button role="tab" data-tab="forge" aria-pressed="false">Forge</button>
         <button role="tab" data-tab="ach" aria-pressed="false">Achievements</button>
-        <button role="tab" data-tab="store" aria-pressed="false">🪙 Store</button>
-        <button role="tab" data-tab="ledger" aria-pressed="false">📒 Ledger</button>
-        <button role="tab" data-tab="sessions" aria-pressed="false">🗂️ Sessions</button>
+        <button role="tab" data-tab="store" aria-pressed="false">Store</button>
+        <button role="tab" data-tab="ledger" aria-pressed="false">Ledger</button>
+        <button role="tab" data-tab="sessions" aria-pressed="false">Sessions</button>
         <button role="tab" data-tab="heat" aria-pressed="false">Heatmap</button>
       </div>
       <div id="tab-targets" class="tab-panel"><div id="fht-tab-panel" class="fht-tab-panel"><div class="muted" style="font-size:.85rem">Adaptive daily and weekly targets load here.</div></div></div>
@@ -3498,7 +3505,7 @@ svg{shape-rendering:geometricPrecision}
   <button type="button" data-nav-target="section-hero"><span>◇</span><b>Hero</b></button>
   <button type="button" data-nav-target="section-progress"><span>✦</span><b>Rewards</b></button>
   <button type="button" data-nav-target="section-log"><span>▤</span><b>Log</b></button>
-  <button type="button" data-nav-action="sessions"><span>🗂</span><b>Sessions</b></button>
+  <button type="button" data-nav-action="sessions"><span>▦</span><b>Sessions</b></button>
   <button type="button" data-nav-action="all-tasks"><span>☰</span><b>All</b></button>
 </nav>
 
@@ -3569,6 +3576,31 @@ svg{shape-rendering:geometricPrecision}
       <input type="color" id="cfg-accent2" aria-label="Secondary custom accent" value="#7aa7ff">
     </div></div>
     <hr>
+    <h4 style="margin:.25rem 0 .25rem;font-size:.82rem;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.1em">Timer appearance</h4>
+    <div class="form-row"><label>Timer typeface</label><div class="val"><select id="cfg-timer-font">
+      <option value="air">Air</option>
+      <option value="slim">Slim</option>
+      <option value="mono">Thin mono</option>
+      <option value="rounded">Soft rounded</option>
+    </select></div></div>
+    <div class="form-row"><label>Timer thickness</label><div class="val"><select id="cfg-timer-weight">
+      <option value="200">Extra thin</option>
+      <option value="300">Thin</option>
+      <option value="400">Regular</option>
+      <option value="500">Medium</option>
+      <option value="700">Bold</option>
+    </select></div></div>
+    <div class="form-row"><label>Timer color</label><div class="val"><select id="cfg-timer-color">
+      <option value="soft">Soft white</option>
+      <option value="dim">Dim gray</option>
+      <option value="warm">Warm low-glare</option>
+      <option value="cool">Cool low-glare</option>
+      <option value="accent">Accent color</option>
+      <option value="custom">Custom</option>
+    </select></div></div>
+    <div class="form-row"><label>Custom timer color</label><div class="val"><input type="color" id="cfg-timer-custom-color" aria-label="Custom timer color" value="#b8c4d4"></div></div>
+    <div class="timer-style-preview" id="timer-style-preview" aria-label="Timer style preview">25:00</div>
+    <hr>
     <h4 style="margin:.25rem 0 .25rem;font-size:.82rem;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.1em">Reward rules</h4>
     <div class="form-row"><label title="Sessions shorter than this earn no XP, loot, or achievements">Minimum session length for rewards (minutes)</label><div class="val"><input type="number" id="cfg-min-reward" min="1" max="15" step="1"></div></div>
     <div class="form-row"><label title="Streak day N adds N% bonus XP, up to this cap">Daily streak XP cap (%)</label><div class="val"><input type="number" id="cfg-streak-cap" min="0" max="200" step="1"></div></div>
@@ -3587,6 +3619,7 @@ svg{shape-rendering:geometricPrecision}
     <div class="form-row"><label title="Silently downloads a full backup JSON once per calendar month">Monthly auto-backup</label><div class="val"><button class="toggle" id="tog-monthly-backup" aria-checked="true" aria-label="Monthly auto-backup"></button></div></div>
     <div class="row" style="gap:8px;margin-top:8px">
       <button id="btn-backup-now" class="primary" title="Download a full, dated JSON backup right now">Back up all data</button>
+      <a class="settings-action-link" href="./recover.html">Recovery center</a>
       <span class="muted" style="font-size:.75rem" id="backup-last">Last backup: never</span>
     </div>
     <hr>
@@ -4005,6 +4038,7 @@ const DEFAULTS = {
     focusMin: 25, shortMin: 5, longMin: 15, cyclesBeforeLong: 4,
     autoStart: false, tick: false, chime: true, notif: false, theme: "dark", layout: "dashboard",
     colorPreset: "mint", customAccent: "#66e3c4", customAccent2: "#7aa7ff",
+    timerFont: "air", timerWeight: 200, timerColor: "soft", customTimerColor: "#b8c4d4",
     gameMode: false, gameModeGraceMs: 2500, /* v9: Game Mode — leaving the app mid-session resets the running timer (no credit) */
     /* v4 additions */
     minRewardMinutes: 5,
@@ -10399,6 +10433,10 @@ function fillSettingsForm(){
   $("#cfg-color").value = VALID_COLOR_PRESETS.includes(s.colorPreset) ? s.colorPreset : "mint";
   $("#cfg-accent").value = normalizeHexColor(s.customAccent, COLOR_PRESETS.custom.accent);
   $("#cfg-accent2").value = normalizeHexColor(s.customAccent2, COLOR_PRESETS.custom.accent2);
+  $("#cfg-timer-font").value = VALID_TIMER_FONTS.includes(s.timerFont) ? s.timerFont : "air";
+  $("#cfg-timer-weight").value = String(VALID_TIMER_WEIGHTS.includes(Number(s.timerWeight)) ? Number(s.timerWeight) : 200);
+  $("#cfg-timer-color").value = VALID_TIMER_COLORS.includes(s.timerColor) ? s.timerColor : "soft";
+  $("#cfg-timer-custom-color").value = normalizeHexColor(s.customTimerColor, "#b8c4d4");
   $("#cfg-min-reward").value = s.minRewardMinutes;
   $("#cfg-streak-cap").value = s.streakBonusCap;
   $("#cfg-combo-cap").value  = s.comboBonusCap;
@@ -10438,6 +10476,10 @@ function bindSettings(){
   bind("#cfg-color", e=>setColorPreset(e.target.value));
   bind("#cfg-accent", e=>{ state.settings.customAccent = normalizeHexColor(e.target.value, COLOR_PRESETS.custom.accent); state.settings.colorPreset = "custom"; saveState(); applyTheme(); });
   bind("#cfg-accent2", e=>{ state.settings.customAccent2 = normalizeHexColor(e.target.value, COLOR_PRESETS.custom.accent2); state.settings.colorPreset = "custom"; saveState(); applyTheme(); });
+  bind("#cfg-timer-font", e=>{ state.settings.timerFont = VALID_TIMER_FONTS.includes(e.target.value) ? e.target.value : "air"; saveState(); applyTimerStyle(); });
+  bind("#cfg-timer-weight", e=>{ const weight=Number(e.target.value); state.settings.timerWeight = VALID_TIMER_WEIGHTS.includes(weight) ? weight : 200; saveState(); applyTimerStyle(); });
+  bind("#cfg-timer-color", e=>{ state.settings.timerColor = VALID_TIMER_COLORS.includes(e.target.value) ? e.target.value : "soft"; saveState(); applyTimerStyle(); });
+  bind("#cfg-timer-custom-color", e=>{ state.settings.customTimerColor = normalizeHexColor(e.target.value, "#b8c4d4"); state.settings.timerColor = "custom"; const select=$("#cfg-timer-color"); if(select) select.value="custom"; saveState(); applyTimerStyle(); });
   bind("#cfg-min-reward", e=>{ state.settings.minRewardMinutes = clamp(parseInt(e.target.value||"5",10),1,15); saveState(); });
   bind("#cfg-streak-cap", e=>{ state.settings.streakBonusCap = clamp(parseInt(e.target.value||"30",10),0,200); saveState(); });
   bind("#cfg-combo-cap",  e=>{ state.settings.comboBonusCap  = clamp(parseInt(e.target.value||"50",10),0,200); saveState(); });
@@ -10607,7 +10649,7 @@ function renderDailyRecap(){
   const s=daySummary(todayKey());
   if(!s.sessions && !s.histMinutes){ host.hidden=true; return; }
   host.hidden=false;
-  host.innerHTML=`<h3>📅 Today so far</h3>
+  host.innerHTML=`<h3>Today so far</h3>
     <div class="dr-grid">
       <div class="dr-cell"><b>${s.histMinutes}m</b><span>Focused</span></div>
       <div class="dr-cell"><b>${s.sessions}</b><span>Sessions</span></div>
@@ -11797,6 +11839,22 @@ const COLOR_PRESETS = {
   custom:   { label:"Custom",     accent:"#66e3c4", accent2:"#7aa7ff" }
 };
 const VALID_COLOR_PRESETS = Object.keys(COLOR_PRESETS);
+const TIMER_FONT_PRESETS = {
+  air:     { family:'"Helvetica Neue","Segoe UI Variable Display","Segoe UI",sans-serif', spacing:"-.045em" },
+  slim:    { family:'"Aptos Display","Segoe UI Variable Display","Segoe UI",sans-serif', spacing:"-.035em" },
+  mono:    { family:'"Cascadia Mono","SFMono-Regular",Consolas,monospace', spacing:"-.055em" },
+  rounded: { family:'"Avenir Next","Nunito Sans","Segoe UI",sans-serif', spacing:"-.025em" }
+};
+const VALID_TIMER_FONTS = Object.keys(TIMER_FONT_PRESETS);
+const VALID_TIMER_WEIGHTS = [200,300,400,500,700];
+const TIMER_COLOR_PRESETS = {
+  soft:"color-mix(in srgb,var(--ink) 82%,var(--bg))",
+  dim:"color-mix(in srgb,var(--ink) 64%,var(--bg))",
+  warm:"#d6c5a8",
+  cool:"#aec3d8",
+  accent:"var(--accent)"
+};
+const VALID_TIMER_COLORS = [...Object.keys(TIMER_COLOR_PRESETS),"custom"];
 const VALID_LAYOUTS = ["dashboard","rail","deck","dock","split","mobile","focus","compact","zen","arcade","cockpit"];
 const PRIMARY_LAYOUTS = ["dashboard","rail","deck","dock","split","mobile"];
 const LAYOUT_LABELS = {
@@ -11813,6 +11871,7 @@ function applyTheme(){
   const bg = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
   if (bg){ document.querySelectorAll('meta[name="theme-color"]').forEach(m=>m.setAttribute("content", bg)); }
   applyColorPreset();
+  applyTimerStyle();
 }
 function normalizeHexColor(v, fallback){
   const s = String(v || "").trim();
@@ -11822,6 +11881,21 @@ function hexToRgbTriplet(hex){
   const h = normalizeHexColor(hex, "#8b9cff").slice(1);
   const n = parseInt(h, 16);
   return `${(n >> 16) & 255},${(n >> 8) & 255},${n & 255}`;
+}
+function applyTimerStyle(){
+  if (!state || !state.settings) return;
+  const fontKey = VALID_TIMER_FONTS.includes(state.settings.timerFont) ? state.settings.timerFont : "air";
+  const weight = VALID_TIMER_WEIGHTS.includes(Number(state.settings.timerWeight)) ? Number(state.settings.timerWeight) : 200;
+  const colorKey = VALID_TIMER_COLORS.includes(state.settings.timerColor) ? state.settings.timerColor : "soft";
+  const font = TIMER_FONT_PRESETS[fontKey];
+  const color = colorKey === "custom"
+    ? normalizeHexColor(state.settings.customTimerColor, "#b8c4d4")
+    : TIMER_COLOR_PRESETS[colorKey];
+  const root = document.documentElement;
+  root.style.setProperty("--timer-font", font.family);
+  root.style.setProperty("--timer-weight", String(weight));
+  root.style.setProperty("--timer-letter-spacing", font.spacing);
+  root.style.setProperty("--timer-ink", color);
 }
 function applyColorPreset(){
   if (!state || !state.settings) return;
@@ -14344,7 +14418,7 @@ else boot();
     var note = full
       ? '<div class="fht-note">Targets read your existing minute history to size goals. They never edit logged minutes, tasks, sessions, streaks, or history; opened chests only add the intended XP/loot reward once.</div>'
       : '<div class="fht-note">Adaptive daily and weekly chests. Logged minutes are read-only.</div><div class="fht-actions"><button type="button" data-fht-open>Open Targets</button></div>';
-    return '<h3>🎯 Focus Targets <span style="font-size:.62rem;color:var(--ink-dim,#9aa);font-weight:400">adaptive chests</span></h3>'
+    return '<h3>Focus Targets <span style="font-size:.62rem;color:var(--ink-dim,#9aa);font-weight:400">adaptive chests</span></h3>'
       +barHtml("daily")+chestHtml("daily")+barHtml("weekly")+chestHtml("weekly")+note;
   }
   function renderCard(){

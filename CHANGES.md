@@ -1,3 +1,11 @@
+# v10.4.7 — 2026-07-17
+
+**Calmer timer typography + consistent navigation**
+- Added independent timer appearance settings: four typefaces, five weights down to extra-thin, six low-glare/custom color options, and a live preview. These are additive display preferences only; existing timer/session/accounting data is not migrated or rewritten.
+- Removed decorative emoji from progression tabs, Focus Targets, Today so far, and the Stopwatch action. The mobile Sessions shortcut now uses the same monochrome-symbol treatment as the other navigation buttons.
+- Removed the service worker's oversized Recover link injection. Recovery remains fully available from Settings → Backups, `recover.html` remains precached, and `data-guard.js` continues to be injected for rolling snapshots and wipe alarms.
+- No minute addition/subtraction, exact-total editing, history, sessions, rewards, sync identity, or cloud-state logic changed. `sw.js` BUILD_ID -> `fh-2026-07-17-v10-4-7-ui-refinement`.
+
 # v10.4.6 — 2026-07-16
 
 **🧮 Exact minute accounting + clearer session controls**
