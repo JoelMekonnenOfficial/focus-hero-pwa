@@ -1,3 +1,12 @@
+# v10.5.0 — 2026-07-18
+
+**Live-parity corrections + Priority Expedition**
+- Manual minute additions/removals now use the live session XP curve with the same current combo, streak, equipped-gear multiplier, and active XP boost. New session records preserve the applied XP/coin multipliers so later exact-total or +/- corrections gain or reverse the correct amounts instead of falling back to base XP.
+- Added manual Priority mode. Each Priority run ends at an honor-system checkpoint: keep the full session only when priorities were followed, or cancel the entire run for zero minutes, XP, coins, loot, Orbs, materials, or farm growth.
+- Added one organized Expedition tab. Eligible focus sessions earn deterministic Focus Orbs, seeds, and action-based farming materials; farm plots grow only from credited focus minutes. Orbs can accelerate crops, and harvested materials craft Focus Tonics, Forge Kits, and a third plot.
+- Expedition rewards use a per-session event ledger. Editing or deleting a session updates that exact grant, while cloud merge keeps the newest correction per session and unions append-only spends/harvests. Existing profiles are initialized additively with no retroactive grants and no logged-minute rewrite.
+- `sw.js` BUILD_ID -> `fh-2026-07-18-v10-5-0-expedition-priority`.
+
 # v10.4.7 — 2026-07-17
 
 **Calmer timer typography + consistent navigation**

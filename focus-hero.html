@@ -3455,6 +3455,7 @@ svg{shape-rendering:geometricPrecision}
       <h2 id="tabs-heading" class="sr-only">Progression</h2>
       <div class="tabs" role="tablist" aria-label="Progression">
         <button role="tab" data-tab="targets" aria-pressed="true">Targets</button>
+        <button role="tab" data-tab="expedition" aria-pressed="false">Expedition</button>
         <button role="tab" data-tab="loot" aria-pressed="false">Loot</button>
         <button role="tab" data-tab="quests-v85" aria-pressed="false">Quests</button>
         <button role="tab" data-tab="world" aria-pressed="false">World</button>
@@ -3471,6 +3472,7 @@ svg{shape-rendering:geometricPrecision}
         <button role="tab" data-tab="heat" aria-pressed="false">Heatmap</button>
       </div>
       <div id="tab-targets" class="tab-panel"><div id="fht-tab-panel" class="fht-tab-panel"><div class="muted" style="font-size:.85rem">Adaptive daily and weekly targets load here.</div></div></div>
+      <div id="tab-expedition" class="tab-panel" hidden><div id="focus-economy-panel"><div class="muted" style="font-size:.85rem">Expedition rewards and farm load here.</div></div></div>
       <div id="tab-loot" class="tab-panel" hidden><div id="loot-grid" class="loot-grid"></div></div>
       <div id="tab-mounts" class="tab-panel" hidden><div id="mount-grid" class="loot-grid companion-grid"></div></div>
       <div id="tab-pets" class="tab-panel" hidden><div id="pet-grid" class="loot-grid companion-grid"></div></div>
@@ -3539,6 +3541,7 @@ svg{shape-rendering:geometricPrecision}
     <div class="form-row"><label>Chime on session end</label><div class="val"><button class="toggle" id="tog-chime" aria-checked="true" aria-label="Chime sound"></button></div></div>
     <div class="form-row"><label>Browser notifications</label><div class="val"><button class="toggle" id="tog-notif" aria-checked="false" aria-label="Notifications"></button></div></div>
     <div class="form-row"><label>🔒 Locked In <span class="hint">A focus mode. If you break focus (social media, etc.) you tap "Reset run" yourself to wipe the current run — nothing is logged. Honor system; nothing resets automatically.</span></label><div class="val"><button class="toggle" id="tog-gamemode" aria-checked="false" aria-label="Locked In focus mode"></button></div></div>
+    <div class="form-row"><label>Priority mode <span class="hint">Manual honor system. Before a focus run is credited, confirm that you worked in the right priority order or cancel the entire run for zero credit.</span></label><div class="val"><button class="toggle" id="tog-prioritymode" aria-checked="false" aria-label="Priority focus mode"></button></div></div>
     <div class="form-row"><label>Theme</label><div class="val"><select id="cfg-theme">
       <option value="dark">Midnight (default)</option>
       <option value="light">Paper</option>
@@ -4040,6 +4043,7 @@ const DEFAULTS = {
     colorPreset: "mint", customAccent: "#66e3c4", customAccent2: "#7aa7ff",
     timerFont: "air", timerWeight: 200, timerColor: "soft", customTimerColor: "#b8c4d4",
     gameMode: false, gameModeGraceMs: 2500, /* v9: Game Mode — leaving the app mid-session resets the running timer (no credit) */
+    priorityMode: false, /* v10.5: manual honor-system checkpoint before session credit */
     /* v4 additions */
     minRewardMinutes: 5,
     streakBonusCap: 30,
@@ -4095,6 +4099,10 @@ const DEFAULTS = {
   coinsEarned: 0,
   coinsSpent: 0,
   store: { purchased: [], boosts: [], unlockedThemes: [] },
+  focusEconomy: {
+    version: 1, grants: {}, spends: [], harvests: [], plots: [],
+    unlockedPlots: 2, installedAt: 0
+  },
   /* v8.x LOOT REWORK — additive only. lootInstances holds per-drop
      unique items with rolled affixes / sockets / dye / level. state.loot
      holds the drop log, pity counters, materials, and the consumable
@@ -10348,6 +10356,13 @@ function mergeRemoteState(local, remote){
     merged.drops = __mergeCounts(localEnt.drops, remoteEnt.drops);
     out.bestiary[k] = merged;
   });
+  /* v10.5: event-ledger merge for Expedition rewards. Session grants are
+     corrected in place by timestamp, while spends/harvests remain append-only. */
+  if (typeof window.fhMergeFocusEconomy === "function"){
+    out.focusEconomy = window.fhMergeFocusEconomy(local.focusEconomy, remote.focusEconomy);
+  } else if (!local.focusEconomy && remote.focusEconomy){
+    out.focusEconomy = deepClone(remote.focusEconomy);
+  }
   out.dataVersion = Math.max(local.dataVersion||0, remote.dataVersion||0, DATA_VERSION);
   out.sync = deepClone(local.sync);
   return out;
@@ -14173,7 +14188,7 @@ function openEmojiPicker(taskIdOrOpts, anchor){
 
 /* --- progression sub-tabs (overrides the original; adds store + ledger) --- */
 function bindTabs(){
-  const KEYS = ["targets","loot","quests-v85","world","vault","stable","mounts","pets","drops","forge","ach","store","ledger","sessions","bestiary","heat"];
+  const KEYS = ["targets","expedition","loot","quests-v85","world","vault","stable","mounts","pets","drops","forge","ach","store","ledger","sessions","bestiary","heat"];
   $$(".tabs button[role='tab']").forEach(b=>{
     b.addEventListener("click", ()=>{
       const tab = b.dataset.tab;
@@ -14182,6 +14197,7 @@ function bindTabs(){
       if (tab === "store")  { try{renderStore();}  catch(_){} }
       if (tab === "ledger") { try{renderLedger();} catch(_){} }
       if (tab === "sessions") { try{renderSessionHistoryPanel();} catch(_){} }
+      if (tab === "expedition" && typeof window.fhRenderFocusEconomy === "function") { try{window.fhRenderFocusEconomy();} catch(_){} }
       if (tab === "targets" && typeof window.fhRenderTargetsCard === "function") { try{window.fhRenderTargetsCard();} catch(_){} }
       if (tab === "drops" && typeof window.renderDropsPanel === "function") { try{window.renderDropsPanel();} catch(_){} }
       if (tab === "forge" && typeof window.renderForgePanel === "function") { try{window.renderForgePanel();} catch(_){} }
@@ -14465,5 +14481,6 @@ else boot();
   else window.addEventListener("load", function(){ setTimeout(boot,300); });
 })();
 </script>
+<script src="./focus-economy.js"></script>
 </body>
 </html>
