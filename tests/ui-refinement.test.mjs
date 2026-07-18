@@ -22,6 +22,8 @@ assert.doesNotMatch(html, /data-tab="sessions"[^>]*>[^<]*[\p{Extended_Pictograph
 assert.doesNotMatch(html, /data-tab="targets"[^>]*>[^<]*[\p{Extended_Pictographic}]/u);
 assert.match(html, /data-nav-action="sessions"><span>▦<\/span><b>Sessions<\/b>/);
 assert.match(html, /href="\.\/recover\.html">Recovery center<\/a>/);
+assert.match(html, /class="encounter-stage" id="encounter-stage"/);
+assert.doesNotMatch(html, /adv-status-slot|adv-status-pill|fh76-blink/);
 assert.doesNotMatch(sw, /RECOVER_LINK|data-nav-recover|withRecoverLink/);
 assert.match(sw, /async function withDataGuard/);
 assert.match(sw, /data-guard\.js/);
@@ -56,6 +58,20 @@ try {
   page.on("pageerror", error => pageErrors.push(String(error)));
   await page.goto(`http://127.0.0.1:${port}/`, { waitUntil:"domcontentloaded" });
   await page.waitForFunction(() => Boolean(window.__FocusHero?.stateRef));
+
+  const encounter = await page.evaluate(() => {
+    const stage = document.querySelector("#encounter-stage");
+    const craft = document.querySelector('#adv-actions [data-action="Craft"]');
+    craft?.click();
+    return {
+      exists:!!stage,
+      scene:stage?.dataset.scene,
+      target:document.querySelector("#arena-enemy-name")?.textContent,
+      model:!!document.querySelector("#arena-hero-model svg") && !!document.querySelector("#arena-enemy-model svg"),
+      statusPill:!!document.querySelector("#adv-status-slot, .adv-status-pill")
+    };
+  });
+  assert.deepEqual(encounter, { exists:true, scene:"crafting", target:"Forge Bench", model:true, statusPill:false });
 
   const seeded = await page.evaluate(() => {
     const state = window.__FocusHero.stateRef();

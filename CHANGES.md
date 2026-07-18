@@ -1,3 +1,13 @@
+# v10.5.1 — 2026-07-18
+
+**Egg/target edit parity + durable offline claims + restored encounter card**
+- Eligible manual minute additions and exact-total edits now advance egg incubation through the same credited-minute boundary as completed live sessions. Reductions and deletions reverse only tracked incubation credit from the affected session/task; they never guess against a replacement egg or delete an already-hatched mount. Event IDs make retries idempotent, and changing the reward-floor setting cannot strand previously credited incubation minutes.
+- Confirmed that daily/weekly target progress already reads the authoritative minute history and its chest rewards are claimed once. Added regression coverage for manual crossings, edit-down/re-cross, and repeated checks so an edit cannot double-award a chest.
+- Completed countdown claims are now persisted before the confirmation screen. A reload, crash, offline restart, Priority checkpoint, or waiting service-worker update restores the exact pending claim; no minute, XP, egg, Expedition, loot, or session award occurs before confirmation, and deterministic claim IDs prevent double credit after a retry.
+- Restored the animated Focus encounter card from the later v9.7–v10.1.1 presentation into the current code without rolling back newer features. Travel, Loot, Hunt, Craft, Meditate, and Fight render their existing hero/objective/battle scenes. The redundant blinking status light at the bottom was removed.
+- Offline service-worker and reconnect behavior remain additive and were tested with synthetic profiles only. The multi-device concurrent-offline merge algorithm was intentionally not redesigned in this release.
+- No production profile, browser storage, cloud row, private backup, credential, or sync code was read or changed. `sw.js` BUILD_ID -> `fh-2026-07-18-v10-5-1-reward-offline-arena`.
+
 # v10.5.0 — 2026-07-18
 
 **Live-parity corrections + Priority Expedition**

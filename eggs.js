@@ -50,6 +50,8 @@
 
   var EGG_SYSTEM_VERSION = 2;
   var EGG_PROCESSED_SESSION_CAP = 200;
+  var EGG_INCUBATION_CREDIT_CAP = 400;
+  var EGG_MAX_CREDIT_MINUTES = Number.MAX_SAFE_INTEGER;
   var EGG_MIN_DROP_MINUTES = 30;
   var EGG_REWARD_PROOF = {};
 
@@ -164,6 +166,87 @@
     return s.eggs;
   }
 
+  /* Incubation corrections need provenance. Without it, editing an old session
+     after the incubator occupant changed could erase progress from the wrong
+     egg. Credits live on the egg that actually received the minutes and are
+     bounded; missing/legacy provenance fails closed instead of guessing. */
+  function eggNormalizeIncubationCredits(egg){
+    if (!egg || typeof egg !== "object") return [];
+    var raw = Array.isArray(egg.incubationCredits) ? egg.incubationCredits : [];
+    var out = [], byId = Object.create(null);
+    raw.forEach(function(entry){
+      if (!entry || typeof entry !== "object") return;
+      var id = typeof entry.id === "string" ? entry.id : "";
+      var minutes = Math.max(0, Math.trunc(Number(entry.minutes) || 0));
+      if (!id || !minutes) return;
+      var taskId = typeof entry.taskId === "string" ? entry.taskId : "";
+      var key = id + "\u0000" + taskId;
+      if (byId[key]){
+        byId[key].minutes = Math.min(EGG_MAX_CREDIT_MINUTES, byId[key].minutes + minutes);
+        byId[key].at = Math.max(byId[key].at || 0, Math.max(0, Number(entry.at) || 0));
+        return;
+      }
+      var normalized = {
+        id: id,
+        taskId: taskId,
+        kind: typeof entry.kind === "string" ? entry.kind.slice(0, 32) : "focus",
+        minutes: Math.min(EGG_MAX_CREDIT_MINUTES, minutes),
+        at: Math.max(0, Number(entry.at) || 0)
+      };
+      byId[key] = normalized;
+      out.push(normalized);
+    });
+    egg.incubationCredits = out.slice(-EGG_INCUBATION_CREDIT_CAP);
+    return egg.incubationCredits;
+  }
+
+  function eggRememberIncubationCredit(egg, minutes, source){
+    var add = Math.max(0, Math.trunc(Number(minutes) || 0));
+    source = source && typeof source === "object" ? source : {};
+    var id = typeof source.id === "string" ? source.id : "";
+    if (!egg || !add || !id) return 0;
+    var credits = eggNormalizeIncubationCredits(egg);
+    var taskId = typeof source.taskId === "string" ? source.taskId : "";
+    var existing = null;
+    for (var i = credits.length - 1; i >= 0; i--){
+      if (credits[i].id === id && credits[i].taskId === taskId){ existing = credits[i]; break; }
+    }
+    if (existing){
+      existing.minutes = Math.min(EGG_MAX_CREDIT_MINUTES, existing.minutes + add);
+      existing.at = Math.max(existing.at || 0, Math.max(0, Number(source.at) || Date.now()));
+    } else {
+      credits.push({
+        id: id,
+        taskId: taskId,
+        kind: typeof source.kind === "string" ? source.kind.slice(0, 32) : "focus",
+        minutes: Math.min(EGG_MAX_CREDIT_MINUTES, add),
+        at: Math.max(0, Number(source.at) || Date.now())
+      });
+      if (credits.length > EGG_INCUBATION_CREDIT_CAP) credits.shift();
+    }
+    return add;
+  }
+
+  function eggRewindIncubationCredits(egg, minutes, source){
+    var left = Math.max(0, Math.trunc(Number(minutes) || 0));
+    source = source && typeof source === "object" ? source : {};
+    var ownerId = typeof source.ownerId === "string" ? source.ownerId : "";
+    var taskId = typeof source.taskId === "string" ? source.taskId : "";
+    if (!egg || !left || (!ownerId && !taskId)) return 0;
+    var credits = eggNormalizeIncubationCredits(egg), removed = 0;
+    for (var i = credits.length - 1; i >= 0 && left > 0; i--){
+      var entry = credits[i];
+      if (ownerId ? entry.id !== ownerId : entry.taskId !== taskId) continue;
+      var take = Math.min(left, Math.max(0, Math.trunc(Number(entry.minutes) || 0)));
+      if (!take) continue;
+      entry.minutes -= take;
+      left -= take;
+      removed += take;
+      if (entry.minutes <= 0) credits.splice(i, 1);
+    }
+    return removed;
+  }
+
   /* ---------- DROP (session-end hook) ---------- */
   function eggMaybeDrop(s, sessionMinutes, context, proof, rng){
     s = s || (typeof window !== "undefined" ? window.state : null);
@@ -201,6 +284,7 @@
     if (s.eggs.incubating.length >= s.eggs.slotCap) return { ok:false, reason:"slots_full" };
     var egg = s.eggs.owned.splice(idx, 1)[0];
     egg.incubatedMin = 0;
+    egg.incubationCredits = [];
     egg.startedAt = Date.now();
     s.eggs.incubating.push(egg);
     return { ok:true };
@@ -213,6 +297,7 @@
     if (idx < 0) return { ok:false, reason:"not_incubating" };
     var egg = s.eggs.incubating.splice(idx, 1)[0];
     delete egg.incubatedMin;
+    delete egg.incubationCredits;
     delete egg.startedAt;
     s.eggs.owned.push(egg);
     return { ok:true };
@@ -220,13 +305,15 @@
 
   /* Called from session-end hook; advances every incubating egg by the
      session minutes. Returns array of newly-hatched eggs. */
-  function eggAdvanceIncubation(s, minutes){
+  function eggAdvanceIncubation(s, minutes, creditSource){
     s = s || (typeof window !== "undefined" ? window.state : null);
     eggEnsureState(s);
     var hatched = [];
     var remaining = [];
+    var addedMinutes = Math.max(0, minutes|0);
     s.eggs.incubating.forEach(function(egg){
-      egg.incubatedMin = (egg.incubatedMin|0) + Math.max(0, minutes|0);
+      egg.incubatedMin = (egg.incubatedMin|0) + addedMinutes;
+      if (addedMinutes && creditSource) eggRememberIncubationCredit(egg, addedMinutes, creditSource);
       if (egg.incubatedMin >= egg.incubationReqMin){
         // Hatch!
         var mount = eggHatch(s, egg);
@@ -247,6 +334,46 @@
     });
     s.eggs.incubating = remaining;
     return hatched;
+  }
+
+  /* Minute edits use the same incubation clock as a completed focus session.
+     The event id makes wrapper retries idempotent, while negative corrections
+     only rewind eggs that are still incubating (a correction must never delete
+     an already-hatched mount or another earned inventory item). */
+  function eggApplyMinuteCorrection(s, deltaMinutes, eventId, source){
+    var eggs = eggEnsureState(s);
+    var delta = Math.trunc(Number(deltaMinutes) || 0);
+    var key = typeof eventId === "string" ? eventId : "";
+    if (!eggs || !delta || !key) return { processed:false, delta:0, hatched:[] };
+    if (eggs.processedSessionIds.indexOf(key) >= 0) return { processed:false, delta:delta, hatched:[] };
+    eggs.processedSessionIds.push(key);
+    if (eggs.processedSessionIds.length > EGG_PROCESSED_SESSION_CAP) eggs.processedSessionIds.shift();
+
+    source = source && typeof source === "object" ? source : {};
+    var hatched = [], applied = [];
+    if (delta > 0){
+      hatched = eggAdvanceIncubation(s, delta, {
+        id: typeof source.ownerId === "string" && source.ownerId ? source.ownerId : key,
+        taskId: typeof source.taskId === "string" ? source.taskId : "",
+        kind: typeof source.kind === "string" ? source.kind : "manual",
+        at: Date.now()
+      });
+      hatched.forEach(function(h){
+        if (typeof window.toast === "function") window.toast(h.egg.sym + " " + h.egg.name + " HATCHED into " + (h.mount.name || h.mount.id) + "!", "good");
+        if (typeof window.logLine === "function") window.logLine("Egg hatched: " + h.egg.name + " -> " + (h.mount.name || h.mount.id));
+      });
+    } else {
+      var rewind = Math.abs(delta);
+      eggs.incubating.forEach(function(egg){
+        var removed = eggRewindIncubationCredits(egg, rewind, source);
+        if (removed){
+          egg.incubatedMin = Math.max(0, (egg.incubatedMin|0) - removed);
+          applied.push({ eggId:egg.id || "", minutes:removed });
+        }
+      });
+    }
+    try { eggRender(); } catch(_){}
+    return { processed:true, delta:delta, hatched:hatched, applied:applied };
   }
 
   /* Hatch: pick a random mount from v8.4 CR_MOUNTS_BY_FAMILY of the matching
@@ -326,7 +453,8 @@
         entry.source === source && (entry.minutes|0) === minutes;
     });
     if (!ledgerMatch) return null;
-    return { source:source, sessionId:sessionId, minutes:minutes, action:action };
+    return { source:source, sessionId:sessionId, minutes:minutes, action:action,
+      taskId:typeof record.taskId === "string" ? record.taskId : "", at:Math.max(0, Number(record.at)||0) };
   }
 
   function eggProcessVerifiedSession(s, context, proof, rng){
@@ -338,7 +466,9 @@
     eggs.processedSessionIds.push(context.sessionId);
     if (eggs.processedSessionIds.length > EGG_PROCESSED_SESSION_CAP) eggs.processedSessionIds.shift();
 
-    var hatched = eggAdvanceIncubation(s, context.minutes);
+    var hatched = eggAdvanceIncubation(s, context.minutes, {
+      id:context.sessionId, taskId:context.taskId || "", kind:context.source || "focus", at:context.at || Date.now()
+    });
     var dropped = eggMaybeDrop(s, context.minutes, context, EGG_REWARD_PROOF, rng);
     hatched.forEach(function(h){
       if (typeof window.toast === "function"){
@@ -491,6 +621,7 @@
   window.eggStartIncubation = eggStartIncubation;
   window.eggCancelIncubation = eggCancelIncubation;
   window.eggAdvanceIncubation = eggAdvanceIncubation;
+  window.eggApplyMinuteCorrection = eggApplyMinuteCorrection;
   window.eggHatch = eggHatch;
   window.eggRender = eggRender;
   window.eggEnsureState = eggEnsureState;

@@ -165,6 +165,11 @@
   }
   function newRecord(before){var log=S().sessionsLog||[];for(var i=log.length-1;i>=0;i--){if(log[i]&&log[i].id&&!before.has(log[i].id))return log[i];}return null;}
   function saveRender(){try{window.saveState();}catch(_){}try{window.renderAll();}catch(_){}try{render();updatePriorityUi();}catch(_){}}
+  function latestEditId(){var log=S().editLog||[], edit=log[log.length-1];return edit&&edit.id?String(edit.id):"";}
+  function applyEggMinuteCorrection(delta,eventId,timeOnly,source){
+    if(!delta||timeOnly||typeof window.eggApplyMinuteCorrection!=="function")return null;
+    try{return window.eggApplyMinuteCorrection(S(),int(delta),String(eventId||""),source||{});}catch(_){return null;}
+  }
 
   function installRewardParity(){
     var originalPreview=window.sessionEditXpPreview;
@@ -183,6 +188,8 @@
         if(ctx.eligible)applyCoinDelta(d>0?ctx.coins:-ctx.coins);
         var rec=d>0?newRecord(before):null;
         if(rec){patchRecord(rec,ctx);upsertGrant(rec);}else if(d<0){var edit=(s.editLog||[])[(s.editLog||[]).length-1];addLedgerCorrection(edit&&edit.id,d,rec&&rec.action||((s.adventure&&s.adventure.action)||"Travel"));}
+        if(d>0&&ctx.eligible&&rec)applyEggMinuteCorrection(d,"egg_ledger_"+rec.id,ctx.timeOnly,{ownerId:rec.id,taskId:taskId,kind:"ledger"});
+        else if(d<0)applyEggMinuteCorrection(d,"egg_ledger_edit_"+latestEditId(),ctx.timeOnly,{taskId:taskId,kind:"ledger-correction"});
         result.xpDelta=d>0?ctx.xp:-ctx.xp;result.coinDelta=d>0?ctx.coins:-ctx.coins;saveRender();return result;
       };lw.__fh105=true;window.applyTaskTimeAdjustment=lw;
     }
@@ -197,32 +204,39 @@
         rec.xpRaw=raw;rec.xpMultiplierApplied=mult;rec.originalXp=Math.max(int(rec.originalXp),oldXp);
         var coinBase=rewarded?int(window.computeCoins(rec.minutes,false)):0, coinMult=n(old&&old.coinMultiplierApplied)||1, coins=rewarded?Math.round(coinBase*coinMult):0;
         applyCoinDelta(coins-oldCoins);rec.coins=coins;rec.coinMultiplierApplied=coinMult;rec.originalCoins=Math.max(int(rec.originalCoins),oldCoins);
-        upsertGrant(rec);result.xpDelta=desired-oldXp;result.coinDelta=coins-oldCoins;saveRender();return result;
+        upsertGrant(rec);
+        var oldEggMinutes=old&&old.rewarded?int(old.minutes):0;
+        var newEggMinutes=rec.rewarded&&!recordTimeOnly(rec)?int(rec.minutes):0;
+        applyEggMinuteCorrection(newEggMinutes-oldEggMinutes,"egg_session_edit_"+latestEditId(),false,{ownerId:rec.id,taskId:rec.taskId||"",kind:"session-edit"});
+        result.xpDelta=desired-oldXp;result.coinDelta=coins-oldCoins;saveRender();return result;
       };ew.__fh105=true;window.applySessionEdit=ew;
     }
     var del=window.deleteSessionRecord;
     if(typeof del==="function"&&!del.__fh105){
-      var dw=function(sessionId){var rec=(S().sessionsLog||[]).find(function(r){return r&&r.id===sessionId;}),coins=rec?int(rec.coins):0;var r=del.apply(this,arguments);if(r&&r.ok){if(coins)applyCoinDelta(-coins);reverseGrant(sessionId);saveRender();}return r;};dw.__fh105=true;window.deleteSessionRecord=dw;
+      var dw=function(sessionId){var rec=(S().sessionsLog||[]).find(function(r){return r&&r.id===sessionId;}),snapshot=rec?clone(rec):null,coins=rec?int(rec.coins):0;var r=del.apply(this,arguments);if(r&&r.ok){if(coins)applyCoinDelta(-coins);reverseGrant(sessionId);if(snapshot&&snapshot.rewarded)applyEggMinuteCorrection(-int(snapshot.minutes),"egg_session_delete_"+(latestEditId()||sessionId),false,{ownerId:sessionId,taskId:snapshot.taskId||"",kind:"session-delete"});saveRender();}return r;};dw.__fh105=true;window.deleteSessionRecord=dw;
     }
   }
 
   function finishRecordedSession(original,args,priorityPassed){
     var before=new Set((S().sessionsLog||[]).map(function(r){return r&&r.id;})), xpBefore=totalHeroXp();
     priorityBypass=true; var result; try{result=original.apply(window,args);}finally{priorityBypass=false;}
-    var rec=newRecord(before); if(rec){rec.priorityVerified=!!priorityPassed;var raw=int(rec.xp),actual=rec.rewarded?int(window.rewardXpTotal(raw)):0;var ctx={xpRaw:raw,xp:actual,xpMultiplier:raw?actual/raw:1,coins:rec.rewarded?int(window.computeCoins(rec.minutes,true)):0,coinBase:rec.rewarded?int(window.computeCoins(rec.minutes,false)):0,combo:int(rec.comboPriorCount),streak:int(rec.streakForCalc)};ctx.coinMultiplier=ctx.coinBase?ctx.coins/ctx.coinBase:1;patchRecord(rec,ctx);upsertGrant(rec);}
+    var claim=args&&args[0], claimId=claim&&claim.sessionId;
+    var rec=newRecord(before) || (result&&result.record) || (claimId?(S().sessionsLog||[]).find(function(r){return r&&r.id===claimId;}):null);
+    if(rec){rec.priorityVerified=!!priorityPassed||!!rec.priorityVerified;var raw=int(rec.xpRaw!=null?rec.xpRaw:rec.xp),actual=rec.rewarded?int(window.rewardXpTotal(raw)):0;var ctx={xpRaw:raw,xp:actual,xpMultiplier:raw?actual/raw:1,coins:rec.rewarded?int(window.computeCoins(rec.minutes,true)):0,coinBase:rec.rewarded?int(window.computeCoins(rec.minutes,false)):0,combo:int(rec.comboPriorCount),streak:int(rec.streakForCalc)};ctx.coinMultiplier=ctx.coinBase?ctx.coins/ctx.coinBase:1;patchRecord(rec,ctx);upsertGrant(rec);}
     S().timer.priorityRun=false;saveRender();return result;
   }
   function priorityEnabledForRun(){var s=S();return !!(s&&s.timer&&(s.timer.priorityRun||s.settings.priorityMode));}
   function showPriority(kind,original,args){pendingPriority={kind:kind,original:original,args:Array.prototype.slice.call(args)};var m=document.getElementById("priority-check-modal");if(m)m.hidden=false;}
   function cancelPriorityRun(){
-    var s=S(), wasSw=pendingPriority&&pendingPriority.kind==="stopwatch";pendingPriority=null;
+    var s=S(); if(!pendingPriority&&!s.pendingFocusClaim)return;
+    var wasSw=pendingPriority&&pendingPriority.kind==="stopwatch";pendingPriority=null;
     if(wasSw){s.timer.swStartedAt=0;s.timer.swAccumulatedMs=0;s.timer.swSessionStartedAt=0;s.timer.swLaps=[];}else{s.timer.msLeft=(typeof window.modeMinutes==="function"?window.modeMinutes("focus"):int(s.settings.focusMin)||25)*60000;}
     s.timer.running=false;s.timer.endAt=0;s.timer.pausedAt=0;s.timer.activeTaskId=null;s.timer.activeTaskNameAtStart=null;s.timer.priorityRun=false;s.canceledSessionCount=int(s.canceledSessionCount)+1;
-    var m=document.getElementById("priority-check-modal");if(m)m.hidden=true;try{window.stopKeepalive();window.releaseWakeLock();}catch(_){}try{window.logLine("Priority run canceled — no minutes, XP, loot, or materials counted.");}catch(_){}try{window.toast("Priority run canceled. Nothing counted.","warn");}catch(_){}saveRender();
+    var m=document.getElementById("priority-check-modal");if(m)m.hidden=true;try{window.stopKeepalive();window.releaseWakeLock();}catch(_){}try{window.logLine("Priority run canceled — no minutes, XP, loot, or materials counted.");}catch(_){}try{window.toast("Priority run canceled. Nothing counted.","warn");}catch(_){}try{if(typeof window.clearPendingFocusClaim==="function")window.clearPendingFocusClaim();}catch(_){}saveRender();
   }
   function installPriorityWrappers(){
     var start=window.startTimer;if(typeof start==="function"&&!start.__fhPriority){var sw=function(){var s=S(),fresh=!s.timer.running&&((typeof window.isStopwatch==="function"&&window.isStopwatch())?int(s.timer.swAccumulatedMs)===0:int(s.timer.msLeft)>=(typeof window.focusPlannedMs==="function"?int(window.focusPlannedMs()):int(s.settings.focusMin)*60000));if(fresh)s.timer.priorityRun=!!s.settings.priorityMode;var r=start.apply(this,arguments);updatePriorityUi();return r;};sw.__fhPriority=true;window.startTimer=sw;}
-    var commit=window.commitFocusTimerSession;if(typeof commit==="function"&&!commit.__fhPriority){var cw=function(){if(!priorityBypass&&priorityEnabledForRun()){showPriority("timer",commit,arguments);return{pendingPriority:true};}return finishRecordedSession(commit,arguments,false);};cw.__fhPriority=true;window.commitFocusTimerSession=cw;}
+    var commit=window.commitFocusTimerSession;if(typeof commit==="function"&&!commit.__fhPriority){var cw=function(){var claim=arguments&&arguments[0];if(!priorityBypass&&claim&&claim.priorityVerified)return finishRecordedSession(commit,arguments,true);if(!priorityBypass&&priorityEnabledForRun()){showPriority("timer",commit,arguments);return{pendingPriority:true};}return finishRecordedSession(commit,arguments,false);};cw.__fhPriority=true;window.commitFocusTimerSession=cw;}
     var stop=window.finalizeStopwatch;if(typeof stop==="function"&&!stop.__fhPriority){var fw=function(){var s=S();if(!priorityBypass&&priorityEnabledForRun()){
       if(s.timer.running){s.timer.swAccumulatedMs=int(s.timer.swAccumulatedMs)+Math.max(0,Date.now()-n(s.timer.swStartedAt));s.timer.swStartedAt=0;s.timer.running=false;}
       if(Math.floor(int(s.timer.swAccumulatedMs)/60000)>0){showPriority("stopwatch",stop,arguments);saveRender();return{pendingPriority:true};}
@@ -269,7 +283,7 @@
     var tog=document.getElementById("tog-prioritymode");if(tog&&!tog.dataset.bound){tog.dataset.bound="1";tog.onclick=togglePriority;}
     var badge=document.getElementById("priority-mode-badge");if(badge&&!badge.dataset.bound){badge.dataset.bound="1";badge.onclick=togglePriority;}
     var reset=document.getElementById("btn-priority-reset");if(reset&&!reset.dataset.bound){reset.dataset.bound="1";reset.onclick=function(){if(pendingPriority)cancelPriorityRun();else if(typeof window.cancelSession==="function")window.cancelSession();};}
-    var keep=document.getElementById("btn-priority-keep");if(keep&&!keep.dataset.bound){keep.dataset.bound="1";keep.onclick=function(){var p=pendingPriority;if(!p)return;pendingPriority=null;document.getElementById("priority-check-modal").hidden=true;finishRecordedSession(p.original,p.args,true);};}
+    var keep=document.getElementById("btn-priority-keep");if(keep&&!keep.dataset.bound){keep.dataset.bound="1";keep.onclick=function(){var p=pendingPriority;if(!p)return;pendingPriority=null;document.getElementById("priority-check-modal").hidden=true;if(p.args&&p.args[0])p.args[0].priorityVerified=true;try{if(typeof window.markPendingFocusClaimPriorityVerified==="function")window.markPendingFocusClaimPriorityVerified();}catch(_){}finishRecordedSession(p.original,p.args,true);try{if(typeof window.clearPendingFocusClaim==="function")window.clearPendingFocusClaim(p.args&&p.args[0]&&p.args[0].sessionId);}catch(_){}};}
     var cancel=document.getElementById("btn-priority-cancel");if(cancel&&!cancel.dataset.bound){cancel.dataset.bound="1";cancel.onclick=cancelPriorityRun;}
   }
   function wrapRender(){var r=window.renderAll;if(typeof r==="function"&&!r.__fhEconomy){var w=function(){var x=r.apply(this,arguments);try{render();updatePriorityUi();}catch(_){}return x;};w.__fhEconomy=true;window.renderAll=w;}}

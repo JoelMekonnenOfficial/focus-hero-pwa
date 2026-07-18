@@ -14,6 +14,9 @@
  * deliberately invisible to users — the only place a version-looking string
  * lives is in the cache name in DevTools.
  *
+ * v10.5.1: durable pending claims survive offline reload/update boundaries;
+ * the battle card returns and manual reward corrections include eggs/targets.
+ *
  * v10.4.7: recovery stays available from Settings, while the old oversized
  * runtime-injected bottom-nav link is retired. The recovery page remains
  * precached and the data guard remains active.
@@ -25,7 +28,7 @@
  * fallback (and skipped injection). Fetch by URL string instead, and inject
  * into cache-served HTML too.
  */
-const BUILD_ID    = "fh-2026-07-18-v10-5-0-expedition-priority";
+const BUILD_ID    = "fh-2026-07-18-v10-5-1-reward-offline-arena";
 const CACHE_NAME  = `focus-hero-${BUILD_ID}`;
 const PRECACHE = [
   "./",

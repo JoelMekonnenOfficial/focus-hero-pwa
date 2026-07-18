@@ -1760,25 +1760,6 @@ body.lr-screen-shake { animation: lr-shake .25s ease-in-out }
   }
 }
 
-/* ---- Live status pill that confirms the current scene at a glance —
- * helps Joel verify the action selector is wired up without inspecting
- * the DOM. Anchor: shown only when state.timer.running is true. */
-.adv-status-pill{
-  display:inline-flex;align-items:center;gap:.4rem;
-  margin-left:.5rem;
-  padding:.18rem .55rem;
-  border:2px solid var(--accent-2);
-  background:rgba(251,191,36,.10);
-  color:var(--accent-2);
-  font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;
-}
-.adv-status-pill .dot{
-  width:8px;height:8px;border-radius:50%;
-  background:var(--accent);
-  animation:fh76-blink 1s steps(2,end) infinite;
-}
-@keyframes fh76-blink{0%,49%{opacity:1}50%,100%{opacity:.25}}
-
 /* v7.6 reduced-motion correction: dim the active avatar, but keep the selected action legible instead of silently freezing all motion. */
 @media (prefers-reduced-motion: reduce){
   .hero-card .avatar[data-running="1"]{filter:saturate(.58) brightness(.86);opacity:.72}
@@ -3358,7 +3339,23 @@ svg{shape-rendering:geometricPrecision}
         </div>
         <div class="live-adjust-preview" id="live-adjust-preview">XP and loot preview updates with the planned time.</div>
       </div>
-      <!-- v10.1.2: removed the "VS" encounter flavor card (Hero vs Open Road / Reward Cache / monster-of-the-day) per user request -->
+      <div class="encounter-stage" id="encounter-stage" data-scene="resting" aria-label="Animated focus encounter">
+        <div class="arena-skyline" aria-hidden="true"></div>
+        <div class="arena-row">
+          <div class="arena-combatant arena-hero">
+            <div class="arena-model" id="arena-hero-model" aria-hidden="true"></div>
+            <div class="arena-name" id="arena-hero-name">Hero</div>
+            <div class="arena-meta" id="arena-hero-meta">Ready</div>
+          </div>
+          <div class="arena-vs" id="arena-vs" aria-hidden="true">VS</div>
+          <div class="arena-combatant arena-enemy">
+            <div class="arena-model" id="arena-enemy-model" aria-hidden="true"></div>
+            <div class="arena-name" id="arena-enemy-name">Focus Wisp</div>
+            <div class="arena-meta" id="arena-enemy-meta">Lv 1</div>
+          </div>
+        </div>
+        <div class="arena-caption" id="arena-caption">Pick an action, start a session, and your encounter moves with you.</div>
+      </div>
       <div class="progress"><div id="progress-bar" style="width:0%"></div></div>
       <div class="active-task-row" id="active-task-row" hidden>
         <span>Working on</span>
@@ -4088,6 +4085,10 @@ const DEFAULTS = {
   history: {},
   sessionHistory: {},
   sessionsLog: [],
+  /* A completed countdown is not credited until the user confirms the claim.
+     Persist that hand-off so reloads, crashes, and service-worker updates cannot
+     strand an otherwise completed session. */
+  pendingFocusClaim: null,
   appLog: [],        /* v9.8.8: durable visible Log card entries, retained 180d */
   activityLog: [],   /* v8.7.0: append-only universal change log (retained 180d) */
   battleLog: [],
@@ -5376,6 +5377,7 @@ function migrate(raw){
     }
   }
   if (!Array.isArray(s.sessionsLog)) s.sessionsLog = [];
+  s.pendingFocusClaim = normalizePendingFocusClaim(s.pendingFocusClaim);
   if (!Array.isArray(s.appLog)) s.appLog = [];
   if (!Array.isArray(s.activityLog)) s.activityLog = [];
   if (!Array.isArray(s.battleLog)) s.battleLog = [];
@@ -6084,15 +6086,119 @@ function tick(){
   }
 }
 let pendingClaim = null;
+function normalizePendingFocusClaim(raw){
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const sessionId = typeof raw.sessionId === "string" && /^focus_[A-Za-z0-9_-]{8,96}$/.test(raw.sessionId)
+    ? raw.sessionId : null;
+  const plannedMinutes = Math.max(0, Math.min(24 * 60, Math.round(Number(raw.plannedMinutes) || 0)));
+  if (!sessionId || plannedMinutes < 1) return null;
+  const selectedMinutes = Math.max(0, Math.min(plannedMinutes,
+    Math.round(Number(raw.selectedMinutes ?? plannedMinutes) || 0)));
+  const plannedMs = Math.max(60_000, Math.min(24 * 60 * 60_000,
+    Math.round(Number(raw.plannedMs) || plannedMinutes * 60_000)));
+  const elapsedMs = Math.max(0, Math.min(plannedMs,
+    Math.round(Number(raw.elapsedMs) || plannedMs)));
+  const asTime = value => {
+    value = Number(value);
+    return Number.isFinite(value) && value > 0 ? Math.round(value) : 0;
+  };
+  return {
+    version: 1,
+    sessionId,
+    wasMode: "focus",
+    plannedMinutes,
+    selectedMinutes,
+    plannedMs,
+    elapsedMs,
+    elapsedMinutes: Math.max(0, Math.min(plannedMinutes,
+      Math.round(Number(raw.elapsedMinutes) || elapsedMs / 60_000))),
+    startedAt: asTime(raw.startedAt),
+    scheduledEndAt: asTime(raw.scheduledEndAt),
+    completedAt: asTime(raw.completedAt),
+    taskId: typeof raw.taskId === "string" && raw.taskId ? raw.taskId.slice(0, 160) : null,
+    taskLabel: String(raw.taskLabel || "the quest").slice(0, 240),
+    taskNameAtStart: typeof raw.taskNameAtStart === "string" ? raw.taskNameAtStart.slice(0, 160) : null,
+    action: String(raw.action || "Travel").slice(0, 80),
+    priorityRun: !!raw.priorityRun,
+    priorityVerified: !!raw.priorityVerified,
+    lockedInRun: !!raw.lockedInRun
+  };
+}
+function pendingFocusClaimRecord(claim){
+  const id = claim && claim.sessionId;
+  return id && Array.isArray(state?.sessionsLog)
+    ? state.sessionsLog.find(rec=>rec && rec.id === id) || null
+    : null;
+}
+function persistPendingFocusClaim(claim, opts={}){
+  const normalized = normalizePendingFocusClaim(claim);
+  if (!normalized) return false;
+  state.pendingFocusClaim = normalized;
+  pendingClaim = state.pendingFocusClaim;
+  if (state.timer) state.timer.priorityRun = !!pendingClaim.priorityRun;
+  if (opts.save !== false) saveState();
+  return true;
+}
+function clearPendingFocusClaim(sessionId, opts={}){
+  const durable = normalizePendingFocusClaim(state?.pendingFocusClaim);
+  const live = normalizePendingFocusClaim(pendingClaim);
+  if (sessionId && durable && durable.sessionId !== sessionId) return false;
+  if (sessionId && live && live.sessionId !== sessionId) return false;
+  state.pendingFocusClaim = null;
+  pendingClaim = null;
+  const modal = document.getElementById("claim-modal");
+  if (modal){ blurIfFocusInside(modal); modal.hidden = true; }
+  if (opts.save !== false) saveState();
+  return true;
+}
+function markPendingFocusClaimPriorityVerified(){
+  const claim = normalizePendingFocusClaim(state?.pendingFocusClaim || pendingClaim);
+  if (!claim) return false;
+  claim.priorityRun = true;
+  claim.priorityVerified = true;
+  return persistPendingFocusClaim(claim);
+}
+function syncPendingFocusClaimFromState(opts={}){
+  const claim = normalizePendingFocusClaim(state?.pendingFocusClaim);
+  if (!claim){
+    pendingClaim = null;
+    const modal = document.getElementById("claim-modal");
+    if (modal) modal.hidden = true;
+    return false;
+  }
+  state.pendingFocusClaim = claim;
+  pendingClaim = state.pendingFocusClaim;
+  if (state.timer) state.timer.priorityRun = !!claim.priorityRun;
+  if (opts.open !== false) openClaimModal();
+  return true;
+}
 function startFocusClaim(wasMode, plannedMinutes){
   stopKeepalive(); releaseWakeLock();
-  pendingClaim = {
+  const plannedMs = Math.max(60_000, Math.round(focusPlannedMs()));
+  const scheduledEndAt = Math.round(Number(state.timer.endAt) || now());
+  const completedAt = now();
+  const elapsedMs = Math.max(0, Math.min(plannedMs, Math.round(focusElapsedMs())));
+  const sessionId = `focus_claim_${completedAt}_${Math.random().toString(36).slice(2,9)}`;
+  const claim = {
+    sessionId,
     wasMode,
     plannedMinutes: Math.max(0, plannedMinutes|0),
+    selectedMinutes: Math.max(0, plannedMinutes|0),
+    plannedMs,
+    elapsedMs,
+    elapsedMinutes: Math.max(0, plannedMinutes|0),
+    startedAt: Math.max(0, scheduledEndAt - plannedMs),
+    scheduledEndAt,
+    completedAt,
     taskId: state.timer.activeTaskId || null,
     taskLabel: currentSessionTaskLabel(),
-    action: currentAdventureActionId()
+    taskNameAtStart: state.timer.activeTaskNameAtStart || null,
+    action: currentAdventureActionId(),
+    priorityRun: !!state.timer.priorityRun,
+    priorityVerified: false,
+    lockedInRun: !!state.settings.gameMode
   };
+  persistPendingFocusClaim(claim, { save:false });
   state.timer.running = false;
   state.timer.endAt = 0;
   state.timer.msLeft = 0;
@@ -6104,16 +6210,18 @@ function startFocusClaim(wasMode, plannedMinutes){
 function openClaimModal(){
   if (!pendingClaim) return;
   const max = Math.max(0, pendingClaim.plannedMinutes|0);
+  const selected = clamp(pendingClaim.selectedMinutes|0, 0, max);
   const input = $("#claim-minutes");
   const range = $("#claim-range");
-  if (input){ input.max = String(max); input.value = String(max); }
-  if (range){ range.max = String(max); range.value = String(max); }
+  if (input){ input.max = String(max); input.value = String(selected); }
+  if (range){ range.max = String(max); range.value = String(selected); }
   updateClaimPreview();
   openModal("claim-modal");
 }
 function claimMinutesValue(){
   const max = pendingClaim ? Math.max(0, pendingClaim.plannedMinutes|0) : 0;
-  return clamp(parseInt($("#claim-minutes")?.value || String(max), 10) || 0, 0, max);
+  const fallback = pendingClaim ? pendingClaim.selectedMinutes|0 : max;
+  return clamp(parseInt($("#claim-minutes")?.value || String(fallback), 10) || 0, 0, max);
 }
 function setClaimMinutes(v){
   if (!pendingClaim) return;
@@ -6123,6 +6231,9 @@ function setClaimMinutes(v){
   const range = $("#claim-range");
   if (input) input.value = String(next);
   if (range) range.value = String(next);
+  pendingClaim.selectedMinutes = next;
+  state.pendingFocusClaim = pendingClaim;
+  saveState();
   updateClaimPreview();
 }
 function updateClaimPreview(){
@@ -6144,11 +6255,24 @@ function confirmSessionClaim(useFull=false){
   if (!pendingClaim) return;
   const claim = pendingClaim;
   const minutes = useFull ? (claim.plannedMinutes|0) : claimMinutesValue();
-  pendingClaim = null;
-  closeModal("claim-modal");
-  commitFocusTimerSession(claim, minutes);
+  claim.selectedMinutes = minutes;
+  persistPendingFocusClaim(claim);
+  const commit = window.commitFocusTimerSession || commitFocusTimerSession;
+  const result = commit.call(window, claim, minutes);
+  if (result && result.pendingPriority){
+    const modal = document.getElementById("claim-modal");
+    if (modal){ blurIfFocusInside(modal); modal.hidden = true; }
+    return result;
+  }
+  clearPendingFocusClaim(claim.sessionId);
+  return result;
 }
 function commitFocusTimerSession(claim, minutes){
+  const claimSessionId = normalizePendingFocusClaim(claim)?.sessionId || null;
+  const existingClaimRecord = claimSessionId ? pendingFocusClaimRecord({ sessionId:claimSessionId }) : null;
+  if (existingClaimRecord){
+    return { ok:true, duplicate:true, sessionId:claimSessionId, record:existingClaimRecord };
+  }
   const taskLabel = claim.taskLabel || "the quest";
   let lootItem = null;
   let achievementsUnlockedHere = [];
@@ -6177,7 +6301,7 @@ function commitFocusTimerSession(claim, minutes){
     state.hero.energy = Math.max(0, state.hero.energy - Math.max(0, 8 - gearStats.energySave));
     state.hero.hp = Math.min(100, state.hero.hp + 2);
     /* v8.x: multi-encounter loot pipeline. */
-    var __lrSessId = "focus_" + Date.now() + "_" + Math.floor(Math.random()*1e6);
+    var __lrSessId = claimSessionId || ("focus_" + Date.now() + "_" + Math.floor(Math.random()*1e6));
     var __lrRun = runSessionRewardPipeline(claim.action || currentAdventureActionId(), minutes, __lrSessId);
     lootItem = __lrRun.legacyItem;
     updateDailyProgress("focus", 1);
@@ -6212,7 +6336,7 @@ function commitFocusTimerSession(claim, minutes){
   if (earnedRewards) maybeRecordActionEncounter("sessionComplete");
   if (typeof checkAchievementsV76 === "function") achievementsUnlockedHere = checkAchievementsV76({ source:"sessionComplete", suppressRewards:__timeOnly }) || [];
   const sessionRecord = buildSessionLogRecordV76({
-    id: earnedRewards ? __lrSessId : undefined,
+    id: claimSessionId || (earnedRewards ? __lrSessId : undefined),
     type:"focus", source:"timer", minutes, taskId: claim.taskId||null,
     taskName: taskLabel,
     xpBreakdown: xp, rewarded: earnedRewards, comboPriorCount, streakBefore,
@@ -6223,6 +6347,20 @@ function commitFocusTimerSession(claim, minutes){
     extendedStreak: lastFocusDateBefore !== state.lastFocusDate, lootItem, achievementsUnlockedHere,
     action: claim.action || currentAdventureActionId()
   });
+  if (claimSessionId){
+    Object.assign(sessionRecord, {
+      claimId: claimSessionId,
+      plannedMinutes: claim.plannedMinutes|0,
+      elapsedMinutes: claim.elapsedMinutes|0,
+      plannedMs: Math.max(0, Number(claim.plannedMs)||0),
+      elapsedMs: Math.max(0, Number(claim.elapsedMs)||0),
+      startedAt: Math.max(0, Number(claim.startedAt)||0),
+      scheduledEndAt: Math.max(0, Number(claim.scheduledEndAt)||0),
+      completedAt: Math.max(0, Number(claim.completedAt)||0),
+      priorityRun: !!claim.priorityRun,
+      lockedInRun: !!claim.lockedInRun
+    });
+  }
   if (__timeOnly) sessionRecord.timeOnly = true;
   pushSessionLog(sessionRecord);
   if (earnedRewards && typeof window.eggRecordCompletedSession === "function") window.eggRecordCompletedSession(sessionRecord, __lrRun);
@@ -6236,17 +6374,18 @@ function commitFocusTimerSession(claim, minutes){
   checkAchievements({ source:"sessionComplete", suppressRewards:__timeOnly });
   renderAll();
   if (state.settings.autoStart){ setTimeout(startTimer, 900); }
+  return { ok:true, duplicate:false, sessionId:sessionRecord.id, record:sessionRecord };
 }
 function completeSession(){
   const wasMode = state.timer.mode;
   const minutes = wasMode === "focus" ? focusPlannedMinutes() : modeMinutes(wasMode);
-  state.timer.running = false;
-  state.timer.endAt = 0;
-  state.timer.msLeft = 0;
   if (wasMode === "focus"){
     startFocusClaim(wasMode, minutes);
     return;
   } else {
+    state.timer.running = false;
+    state.timer.endAt = 0;
+    state.timer.msLeft = 0;
     state.hero.energy = Math.min(100, state.hero.energy + (wasMode==="long"?40:18));
     pushSessionLog(buildSessionLogRecordV76({ type: wasMode, minutes, rewarded:false, xpBreakdown:{total:0}, taskId:null }));
     logLine(`${wasMode==="long"?"Long":"Short"} break done (+energy)`);
@@ -10858,11 +10997,6 @@ function renderActionPicker(){
     b.onclick = () => setAdventureAction(a.id);
     host.appendChild(b);
   }
-  const slot = document.getElementById("adv-status-slot");
-  if (slot){
-    const a = ACTION_BY_ID[cur] || ACTION_BY_ID.Travel;
-    slot.innerHTML = state.timer?.running ? `<span class="adv-status-pill"><span class="dot"></span>${a.sym} ${a.label}</span>` : "";
-  }
 }
 function avatarRendererPreference(){
   const pref = String(state?.settings?.avatarRenderer || "auto").toLowerCase();
@@ -11814,12 +11948,6 @@ function injectV76DomScaffolding(){
     strip.setAttribute("role","tablist"); strip.setAttribute("aria-label","Adventure action");
     td.insertAdjacentElement("afterend",strip);
   }
-  const atRow=document.getElementById("active-task-row");
-  if(atRow&&!document.getElementById("adv-status-slot")){
-    const slot=document.createElement("span");
-    slot.id="adv-status-slot";
-    atRow.appendChild(slot);
-  }
   const tabsHost=document.querySelector(`[aria-labelledby="tabs-heading"] .tabs`);
   if(tabsHost&&!tabsHost.querySelector(`[data-tab="bestiary"]`)){
     const btn=document.createElement("button");
@@ -12532,10 +12660,10 @@ function bindKeys(){
   });
 }
 function bindMultiTab(){
-  if (bc){ bc.addEventListener("message", e=>{ if (e.data?.type==="state" && e.data.state){ state = migrate(e.data.state); renderAll(); } }); }
+  if (bc){ bc.addEventListener("message", e=>{ if (e.data?.type==="state" && e.data.state){ state = migrate(e.data.state); renderAll(); syncPendingFocusClaimFromState(); } }); }
   window.addEventListener("storage", e=>{
     if (e.key === STORAGE_KEY && e.newValue){
-      try { state = migrate(JSON.parse(e.newValue)); renderAll(); } catch(_){}
+      try { state = migrate(JSON.parse(e.newValue)); renderAll(); syncPendingFocusClaimFromState(); } catch(_){}
     }
   });
 }
@@ -12545,7 +12673,9 @@ function registerSW(){
 
   // True if there's a focus/stopwatch session in progress — we never auto-reload
   // mid-session because it would interrupt the user's flow on iOS.
-  const sessionActive = ()=> !!(state && state.timer && state.timer.running && state.timer.endAt);
+  const sessionActive = ()=> !!(state && (
+    (state.timer && state.timer.running && state.timer.endAt) || state.pendingFocusClaim
+  ));
 
   // When a new SW takes control, do a quiet reload if it's safe. The SW is
   // network-first for HTML so this just guarantees the page object matches the
@@ -12628,6 +12758,8 @@ const __FocusHero = {
   startFocusClaim, confirmSessionClaim, commitFocusTimerSession,
   adjustLiveSessionMinutes, adjustLiveFocusMinutes, adjustLiveStopwatchMinutes,
   focusPlannedMinutes, focusPlannedMs, liveFocusCanAdjust, liveStopwatchCanAdjust,
+  normalizePendingFocusClaim, syncPendingFocusClaimFromState,
+  clearPendingFocusClaim, markPendingFocusClaimPriorityVerified,
   setEquipped, clearEquipped, setHeroAppearance, ensureHeroAppearanceShape,
   fmtTimeLong,
   /* v4.2: emergency recovery — call from DevTools console.
@@ -13301,6 +13433,7 @@ async function boot(){
     bindTasks(); bindQuests(); bindTimer(); bindBattleLog(); bindKeys(); bindMultiTab(); bindSecretAchievementListeners();
     $("#btn-theme").onclick = toggleTheme;
     renderAll();
+    syncPendingFocusClaimFromState();
     /* v10.1: time-only task flags + one-shot LIFEMAXXING XP/loot reversal */
     try { ensureTimeOnlyFlags(); runLifemaxxRetroPurgeOnce(); } catch(_){}
     /* v10: retro-check achievements every boot - anything already earned

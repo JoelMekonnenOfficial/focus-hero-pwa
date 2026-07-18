@@ -111,6 +111,111 @@ try {
   assert.deepEqual(sessionEdit.eco,{orbs:1,materials:{seed:1,herb:0,timber:2,ore:0},farmMinutes:30});
 
   await reset();
+  const eggParity = await page.evaluate(()=>{
+    function incubator(){
+      return {owned:[],incubating:[{id:"egg-test",family:"horse",rarity:"common",sym:"E",name:"Test egg",incubationReqMin:120,incubatedMin:0}],hatched:[],quarantined:[],processedSessionIds:[],slotCap:3,systemVersion:2};
+    }
+    const s=window.__FocusHero.stateRef(), liveTask=window.__FocusHero.createTask({name:"Live egg parity",emoji:"L"});
+    s.eggs=incubator();
+    const liveResult=window.commitFocusTimerSession({taskId:liveTask.id,taskLabel:liveTask.name,action:"Travel"},20);
+    const liveMinutes=s.eggs.incubating[0].incubatedMin;
+    window.applySessionEdit(liveResult.record.id,10);
+    const liveAfterExactDown=s.eggs.incubating[0].incubatedMin;
+
+    const fresh=window.__FocusHero.migrate(JSON.parse(JSON.stringify(window.__FocusHero.DEFAULTS)));
+    Object.keys(s).forEach(k=>delete s[k]);Object.assign(s,fresh);s.sync.enabled=false;s.settings.monthlyBackup=false;s.sessionsLog=[];s.activityLog=[];s.editLog=[];
+    window.__fhEconomyTest.ensure();s.eggs=incubator();
+    const manualTask=window.__FocusHero.createTask({name:"Manual egg parity",emoji:"M"});
+    window.applyTaskTimeAdjustment(manualTask.id,20);
+    const rec=s.sessionsLog.find(r=>r?.source==="ledger"&&r.taskId===manualTask.id);
+    const manualMinutes=s.eggs.incubating[0].incubatedMin;
+    window.applySessionEdit(rec.id,35);
+    const afterExactUp=s.eggs.incubating[0].incubatedMin;
+    window.applySessionEdit(rec.id,10);
+    const afterExactDown=s.eggs.incubating[0].incubatedMin;
+    window.applyTaskTimeAdjustment(manualTask.id,-10);
+    const afterLedgerDown=s.eggs.incubating[0].incubatedMin;
+    const once=window.eggApplyMinuteCorrection(s,7,"egg_test_dedupe"), twice=window.eggApplyMinuteCorrection(s,7,"egg_test_dedupe");
+    const afterDedupe=s.eggs.incubating[0].incubatedMin;
+    const negOnce=window.eggApplyMinuteCorrection(s,-4,"egg_test_neg_dedupe",{ownerId:"egg_test_dedupe"});
+    const negTwice=window.eggApplyMinuteCorrection(s,-4,"egg_test_neg_dedupe",{ownerId:"egg_test_dedupe"});
+    const afterNegativeDedupe=s.eggs.incubating[0].incubatedMin;
+    const timeOnly=window.__FocusHero.createTask({name:"LIFEMAXXING",emoji:"T"});
+    window.applyTaskTimeAdjustment(timeOnly.id,20);
+    return {liveMinutes,liveAfterExactDown,manualMinutes,afterExactUp,afterExactDown,afterLedgerDown,
+      once:once.processed,twice:twice.processed,afterDedupe,negOnce:negOnce.processed,negTwice:negTwice.processed,
+      afterNegativeDedupe,afterTimeOnly:s.eggs.incubating[0].incubatedMin};
+  });
+  assert.equal(eggParity.liveMinutes,20,"completed live focus advances incubation by its credited minutes");
+  assert.equal(eggParity.liveAfterExactDown,10,"editing a live session down reverses only that session's incubation credit");
+  assert.equal(eggParity.manualMinutes,eggParity.liveMinutes,"manual add uses the same incubation minutes as live focus");
+  assert.equal(eggParity.afterExactUp,35,"absolute edit-up adds only the positive incubation delta");
+  assert.equal(eggParity.afterExactDown,10,"absolute edit-down reverses only the removed incubation delta");
+  assert.equal(eggParity.afterLedgerDown,0,"standalone subtraction reverses incubation progress without going negative");
+  assert.deepEqual({once:eggParity.once,twice:eggParity.twice,minutes:eggParity.afterDedupe},{once:true,twice:false,minutes:7},"one correction event advances incubation once");
+  assert.deepEqual({once:eggParity.negOnce,twice:eggParity.negTwice,minutes:eggParity.afterNegativeDedupe},{once:true,twice:false,minutes:3},"one negative correction event rewinds its own credit once");
+  assert.equal(eggParity.afterTimeOnly,3,"time-only manual minutes never advance egg rewards");
+
+  await reset();
+  const eggSafety = await page.evaluate(()=>{
+    const egg=(id,req=120)=>({id,family:"horse",rarity:"common",sym:"E",name:id,incubationReqMin:req,incubatedMin:0});
+    const s=window.__FocusHero.stateRef(), task=window.__FocusHero.createTask({name:"Egg safety",emoji:"E"});
+    s.settings.minRewardMinutes=5;
+    s.eggs={owned:[],incubating:[egg("floor-egg")],hatched:[],quarantined:[],processedSessionIds:[],slotCap:3,systemVersion:2};
+    window.applyTaskTimeAdjustment(task.id,5);
+    const floorRec=s.sessionsLog.find(r=>r?.source==="ledger"&&r.taskId===task.id);
+    const beforeFloorChange=s.eggs.incubating[0].incubatedMin;
+    s.settings.minRewardMinutes=10;
+    window.applySessionEdit(floorRec.id,0);
+    const afterFloorChange=s.eggs.incubating[0].incubatedMin;
+
+    s.settings.minRewardMinutes=5;
+    s.eggs={owned:[egg("next-egg")],incubating:[egg("first-egg")],hatched:[],quarantined:[],processedSessionIds:[],slotCap:3,systemVersion:2};
+    window.applyTaskTimeAdjustment(task.id,10);
+    window.eggCancelIncubation(s,"first-egg");
+    window.eggStartIncubation(s,"next-egg");
+    window.applyTaskTimeAdjustment(task.id,-5);
+    const replacementProgress=s.eggs.incubating.find(e=>e.id==="next-egg")?.incubatedMin;
+
+    s.eggs={owned:[],incubating:[egg("hatch-egg",5)],hatched:[],quarantined:[],processedSessionIds:[],slotCap:3,systemVersion:2};
+    window.applyTaskTimeAdjustment(task.id,5);
+    const hatchRec=[...s.sessionsLog].reverse().find(r=>r?.source==="ledger"&&r.taskId===task.id&&r.minutes===5);
+    const hatchedBefore=s.eggs.hatched.length, mountId=s.eggs.hatched[0]?.hatchedTo;
+    window.applySessionEdit(hatchRec.id,0);
+    const hatchedAfter=s.eggs.hatched.length, mountStillOwned=!!(mountId&&s.lootOwned&&s.lootOwned[mountId]>0);
+
+    s.eggs={owned:[],incubating:[egg("large-edit-egg",10000)],hatched:[],quarantined:[],processedSessionIds:[],slotCap:3,systemVersion:2};
+    window.applyTaskTimeAdjustment(task.id,800);
+    const largeRec=[...s.sessionsLog].reverse().find(r=>r?.source==="ledger"&&r.taskId===task.id&&r.minutes===800);
+    window.applySessionEdit(largeRec.id,1600);
+    const largeEditUp=s.eggs.incubating[0].incubatedMin;
+    window.applySessionEdit(largeRec.id,0);
+    const largeEditDown=s.eggs.incubating[0].incubatedMin;
+    return {beforeFloorChange,afterFloorChange,replacementProgress,hatchedBefore,hatchedAfter,
+      mountStillOwned,largeEditUp,largeEditDown};
+  });
+  assert.deepEqual({before:eggSafety.beforeFloorChange,after:eggSafety.afterFloorChange},{before:5,after:0},"a changed reward floor cannot strand old incubation credit");
+  assert.equal(eggSafety.replacementProgress,0,"subtracting old minutes never erases a replacement egg's unrelated progress");
+  assert.deepEqual({before:eggSafety.hatchedBefore,after:eggSafety.hatchedAfter,owned:eggSafety.mountStillOwned},{before:1,after:1,owned:true},"a correction never deletes an already-hatched mount");
+  assert.deepEqual({up:eggSafety.largeEditUp,down:eggSafety.largeEditDown},{up:1600,down:0},"large exact-total edits retain full reversible incubation provenance");
+
+  await reset();
+  const targetParity = await page.evaluate(()=>{
+    const s=window.__FocusHero.stateRef(), task=window.__FocusHero.createTask({name:"Target edit parity",emoji:"G"}), T=window.__fhtTest.ensureShape();
+    T.daily.easy=10;T.daily.medium=20;T.daily.hard=1000;T.daily.claimed={easy:false,medium:false,hard:false};
+    T.weekly.easy=1000;T.weekly.medium=2000;T.weekly.hard=3000;T.weekly.claimed={easy:false,medium:false,hard:false};
+    const count=()=>s.activityLog.filter(a=>a?.action==="target_chest_opened"&&a?.source==="focus-targets").length;
+    window.applyTaskTimeAdjustment(task.id,20);
+    const rec=s.sessionsLog.find(r=>r?.source==="ledger"&&r.taskId===task.id), afterAdd=count(), claimedAfterAdd={...T.daily.claimed};
+    window.applySessionEdit(rec.id,5);window.applySessionEdit(rec.id,20);window.fhTargetsCheck();window.fhTargetsCheck();
+    return {afterAdd,afterRecross:count(),claimedAfterAdd,progress:window.__fhtTest.dailyProgress()};
+  });
+  assert.deepEqual(targetParity.claimedAfterAdd,{easy:true,medium:true,hard:false},"manual add crosses the same daily target chests as live minutes");
+  assert.equal(targetParity.afterAdd,2,"each newly crossed target chest opens exactly once");
+  assert.equal(targetParity.afterRecross,2,"absolute edit-down/up and repeated checks cannot double-award a claimed chest");
+  assert.equal(targetParity.progress,20,"target progress follows the authoritative edited minute history");
+
+  await reset();
   const priorityCancel = await page.evaluate(()=>{
     const s=window.__FocusHero.stateRef(), task=window.__FocusHero.createTask({name:"Priority",emoji:"P"});
     s.settings.priorityMode=true; s.timer.priorityRun=true; s.timer.mode="focus"; s.timer.activeTaskId=task.id; s.timer.activeTaskNameAtStart=task.name;
@@ -147,7 +252,7 @@ try {
   assert.equal(merge.unlockedPlots,3);
 
   assert.deepEqual(pageErrors,[],pageErrors.join("\n"));
-  console.log("ok - live XP parity, Priority cancellation/verification, Expedition grants, and merge safety");
+  console.log("ok - live XP/egg/target parity, Priority cancellation/verification, Expedition grants, and merge safety");
 } finally {
   await context.close(); await browser.close(); await new Promise(resolve=>server.close(resolve));
 }
