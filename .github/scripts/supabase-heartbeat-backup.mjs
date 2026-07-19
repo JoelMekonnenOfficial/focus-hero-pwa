@@ -1,4 +1,6 @@
 import fs from "node:fs/promises";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 /* Focus Hero - Supabase heartbeat + backup-readiness check (v3).
  *
@@ -13,8 +15,8 @@ import fs from "node:fs/promises";
  *   3. ALWAYS writes backups/backup-status.json with ranAt, ok, reason,
  *      rowCount, maxUpdatedAt - so an external watcher can verify cloud
  *      persistence is visible and fresh without exposing player data.
- *   4. rowCount 0 is recorded (status "empty") but does not fail the run -
- *      an unlinked app legitimately has no rows yet. External watcher decides.
+ *   4. rowCount 0 fails closed. A linked production app should have protected
+ *      metadata-visible rows; zero rows means the monitoring signal is unsafe.
  */
 
 const APP_FILE = "focus-hero.html";
@@ -27,8 +29,8 @@ function readConst(source, name) {
     return match[1];
 }
 
-async function supabaseRequest(url, key, path, init = {}) {
-    const resp = await fetch(`${url}/rest/v1/${path}`, {
+async function supabaseRequest(url, key, restPath, init = {}, fetchImpl = fetch) {
+    const resp = await fetchImpl(`${url}/rest/v1/${restPath}`, {
           ...init,
           headers: {
             apikey: key,
@@ -44,17 +46,17 @@ async function supabaseRequest(url, key, path, init = {}) {
     return resp;
 }
 
-async function supabaseFetch(url, key, path, init) {
-    const resp = await supabaseRequest(url, key, path, init);
+async function supabaseFetch(url, key, restPath, init, fetchImpl) {
+    const resp = await supabaseRequest(url, key, restPath, init, fetchImpl);
     return resp.json();
 }
 
-async function readPlayerMetadata(url, key) {
+async function readPlayerMetadata(url, key, fetchImpl = fetch) {
     // HEAD + count=exact returns only Content-Range; no row body leaves Supabase.
     const countResp = await supabaseRequest(url, key, "players?select=id", {
       method: "HEAD",
       headers: { Prefer: "count=exact" }
-    });
+    }, fetchImpl);
     const range = countResp.headers.get("content-range") || "";
     const countMatch = range.match(/\/(\d+)$/);
     if (!countMatch) throw new Error("Supabase row count missing from Content-Range");
@@ -63,7 +65,9 @@ async function readPlayerMetadata(url, key) {
     const latestRows = await supabaseFetch(
       url,
       key,
-      "players?select=updated_at&order=updated_at.desc&limit=1"
+      "players?select=updated_at&order=updated_at.desc&limit=1",
+      undefined,
+      fetchImpl
     );
     return {
       rowCount: Number(countMatch[1]),
@@ -73,59 +77,76 @@ async function readPlayerMetadata(url, key) {
     };
 }
 
-async function writeStatus(status) {
-    await fs.mkdir("backups", { recursive: true });
-    await fs.writeFile(STATUS_FILE, `${JSON.stringify(status, null, 2)}\n`, "utf8");
+async function writeStatus(status, cwd = ".") {
+    const statusPath = path.join(cwd, STATUS_FILE);
+    await fs.mkdir(path.dirname(statusPath), { recursive: true });
+    await fs.writeFile(statusPath, `${JSON.stringify(status, null, 2)}\n`, "utf8");
 }
 
-const startedAt = new Date().toISOString();
-let status = {
-  ranAt: startedAt,
-  ok: false,
-  reason: "unknown",
-  rowCount: null,
-  maxUpdatedAt: null,
-  usedServiceKey: false,
-  mode: "metadata-only",
-  exportedPlayerRows: false
-};
+export async function runHeartbeat({
+  cwd = ".",
+  env = process.env,
+  fetchImpl = fetch,
+  now = () => new Date(),
+  consoleImpl = console
+} = {}) {
+  let status = {
+    ranAt: now().toISOString(),
+    ok: false,
+    reason: "unknown",
+    rowCount: null,
+    maxUpdatedAt: null,
+    usedServiceKey: false,
+    mode: "metadata-only",
+    exportedPlayerRows: false
+  };
 
-try {
-    const html = await fs.readFile(APP_FILE, "utf8");
+  try {
+    const html = await fs.readFile(path.join(cwd, APP_FILE), "utf8");
     const supabaseUrl = readConst(html, "SUPABASE_URL");
     const supabaseAnonKey = readConst(html, "SUPABASE_ANON_KEY");
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY;
     const projectRef = new URL(supabaseUrl).hostname.split(".")[0];
 
-  if (projectRef !== EXPECTED_PROJECT_REF) {
+    if (projectRef !== EXPECTED_PROJECT_REF) {
         throw new Error(`Supabase project ref mismatch: expected ${EXPECTED_PROJECT_REF}, got ${projectRef}`);
-  }
+    }
 
-  // Wake-up ping keeps the free-tier project alive even if the rest fails.
-  // HEAD prevents even an anon-visible row body from entering the runner.
-  await supabaseRequest(supabaseUrl, supabaseAnonKey, "players?select=id&limit=1", { method: "HEAD" });
+    // Wake-up ping keeps the free-tier project alive even if the rest fails.
+    // HEAD prevents even an anon-visible row body from entering the runner.
+    await supabaseRequest(supabaseUrl, supabaseAnonKey, "players?select=id&limit=1", { method: "HEAD" }, fetchImpl);
 
-  if (!serviceKey) {
+    if (!serviceKey) {
         status.reason = "SUPABASE_SERVICE_ROLE_KEY missing - metadata verification CANNOT see protected rows. Add it in repo Settings -> Secrets -> Actions.";
-        await writeStatus(status);
-        console.error(status.reason);
-        process.exit(1);
-  }
+        await writeStatus(status, cwd);
+        consoleImpl.error(status.reason);
+        return status;
+    }
     status.usedServiceKey = true;
 
-  const { rowCount, maxUpdatedAt } = await readPlayerMetadata(supabaseUrl, serviceKey);
+    const { rowCount, maxUpdatedAt } = await readPlayerMetadata(supabaseUrl, serviceKey, fetchImpl);
 
-  status.ok = true;
     status.rowCount = rowCount;
     status.maxUpdatedAt = maxUpdatedAt;
-    status.reason = rowCount === 0
-      ? "empty - no player rows exist yet (is sync linked?)"
-      : "cloud rows visible; metadata verified without exporting player data";
-    await writeStatus(status);
-    console.log(`Supabase metadata check: ${rowCount} row(s), newest updated_at=${maxUpdatedAt}. No player rows exported.`);
-} catch (err) {
+    if (rowCount === 0) {
+      status.reason = "no player rows visible - metadata heartbeat fails closed";
+      await writeStatus(status, cwd);
+      consoleImpl.error(`Supabase metadata check failed closed: ${status.reason}. No player rows exported.`);
+      return status;
+    }
+    status.ok = true;
+    status.reason = "cloud rows visible; metadata verified without exporting player data";
+    await writeStatus(status, cwd);
+    consoleImpl.log(`Supabase metadata check: ${rowCount} row(s), newest updated_at=${maxUpdatedAt}. No player rows exported.`);
+  } catch (err) {
     status.reason = String(err && err.message ? err.message : err).slice(0, 400);
-    try { await writeStatus(status); } catch (_) {}
-    console.error("Heartbeat/backup FAILED:", status.reason);
-    process.exit(1);
+    try { await writeStatus(status, cwd); } catch (_) {}
+    consoleImpl.error("Heartbeat/backup FAILED:", status.reason);
+  }
+  return status;
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const status = await runHeartbeat();
+  if (!status.ok) process.exit(1);
 }

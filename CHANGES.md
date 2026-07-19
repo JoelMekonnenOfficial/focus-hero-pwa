@@ -1,3 +1,10 @@
+# v10.5.2 — 2026-07-19
+
+**Metadata heartbeat fails closed on zero rows**
+- Hardened the scheduled Supabase metadata heartbeat so `rowCount=0` is a failed run instead of a soft "empty" status. A production-linked Focus Hero deployment should have metadata-visible protected rows; zero rows now stops the monitoring signal loudly while still writing only aggregate status.
+- Added an isolated regression for the zero-row fail-closed path and the positive-row pass path using mocked metadata responses. No app runtime, player state, minute accounting, XP, loot, inventory, browser storage, Supabase schema, cloud row, private payload, or signed-in profile behavior changed.
+- `sw.js` BUILD_ID unchanged because this is repository ops-monitoring code only.
+
 # v10.5.1 — 2026-07-18
 
 **Egg/target edit parity + durable offline claims + restored encounter card**
