@@ -14,6 +14,8 @@
  * deliberately invisible to users — the only place a version-looking string
  * lives is in the cache name in DevTools.
  *
+ * v10.6.0: permanent 1,000-hour rings + Trophy Room; achievement banners now
+ * sit below browser/app chrome and use unmistakably celebratory mythic colors.
  * v10.5.1: durable pending claims survive offline reload/update boundaries;
  * the battle card returns and manual reward corrections include eggs/targets.
  *
@@ -28,7 +30,7 @@
  * fallback (and skipped injection). Fetch by URL string instead, and inject
  * into cache-served HTML too.
  */
-const BUILD_ID    = "fh-2026-07-18-v10-5-1-reward-offline-arena";
+const BUILD_ID    = "fh-2026-07-21-v10-6-0-thousand-hour-rings";
 const CACHE_NAME  = `focus-hero-${BUILD_ID}`;
 const PRECACHE = [
   "./",

@@ -1,3 +1,13 @@
+# v10.6.0 — 2026-07-21
+
+- Confirmed the 1,000-hour event is the existing mythic `Beyond Measure` achievement, not an error or limit. The exact prior banner was `MYTHIC · BEYOND MEASURE`; lifetime minutes continue above 60,000.
+- Added a dedicated, vector-only Trophy Room. One permanent cosmetic championship ring is recognized at every 60,000 authoritative lifetime minutes (1,000h, 2,000h, and onward). Existing 1,000h+ profiles are backfilled silently, and the legacy `hours_1000` achievement preserves Ring #1 after later corrections.
+- Ring state is monotonic and claimed-once. It merges by maximum ordinal across devices, survives offline reloads/imports, and never alters focus minutes, history, sessions, XP, coins, loot, eggs, Expedition rewards, or sync identity.
+- Ring #1 shares the existing Beyond Measure celebration/reward path so first crossing cannot double-award XP or stack banners. Rings #2+ receive a longer, non-blocking championship banner linking to the Trophy Room.
+- Achievement banners now render below safe-area/app chrome, stay visible longer, include live-region semantics, and use violet/gold for mythic celebrations instead of warning-like pink/red.
+- Added threshold, permanence, legacy migration, merge-idempotency, time-only crossing, vector UI, no-emoji navigation, and reload persistence regression coverage. HTML mirrors remain byte-identical. `DATA_VERSION` -> 16; `sw.js` BUILD_ID -> `fh-2026-07-21-v10-6-0-thousand-hour-rings`.
+- No signed-in profile, browser storage, cloud row, private backup, credential, or sync code was read or changed during development.
+
 # v10.5.2 — 2026-07-19
 
 **Metadata heartbeat fails closed on zero rows**

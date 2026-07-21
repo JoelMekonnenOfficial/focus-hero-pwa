@@ -1265,11 +1265,13 @@ button.primary{
   100%{transform:scale(1) rotate(0);filter:hue-rotate(0deg)}
 }
 
-/* Achievement unlock banner — appears top-of-screen for gold+ */
+/* Achievement unlock banner — appears below app/browser chrome for gold+.
+ * Mythic uses violet + gold so a celebration cannot be mistaken for an error. */
 .fh76-ach-banner{
-  position:fixed;left:50%;top:24px;transform:translateX(-50%);
-  z-index:1200;
-  padding:.6rem 1.2rem;
+  position:fixed;left:50%;top:calc(env(safe-area-inset-top, 0px) + 76px);transform:translateX(-50%);
+  z-index:2200;
+  width:max-content;max-width:calc(100vw - 32px);
+  padding:.7rem 1.2rem;text-align:center;white-space:normal;
   border:3px solid #000;outline:2px solid #FBBF24;
   background:linear-gradient(180deg,#FDE68A,#B45309);
   color:#10140f;
@@ -1278,9 +1280,57 @@ button.primary{
   animation:fh76-banner-in .4s ease-out, fh76-banner-out .4s ease-in 2.6s forwards;
 }
 .fh76-ach-banner.tier-platinum{background:linear-gradient(180deg,#CFFAFE,#22D3EE);outline-color:#22D3EE}
-.fh76-ach-banner.tier-mythic{background:linear-gradient(180deg,#FBCFE8,#FF77C8);outline-color:#FF77C8;animation:fh76-banner-in .4s ease-out, fh76-banner-out .4s ease-in 3.6s forwards}
+.fh76-ach-banner.tier-mythic{background:linear-gradient(180deg,#FDE68A,#A78BFA);outline-color:#FBBF24;animation:fh76-banner-in .4s ease-out, fh76-banner-out .4s ease-in 5.6s forwards}
 @keyframes fh76-banner-in{from{opacity:0;transform:translateX(-50%) translateY(-30px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 @keyframes fh76-banner-out{to{opacity:0;transform:translateX(-50%) translateY(-30px)}}
+
+/* v10.6: permanent 1,000-hour championship rings. Code-native SVG keeps the
+ * Trophy Room consistent with the app icon system instead of adding emoji. */
+.trophy-room{display:grid;gap:12px;min-width:0;max-width:100%}
+.trophy-room-hero{
+  display:grid;grid-template-columns:minmax(120px,.7fr) minmax(210px,1.3fr);gap:14px;align-items:center;
+  min-width:0;max-width:100%;overflow:hidden;box-sizing:border-box;
+  padding:16px;border:3px solid #0a0c0b;outline:2px solid #FBBF24;
+  background:radial-gradient(circle at 20% 20%,rgba(251,191,36,.22),transparent 34%),linear-gradient(145deg,rgba(167,139,250,.18),rgba(8,12,14,.92));
+  box-shadow:0 8px 0 rgba(0,0,0,.35),inset 0 0 24px rgba(251,191,36,.08);
+}
+.trophy-room-hero>div{min-width:0}
+.trophy-room-mark{display:grid;place-items:center;min-height:130px}
+.trophy-room-mark svg{width:min(150px,100%);height:auto;filter:drop-shadow(0 8px 9px rgba(0,0,0,.45))}
+.trophy-room-kicker{font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;color:#FDE68A;font-weight:800}
+.trophy-room-title{margin:.25rem 0;font-size:clamp(1.25rem,3vw,2rem);line-height:1.05;color:var(--ink)}
+.trophy-room-copy{color:var(--ink-dim);font-size:.88rem;line-height:1.45;overflow-wrap:anywhere}
+.trophy-room-progress{height:12px;margin-top:10px;border:2px solid #050805;background:#11161a;overflow:hidden}
+.trophy-room-progress>div{height:100%;background:linear-gradient(90deg,#FBBF24,#A78BFA)}
+.trophy-room-progress-label{display:flex;justify-content:space-between;gap:8px;margin-top:5px;color:var(--ink-dim);font-size:.72rem;min-width:0}
+.trophy-room-progress-label span{min-width:0;overflow-wrap:anywhere}
+.trophy-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+.focus-ring-card{
+  position:relative;overflow:hidden;min-height:198px;padding:12px;text-align:center;
+  border:3px solid #090a09;outline:2px solid #D6A72F;
+  background:linear-gradient(155deg,rgba(251,191,36,.20),rgba(167,139,250,.12) 44%,var(--panel-2));
+  box-shadow:0 6px 0 rgba(0,0,0,.32);
+}
+.focus-ring-card::before{content:"";position:absolute;inset:-55% 45% auto -25%;height:170%;transform:rotate(18deg);background:linear-gradient(90deg,transparent,rgba(255,255,255,.12),transparent);pointer-events:none}
+.focus-ring-card svg{width:92px;height:auto;filter:drop-shadow(0 6px 5px rgba(0,0,0,.38))}
+.focus-ring-number{margin-top:4px;color:#FDE68A;font-size:.68rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
+.focus-ring-hours{font-size:1.02rem;font-weight:800;color:var(--ink)}
+.focus-ring-date{margin-top:3px;color:var(--ink-dim);font-size:.72rem}
+.trophy-room-empty{padding:22px;text-align:center;border:2px dashed var(--border);color:var(--ink-dim)}
+.fh76-ach-banner.focus-ring-banner{display:grid;grid-template-columns:58px minmax(0,1fr);gap:10px;align-items:center;text-transform:none;letter-spacing:normal;min-width:min(430px,calc(100vw - 32px));animation:fh76-banner-in .4s ease-out,fh76-banner-out .4s ease-in 7.6s forwards}
+.focus-ring-banner svg{width:58px;height:auto}
+.focus-ring-banner strong{display:block;letter-spacing:.09em;text-transform:uppercase}
+.focus-ring-banner span{display:block;margin-top:2px;font-size:.78rem}
+.focus-ring-banner button{grid-column:1/-1;justify-self:center;padding:.32rem .7rem;font-size:.74rem}
+@media (max-width:620px){
+  .trophy-room-hero{grid-template-columns:1fr;text-align:center}
+  .trophy-room-mark{min-height:104px}
+  .trophy-room-mark svg{width:116px}
+  .trophy-room-kicker{font-size:.64rem;letter-spacing:.1em;overflow-wrap:anywhere}
+  .trophy-room-progress-label{flex-wrap:wrap;justify-content:center}
+  .trophy-room-progress-label span{flex:1 1 135px;text-align:center}
+  .focus-ring-banner{min-width:0;width:calc(100vw - 32px)}
+}
 
 /* ---- Bestiary tab ---- */
 .bestiary-grid{
@@ -3462,6 +3512,7 @@ svg{shape-rendering:geometricPrecision}
         <button role="tab" data-tab="pets" aria-pressed="false">Pets</button>
         <button role="tab" data-tab="drops" aria-pressed="false">Drops</button>
         <button role="tab" data-tab="forge" aria-pressed="false">Forge</button>
+        <button role="tab" data-tab="trophies" aria-pressed="false">Trophy Room</button>
         <button role="tab" data-tab="ach" aria-pressed="false">Achievements</button>
         <button role="tab" data-tab="store" aria-pressed="false">Store</button>
         <button role="tab" data-tab="ledger" aria-pressed="false">Ledger</button>
@@ -3479,6 +3530,7 @@ svg{shape-rendering:geometricPrecision}
       <div id="tab-stable" class="tab-panel" hidden><div id="stable-panel"><div class="muted" style="font-size:.85rem;margin-bottom:6px">Mount ecosystem. Complete a full family to earn a "Master of" title.</div></div></div>
       <div id="tab-drops" class="tab-panel" hidden><div id="drops-panel"><div class="muted" style="font-size:.8rem;margin-bottom:6px">Every drop you've earned, with the odds at the moment it rolled.</div><div id="drops-list" class="drops-list"></div></div></div>
       <div id="tab-forge" class="tab-panel" hidden><div id="forge-panel"></div></div>
+      <div id="tab-trophies" class="tab-panel" hidden><div id="trophy-room" class="trophy-room"></div></div>
       <div id="tab-ach" class="tab-panel" hidden><div id="ach-grid" class="ach-grid"></div></div>
       <div id="tab-store" class="tab-panel" hidden><div id="store-panel"></div></div>
       <div id="tab-ledger" class="tab-panel" hidden><div id="ledger-panel"></div></div>
@@ -3989,7 +4041,8 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const STORAGE_KEY     = "focusHero.v4.state";
 const LEGACY_KEYS     = ["focusHero.v3.state", "focusHero.v2.state", "focusHero.v1.state"];
 const BC_KEY          = "focusHero.v4";
-const DATA_VERSION    = 15;
+const DATA_VERSION    = 16;
+const THOUSAND_HOUR_STEP_MIN = 60_000;
 const PBKDF2_ITERATIONS = 100_000;
 const AES_KEY_LENGTH = 256;
 const SALT_BYTES = 16;
@@ -4082,6 +4135,9 @@ const DEFAULTS = {
   daily: { date: null, items: [] },
   lootOwned: {},
   achievements: {},
+  /* v10.6: permanent cosmetic championship rings. claimedThrough is the
+     highest contiguous 1,000-hour ring ever earned and never decreases. */
+  focusMilestones: { version:1, claimedThrough:0, announcedThrough:0 },
   history: {},
   sessionHistory: {},
   sessionsLog: [],
@@ -4838,6 +4894,46 @@ function deepMerge(target, source){
   return out;
 }
 
+/* v10.6: permanent focus-hour championship rings. These helpers only inspect
+ * authoritative lifetime minutes and a monotonic ordinal; they never alter
+ * minutes, history, sessions, XP, currency, loot, eggs, or cloud identity. */
+function focusMilestoneOrdinal(value){
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? Math.min(Number.MAX_SAFE_INTEGER, Math.floor(n)) : 0;
+}
+function normalizeFocusMilestones(raw){
+  const out = raw && typeof raw === "object" && !Array.isArray(raw) ? deepClone(raw) : {};
+  out.version = 1;
+  out.claimedThrough = focusMilestoneOrdinal(out.claimedThrough);
+  out.announcedThrough = Math.min(out.claimedThrough, focusMilestoneOrdinal(out.announcedThrough));
+  return out;
+}
+function focusMilestonesEligible(totalFocusMin){
+  const total = Number(totalFocusMin);
+  if (!Number.isFinite(total) || total < THOUSAND_HOUR_STEP_MIN) return 0;
+  return Math.min(Number.MAX_SAFE_INTEGER, Math.floor(total / THOUSAND_HOUR_STEP_MIN));
+}
+function reconcileFocusMilestones(target){
+  if (!target || typeof target !== "object") return { previous:0, claimedThrough:0, newlyEarned:0 };
+  const room = normalizeFocusMilestones(target.focusMilestones);
+  const previous = room.claimedThrough;
+  const legacyFirstRing = target.achievements && target.achievements.hours_1000 ? 1 : 0;
+  room.claimedThrough = Math.max(previous, focusMilestonesEligible(target.totalFocusMin), legacyFirstRing);
+  room.announcedThrough = Math.min(room.claimedThrough, room.announcedThrough);
+  target.focusMilestones = room;
+  return { previous, claimedThrough:room.claimedThrough, newlyEarned:Math.max(0, room.claimedThrough - previous) };
+}
+function mergeFocusMilestones(localRoom, remoteRoom, totalFocusMin, achievements){
+  const left = normalizeFocusMilestones(localRoom);
+  const right = normalizeFocusMilestones(remoteRoom);
+  const out = Object.assign({}, left, right);
+  const legacyFirstRing = achievements && achievements.hours_1000 ? 1 : 0;
+  out.version = 1;
+  out.claimedThrough = Math.max(left.claimedThrough, right.claimedThrough, focusMilestonesEligible(totalFocusMin), legacyFirstRing);
+  out.announcedThrough = Math.min(out.claimedThrough, Math.max(left.announcedThrough, right.announcedThrough));
+  return out;
+}
+
 /* -------- state + persistence -------- */
 let state;
 try {
@@ -4924,6 +5020,7 @@ function migrate(raw){
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) s = deepClone(DEFAULTS);
   else s = raw;
   if (typeof s.dataVersion !== "number") s.dataVersion = 1;
+  const upgradingFocusMilestones = s.dataVersion < 16;
 
   /* v4.2: pre-migration safety snapshot.
      If we're about to migrate to a newer schema, copy the original raw state to
@@ -5245,6 +5342,12 @@ function migrate(raw){
     if (!Array.isArray(s.activityLog)) s.activityLog = [];
     s.dataVersion = 15;
   }
+  if (s.dataVersion < 16){
+    /* v10.6: additive, cosmetic milestone state. No gameplay or accounting
+       field is rewritten; the final validated lifetime total seeds the ring. */
+    s.focusMilestones = normalizeFocusMilestones(s.focusMilestones);
+    s.dataVersion = 16;
+  }
   /* v8.7.0 ONE-SHOT: retroactive clawback of loot from the hygiene session
      that was edited to 0 minutes. Per Joel's directive, the new v8.7 loot
      clawback rule should have removed that session's 4 loot items at edit
@@ -5325,6 +5428,12 @@ function migrate(raw){
   if (!(s.hero.xp >= 0)) s.hero.xp = 0;
   if (!(s.totalFocusMin >= 0)) s.totalFocusMin = 0;
   if (!(s.completedFocusSessions >= 0)) s.completedFocusSessions = 0;
+  const focusMilestoneResult = reconcileFocusMilestones(s);
+  /* Existing 1,000h+ profiles are backfilled silently. Their Beyond Measure
+     achievement already supplied the celebration/reward when they crossed. */
+  if (upgradingFocusMilestones){
+    s.focusMilestones.announcedThrough = focusMilestoneResult.claimedThrough;
+  }
   s.totalAppOpenMs = nonNegativeNumber(s.totalAppOpenMs);
   if (!s.uptimeHistory || typeof s.uptimeHistory !== "object" || Array.isArray(s.uptimeHistory)) s.uptimeHistory = {};
   for (const k of Object.keys(s.uptimeHistory)){
@@ -5405,6 +5514,10 @@ function isStateSane(s){
   if (!(s.totalAppOpenMs >= 0)) return false;
   if (!Array.isArray(s.tasks)) return false;
   if (!s.settings || typeof s.settings !== "object") return false;
+  const milestoneState = s.focusMilestones;
+  if (!milestoneState || typeof milestoneState !== "object" || Array.isArray(milestoneState)) return false;
+  if (!Number.isSafeInteger(milestoneState.claimedThrough) || milestoneState.claimedThrough < 0) return false;
+  if (!Number.isSafeInteger(milestoneState.announcedThrough) || milestoneState.announcedThrough < 0 || milestoneState.announcedThrough > milestoneState.claimedThrough) return false;
   // Monotonicity check: the named counters MUST never decrease across saves.
   // A regression means something miscomputed and we should NOT promote it to LKG.
   try {
@@ -5416,6 +5529,7 @@ function isStateSane(s){
       if (nonNegativeNumber(ps.totalAppOpenMs) > nonNegativeNumber(s.totalAppOpenMs)) return false;
       if ((ps.completedFocusSessions|0) > (s.completedFocusSessions|0)) return false;
       if ((ps.longestStreak|0) > (s.longestStreak|0)) return false;
+      if (focusMilestoneOrdinal(ps.focusMilestones?.claimedThrough) > milestoneState.claimedThrough) return false;
       const psLevel = ps.hero?.level|0, sLevel = s.hero?.level|0;
       if (psLevel > sLevel) return false;
       // At equal level, total XP earned should not regress either.
@@ -5462,6 +5576,7 @@ function saveState(opts={}){
     clearTimeout(cloudDebounce);
     cloudDebounce = setTimeout(()=>cloudPush().catch(e=>console.warn("push queued", e)), 500);
   }
+  if (!opts.suppressMilestoneAnnouncement) schedulePendingFocusMilestoneAnnouncement();
 }
 /* v4.2: emergency recovery helper exposed via window.__FocusHero.recover().
    Reads the LKG snapshot, migrates it, and overwrites live state. Logs each
@@ -6035,6 +6150,7 @@ function finalizeStopwatch(){
   }
   recordAdventureMinutes(minutes);
   if (earnedRewards) maybeRecordActionEncounter("stopwatchComplete");
+  reconcileFocusMilestones(state);
   if (typeof checkAchievementsV76 === "function") achievementsUnlockedHere = checkAchievementsV76({ source:"stopwatchComplete", suppressRewards:__timeOnly }) || [];
   const sessionRecord = buildSessionLogRecordV76({
     id: earnedRewards ? __lrSwSessId : undefined,
@@ -6334,6 +6450,7 @@ function commitFocusTimerSession(claim, minutes){
   }
   recordAdventureMinutes(minutes);
   if (earnedRewards) maybeRecordActionEncounter("sessionComplete");
+  reconcileFocusMilestones(state);
   if (typeof checkAchievementsV76 === "function") achievementsUnlockedHere = checkAchievementsV76({ source:"sessionComplete", suppressRewards:__timeOnly }) || [];
   const sessionRecord = buildSessionLogRecordV76({
     id: claimSessionId || (earnedRewards ? __lrSessId : undefined),
@@ -7733,7 +7850,7 @@ function notify(title, body){
 /* -------- rendering -------- */
 function renderAll(){
   renderTimer(); renderHero(); renderQuests(); renderDaily(); if (typeof fhRenderDailyHoursCard === "function") fhRenderDailyHoursCard();
-  renderLoot(); renderCompanions(); renderAchievements(); renderHeatmap(); renderTopMeta();
+  renderLoot(); renderCompanions(); renderAchievements(); renderTrophyRoom(); renderHeatmap(); renderTopMeta();
   renderModeTabs(); renderAvatar(); renderEncounterStage(); renderTasks(); renderActiveTaskRow();
   renderStatStrip(); renderBattleLog(); renderLog(); renderBackupLast(); renderSecurityPanel();
   try { renderDailyRecap(); } catch(_){}
@@ -10330,6 +10447,11 @@ function mergeRemoteState(local, remote){
     if (!(k in out.achievements)) out.achievements[k] = remote.achievements[k];
     else out.achievements[k] = Math.max(out.achievements[k]|0, remote.achievements[k]|0);
   }
+  /* v10.6: permanent rings merge by highest ordinal, never addition or
+     last-writer replacement. Derivation uses the already max-merged total. */
+  out.focusMilestones = mergeFocusMilestones(
+    local.focusMilestones, remote.focusMilestones, out.totalFocusMin, out.achievements
+  );
   const qmap = new Map();
   for (const q of (local.quests||[])) qmap.set(q.id, q);
   for (const q of (remote.quests||[])){
@@ -11429,9 +11551,12 @@ function _achUnlock(id, opts){
 function showAchievementBanner(name,tier){
   const b=document.createElement("div");
   b.className=`fh76-ach-banner tier-${tier}`;
+  b.setAttribute("role","status");
+  b.setAttribute("aria-live","assertive");
+  b.setAttribute("aria-atomic","true");
   b.textContent=`${String(tier||"").toUpperCase()} · ${name}`;
   document.body.appendChild(b);
-  setTimeout(()=>{try{b.remove();}catch(_){}},tier==="mythic"?4000:3000);
+  setTimeout(()=>{try{b.remove();}catch(_){}},tier==="mythic"?6500:3500);
 }
 function checkAchievementsV76(opts){
   ensureV76StateShape(state);
@@ -11487,6 +11612,121 @@ function renderAchievements(){
     }
     g.appendChild(el);
   }
+}
+
+function focusRingSvg(ordinal){
+  const n = Math.max(1, focusMilestoneOrdinal(ordinal));
+  return `<svg viewBox="0 0 120 112" aria-hidden="true" focusable="false">
+    <path d="M26 60c-5 12-7 29 2 40 9 11 25 8 32-3 7 11 23 14 32 3 9-11 7-28 2-40l-13 7c3 9 3 18-1 22-5 5-13 1-14-6H54c-1 7-9 11-14 6-4-4-4-13-1-22z" fill="#B7791F" stroke="#231807" stroke-width="4"/>
+    <path d="M33 21 49 8h22l16 13 9 29-18 22H42L24 50z" fill="#F6C453" stroke="#231807" stroke-width="4"/>
+    <path d="m43 25 10-8h14l10 8 6 20-11 14H48L37 45z" fill="#A78BFA" stroke="#FFF2B2" stroke-width="3"/>
+    <path d="M60 17v42M38 44h44M45 22l29 34M75 22 46 56" stroke="rgba(255,255,255,.45)" stroke-width="2"/>
+    <text x="60" y="48" text-anchor="middle" fill="#140F21" font-family="Segoe UI,Arial,sans-serif" font-size="17" font-weight="900">${n}K</text>
+  </svg>`;
+}
+function formatFocusMilestoneRemaining(minutes){
+  const wholeMinutes = Math.max(0, Math.ceil(Number(minutes)||0));
+  const hours = Math.floor(wholeMinutes / 60);
+  const remainder = wholeMinutes % 60;
+  if (hours && remainder) return `${hours.toLocaleString()}h ${remainder}m`;
+  if (hours) return `${hours.toLocaleString()}h`;
+  return `${remainder}m`;
+}
+function renderTrophyRoom(){
+  const host = document.getElementById("trophy-room");
+  if (!host || !state) return;
+  const room = normalizeFocusMilestones(state.focusMilestones);
+  const count = room.claimedThrough;
+  const totalMinutes = Math.max(0, Number(state.totalFocusMin)||0);
+  const nextOrdinal = count + 1;
+  const nextMinutes = nextOrdinal * THOUSAND_HOUR_STEP_MIN;
+  const baseMinutes = count * THOUSAND_HOUR_STEP_MIN;
+  const stepProgress = Math.max(0, Math.min(THOUSAND_HOUR_STEP_MIN, totalMinutes - baseMinutes));
+  const pct = Math.max(0, Math.min(100, (stepProgress / THOUSAND_HOUR_STEP_MIN) * 100));
+  const hoursNow = Math.floor(totalMinutes / 60);
+  const hoursNext = nextOrdinal * 1000;
+  const remainingMinutes = Math.max(0, nextMinutes - totalMinutes);
+  const visibleStart = Math.max(1, count - 199);
+  const cards = [];
+  for (let ordinal=count; ordinal>=visibleStart; ordinal--){
+    const hours = ordinal * 1000;
+    cards.push(`<article class="focus-ring-card" aria-label="Championship Ring ${ordinal}, ${hours.toLocaleString()} lifetime focus hours">
+      ${focusRingSvg(ordinal)}
+      <div class="focus-ring-number">Championship Ring #${ordinal}</div>
+      <div class="focus-ring-hours">${hours.toLocaleString()} lifetime hours</div>
+      <div class="focus-ring-date">Permanent cosmetic milestone</div>
+    </article>`);
+  }
+  const omitted = visibleStart > 1
+    ? `<div class="trophy-room-empty">${(visibleStart-1).toLocaleString()} earlier rings are safely counted. Showing the latest 200.</div>` : "";
+  const collection = count
+    ? `${omitted}<div class="trophy-grid">${cards.join("")}</div>`
+    : `<div class="trophy-room-empty">Your first championship ring unlocks permanently at 1,000 lifetime focus hours.</div>`;
+  host.innerHTML = `<section class="trophy-room-hero" aria-labelledby="trophy-room-title">
+      <div class="trophy-room-mark">${focusRingSvg(Math.max(1,count))}</div>
+      <div>
+        <div class="trophy-room-kicker">Lifetime championship collection</div>
+        <h3 class="trophy-room-title" id="trophy-room-title">${count ? `${count.toLocaleString()} ring${count===1?"":"s"} earned` : "The road to Ring #1"}</h3>
+        <div class="trophy-room-copy">One permanent ring is awarded every 1,000 lifetime focus hours. Rings are symbolic only and never change your minutes or other rewards. Once earned, a later time correction cannot revoke one.</div>
+        <div class="trophy-room-progress" role="progressbar" aria-label="Progress to Championship Ring ${nextOrdinal}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pct)}"><div style="width:${pct.toFixed(2)}%"></div></div>
+        <div class="trophy-room-progress-label"><span>${hoursNow.toLocaleString()} lifetime hours</span><span>${formatFocusMilestoneRemaining(remainingMinutes)} to Ring #${nextOrdinal} · ${hoursNext.toLocaleString()}h</span></div>
+      </div>
+    </section>${collection}`;
+}
+function showFocusMilestoneBanner(fromOrdinal,toOrdinal){
+  if (typeof document === "undefined" || !document.body) return;
+  const first = Math.max(1, focusMilestoneOrdinal(fromOrdinal));
+  const last = Math.max(first, focusMilestoneOrdinal(toOrdinal));
+  const earned = last - first + 1;
+  const b = document.createElement("div");
+  b.className = "fh76-ach-banner tier-mythic focus-ring-banner";
+  b.setAttribute("role","status");
+  b.setAttribute("aria-live","assertive");
+  b.setAttribute("aria-atomic","true");
+  const title = earned === 1
+    ? `${(last*1000).toLocaleString()}-Hour Championship Ring Earned`
+    : `${earned.toLocaleString()} Championship Rings Earned`;
+  b.innerHTML = `${focusRingSvg(last)}<div><strong>${title}</strong><span>Permanent and now displayed in your Trophy Room.</span></div><button type="button">Open Trophy Room</button>`;
+  b.querySelector("button")?.addEventListener("click",()=>{ openProgressPanel("trophies"); try{b.remove();}catch(_){} });
+  document.body.appendChild(b);
+  setTimeout(()=>{try{b.remove();}catch(_){}},8000);
+}
+function schedulePendingFocusMilestoneAnnouncement(){
+  if (typeof document === "undefined" || !state || !state.focusMilestones) return;
+  const snapshot = normalizeFocusMilestones(state.focusMilestones);
+  if (snapshot.announcedThrough >= snapshot.claimedThrough) return;
+  if (schedulePendingFocusMilestoneAnnouncement._timer) return;
+  schedulePendingFocusMilestoneAnnouncement._timer = setTimeout(function flushMilestoneAnnouncement(){
+    schedulePendingFocusMilestoneAnnouncement._timer = null;
+    if (!state) return;
+    const room = normalizeFocusMilestones(state.focusMilestones);
+    /* Ring #1 shares the existing Beyond Measure achievement celebration and
+       XP path. Mark it announced so the same crossing never shows two banners. */
+    let silentlyAdvanced = false;
+    if (room.announcedThrough < 1 && room.claimedThrough >= 1){
+      room.announcedThrough = 1;
+      silentlyAdvanced = true;
+    }
+    state.focusMilestones = room;
+    if (room.announcedThrough >= room.claimedThrough){
+      if (silentlyAdvanced) saveState({ suppressMilestoneAnnouncement:true });
+      renderTrophyRoom();
+      return;
+    }
+    if (document.querySelector(".fh76-ach-banner")){
+      schedulePendingFocusMilestoneAnnouncement._timer = setTimeout(flushMilestoneAnnouncement, 500);
+      return;
+    }
+    const first = room.announcedThrough + 1;
+    const last = room.claimedThrough;
+    showFocusMilestoneBanner(first,last);
+    room.announcedThrough = last;
+    state.focusMilestones = room;
+    if (first === last) logLine(`Championship Ring #${last} earned — ${(last*1000).toLocaleString()} lifetime focus hours.`);
+    else logLine(`Championship Rings #${first}–#${last} earned — ${(last*1000).toLocaleString()} lifetime focus hours.`);
+    saveState({ suppressMilestoneAnnouncement:true });
+    renderTrophyRoom();
+  }, 180);
 }
 function canEditSessionRecord(rec){
   return !!(rec&&rec.type==="focus"&&typeof rec.id==="string"&&typeof rec.originalMinutes==="number"&&(rec.minutes|0)>0);
@@ -11778,8 +12018,9 @@ function applySessionEdit(sessionId,newMinutes){
       }
     }
   } catch(__e){ console.warn("v8.7.0 loot clawback/reroll failed", __e); }
-  if (delta < 0 && xpInfo && xpInfo.timeOnly && typeof checkAchievements === "function"){
-    try { checkAchievements({ source:"timeOnlySessionEdit", suppressRewards:true }); } catch(_){}
+  reconcileFocusMilestones(state);
+  if (delta < 0 && typeof checkAchievements === "function"){
+    try { checkAchievements({ source:"sessionEdit", suppressRewards:!!(xpInfo && xpInfo.timeOnly) }); } catch(_){}
   }
   appendEditLog({ taskName:(task&&task.name)||rec.action||"Focus", before:oldMinutes, after:nm, source:"session-editor", sessionId:sessionId, taskId:rec.taskId||null });
   saveState(); renderAll();
@@ -12105,6 +12346,7 @@ function bindTabs(){
       host.querySelectorAll(".tab-panel[id^='tab-']").forEach(p=>{ p.hidden = p.id !== `tab-${tab}`; });
       if (tab === "store" && typeof renderStore === "function") renderStore();
       if (tab === "ledger" && typeof renderLedger === "function") renderLedger();
+      if (tab === "trophies" && typeof renderTrophyRoom === "function") renderTrophyRoom();
       if (tab === "sessions" && typeof renderSessionHistoryPanel === "function") renderSessionHistoryPanel();
       if (tab === "targets" && typeof window.fhRenderTargetsCard === "function") window.fhRenderTargetsCard();
       if (tab === "forge" && typeof window.renderForgePanel === "function") window.renderForgePanel();
@@ -12774,6 +13016,7 @@ const __FocusHero = {
 Object.assign(__FocusHero, {
   applySessionEdit, setAdventureAction, currentAdventureActionId,
   lootClawbackPreviewForSession, sessionLootDrops,
+  normalizeFocusMilestones, focusMilestonesEligible, reconcileFocusMilestones, mergeFocusMilestones, formatFocusMilestoneRemaining,
   ACHIEVEMENTS_V76, MONSTERS, ACTION_LIST, pickMonster, recordEncounter,
   checkAchievementsV76, unlockSecretAchievement, isPalindrome, _achCtx, _condMet,
   defaultAdventure, defaultBestiary, defaultAchievementProgress
@@ -13410,6 +13653,31 @@ async function runSmokeTests(){
     add("v8.1: equipped rewards and mount display are active", stats.xpPct >= 12 && stats.coinPct >= 8 && boosted && mounted);
     state = snap; saveState(); renderAll();
   }
+  {
+    const below = deepClone(DEFAULTS); below.totalFocusMin = 59_999;
+    const exact = deepClone(DEFAULTS); exact.totalFocusMin = 60_000;
+    reconcileFocusMilestones(below); reconcileFocusMilestones(exact);
+    add("v10.6: first ring threshold is exactly 60,000 minutes",
+      below.focusMilestones.claimedThrough === 0 && exact.focusMilestones.claimedThrough === 1);
+  }
+  {
+    const s = deepClone(DEFAULTS); s.totalFocusMin = 120_000;
+    reconcileFocusMilestones(s); s.totalFocusMin = 59_999; reconcileFocusMilestones(s);
+    add("v10.6: earned championship rings are permanent", s.focusMilestones.claimedThrough === 2);
+  }
+  {
+    const merged = mergeFocusMilestones(
+      {version:1,claimedThrough:2,announcedThrough:2},
+      {version:1,claimedThrough:1,announcedThrough:1},
+      60_000, {}
+    );
+    add("v10.6: ring merge is max-based and idempotent", merged.claimedThrough === 2 && merged.announcedThrough === 2);
+  }
+  {
+    const tab = document.querySelector('[data-tab="trophies"]');
+    add("v10.6: Trophy Room is present and uses plain navigation text",
+      !!tab && tab.textContent.trim() === "Trophy Room" && !/\p{Extended_Pictographic}/u.test(tab.textContent));
+  }
 
   return results;
 }
@@ -13769,6 +14037,7 @@ function applyTaskTimeAdjustment(taskId, deltaMin){
   var __dailyApplied = 0;
   if (d > 0) __dailyApplied = addDailyProgressForSession(day, "minutes", d) || 0;
   else if (removedToday > 0) rollbackDailyProgressForSession(day, "minutes", removedToday);
+  reconcileFocusMilestones(state);
   /* v10: minutes added in the edit tab now feed the SAME reward pipeline as a
      live session - they earn XP (applied above) AND roll loot, and the session
      record they create participates in clawback if those minutes are later
@@ -13796,12 +14065,14 @@ function applyTaskTimeAdjustment(taskId, deltaMin){
         const __extra = (__run.drops||[]).length > 1 ? " +" + ((__run.drops||[]).length - 1) + " more" : "";
         if (__ledgerLoot) toast("Loot from logged time: " + __ledgerLoot[1] + " (" + __ledgerLoot[2] + ")" + __extra, "good");
         else toast("+" + d + "m logged - loot dice rolled, nothing dropped this time.", "info");
-        if (typeof checkAchievements === "function") checkAchievements();
       }
     } catch(__e){ console.warn("ledger reward pipeline failed", __e); }
   }
-  if (d > 0 && __timeOnlyLedger && typeof checkAchievements === "function"){
-    try { checkAchievements({ source:"timeOnlyLedger", suppressRewards:true }); } catch(_){}
+  /* Every positive ledger correction gets the same achievement check as a live
+     session, even below the normal XP/loot floor. Time-only corrections still
+     suppress achievement XP while retaining the milestone itself. */
+  if (d > 0 && typeof checkAchievements === "function"){
+    try { checkAchievements({ source:"ledger", suppressRewards:__timeOnlyLedger }); } catch(_){}
   }
   const after = task.totalFocusMin|0;
   appendEditLog({ taskName: task.name, taskId: task.id, before: before, after: after, source:"ledger" });
@@ -14321,7 +14592,7 @@ function openEmojiPicker(taskIdOrOpts, anchor){
 
 /* --- progression sub-tabs (overrides the original; adds store + ledger) --- */
 function bindTabs(){
-  const KEYS = ["targets","expedition","loot","quests-v85","world","vault","stable","mounts","pets","drops","forge","ach","store","ledger","sessions","bestiary","heat"];
+  const KEYS = ["targets","expedition","loot","quests-v85","world","vault","stable","mounts","pets","drops","forge","trophies","ach","store","ledger","sessions","bestiary","heat"];
   $$(".tabs button[role='tab']").forEach(b=>{
     b.addEventListener("click", ()=>{
       const tab = b.dataset.tab;
@@ -14329,6 +14600,7 @@ function bindTabs(){
       KEYS.forEach(k=>{ const p = $(`#tab-${k}`); if (!p) return; p.hidden = (k !== tab); });
       if (tab === "store")  { try{renderStore();}  catch(_){} }
       if (tab === "ledger") { try{renderLedger();} catch(_){} }
+      if (tab === "trophies") { try{renderTrophyRoom();} catch(_){} }
       if (tab === "sessions") { try{renderSessionHistoryPanel();} catch(_){} }
       if (tab === "expedition" && typeof window.fhRenderFocusEconomy === "function") { try{window.fhRenderFocusEconomy();} catch(_){} }
       if (tab === "targets" && typeof window.fhRenderTargetsCard === "function") { try{window.fhRenderTargetsCard();} catch(_){} }
