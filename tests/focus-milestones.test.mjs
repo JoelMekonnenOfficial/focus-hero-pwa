@@ -57,6 +57,7 @@ async function resetFixture(){
     Object.assign(current, fresh);
     current.sync.enabled = false;
     current.settings.monthlyBackup = false;
+    fh.clearAchievementBannerQueue?.();
     document.querySelectorAll(".fh76-ach-banner").forEach(node => node.remove());
     if (window.schedulePendingFocusMilestoneAnnouncement?._timer){
       clearTimeout(window.schedulePendingFocusMilestoneAnnouncement._timer);
@@ -174,7 +175,39 @@ try {
     assert.deepEqual(result, { forward:2, reverse:2, repeated:2, total:60000 });
   });
 
-  await test("Trophy Room renders a vector championship ring and no emoji navigation", async () => {
+  await test("artifact catalog is deterministic, unique, and preserves the flagship copy", async () => {
+    const result = await page.evaluate(() => {
+      const f = window.__FocusHero.focusArtifactSpec;
+      const specs = Array.from({ length:1000 }, (_,i) => f(i+1));
+      const again = f(1);
+      return {
+        first:{ id:again.id, name:again.name, title:again.title, slogan:again.slogan, form:again.form },
+        ids:new Set(specs.map(x=>x.id)).size,
+        names:new Set(specs.map(x=>x.name)).size,
+        slogans:new Set(specs.map(x=>x.slogan)).size,
+        signatures:new Set(specs.map(x=>x.visualSignature)).size,
+        adjacentFormsDiffer:specs.every((x,i)=>i===0 || x.form!==specs[i-1].form),
+        firstCycleForms:new Set(specs.slice(0,10).map(x=>x.form)).size,
+        sameFormNextCycleChanged:specs[0].form===specs[10].form
+          && specs[0].palette.accent!==specs[10].palette.accent
+          && specs[0].visualSignature!==specs[10].visualSignature
+      };
+    });
+    assert.deepEqual(result.first, {
+      id:"focus-artifact-v1-1", name:"First Light Signet",
+      title:"Keeper of the First Thousand",
+      slogan:"A thousand hours, chosen one minute at a time.", form:"signet"
+    });
+    assert.equal(result.ids, 1000);
+    assert.equal(result.names, 1000);
+    assert.equal(result.slogans, 1000);
+    assert.equal(result.signatures, 1000);
+    assert.equal(result.adjacentFormsDiffer, true);
+    assert.equal(result.firstCycleForms, 10);
+    assert.equal(result.sameFormNextCycleChanged, true);
+  });
+
+  await test("Trophy Room renders the named vector artifact and no emoji navigation", async () => {
     await resetFixture();
     const result = await page.evaluate(() => {
       const fh = window.__FocusHero;
@@ -188,7 +221,7 @@ try {
       return {
         tabText:tab?.textContent?.trim(),
         panelText:panel?.textContent || "",
-        cards:panel?.querySelectorAll(".focus-ring-card").length || 0,
+        cards:panel?.querySelectorAll(".focus-artifact-card").length || 0,
         svgs:panel?.querySelectorAll("svg").length || 0,
         hidden:panel?.hidden,
         pictographic:/\p{Extended_Pictographic}/u.test(tab?.textContent || "")
@@ -198,8 +231,10 @@ try {
     assert.equal(result.hidden, false);
     assert.equal(result.cards, 1);
     assert.ok(result.svgs >= 2);
-    assert.match(result.panelText, /Championship Ring #1/);
-    assert.match(result.panelText, /1,000 lifetime hours/);
+    assert.match(result.panelText, /First Light Signet/);
+    assert.match(result.panelText, /Keeper of the First Thousand/);
+    assert.match(result.panelText, /A thousand hours, chosen one minute at a time/);
+    assert.match(result.panelText, /Artifact #1 · 1,000h/);
     assert.equal(result.pictographic, false);
   });
 
@@ -215,34 +250,129 @@ try {
       document.querySelector('[data-tab="trophies"]')?.click();
       return document.getElementById("trophy-room")?.textContent || "";
     });
-    assert.match(result, /1m to Ring #1/);
-    assert.doesNotMatch(result, /1h to Ring #1/);
+    assert.match(result, /1m to First Light Signet/);
+    assert.doesNotMatch(result, /1h to First Light Signet/);
   });
 
-  await test("Trophy Room stays within a 390px mobile viewport", async () => {
+  await test("simultaneous mythic and gold unlocks queue below phone chrome without warning red", async () => {
     await page.setViewportSize({ width:390, height:844 });
     await resetFixture();
-    const result = await page.evaluate(() => {
-      const s = window.__FocusHero.stateRef();
-      s.totalFocusMin = 60000;
-      s.focusMilestones = { version:1, claimedThrough:1, announcedThrough:1 };
-      window.renderAll();
-      document.querySelector('[data-tab="trophies"]')?.click();
-      const room = document.getElementById("trophy-room");
-      const hero = room?.querySelector(".trophy-room-hero");
-      const copy = room?.querySelector(".trophy-room-copy");
+    const result = await page.evaluate(async () => {
+      const fh = window.__FocusHero;
+      fh.showAchievementBanner("Beyond Measure", "mythic", "hours_1000");
+      fh.showAchievementBanner("Master", "gold", "level_50");
+      await new Promise(resolve => setTimeout(resolve, 80));
+      const first = document.querySelector(".fh76-ach-banner");
+      const firstSnapshot = {
+        count:document.querySelectorAll(".fh76-ach-banner").length,
+        text:first?.textContent || "",
+        top:first?.getBoundingClientRect().top || 0,
+        background:first ? getComputedStyle(first).backgroundImage : ""
+      };
+      fh.dismissAchievementBanner();
+      await new Promise(resolve => setTimeout(resolve, 100));
+      const second = document.querySelector(".fh76-ach-banner");
+      const secondSnapshot = {
+        count:document.querySelectorAll(".fh76-ach-banner").length,
+        text:second?.textContent || "",
+        top:second?.getBoundingClientRect().top || 0,
+        background:second ? getComputedStyle(second).backgroundImage : ""
+      };
+      fh.clearAchievementBannerQueue();
+      return { first:firstSnapshot, second:secondSnapshot };
+    });
+    assert.equal(result.first.count, 1);
+    assert.match(result.first.text, /Beyond Measure/i);
+    assert.match(result.first.text, /First Light Signet/);
+    assert.match(result.first.text, /Keeper of the First Thousand/);
+    assert.ok(result.first.top >= 104);
+    assert.doesNotMatch(result.first.background, /180,\s*83,\s*9/);
+    assert.equal(result.second.count, 1);
+    assert.match(result.second.text, /Master/);
+    assert.ok(result.second.top >= 104);
+    assert.doesNotMatch(result.second.background, /180,\s*83,\s*9/);
+    await page.setViewportSize({ width:1280, height:800 });
+  });
+
+  await test("artifact milestones and later achievements share one dismissible queue", async () => {
+    await resetFixture();
+    const result = await page.evaluate(async () => {
+      const fh = window.__FocusHero;
+      fh.showFocusMilestoneBanner(2, 2);
+      fh.showAchievementBanner("Master", "gold", "level_50");
+      await new Promise(resolve => setTimeout(resolve, 80));
+      const first = document.querySelector(".fh76-ach-banner");
+      const firstSnapshot = {
+        count:document.querySelectorAll(".fh76-ach-banner").length,
+        text:first?.textContent || "",
+        dismissible:!!first?.querySelector(".achievement-banner-dismiss")
+      };
+      first?.querySelector(".achievement-banner-dismiss")?.click();
+      await new Promise(resolve => setTimeout(resolve, 100));
+      const second = document.querySelector(".fh76-ach-banner");
+      const secondSnapshot = {
+        count:document.querySelectorAll(".fh76-ach-banner").length,
+        text:second?.textContent || ""
+      };
+      fh.clearAchievementBannerQueue();
       return {
-        viewport:document.documentElement.clientWidth,
-        roomClient:room?.clientWidth || 0, roomScroll:room?.scrollWidth || 0,
-        heroClient:hero?.clientWidth || 0, heroScroll:hero?.scrollWidth || 0,
-        copyClient:copy?.clientWidth || 0, copyScroll:copy?.scrollWidth || 0
+        first:firstSnapshot,
+        second:secondSnapshot,
+        afterClear:document.querySelectorAll(".fh76-ach-banner").length
       };
     });
-    assert.ok(result.viewport <= 390);
-    assert.ok(result.roomScroll <= result.roomClient);
-    assert.ok(result.heroScroll <= result.heroClient);
-    assert.ok(result.copyScroll <= result.copyClient);
+    assert.equal(result.first.count, 1);
+    assert.match(result.first.text, /Twin-Flame Lantern earned/i);
+    assert.equal(result.first.dismissible, true);
+    assert.equal(result.second.count, 1);
+    assert.match(result.second.text, /Master/i);
+    assert.equal(result.afterClear, 0);
+  });
+
+  await test("Trophy Room stays within 320px and 390px mobile viewports", async () => {
+    for (const width of [320,390]){
+      await page.setViewportSize({ width, height:844 });
+      await resetFixture();
+      const result = await page.evaluate(() => {
+        const s = window.__FocusHero.stateRef();
+        s.totalFocusMin = 60000;
+        s.focusMilestones = { version:1, claimedThrough:1, announcedThrough:1 };
+        window.renderAll();
+        document.querySelector('[data-tab="trophies"]')?.click();
+        const room = document.getElementById("trophy-room");
+        const hero = room?.querySelector(".trophy-room-hero");
+        const copy = room?.querySelector(".trophy-room-copy");
+        const card = room?.querySelector(".focus-artifact-card");
+        return {
+          viewport:document.documentElement.clientWidth,
+          roomClient:room?.clientWidth || 0, roomScroll:room?.scrollWidth || 0,
+          heroClient:hero?.clientWidth || 0, heroScroll:hero?.scrollWidth || 0,
+          copyClient:copy?.clientWidth || 0, copyScroll:copy?.scrollWidth || 0,
+          cardClient:card?.clientWidth || 0, cardScroll:card?.scrollWidth || 0
+        };
+      });
+      assert.ok(result.viewport <= width);
+      assert.ok(result.roomScroll <= result.roomClient);
+      assert.ok(result.heroScroll <= result.heroClient);
+      assert.ok(result.copyScroll <= result.copyClient);
+      assert.ok(result.cardScroll <= result.cardClient);
+    }
     await page.setViewportSize({ width:1280, height:800 });
+  });
+
+  await test("achievement banners respect reduced-motion preferences", async () => {
+    await resetFixture();
+    await page.emulateMedia({ reducedMotion:"reduce" });
+    const animationName = await page.evaluate(() => {
+      const fh = window.__FocusHero;
+      fh.showAchievementBanner("Master", "gold", "level_50");
+      const banner = document.querySelector(".fh76-ach-banner");
+      const value = banner ? getComputedStyle(banner).animationName : "missing";
+      fh.clearAchievementBannerQueue();
+      return value;
+    });
+    assert.equal(animationName, "none");
+    await page.emulateMedia({ reducedMotion:"no-preference" });
   });
 
   await test("a normal 1-minute ledger crossing still unlocks Beyond Measure exactly once", async () => {
@@ -298,6 +428,10 @@ try {
       s.totalFocusMin = 59990;
       s.history = {};
       s.achievements = {};
+      for (const meta of fh.ACHIEVEMENTS_V76){
+        const threshold = Number(meta?.[5]?.totalMin);
+        if (threshold > 0 && threshold < 60000) s.achievements[meta[0]] = 1;
+      }
       s.focusMilestones = { version:1, claimedThrough:0, announcedThrough:0 };
       const beforeXp = { level:s.hero.level, xp:s.hero.xp };
       const applied = window.applyTaskTimeAdjustment(task.id, 10);
@@ -325,7 +459,7 @@ try {
     assert.equal(result.ringBanners, 0);
   });
 
-  await test("Ring #2 gets one persistent-room announcement and no gameplay reward", async () => {
+  await test("Artifact #2 gets one persistent-room announcement and no gameplay reward", async () => {
     await resetFixture();
     const result = await page.evaluate(async () => {
       const fh = window.__FocusHero;
@@ -366,12 +500,14 @@ try {
     assert.equal(result.announced, 2);
     assert.equal(result.firstCount, 1);
     assert.equal(result.afterSaveCount, 1);
-    assert.match(result.firstText, /2,000-Hour Championship Ring Earned/);
-    assert.match(result.animationDelay, /7\.6s/);
+    assert.match(result.firstText, /Twin-Flame Lantern earned/i);
+    assert.match(result.firstText, /Bearer of the Second Flame/);
+    assert.match(result.firstText, /Discipline burns brighter/);
+    assert.match(result.animationDelay, /8\.1s/);
     assert.equal(result.unchanged, true);
   });
 
-  await test("ring state survives a local reload", async () => {
+  await test("artifact milestone state survives a local reload", async () => {
     await resetFixture();
     await page.evaluate(() => {
       const fh = window.__FocusHero;
@@ -386,9 +522,10 @@ try {
     const result = await page.evaluate(() => ({
       total:window.__FocusHero.stateRef().totalFocusMin,
       ring:window.__FocusHero.stateRef().focusMilestones.claimedThrough,
-      cards:document.querySelectorAll(".focus-ring-card").length
+      cards:document.querySelectorAll(".focus-artifact-card").length,
+      names:[...document.querySelectorAll(".focus-artifact-name")].map(node=>node.textContent)
     }));
-    assert.deepEqual(result, { total:120000, ring:2, cards:2 });
+    assert.deepEqual(result, { total:120000, ring:2, cards:2, names:["Twin-Flame Lantern","First Light Signet"] });
   });
 
   assert.deepEqual(pageErrors, [], pageErrors.join("\n"));

@@ -1265,71 +1265,89 @@ button.primary{
   100%{transform:scale(1) rotate(0);filter:hue-rotate(0deg)}
 }
 
-/* Achievement unlock banner — appears below app/browser chrome for gold+.
- * Mythic uses violet + gold so a celebration cannot be mistaken for an error. */
+/* v10.6.1: achievement unlocks always clear phone top chrome and display one
+ * at a time. Cool celebratory palettes cannot be mistaken for warning red. */
 .fh76-ach-banner{
-  position:fixed;left:50%;top:calc(env(safe-area-inset-top, 0px) + 76px);transform:translateX(-50%);
+  position:fixed;left:50%;top:max(calc(env(safe-area-inset-top, 0px) + 88px),104px);transform:translateX(-50%);
   z-index:2200;
-  width:max-content;max-width:calc(100vw - 32px);
-  padding:.7rem 1.2rem;text-align:center;white-space:normal;
-  border:3px solid #000;outline:2px solid #FBBF24;
-  background:linear-gradient(180deg,#FDE68A,#B45309);
-  color:#10140f;
+  width:max-content;max-width:calc(100vw - 32px);box-sizing:border-box;
+  padding:.8rem 1.2rem;text-align:center;white-space:normal;
+  border:3px solid #07111f;outline:2px solid #FDE68A;
+  background:radial-gradient(circle at 15% 15%,rgba(125,211,252,.22),transparent 38%),linear-gradient(145deg,#172554,#312E81);
+  color:#FFF8D8;
   font-weight:700;letter-spacing:.08em;text-transform:uppercase;
-  box-shadow:0 8px 0 rgba(0,0,0,.5);
-  animation:fh76-banner-in .4s ease-out, fh76-banner-out .4s ease-in 2.6s forwards;
+  box-shadow:0 10px 0 rgba(0,0,0,.48),0 0 28px rgba(99,102,241,.28);
+  animation:fh76-banner-in .4s ease-out,fh76-banner-out .4s ease-in 6.1s forwards;
 }
-.fh76-ach-banner.tier-platinum{background:linear-gradient(180deg,#CFFAFE,#22D3EE);outline-color:#22D3EE}
-.fh76-ach-banner.tier-mythic{background:linear-gradient(180deg,#FDE68A,#A78BFA);outline-color:#FBBF24;animation:fh76-banner-in .4s ease-out, fh76-banner-out .4s ease-in 5.6s forwards}
-@keyframes fh76-banner-in{from{opacity:0;transform:translateX(-50%) translateY(-30px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
-@keyframes fh76-banner-out{to{opacity:0;transform:translateX(-50%) translateY(-30px)}}
+.fh76-ach-banner.tier-gold{background:radial-gradient(circle at 15% 15%,rgba(253,230,138,.18),transparent 38%),linear-gradient(145deg,#172554,#3730A3);outline-color:#FDE68A}
+.fh76-ach-banner.tier-platinum{background:radial-gradient(circle at 15% 15%,rgba(207,250,254,.20),transparent 40%),linear-gradient(145deg,#083344,#164E63);outline-color:#67E8F9;color:#ECFEFF}
+.fh76-ach-banner.tier-mythic{background:radial-gradient(circle at 18% 12%,rgba(253,230,138,.22),transparent 34%),linear-gradient(145deg,#1E1B4B,#4338CA 58%,#312E81);outline-color:#FDE68A;color:#FFFBEA;animation:fh76-banner-in .4s ease-out,fh76-banner-out .4s ease-in 8.1s forwards}
+.achievement-banner-kicker{display:block;margin-bottom:2px;color:#BAE6FD;font-size:.62rem;letter-spacing:.18em;text-transform:uppercase}
+.achievement-banner-title{display:block;font-size:clamp(.9rem,3.4vw,1.08rem);overflow-wrap:anywhere}
+.achievement-banner-dismiss{position:absolute;right:5px;top:5px;width:28px;height:28px;padding:0;border:1px solid rgba(255,255,255,.22);background:rgba(4,8,20,.28);color:inherit;font:inherit;line-height:1;cursor:pointer}
+@keyframes fh76-banner-in{from{opacity:0;transform:translateX(-50%) translateY(18px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+@keyframes fh76-banner-out{to{opacity:0;transform:translateX(-50%) translateY(14px)}}
 
-/* v10.6: permanent 1,000-hour championship rings. Code-native SVG keeps the
- * Trophy Room consistent with the app icon system instead of adding emoji. */
+/* v10.6.1: deterministic 1,000-hour artifacts. Presentation is derived from
+ * the ordinal; no visual metadata is written into player state. */
 .trophy-room{display:grid;gap:12px;min-width:0;max-width:100%}
 .trophy-room-hero{
   display:grid;grid-template-columns:minmax(120px,.7fr) minmax(210px,1.3fr);gap:14px;align-items:center;
   min-width:0;max-width:100%;overflow:hidden;box-sizing:border-box;
-  padding:16px;border:3px solid #0a0c0b;outline:2px solid #FBBF24;
-  background:radial-gradient(circle at 20% 20%,rgba(251,191,36,.22),transparent 34%),linear-gradient(145deg,rgba(167,139,250,.18),rgba(8,12,14,.92));
-  box-shadow:0 8px 0 rgba(0,0,0,.35),inset 0 0 24px rgba(251,191,36,.08);
+  padding:18px;border:3px solid #080B13;outline:2px solid var(--artifact-accent,#FDE68A);
+  background:linear-gradient(145deg,rgba(30,27,75,.84),rgba(6,10,20,.96));
+  background:radial-gradient(circle at 20% 18%,color-mix(in srgb,var(--artifact-accent,#FDE68A) 22%,transparent),transparent 36%),linear-gradient(145deg,rgba(30,27,75,.84),rgba(6,10,20,.96));
+  box-shadow:0 8px 0 rgba(0,0,0,.38),inset 0 0 34px color-mix(in srgb,var(--artifact-accent,#FDE68A) 9%,transparent);
 }
 .trophy-room-hero>div{min-width:0}
-.trophy-room-mark{display:grid;place-items:center;min-height:130px}
-.trophy-room-mark svg{width:min(150px,100%);height:auto;filter:drop-shadow(0 8px 9px rgba(0,0,0,.45))}
-.trophy-room-kicker{font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;color:#FDE68A;font-weight:800}
+.trophy-room-mark{display:grid;place-items:center;min-height:150px}
+.trophy-room-mark svg{width:min(174px,100%);height:auto;filter:drop-shadow(0 9px 10px rgba(0,0,0,.48))}
+.trophy-room-mark.is-locked{filter:grayscale(.55);opacity:.68}
+.trophy-room-kicker{font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;color:var(--artifact-accent,#FDE68A);font-weight:800}
 .trophy-room-title{margin:.25rem 0;font-size:clamp(1.25rem,3vw,2rem);line-height:1.05;color:var(--ink)}
+.trophy-room-earned-title{color:#E0E7FF;font-size:.8rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+.trophy-room-slogan{margin:.45rem 0;color:#FFF8D8;font-family:Georgia,serif;font-size:.93rem;font-style:italic;line-height:1.35}
 .trophy-room-copy{color:var(--ink-dim);font-size:.88rem;line-height:1.45;overflow-wrap:anywhere}
 .trophy-room-progress{height:12px;margin-top:10px;border:2px solid #050805;background:#11161a;overflow:hidden}
-.trophy-room-progress>div{height:100%;background:linear-gradient(90deg,#FBBF24,#A78BFA)}
+.trophy-room-progress>div{height:100%;background:linear-gradient(90deg,var(--artifact-accent,#FDE68A),var(--artifact-jewel,#A78BFA))}
 .trophy-room-progress-label{display:flex;justify-content:space-between;gap:8px;margin-top:5px;color:var(--ink-dim);font-size:.72rem;min-width:0}
 .trophy-room-progress-label span{min-width:0;overflow-wrap:anywhere}
 .trophy-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
-.focus-ring-card{
-  position:relative;overflow:hidden;min-height:198px;padding:12px;text-align:center;
-  border:3px solid #090a09;outline:2px solid #D6A72F;
-  background:linear-gradient(155deg,rgba(251,191,36,.20),rgba(167,139,250,.12) 44%,var(--panel-2));
+.focus-artifact-card,.focus-ring-card{
+  position:relative;overflow:hidden;min-height:282px;padding:13px;text-align:center;
+  border:3px solid #080B13;outline:2px solid var(--artifact-accent,#D6A72F);
+  background:linear-gradient(155deg,rgba(30,27,75,.72),rgba(8,12,22,.96) 58%,var(--panel-2));
+  background:radial-gradient(circle at 50% 22%,color-mix(in srgb,var(--artifact-accent,#FDE68A) 20%,transparent),transparent 35%),linear-gradient(155deg,rgba(30,27,75,.72),rgba(8,12,22,.96) 58%,var(--panel-2));
   box-shadow:0 6px 0 rgba(0,0,0,.32);
 }
-.focus-ring-card::before{content:"";position:absolute;inset:-55% 45% auto -25%;height:170%;transform:rotate(18deg);background:linear-gradient(90deg,transparent,rgba(255,255,255,.12),transparent);pointer-events:none}
-.focus-ring-card svg{width:92px;height:auto;filter:drop-shadow(0 6px 5px rgba(0,0,0,.38))}
-.focus-ring-number{margin-top:4px;color:#FDE68A;font-size:.68rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
-.focus-ring-hours{font-size:1.02rem;font-weight:800;color:var(--ink)}
-.focus-ring-date{margin-top:3px;color:var(--ink-dim);font-size:.72rem}
+.focus-artifact-card::before,.focus-ring-card::before{content:"";position:absolute;inset:-55% 45% auto -25%;height:170%;transform:rotate(18deg);background:linear-gradient(90deg,transparent,rgba(255,255,255,.12),transparent);pointer-events:none}
+.focus-artifact-card svg,.focus-ring-card svg{width:118px;height:auto;filter:drop-shadow(0 7px 6px rgba(0,0,0,.42))}
+.focus-artifact-number,.focus-ring-number{margin-top:2px;color:var(--artifact-accent,#FDE68A);font-size:.65rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
+.focus-artifact-name,.focus-ring-hours{margin-top:3px;font-size:1rem;font-weight:900;color:var(--ink);line-height:1.1}
+.focus-artifact-title{margin-top:4px;color:#E0E7FF;font-size:.7rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase;line-height:1.25}
+.focus-artifact-slogan,.focus-ring-date{margin-top:7px;color:#FFF8D8;font-family:Georgia,serif;font-size:.72rem;font-style:italic;line-height:1.35}
 .trophy-room-empty{padding:22px;text-align:center;border:2px dashed var(--border);color:var(--ink-dim)}
-.fh76-ach-banner.focus-ring-banner{display:grid;grid-template-columns:58px minmax(0,1fr);gap:10px;align-items:center;text-transform:none;letter-spacing:normal;min-width:min(430px,calc(100vw - 32px));animation:fh76-banner-in .4s ease-out,fh76-banner-out .4s ease-in 7.6s forwards}
-.focus-ring-banner svg{width:58px;height:auto}
-.focus-ring-banner strong{display:block;letter-spacing:.09em;text-transform:uppercase}
-.focus-ring-banner span{display:block;margin-top:2px;font-size:.78rem}
-.focus-ring-banner button{grid-column:1/-1;justify-self:center;padding:.32rem .7rem;font-size:.74rem}
+.fh76-ach-banner.focus-artifact-banner,.fh76-ach-banner.focus-ring-banner{display:grid;grid-template-columns:82px minmax(0,1fr);gap:12px;align-items:center;text-transform:none;letter-spacing:normal;min-width:min(480px,calc(100vw - 32px));animation:fh76-banner-in .4s ease-out,fh76-banner-out .4s ease-in 8.1s forwards}
+.focus-artifact-banner svg,.focus-ring-banner svg{width:80px;height:auto}
+.focus-artifact-banner strong,.focus-ring-banner strong{display:block;letter-spacing:.07em;text-transform:uppercase}
+.focus-artifact-banner span,.focus-ring-banner span{display:block;margin-top:2px;font-size:.76rem}
+.focus-artifact-banner .artifact-banner-slogan{color:#FFF8D8;font-family:Georgia,serif;font-style:italic;text-transform:none}
+.focus-artifact-banner .artifact-banner-open,.focus-ring-banner .artifact-banner-open{grid-column:1/-1;justify-self:center;padding:.34rem .72rem;font-size:.74rem}
+.focus-artifact-banner .achievement-banner-dismiss{position:absolute;right:5px;top:5px;width:28px;height:28px;padding:0;grid-column:auto;justify-self:auto;font-size:.8rem}
 @media (max-width:620px){
   .trophy-room-hero{grid-template-columns:1fr;text-align:center}
   .trophy-room-mark{min-height:104px}
-  .trophy-room-mark svg{width:116px}
+  .trophy-room-mark svg{width:142px}
   .trophy-room-kicker{font-size:.64rem;letter-spacing:.1em;overflow-wrap:anywhere}
   .trophy-room-progress-label{flex-wrap:wrap;justify-content:center}
   .trophy-room-progress-label span{flex:1 1 135px;text-align:center}
-  .focus-ring-banner{min-width:0;width:calc(100vw - 32px)}
+  .focus-artifact-banner,.focus-ring-banner{min-width:0;width:calc(100vw - 32px)}
+  .fh76-ach-banner.focus-artifact-banner,.fh76-ach-banner.focus-ring-banner{grid-template-columns:68px minmax(0,1fr)}
+  .focus-artifact-banner svg,.focus-ring-banner svg{width:66px}
+}
+@media (prefers-reduced-motion:reduce){
+  .fh76-ach-banner{animation:none!important}
+  .focus-artifact-card::before,.focus-ring-card::before{display:none}
 }
 
 /* ---- Bestiary tab ---- */
@@ -11541,22 +11559,71 @@ function _achUnlock(id, opts){
   const suppressRewards=!!(opts&&opts.suppressRewards);
   const awardedXp=suppressRewards?0:tier.xp;
   if(awardedXp>0)awardXp(awardedXp);
-  if(["gold","platinum","mythic"].includes(meta[2]))showAchievementBanner(meta[1],meta[2]);
+  if(["gold","platinum","mythic"].includes(meta[2]))showAchievementBanner(meta[1],meta[2],meta[0]);
   else toast(`${meta[3]} Achievement: ${meta[1]}`,"good");
   logLine(suppressRewards
     ? `Unlocked: ${meta[1]} (${meta[2]} · no XP from time-only session)`
     : `Unlocked: ${meta[1]} (${meta[2]} · +${tier.xp} XP)`);
   return true;
 }
-function showAchievementBanner(name,tier){
+const achievementBannerQueue=[];
+let achievementBannerActive=null;
+let achievementBannerTimer=null;
+function dismissAchievementBanner(){
+  if(achievementBannerTimer){clearTimeout(achievementBannerTimer);achievementBannerTimer=null;}
+  if(achievementBannerActive){try{achievementBannerActive.remove();}catch(_){} achievementBannerActive=null;}
+  setTimeout(drainAchievementBannerQueue,40);
+}
+function clearAchievementBannerQueue(){
+  achievementBannerQueue.length=0;
+  if(achievementBannerTimer){clearTimeout(achievementBannerTimer);achievementBannerTimer=null;}
+  if(achievementBannerActive){try{achievementBannerActive.remove();}catch(_){} achievementBannerActive=null;}
+  document.querySelectorAll(".fh76-ach-banner").forEach(node=>{try{node.remove();}catch(_){}});
+}
+function drainAchievementBannerQueue(){
+  if(achievementBannerActive || !achievementBannerQueue.length || typeof document==="undefined")return;
+  const item=achievementBannerQueue.shift();
   const b=document.createElement("div");
-  b.className=`fh76-ach-banner tier-${tier}`;
+  achievementBannerActive=b;
+  b.className=`fh76-ach-banner tier-${item.tier}`;
+  b.dataset.achievementId=item.achievementId||"";
   b.setAttribute("role","status");
   b.setAttribute("aria-live","assertive");
   b.setAttribute("aria-atomic","true");
-  b.textContent=`${String(tier||"").toUpperCase()} · ${name}`;
+  if(item.kind==="milestone"){
+    const first=Math.max(1,focusMilestoneOrdinal(item.fromOrdinal));
+    const last=Math.max(first,focusMilestoneOrdinal(item.toOrdinal));
+    const earned=last-first+1;
+    const spec=focusArtifactSpec(last);
+    const title=earned===1?`${spec.name} earned`:`${earned.toLocaleString()} new artifacts · latest: ${spec.name}`;
+    b.classList.add("focus-ring-banner","focus-artifact-banner");
+    b.style.setProperty("--artifact-accent",spec.palette.accent);
+    b.style.setProperty("--artifact-jewel",spec.palette.jewel);
+    b.innerHTML=`${focusArtifactSvg(spec,"milestone-banner")}
+      <div><span class="achievement-banner-kicker">Artifact #${last} · ${spec.hours.toLocaleString()}h</span><strong>${escapeHtml(title)}</strong><span>${escapeHtml(spec.title)}</span><span class="artifact-banner-slogan">“${escapeHtml(spec.slogan)}”</span></div>
+      <button class="artifact-banner-open" type="button">Open Trophy Room</button>
+      <button class="achievement-banner-dismiss" type="button" aria-label="Dismiss milestone artifact">×</button>`;
+    b.querySelector(".artifact-banner-open")?.addEventListener("click",()=>{dismissAchievementBanner();openProgressPanel("trophies");});
+  }else if(item.achievementId==="hours_1000"){
+    const spec=focusArtifactSpec(1);
+    b.classList.add("focus-artifact-banner","focus-milestone-achievement");
+    b.style.setProperty("--artifact-accent",spec.palette.accent);
+    b.style.setProperty("--artifact-jewel",spec.palette.jewel);
+    b.innerHTML=`${focusArtifactSvg(spec,"achievement")}
+      <div><span class="achievement-banner-kicker">Mythic · Beyond Measure · 1,000h</span><strong>${escapeHtml(spec.name)}</strong><span>${escapeHtml(spec.title)}</span><span class="artifact-banner-slogan">“${escapeHtml(spec.slogan)}”</span></div>
+      <button class="artifact-banner-open" type="button">Open Trophy Room</button>
+      <button class="achievement-banner-dismiss" type="button" aria-label="Dismiss achievement">×</button>`;
+    b.querySelector(".artifact-banner-open")?.addEventListener("click",()=>{dismissAchievementBanner();openProgressPanel("trophies");});
+  }else{
+    b.innerHTML=`<span class="achievement-banner-kicker">Achievement unlocked · ${escapeHtml(String(item.tier||""))}</span><strong class="achievement-banner-title">${escapeHtml(item.name)}</strong><button class="achievement-banner-dismiss" type="button" aria-label="Dismiss achievement">×</button>`;
+  }
+  b.querySelector(".achievement-banner-dismiss")?.addEventListener("click",dismissAchievementBanner);
   document.body.appendChild(b);
-  setTimeout(()=>{try{b.remove();}catch(_){}},tier==="mythic"?6500:3500);
+  achievementBannerTimer=setTimeout(dismissAchievementBanner,item.tier==="mythic"?8500:6500);
+}
+function showAchievementBanner(name,tier,achievementId){
+  achievementBannerQueue.push({kind:"achievement",name:String(name||"Achievement"),tier:String(tier||"gold"),achievementId:String(achievementId||"")});
+  drainAchievementBannerQueue();
 }
 function checkAchievementsV76(opts){
   ensureV76StateShape(state);
@@ -11614,16 +11681,69 @@ function renderAchievements(){
   }
 }
 
-function focusRingSvg(ordinal){
-  const n = Math.max(1, focusMilestoneOrdinal(ordinal));
-  return `<svg viewBox="0 0 120 112" aria-hidden="true" focusable="false">
-    <path d="M26 60c-5 12-7 29 2 40 9 11 25 8 32-3 7 11 23 14 32 3 9-11 7-28 2-40l-13 7c3 9 3 18-1 22-5 5-13 1-14-6H54c-1 7-9 11-14 6-4-4-4-13-1-22z" fill="#B7791F" stroke="#231807" stroke-width="4"/>
-    <path d="M33 21 49 8h22l16 13 9 29-18 22H42L24 50z" fill="#F6C453" stroke="#231807" stroke-width="4"/>
-    <path d="m43 25 10-8h14l10 8 6 20-11 14H48L37 45z" fill="#A78BFA" stroke="#FFF2B2" stroke-width="3"/>
-    <path d="M60 17v42M38 44h44M45 22l29 34M75 22 46 56" stroke="rgba(255,255,255,.45)" stroke-width="2"/>
-    <text x="60" y="48" text-anchor="middle" fill="#140F21" font-family="Segoe UI,Arial,sans-serif" font-size="17" font-weight="900">${n}K</text>
+const FOCUS_ARTIFACT_FOUNDERS = Object.freeze([
+  {name:"First Light Signet",noun:"Signet",title:"Keeper of the First Thousand",slogan:"A thousand hours, chosen one minute at a time.",form:"signet",palette:{accent:"#F6C453",jewel:"#A78BFA",metal:"#FFF2B2",shadow:"#1C1630",glow:"#FFFBEB"}},
+  {name:"Twin-Flame Lantern",noun:"Lantern",title:"Bearer of the Second Flame",slogan:"Discipline burns brighter when it survives repetition.",form:"lantern",palette:{accent:"#D6A34A",jewel:"#67E8F9",metal:"#FDE68A",shadow:"#172033",glow:"#CFFAFE"}},
+  {name:"Wayfinder Astrolabe",noun:"Astrolabe",title:"Cartographer of Attention",slogan:"Direction, held long enough, becomes distance.",form:"astrolabe",palette:{accent:"#C7D2E0",jewel:"#2DD4BF",metal:"#E0F2FE",shadow:"#102A35",glow:"#CCFBF1"}},
+  {name:"Tempered Hourglass",noun:"Hourglass",title:"Warden of Deep Time",slogan:"You did not find the time. You forged it.",form:"hourglass",palette:{accent:"#D6A72F",jewel:"#C084FC",metal:"#FDE68A",shadow:"#21162B",glow:"#F3E8FF"}},
+  {name:"Quiet Crown",noun:"Crown",title:"Sovereign of the Long Game",slogan:"Consistency has become a kingdom.",form:"crown",palette:{accent:"#FDE68A",jewel:"#34D399",metal:"#FFF7CC",shadow:"#10251F",glow:"#D1FAE5"}},
+  {name:"Northstar Compass",noun:"Compass",title:"Keeper of True Bearing",slogan:"A true bearing outlasts every detour.",form:"compass",palette:{accent:"#93C5FD",jewel:"#38BDF8",metal:"#E0F2FE",shadow:"#0F1B33",glow:"#DBEAFE"}},
+  {name:"Gatekeeper Key",noun:"Key",title:"Opener of the Inner Gate",slogan:"The lock yielded to return, not force.",form:"key",palette:{accent:"#FBBF24",jewel:"#8B5CF6",metal:"#FEF3C7",shadow:"#21183B",glow:"#EDE9FE"}},
+  {name:"Focused Orrery",noun:"Orrery",title:"Keeper of the Chosen Orbit",slogan:"What matters now has gravity.",form:"orrery",palette:{accent:"#67E8F9",jewel:"#C084FC",metal:"#ECFEFF",shadow:"#18142E",glow:"#F3E8FF"}},
+  {name:"Obsidian Monolith",noun:"Monolith",title:"Builder of the Quiet Monument",slogan:"Practice has become a landmark.",form:"monolith",palette:{accent:"#D4AF37",jewel:"#E879F9",metal:"#FDE68A",shadow:"#090B12",glow:"#FAE8FF"}},
+  {name:"Tenfold Reliquary",noun:"Reliquary",title:"Architect of Ten Thousand",slogan:"The long game is no longer a promise. It is a place.",form:"reliquary",palette:{accent:"#FFF7CC",jewel:"#FBBF24",metal:"#FFFFFF",shadow:"#1E1B4B",glow:"#FEFCE8"}}
+]);
+const FOCUS_ARTIFACT_CYCLE_EPITHETS = Object.freeze(["Luminous","Runebound","Astral","Verdant","Ivory","Stormforged","Nocturne","Sovereign","Ethereal","Everbright","Celestial","Timeless"]);
+function focusRoman(value){
+  let n=Math.max(1,Math.floor(Number(value)||1));
+  if(n>3999)return n.toLocaleString();
+  const map=[[1000,"M"],[900,"CM"],[500,"D"],[400,"CD"],[100,"C"],[90,"XC"],[50,"L"],[40,"XL"],[10,"X"],[9,"IX"],[5,"V"],[4,"IV"],[1,"I"]];
+  let out="";for(const [amount,glyph] of map){while(n>=amount){out+=glyph;n-=amount;}}return out;
+}
+function focusArtifactSpec(ordinal){
+  const n=Math.max(1,focusMilestoneOrdinal(ordinal));
+  const slot=(n-1)%FOCUS_ARTIFACT_FOUNDERS.length;
+  const cycle=Math.floor((n-1)/FOCUS_ARTIFACT_FOUNDERS.length);
+  const founder=FOCUS_ARTIFACT_FOUNDERS[slot];
+  const cycleRoman=focusRoman(cycle+1);
+  const epithet=FOCUS_ARTIFACT_CYCLE_EPITHETS[(cycle-1+FOCUS_ARTIFACT_CYCLE_EPITHETS.length)%FOCUS_ARTIFACT_CYCLE_EPITHETS.length];
+  const palette=cycle===0?founder.palette:FOCUS_ARTIFACT_FOUNDERS[(slot+cycle*3)%FOCUS_ARTIFACT_FOUNDERS.length].palette;
+  const hours=n<=Number.MAX_SAFE_INTEGER/1000?n*1000:Number.MAX_SAFE_INTEGER;
+  const special=n%100===0?"constellation":n%10===0?"capstone":n%5===0?"keystone":"standard";
+  const name=cycle===0?founder.name:`${epithet} ${founder.noun} ${cycleRoman}`;
+  const title=cycle===0?founder.title:`${founder.title} · Ascension ${cycleRoman}`;
+  const slogan=cycle===0?founder.slogan:`${founder.slogan} ${hours.toLocaleString()} hours now mark Ascension ${cycleRoman}.`;
+  const crest=(n*7+cycle)%12,aura=(n*5+cycle)%7,bands=1+(cycle%4),notches=1+(n%9);
+  return Object.freeze({id:`focus-artifact-v1-${n}`,ordinal:n,hours,name,title,slogan,form:founder.form,palette,crest,aura,bands,notches,special,chapter:cycle===0?"Founding Collection":`${epithet} Ascension ${cycleRoman}`,visualSignature:`${founder.form}|${palette.accent}|${palette.jewel}|${crest}|${aura}|${bands}|${notches}|${special}|${n}`});
+}
+let focusArtifactSvgSerial=0;
+function focusArtifactSvg(specOrOrdinal,instanceKey){
+  const spec=specOrOrdinal&&typeof specOrOrdinal==="object"?specOrOrdinal:focusArtifactSpec(specOrOrdinal);
+  const p=spec.palette;
+  const uid=`fha-${spec.ordinal}-${String(instanceKey||"view").replace(/[^a-z0-9_-]/gi,"")}-${++focusArtifactSvgSerial}`;
+  const rays=Array.from({length:8+(spec.aura%5)},(_,i)=>{const a=(i/(8+(spec.aura%5)))*Math.PI*2;const x1=80+Math.cos(a)*49,y1=68+Math.sin(a)*49,x2=80+Math.cos(a)*62,y2=68+Math.sin(a)*62;return `<path d="M${x1.toFixed(1)} ${y1.toFixed(1)}L${x2.toFixed(1)} ${y2.toFixed(1)}"/>`;}).join("");
+  const seals=Array.from({length:spec.notches},(_,i)=>`<circle cx="${(48+i*(64/Math.max(1,spec.notches-1))).toFixed(1)}" cy="124" r="1.7"/>`).join("");
+  let shape="";
+  if(spec.form==="signet")shape=`<path d="M38 83Q27 95 35 116M122 83q11 12 3 33M36 99l15-8M124 99l-15-8" fill="none" stroke="${p.metal}" stroke-width="5" stroke-linecap="round"/><path d="M80 15 112 29l13 31-13 31-32 14-32-14-13-31 13-31z" fill="url(#${uid}-metal)" stroke="${p.shadow}" stroke-width="5"/><circle cx="80" cy="60" r="28" fill="${p.jewel}" stroke="${p.glow}" stroke-width="4"/><path d="m80 37 6 15 16 1-12 10 4 16-14-9-14 9 4-16-12-10 16-1z" fill="${p.glow}" stroke="${p.shadow}" stroke-width="2"/>`;
+  else if(spec.form==="lantern")shape=`<path d="M57 30q0-18 23-18t23 18" fill="none" stroke="${p.metal}" stroke-width="7"/><path d="M48 31h64l9 73H39z" fill="url(#${uid}-metal)" stroke="${p.shadow}" stroke-width="5"/><path d="M57 43h46l5 49H52z" fill="${p.shadow}" stroke="${p.glow}" stroke-width="3"/><path d="M72 81c-14-12 2-23 7-37 11 13 13 24 2 37zM90 81c-10-9 1-18 5-29 9 11 10 20 1 29z" fill="${p.jewel}" stroke="${p.glow}" stroke-width="2"/><path d="M45 104h70" stroke="${p.metal}" stroke-width="8"/>`;
+  else if(spec.form==="astrolabe")shape=`<circle cx="80" cy="62" r="48" fill="${p.shadow}" stroke="${p.accent}" stroke-width="6"/><ellipse cx="80" cy="62" rx="44" ry="20" fill="none" stroke="${p.metal}" stroke-width="3" transform="rotate(28 80 62)"/><ellipse cx="80" cy="62" rx="44" ry="20" fill="none" stroke="${p.jewel}" stroke-width="3" transform="rotate(-28 80 62)"/><circle cx="80" cy="62" r="24" fill="none" stroke="${p.glow}" stroke-width="3"/><path d="m80 34 8 21 21 7-21 7-8 21-8-21-21-7 21-7z" fill="${p.jewel}" stroke="${p.glow}" stroke-width="2"/><circle cx="80" cy="62" r="7" fill="${p.glow}"/>`;
+  else if(spec.form==="hourglass")shape=`<path d="M46 19h68M46 106h68" stroke="${p.metal}" stroke-width="11" stroke-linecap="square"/><path d="M53 27h54L91 58l16 40H53l16-40z" fill="${p.shadow}" stroke="${p.accent}" stroke-width="5"/><path d="M61 34h38L83 58l17 33H60l17-33z" fill="${p.glow}" opacity=".75"/><path d="m80 57 16 32H64zM67 37h27L80 55z" fill="${p.jewel}"/><path d="M52 24v78M108 24v78" stroke="${p.accent}" stroke-width="5"/>`;
+  else if(spec.form==="crown")shape=`<circle cx="80" cy="58" r="50" fill="none" stroke="${p.jewel}" stroke-width="4" opacity=".65"/><circle cx="80" cy="58" r="42" fill="none" stroke="${p.glow}" stroke-width="2" opacity=".55"/><path d="M31 40 55 62 66 28 80 60 96 25 106 62 130 40l-12 58H43z" fill="url(#${uid}-metal)" stroke="${p.shadow}" stroke-width="5"/><path d="M44 82h73" stroke="${p.jewel}" stroke-width="9"/><circle cx="55" cy="76" r="5" fill="${p.glow}"/><circle cx="80" cy="76" r="7" fill="${p.jewel}"/><circle cx="106" cy="76" r="5" fill="${p.glow}"/>`;
+  else if(spec.form==="compass")shape=`<circle cx="80" cy="62" r="52" fill="${p.shadow}" stroke="${p.accent}" stroke-width="7"/><circle cx="80" cy="62" r="41" fill="none" stroke="${p.metal}" stroke-width="3"/><path d="m80 17 11 34 34 11-34 11-11 34-11-34-34-11 34-11z" fill="${p.jewel}" stroke="${p.glow}" stroke-width="3"/><path d="m80 31 7 24 23 7-23 7-7 24-7-24-23-7 23-7z" fill="${p.glow}"/><circle cx="80" cy="62" r="7" fill="${p.shadow}" stroke="${p.accent}" stroke-width="3"/>`;
+  else if(spec.form==="key")shape=`<circle cx="59" cy="44" r="27" fill="none" stroke="${p.accent}" stroke-width="12"/><circle cx="59" cy="44" r="10" fill="${p.jewel}" stroke="${p.glow}" stroke-width="3"/><path d="m76 62 45 45M91 77l-12 12M104 90l-10 10M116 102l-7 7" stroke="${p.metal}" stroke-width="13" stroke-linecap="square"/><path d="m76 62 45 45" stroke="${p.shadow}" stroke-width="4"/><path d="m59 27 7 12-7 13-7-13z" fill="${p.glow}"/>`;
+  else if(spec.form==="orrery")shape=`<circle cx="80" cy="62" r="15" fill="${p.jewel}" stroke="${p.glow}" stroke-width="4"/><ellipse cx="80" cy="62" rx="55" ry="22" fill="none" stroke="${p.accent}" stroke-width="4" transform="rotate(18 80 62)"/><ellipse cx="80" cy="62" rx="53" ry="25" fill="none" stroke="${p.metal}" stroke-width="3" transform="rotate(74 80 62)"/><ellipse cx="80" cy="62" rx="43" ry="35" fill="none" stroke="${p.jewel}" stroke-width="3" transform="rotate(-35 80 62)"/><circle cx="127" cy="78" r="7" fill="${p.glow}" stroke="${p.shadow}" stroke-width="2"/><circle cx="56" cy="21" r="6" fill="${p.accent}"/><circle cx="42" cy="84" r="5" fill="${p.metal}"/><path d="M80 77v35" stroke="${p.metal}" stroke-width="6"/>`;
+  else if(spec.form==="monolith")shape=`<path d="m80 12 35 25-8 76H53l-8-76z" fill="${p.shadow}" stroke="${p.accent}" stroke-width="6"/><path d="m80 25 20 17-6 58H66l-6-58z" fill="${p.jewel}" opacity=".74"/><path d="M80 25v75M59 45l42 39M101 45 59 84" stroke="${p.glow}" stroke-width="2" opacity=".78"/>${Array.from({length:Math.min(9,spec.ordinal)},(_,i)=>`<path d="M${59+i*5} ${108-i%2*4}h3" stroke="${p.metal}" stroke-width="3"/>`).join("")}`;
+  else shape=`<path d="M42 110V49Q42 15 80 9q38 6 38 40v61z" fill="url(#${uid}-metal)" stroke="${p.shadow}" stroke-width="6"/><path d="M55 105V53q0-22 25-28 25 6 25 28v52z" fill="${p.shadow}" stroke="${p.accent}" stroke-width="4"/><path d="m80 34 8 17 19 2-14 13 4 19-17-9-17 9 4-19-14-13 19-2z" fill="${p.jewel}" stroke="${p.glow}" stroke-width="3"/><path d="M80 9v18M42 49h76M51 30l14 13M109 30 95 43" stroke="${p.glow}" stroke-width="3"/>`;
+  const specialFrame=spec.special==="constellation"?`<rect x="8" y="7" width="144" height="143" rx="22" fill="none" stroke="${p.glow}" stroke-width="3" stroke-dasharray="2 7"/>`:spec.special==="capstone"?`<path d="M18 119h124l-9 16H27z" fill="${p.jewel}" stroke="${p.glow}" stroke-width="3"/>`:spec.special==="keystone"?`<path d="M18 65 30 54v22zM142 65l-12-11v22z" fill="${p.jewel}"/>`:"";
+  const plaqueSize=String(spec.ordinal).length>4?9:String(spec.ordinal).length>2?11:13;
+  return `<svg class="focus-artifact-svg form-${spec.form}" data-artifact-id="${spec.id}" data-artifact-form="${spec.form}" viewBox="0 0 160 156" aria-hidden="true" focusable="false">
+    <defs><linearGradient id="${uid}-metal" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${p.glow}"/><stop offset=".46" stop-color="${p.accent}"/><stop offset="1" stop-color="${p.metal}"/></linearGradient><radialGradient id="${uid}-aura"><stop stop-color="${p.jewel}" stop-opacity=".42"/><stop offset="1" stop-color="${p.jewel}" stop-opacity="0"/></radialGradient></defs>
+    <circle cx="80" cy="66" r="65" fill="url(#${uid}-aura)"/><g stroke="${p.accent}" stroke-width="2" opacity=".5">${rays}</g>${specialFrame}<g>${shape}</g>
+    <path d="M35 119h90l10 13-10 17H35l-10-17z" fill="${p.shadow}" stroke="${p.accent}" stroke-width="4"/><g fill="${p.jewel}">${seals}</g>
+    <text x="80" y="143" text-anchor="middle" fill="${p.glow}" font-family="Segoe UI,Arial,sans-serif" font-size="${plaqueSize}" font-weight="900">${spec.ordinal}K</text>
   </svg>`;
 }
+function focusRingSvg(ordinal){return focusArtifactSvg(focusArtifactSpec(ordinal),"legacy");}
 function formatFocusMilestoneRemaining(minutes){
   const wholeMinutes = Math.max(0, Math.ceil(Number(minutes)||0));
   const hours = Math.floor(wholeMinutes / 60);
@@ -11646,30 +11766,35 @@ function renderTrophyRoom(){
   const hoursNow = Math.floor(totalMinutes / 60);
   const hoursNext = nextOrdinal * 1000;
   const remainingMinutes = Math.max(0, nextMinutes - totalMinutes);
+  const latestSpec=focusArtifactSpec(Math.max(1,count));
+  const nextSpec=focusArtifactSpec(nextOrdinal);
   const visibleStart = Math.max(1, count - 199);
   const cards = [];
   for (let ordinal=count; ordinal>=visibleStart; ordinal--){
-    const hours = ordinal * 1000;
-    cards.push(`<article class="focus-ring-card" aria-label="Championship Ring ${ordinal}, ${hours.toLocaleString()} lifetime focus hours">
-      ${focusRingSvg(ordinal)}
-      <div class="focus-ring-number">Championship Ring #${ordinal}</div>
-      <div class="focus-ring-hours">${hours.toLocaleString()} lifetime hours</div>
-      <div class="focus-ring-date">Permanent cosmetic milestone</div>
+    const spec=focusArtifactSpec(ordinal);
+    cards.push(`<article class="focus-artifact-card focus-ring-card" data-artifact-id="${spec.id}" data-visual-signature="${spec.visualSignature}" style="--artifact-accent:${spec.palette.accent};--artifact-jewel:${spec.palette.jewel}" aria-label="Artifact ${ordinal}, ${escapeHtml(spec.name)}, ${spec.hours.toLocaleString()} lifetime focus hours">
+      ${focusArtifactSvg(spec,`card-${ordinal}`)}
+      <div class="focus-artifact-number focus-ring-number">Artifact #${ordinal} · ${spec.hours.toLocaleString()}h</div>
+      <div class="focus-artifact-name focus-ring-hours">${escapeHtml(spec.name)}</div>
+      <div class="focus-artifact-title">${escapeHtml(spec.title)}</div>
+      <div class="focus-artifact-slogan focus-ring-date">“${escapeHtml(spec.slogan)}”</div>
     </article>`);
   }
   const omitted = visibleStart > 1
     ? `<div class="trophy-room-empty">${(visibleStart-1).toLocaleString()} earlier rings are safely counted. Showing the latest 200.</div>` : "";
   const collection = count
     ? `${omitted}<div class="trophy-grid">${cards.join("")}</div>`
-    : `<div class="trophy-room-empty">Your first championship ring unlocks permanently at 1,000 lifetime focus hours.</div>`;
-  host.innerHTML = `<section class="trophy-room-hero" aria-labelledby="trophy-room-title">
-      <div class="trophy-room-mark">${focusRingSvg(Math.max(1,count))}</div>
+    : `<div class="trophy-room-empty">Your first one-of-a-kind artifact, ${escapeHtml(nextSpec.name)}, unlocks permanently at 1,000 lifetime focus hours.</div>`;
+  host.innerHTML = `<section class="trophy-room-hero" style="--artifact-accent:${latestSpec.palette.accent};--artifact-jewel:${latestSpec.palette.jewel}" aria-labelledby="trophy-room-title">
+      <div class="trophy-room-mark${count?"":" is-locked"}">${focusArtifactSvg(latestSpec,"hero")}</div>
       <div>
-        <div class="trophy-room-kicker">Lifetime championship collection</div>
-        <h3 class="trophy-room-title" id="trophy-room-title">${count ? `${count.toLocaleString()} ring${count===1?"":"s"} earned` : "The road to Ring #1"}</h3>
-        <div class="trophy-room-copy">One permanent ring is awarded every 1,000 lifetime focus hours. Rings are symbolic only and never change your minutes or other rewards. Once earned, a later time correction cannot revoke one.</div>
-        <div class="trophy-room-progress" role="progressbar" aria-label="Progress to Championship Ring ${nextOrdinal}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pct)}"><div style="width:${pct.toFixed(2)}%"></div></div>
-        <div class="trophy-room-progress-label"><span>${hoursNow.toLocaleString()} lifetime hours</span><span>${formatFocusMilestoneRemaining(remainingMinutes)} to Ring #${nextOrdinal} · ${hoursNext.toLocaleString()}h</span></div>
+        <div class="trophy-room-kicker">${count?(latestSpec.ordinal===1?"Mythic milestone · Beyond Measure":`Latest artifact · ${escapeHtml(latestSpec.chapter)}`):"First artifact awaits"}</div>
+        <h3 class="trophy-room-title" id="trophy-room-title">${count?escapeHtml(latestSpec.name):escapeHtml(nextSpec.name)}</h3>
+        <div class="trophy-room-earned-title">${count?escapeHtml(latestSpec.title):"Keeper of the First Thousand"}</div>
+        <div class="trophy-room-slogan">“${escapeHtml(count?latestSpec.slogan:nextSpec.slogan)}”</div>
+        <div class="trophy-room-copy">One distinct permanent artifact is awarded every 1,000 lifetime focus hours. Each has its own form, name, earned title, and slogan. Artifacts are symbolic only: they never change minutes or rewards, and later corrections cannot revoke them.</div>
+        <div class="trophy-room-progress" role="progressbar" aria-label="Progress to Artifact ${nextOrdinal}, ${escapeHtml(nextSpec.name)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pct)}"><div style="width:${pct.toFixed(2)}%"></div></div>
+        <div class="trophy-room-progress-label"><span>${hoursNow.toLocaleString()} lifetime hours</span><span>${formatFocusMilestoneRemaining(remainingMinutes)} to ${escapeHtml(nextSpec.name)} · ${hoursNext.toLocaleString()}h</span></div>
       </div>
     </section>${collection}`;
 }
@@ -11677,19 +11802,8 @@ function showFocusMilestoneBanner(fromOrdinal,toOrdinal){
   if (typeof document === "undefined" || !document.body) return;
   const first = Math.max(1, focusMilestoneOrdinal(fromOrdinal));
   const last = Math.max(first, focusMilestoneOrdinal(toOrdinal));
-  const earned = last - first + 1;
-  const b = document.createElement("div");
-  b.className = "fh76-ach-banner tier-mythic focus-ring-banner";
-  b.setAttribute("role","status");
-  b.setAttribute("aria-live","assertive");
-  b.setAttribute("aria-atomic","true");
-  const title = earned === 1
-    ? `${(last*1000).toLocaleString()}-Hour Championship Ring Earned`
-    : `${earned.toLocaleString()} Championship Rings Earned`;
-  b.innerHTML = `${focusRingSvg(last)}<div><strong>${title}</strong><span>Permanent and now displayed in your Trophy Room.</span></div><button type="button">Open Trophy Room</button>`;
-  b.querySelector("button")?.addEventListener("click",()=>{ openProgressPanel("trophies"); try{b.remove();}catch(_){} });
-  document.body.appendChild(b);
-  setTimeout(()=>{try{b.remove();}catch(_){}},8000);
+  achievementBannerQueue.push({kind:"milestone",tier:"mythic",achievementId:`focus_artifact_${last}`,fromOrdinal:first,toOrdinal:last});
+  drainAchievementBannerQueue();
 }
 function schedulePendingFocusMilestoneAnnouncement(){
   if (typeof document === "undefined" || !state || !state.focusMilestones) return;
@@ -11700,7 +11814,7 @@ function schedulePendingFocusMilestoneAnnouncement(){
     schedulePendingFocusMilestoneAnnouncement._timer = null;
     if (!state) return;
     const room = normalizeFocusMilestones(state.focusMilestones);
-    /* Ring #1 shares the existing Beyond Measure achievement celebration and
+    /* Artifact #1 shares the existing Beyond Measure achievement celebration and
        XP path. Mark it announced so the same crossing never shows two banners. */
     let silentlyAdvanced = false;
     if (room.announcedThrough < 1 && room.claimedThrough >= 1){
@@ -11722,8 +11836,8 @@ function schedulePendingFocusMilestoneAnnouncement(){
     showFocusMilestoneBanner(first,last);
     room.announcedThrough = last;
     state.focusMilestones = room;
-    if (first === last) logLine(`Championship Ring #${last} earned — ${(last*1000).toLocaleString()} lifetime focus hours.`);
-    else logLine(`Championship Rings #${first}–#${last} earned — ${(last*1000).toLocaleString()} lifetime focus hours.`);
+    if (first === last){ const artifact=focusArtifactSpec(last); logLine(`Artifact #${last} earned: ${artifact.name} — ${artifact.hours.toLocaleString()} lifetime focus hours.`); }
+    else logLine(`${last-first+1} milestone artifacts earned — latest: ${focusArtifactSpec(last).name} at ${focusArtifactSpec(last).hours.toLocaleString()} lifetime focus hours.`);
     saveState({ suppressMilestoneAnnouncement:true });
     renderTrophyRoom();
   }, 180);
@@ -13017,6 +13131,7 @@ Object.assign(__FocusHero, {
   applySessionEdit, setAdventureAction, currentAdventureActionId,
   lootClawbackPreviewForSession, sessionLootDrops,
   normalizeFocusMilestones, focusMilestonesEligible, reconcileFocusMilestones, mergeFocusMilestones, formatFocusMilestoneRemaining,
+  focusArtifactSpec, focusArtifactSvg, showAchievementBanner, showFocusMilestoneBanner, dismissAchievementBanner, clearAchievementBannerQueue,
   ACHIEVEMENTS_V76, MONSTERS, ACTION_LIST, pickMonster, recordEncounter,
   checkAchievementsV76, unlockSecretAchievement, isPalindrome, _achCtx, _condMet,
   defaultAdventure, defaultBestiary, defaultAchievementProgress

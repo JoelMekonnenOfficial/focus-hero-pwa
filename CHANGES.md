@@ -1,3 +1,12 @@
+# v10.6.1 — 2026-07-21
+
+- Confirmed from Joel's iPhone screenshot that the cropped orange banner was the legacy `GOLD · MASTER` achievement banner, not the 1,000-hour text itself. The same edit also unlocked `Beyond Measure`, but simultaneous gold/mythic banners could occupy the exact same top position and cover one another.
+- Replaced the warning-like gold/orange banner with cool navy/indigo celebration colors. Every gold, platinum, mythic, and milestone banner now stays at least 104px below phone top chrome, animates only from/to the safe downward direction, and queues one at a time with a dismiss control.
+- Upgraded the Trophy Room from repeated rings to deterministic, code-native milestone artifacts. The first ten have distinct silhouettes, materials, names, earned titles, and slogans; later artifacts remain presentation-only and derive uniquely from the milestone ordinal without adding player-state or merge fields.
+- Artifact #1 is the `First Light Signet` / `Keeper of the First Thousand`: “A thousand hours, chosen one minute at a time.” Its single existing `Beyond Measure` celebration now includes the artifact and Trophy Room link without adding a second banner or reward.
+- Added catalog uniqueness, exact flagship-copy, simultaneous banner queue, non-red palette, safe-top animation, mobile overflow, reward isolation, persistence, and merge regressions. No minute, XP, coin, loot, egg, sync, recovery, or player-data schema changed.
+- No signed-in profile, browser storage, cloud row, private backup, credential, or sync code was read or changed during development. The supplied screenshot was used as visual evidence only.
+
 # v10.6.0 — 2026-07-21
 
 - Confirmed the 1,000-hour event is the existing mythic `Beyond Measure` achievement, not an error or limit. The exact prior banner was `MYTHIC · BEYOND MEASURE`; lifetime minutes continue above 60,000.
