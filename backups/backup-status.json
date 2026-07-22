@@ -1,9 +1,9 @@
 {
-  "ranAt": "2026-07-21T11:58:58.495Z",
+  "ranAt": "2026-07-22T12:02:46.179Z",
   "ok": true,
   "reason": "cloud rows visible; metadata verified without exporting player data",
   "rowCount": 4,
-  "maxUpdatedAt": "2026-07-21T09:28:52.016743+00:00",
+  "maxUpdatedAt": "2026-07-22T07:28:15.657155+00:00",
   "usedServiceKey": true,
   "mode": "metadata-only",
   "exportedPlayerRows": false
