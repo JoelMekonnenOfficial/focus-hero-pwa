@@ -1,3 +1,9 @@
+# v10.6.2 — 2026-07-22
+
+- The earned artifact collection in the Trophy Room now exposes explicit list/listitem semantics, and the room has an accessible label. This is presentation-only and keeps the existing vector artifact visuals, names, slogans, and milestone behavior.
+- Added focused regression coverage for the Trophy Room accessibility semantics. No timer, tasks, sessions, history, minute accounting, XP, coins, loot, eggs, artifacts, cloud sync, recovery, encryption, storage schema, or player data logic changed.
+- `sw.js` BUILD_ID -> `fh-2026-07-22-v10-6-2-trophy-room-a11y`.
+
 # v10.6.1 — 2026-07-21
 
 - Confirmed from Joel's iPhone screenshot that the cropped orange banner was the legacy `GOLD · MASTER` achievement banner, not the 1,000-hour text itself. The same edit also unlocked `Beyond Measure`, but simultaneous gold/mythic banners could occupy the exact same top position and cover one another.

@@ -224,12 +224,20 @@ try {
         cards:panel?.querySelectorAll(".focus-artifact-card").length || 0,
         svgs:panel?.querySelectorAll("svg").length || 0,
         hidden:panel?.hidden,
+        roomLabel:panel?.querySelector("#trophy-room")?.getAttribute("aria-label") || "",
+        listRole:panel?.querySelector(".trophy-grid")?.getAttribute("role") || "",
+        listLabel:panel?.querySelector(".trophy-grid")?.getAttribute("aria-label") || "",
+        listItems:panel?.querySelectorAll('.focus-artifact-card[role="listitem"]').length || 0,
         pictographic:/\p{Extended_Pictographic}/u.test(tab?.textContent || "")
       };
     });
     assert.equal(result.tabText, "Trophy Room");
     assert.equal(result.hidden, false);
     assert.equal(result.cards, 1);
+    assert.equal(result.roomLabel, "Focus milestone Trophy Room");
+    assert.equal(result.listRole, "list");
+    assert.equal(result.listLabel, "Earned focus milestone artifacts");
+    assert.equal(result.listItems, 1);
     assert.ok(result.svgs >= 2);
     assert.match(result.panelText, /First Light Signet/);
     assert.match(result.panelText, /Keeper of the First Thousand/);

@@ -14,6 +14,7 @@
  * deliberately invisible to users — the only place a version-looking string
  * lives is in the cache name in DevTools.
  *
+ * v10.6.2: Trophy Room artifact grid exposes list/listitem semantics.
  * v10.6.1: queued, top-safe achievement banners + unique named/slogan-bearing
  * milestone artifacts; all presentation-only with no player-data schema change.
  * v10.6.0: permanent 1,000-hour rings + Trophy Room; achievement banners now
@@ -32,7 +33,7 @@
  * fallback (and skipped injection). Fetch by URL string instead, and inject
  * into cache-served HTML too.
  */
-const BUILD_ID    = "fh-2026-07-21-v10-6-1-mythic-artifacts";
+const BUILD_ID    = "fh-2026-07-22-v10-6-2-trophy-room-a11y";
 const CACHE_NAME  = `focus-hero-${BUILD_ID}`;
 const PRECACHE = [
   "./",

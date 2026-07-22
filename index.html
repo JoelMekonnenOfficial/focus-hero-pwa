@@ -3548,7 +3548,7 @@ svg{shape-rendering:geometricPrecision}
       <div id="tab-stable" class="tab-panel" hidden><div id="stable-panel"><div class="muted" style="font-size:.85rem;margin-bottom:6px">Mount ecosystem. Complete a full family to earn a "Master of" title.</div></div></div>
       <div id="tab-drops" class="tab-panel" hidden><div id="drops-panel"><div class="muted" style="font-size:.8rem;margin-bottom:6px">Every drop you've earned, with the odds at the moment it rolled.</div><div id="drops-list" class="drops-list"></div></div></div>
       <div id="tab-forge" class="tab-panel" hidden><div id="forge-panel"></div></div>
-      <div id="tab-trophies" class="tab-panel" hidden><div id="trophy-room" class="trophy-room"></div></div>
+      <div id="tab-trophies" class="tab-panel" hidden><div id="trophy-room" class="trophy-room" aria-label="Focus milestone Trophy Room"></div></div>
       <div id="tab-ach" class="tab-panel" hidden><div id="ach-grid" class="ach-grid"></div></div>
       <div id="tab-store" class="tab-panel" hidden><div id="store-panel"></div></div>
       <div id="tab-ledger" class="tab-panel" hidden><div id="ledger-panel"></div></div>
@@ -11772,7 +11772,7 @@ function renderTrophyRoom(){
   const cards = [];
   for (let ordinal=count; ordinal>=visibleStart; ordinal--){
     const spec=focusArtifactSpec(ordinal);
-    cards.push(`<article class="focus-artifact-card focus-ring-card" data-artifact-id="${spec.id}" data-visual-signature="${spec.visualSignature}" style="--artifact-accent:${spec.palette.accent};--artifact-jewel:${spec.palette.jewel}" aria-label="Artifact ${ordinal}, ${escapeHtml(spec.name)}, ${spec.hours.toLocaleString()} lifetime focus hours">
+    cards.push(`<article role="listitem" class="focus-artifact-card focus-ring-card" data-artifact-id="${spec.id}" data-visual-signature="${spec.visualSignature}" style="--artifact-accent:${spec.palette.accent};--artifact-jewel:${spec.palette.jewel}" aria-label="Artifact ${ordinal}, ${escapeHtml(spec.name)}, ${spec.hours.toLocaleString()} lifetime focus hours">
       ${focusArtifactSvg(spec,`card-${ordinal}`)}
       <div class="focus-artifact-number focus-ring-number">Artifact #${ordinal} · ${spec.hours.toLocaleString()}h</div>
       <div class="focus-artifact-name focus-ring-hours">${escapeHtml(spec.name)}</div>
@@ -11783,7 +11783,7 @@ function renderTrophyRoom(){
   const omitted = visibleStart > 1
     ? `<div class="trophy-room-empty">${(visibleStart-1).toLocaleString()} earlier rings are safely counted. Showing the latest 200.</div>` : "";
   const collection = count
-    ? `${omitted}<div class="trophy-grid">${cards.join("")}</div>`
+    ? `${omitted}<div class="trophy-grid" role="list" aria-label="Earned focus milestone artifacts">${cards.join("")}</div>`
     : `<div class="trophy-room-empty">Your first one-of-a-kind artifact, ${escapeHtml(nextSpec.name)}, unlocks permanently at 1,000 lifetime focus hours.</div>`;
   host.innerHTML = `<section class="trophy-room-hero" style="--artifact-accent:${latestSpec.palette.accent};--artifact-jewel:${latestSpec.palette.jewel}" aria-labelledby="trophy-room-title">
       <div class="trophy-room-mark${count?"":" is-locked"}">${focusArtifactSvg(latestSpec,"hero")}</div>
