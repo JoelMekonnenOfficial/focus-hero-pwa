@@ -13,6 +13,7 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="icon" href="focus-hero-logo.svg" type="image/svg+xml">
 <link rel="alternate icon" href="icon-192.png">
+<script src="./data-guard.js" defer></script>
 <title>Focus Hero</title>
 <style>
 /* ================================================================
@@ -161,13 +162,17 @@ header.topbar{grid-column:1/-1;display:flex;align-items:center;justify-content:s
 .mode-tabs button{padding:.4rem .75rem;font-size:.85rem;border-radius:999px}
 .mode-tabs button[aria-pressed="true"]{background:var(--panel-2);border-color:var(--accent)}
 .timer-display{font-family:var(--mono);font-size:clamp(4rem,15vw,8rem);font-weight:700;text-align:center;letter-spacing:-.02em;margin:.35rem 0;line-height:1;text-shadow:0 6px 40px rgba(var(--accent-rgb),.25)}
-.live-adjust{margin:8px auto 10px;max-width:520px;border:1px solid var(--border);border-radius:14px;background:rgba(255,255,255,.035);padding:8px 10px}
+.live-adjust{margin:10px auto 12px;max-width:560px;border:1px solid var(--border);border-radius:14px;background:rgba(255,255,255,.035);padding:10px 12px}
 .live-adjust[hidden]{display:none!important}
-.live-adjust-head{display:flex;justify-content:space-between;gap:10px;align-items:center;font-size:.72rem;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:7px}
-.live-adjust-head b{color:var(--accent);font-size:.78rem}
-.live-adjust-controls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
-.live-adjust-controls button{padding:.48rem .35rem;font-size:.78rem;border-radius:10px}
-.live-adjust-preview{margin-top:7px;font-size:.76rem;color:var(--ink-dim);line-height:1.35;text-align:center}
+.live-adjust-head{display:flex;justify-content:space-between;gap:10px;align-items:center;font-size:.78rem;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:9px}
+.live-adjust-head b{color:var(--accent);font-size:.84rem}
+.live-adjust-controls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}
+.live-adjust-controls button{min-height:44px;padding:.55rem .4rem;font-size:.84rem;border-radius:10px}
+#live-custom-wrap{grid-column:1/-1;display:grid!important;grid-template-columns:52px minmax(0,1fr) auto;gap:7px;align-items:center;margin-top:2px}
+#live-custom-min{box-sizing:border-box;width:100%!important;min-width:0;min-height:48px;background:rgba(255,255,255,.06);border:1px solid var(--border-strong);border-radius:10px;color:inherit;padding:10px 12px;font:inherit;font-size:1.05rem!important}
+#live-custom-apply{min-width:92px}
+.live-adjust-preview{margin-top:9px;font-size:.8rem;color:var(--ink-dim);line-height:1.4;text-align:center}
+@media(max-width:430px){#live-custom-wrap{grid-template-columns:48px minmax(0,1fr)}#live-custom-apply{grid-column:1/-1;width:100%}}
 .progress{height:6px;background:var(--panel-2);border-radius:999px;overflow:hidden}
 .progress > div{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2));transition:width .3s linear}
 .timer-controls{display:flex;gap:10px;justify-content:center;margin-top:14px;flex-wrap:wrap}
@@ -175,13 +180,13 @@ header.topbar{grid-column:1/-1;display:flex;align-items:center;justify-content:s
 /* v7.3: Cancel session — destructive, intentionally lower visual weight than Start/Pause.
    Hidden unless a session is in progress. Distinct from Reset: this is the explicit
    "I shouldn't have started this — drop everything, zero credit" action. */
-.timer-controls #btn-cancel-session{
-  min-width:0;padding:.45rem .7rem;font-size:.82rem;
+#btn-cancel-session{
+  display:block;width:fit-content;min-width:0;min-height:40px;margin:8px auto 0;padding:.45rem .8rem;font-size:.82rem;
   color:var(--bad);border-color:var(--bad);
   background:transparent;letter-spacing:.02em;opacity:.92
 }
-.timer-controls #btn-cancel-session:hover{opacity:1;background:rgba(255,122,138,.08)}
-.timer-controls #btn-cancel-session[hidden]{display:none}
+#btn-cancel-session:hover{opacity:1;background:rgba(255,122,138,.08)}
+#btn-cancel-session[hidden]{display:none}
 .session-meta{display:flex;gap:10px;justify-content:center;margin-top:10px;flex-wrap:wrap;color:var(--ink-dim);font-size:.85rem}
 /* v4.2.1: stopwatch laps */
 .sw-laps{margin-top:12px;padding:8px 10px;background:var(--panel-2);border-radius:10px;border:1px solid var(--border)}
@@ -3391,7 +3396,7 @@ svg{shape-rendering:geometricPrecision}
       </div>
       <div class="timer-display" id="timer-display" role="timer" aria-live="polite" aria-atomic="true">25:00</div>
       <div id="game-mode-badge" class="game-mode-badge" hidden aria-live="polite" style="text-align:center">🔒 Locked In</div>
-      <button type="button" id="btn-lockedin-reset" hidden style="display:block;width:fit-content;margin:6px auto 0;padding:6px 14px;border-radius:999px;font-size:.76rem;font-weight:700;background:rgba(255,122,138,.16);color:#ff9aa7;border:1px solid rgba(255,122,138,.5);cursor:pointer">🔁 I slipped — reset run</button>
+      <button id="btn-cancel-session" title="Cancel active run (Esc) — zero minutes, XP, loot, or progress" hidden aria-label="Cancel the active run with zero credit">Cancel run · 0 credit</button>
       <div class="live-adjust" id="live-adjust" hidden aria-live="polite">
         <div class="live-adjust-head"><span id="live-adjust-title">Adjust live session</span><b id="live-adjust-planned">25m planned</b></div>
         <div class="live-adjust-controls" role="group" aria-label="Adjust live session minutes">
@@ -3399,9 +3404,9 @@ svg{shape-rendering:geometricPrecision}
           <button type="button" data-live-delta="-5">−5m</button>
           <button type="button" data-live-delta="5">+5m</button>
           <button type="button" data-live-delta="15">+15m</button>
-          <span id="live-custom-wrap" style="display:inline-flex;gap:4px;align-items:center">
+          <span id="live-custom-wrap">
             <button type="button" id="live-custom-sign" aria-label="Toggle add or subtract" style="min-width:34px">+</button>
-            <input type="number" id="live-custom-min" min="1" max="1440" step="1" placeholder="min" inputmode="numeric" aria-label="Custom minutes" style="width:96px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.22);border-radius:8px;color:inherit;padding:8px 10px;font:inherit;font-size:.95rem">
+            <input type="number" id="live-custom-min" min="1" max="1440" step="1" placeholder="Enter minutes" inputmode="numeric" aria-label="Custom minutes">
             <button type="button" id="live-custom-apply">Apply</button>
           </span>
         </div>
@@ -3436,7 +3441,6 @@ svg{shape-rendering:geometricPrecision}
         <button id="btn-lap" title="Lap (L) — capture current stopwatch time" hidden>Lap</button>
         <button id="btn-skip" title="Skip (N)">Skip</button>
         <button id="btn-reset-timer" title="Reset timer (R)">Reset</button>
-        <button id="btn-cancel-session" title="Cancel session (Esc) — drops elapsed time, no stats credited" hidden aria-label="Cancel current session without crediting stats">✕ Cancel session</button>
       </div>
       <div id="sw-laps" class="sw-laps" hidden aria-label="Stopwatch laps"></div>
       <div class="session-meta" hidden>
@@ -3500,7 +3504,7 @@ svg{shape-rendering:geometricPrecision}
     </div>
 
     <div class="card" aria-labelledby="quest-heading">
-      <h2 id="quest-heading">Quests <span class="muted" style="font-size:.72rem;text-transform:none;margin-left:6px">(one-off to-dos — tick to earn XP)</span></h2>
+      <h2 id="quest-heading">To-dos <span class="muted" style="font-size:.72rem;text-transform:none;margin-left:6px">(one-off goals — tick to earn XP)</span></h2>
       <div id="quest-list" role="list"></div>
       <form id="quest-form" class="row" style="margin-top:8px" onsubmit="return false;">
         <input id="quest-input" type="text" placeholder="Add a quest… (e.g. Finish chapter 3)" autocomplete="off" maxlength="140" aria-label="New quest">
@@ -3522,7 +3526,7 @@ svg{shape-rendering:geometricPrecision}
         <button role="tab" data-tab="targets" aria-pressed="true">Targets</button>
         <button role="tab" data-tab="expedition" aria-pressed="false">Expedition</button>
         <button role="tab" data-tab="loot" aria-pressed="false">Loot</button>
-        <button role="tab" data-tab="quests-v85" aria-pressed="false">Quests</button>
+        <button role="tab" data-tab="quests-v85" aria-pressed="false">Challenges</button>
         <button role="tab" data-tab="world" aria-pressed="false">World</button>
         <button role="tab" data-tab="vault" aria-pressed="false">Vault</button>
         <button role="tab" data-tab="stable" aria-pressed="false">Stable</button>
@@ -4167,6 +4171,21 @@ const DEFAULTS = {
   activityLog: [],   /* v8.7.0: append-only universal change log (retained 180d) */
   battleLog: [],
   adventure: { action:"Travel", actionMin:{ Travel:0, Rest:0, Hunt:0, Loot:0, Fight:0, Craft:0, Meditate:0 }, actionsTriedSinceV76:{} },
+  crystalShards: 0,
+  crystalShardsEarned: 0,
+  crystalShardsSpent: 0,
+  craftingDust: 0,
+  questSystem: {
+    daily:[], weekly:[], seasonal:[],
+    lastRoll:{ daily:null, weekly:null, seasonal:null },
+    dailyClaimedCount:0, weeklyClaimedCount:0, seasonalClaimedCount:0
+  },
+  world: {
+    currentZone:"verdant_vale", currentZoneUpdatedAt:0,
+    unlockedZones:{ verdant_vale:true }, zonesVisited:{ verdant_vale:1 },
+    bossesDefeated:0, mysteryBoxesOpened:0, artifactsFound:{}, questCounters:{}
+  },
+  achievementsV85: {},
   bestiary: {},
   eggs: { owned:[], incubating:[], hatched:[], quarantined:[], processedSessionIds:[], slotCap:3, systemVersion:2 },
   achievementProgress: {},
@@ -4192,7 +4211,10 @@ const DEFAULTS = {
     gemsOwned: {},
     consumables: {},
     loadout: { slot1:null, slot2:null, slot3:null },
-    loadoutUpdatedAt: 0
+    loadoutUpdatedAt: 0,
+    mountProgress: 0,
+    mountFamilies: {},
+    vault: { instances:{}, locations:{}, cap:100 }
   },
   lootRework: { version:1, flags:{ animationsOn:true, showDropLog:true, autoSalvageCommonDupes:false } },
   editLog: [],
@@ -4203,7 +4225,7 @@ const DEFAULTS = {
     userToken: null, refreshToken: null, tokenExpiresAt: 0,
     jsonstorageUrl: null,
     saltB64: null,
-    pendingSync: false, retryCount: 0, retryAfter: 0,
+    pendingSync: false, pendingSince: 0, retryCount: 0, retryAfter: 0,
     lastSyncError: null, lastErrorLoggedAt: 0, lastSuccessfulSyncAt: 0
   }
 };
@@ -4953,11 +4975,13 @@ function mergeFocusMilestones(localRoom, remoteRoom, totalFocusMin, achievements
 }
 
 /* -------- state + persistence -------- */
+let startupRecoveryError = null;
 let state;
 try {
   state = loadState();
 } catch (e) {
   console.error("[Focus Hero] loadState threw — recovering from backup", e);
+  startupRecoveryError = e;
   state = safeRecoverState(e);
 }
 let bc = null;
@@ -4965,55 +4989,130 @@ try { bc = new BroadcastChannel(BC_KEY); } catch { bc = null; }
 let saveTimer = null;
 let cloudDebounce = null;
 
-/* safeRecoverState — last-ditch path used only when loadState() or migrate()
-   throws. Walks every pre-v* backup we've ever written, then the LKG snapshot,
-   then DEFAULTS. Returns a usable state. NEVER throws. The user's raw broken
-   state is preserved (we never overwrite the original key here). */
-function safeRecoverState(){
+function isRecognizableRecoveryState(candidate){
+  const hasStateMarker = candidate && typeof candidate === "object" && !Array.isArray(candidate) &&
+    (candidate.hero && typeof candidate.hero === "object" && !Array.isArray(candidate.hero) ||
+      Array.isArray(candidate.tasks) ||
+      typeof candidate.dataVersion === "number" && Number.isFinite(candidate.dataVersion));
+  return !!hasStateMarker && Number.isSafeInteger(candidate.totalFocusMin) && candidate.totalFocusMin >= 0;
+}
+function parseRecoveryEntry(raw){
+  const parsed = JSON.parse(raw);
+  const candidate = parsed && parsed.state ? parsed.state : parsed;
+  if (!isRecognizableRecoveryState(candidate)) throw new Error("snapshot is not a recognizable Focus Hero state");
+  return { state:migrate(deepClone(candidate)), savedAt:parsed && parsed.savedAt };
+}
+function findSafeRecoverySnapshot(){
+  /* LKG is continuously refreshed only after invariant checks, while pre-v*
+     files are one-time migration snapshots. Prefer the valid LKG so a stale
+     migration copy can never beat newer play. */
+  try {
+    const raw = localStorage.getItem(`${STORAGE_KEY}.lkg`);
+    if (raw){
+      const found = parseRecoveryEntry(raw);
+      return { key:`${STORAGE_KEY}.lkg`, state:found.state, savedAt:found.savedAt };
+    }
+  } catch(_){}
   for (let v = DATA_VERSION + 4; v >= 1; v--){
     const key = `${STORAGE_KEY}.pre-v${v}`;
     try {
       const raw = localStorage.getItem(key);
       if (!raw) continue;
-      const parsed = JSON.parse(raw);
-      const candidate = parsed && parsed.state ? parsed.state : parsed;
-      if (candidate && typeof candidate === "object"){
-        try { return migrate(candidate); }
-        catch(_){ /* this backup is also bad — keep walking */ }
-      }
-    } catch(_){}
+      const found = parseRecoveryEntry(raw);
+      return { key, state:found.state, savedAt:found.savedAt };
+    } catch(_){ /* malformed/stale candidate — keep walking */ }
   }
-  try {
-    const lkg = localStorage.getItem(`${STORAGE_KEY}.lkg`);
-    if (lkg){
-      const parsed = JSON.parse(lkg);
-      if (parsed && typeof parsed === "object"){
-        try { return migrate(parsed.state || parsed); } catch(_){}
-      }
-    }
-  } catch(_){}
+  return null;
+}
+/* safeRecoverState — last-ditch in-memory fallback used when loadState() or
+   migrate() throws. It never writes live storage and never throws. */
+function safeRecoverState(){
+  const recovered = findSafeRecoverySnapshot();
+  if (recovered) return recovered.state;
   try { return migrate(deepClone(DEFAULTS)); }
   catch(_){ return deepClone(DEFAULTS); }
 }
 
+function stageStartupRecoveryState(candidate, sourceRaw, previousMainRaw){
+  if (!isRecognizableRecoveryState(candidate)) throw new Error("No valid Focus Hero recovery state was found; the original bytes were not changed.");
+  const staged = deepClone(candidate);
+  const syncSource = staged.sync && typeof staged.sync === "object" && !Array.isArray(staged.sync) ? staged.sync : DEFAULTS.sync;
+  staged.sync = deepClone(syncSource);
+  staged.sync.enabled = false;
+  staged.sync.pendingSync = false;
+  staged.sync.pendingSince = 0;
+  staged.sync.retryCount = 0;
+  staged.sync.retryAfter = 0;
+  staged.sync.lastSyncError = "Startup recovery staged locally; verify it before re-enabling cloud sync.";
+  const desired = JSON.stringify(staged);
+  const roundTrip = JSON.parse(desired);
+  if (!isRecognizableRecoveryState(roundTrip) || JSON.stringify(roundTrip) !== desired){
+    throw new Error("Startup recovery serialization failed; the original bytes were not changed.");
+  }
+  const backupKey = uniqueInAppRecoveryBackupKey(`${STORAGE_KEY}.pre-startup-recovery-`);
+  try {
+    localStorage.setItem(backupKey, sourceRaw);
+    if (localStorage.getItem(backupKey) !== sourceRaw) throw new Error("backup bytes differed");
+  } catch(error){
+    throw new Error(`Startup recovery could not verify its exact pre-recovery backup; the original bytes were not changed. ${error?.message || error}`);
+  }
+  let mutationAttempted = false;
+  try {
+    mutationAttempted = true;
+    localStorage.setItem(STORAGE_KEY, desired);
+    const readBack = localStorage.getItem(STORAGE_KEY);
+    if (readBack !== desired) throw new Error("recovered bytes differed");
+    const verified = JSON.parse(readBack);
+    if (!isRecognizableRecoveryState(verified) || JSON.stringify(verified) !== desired) throw new Error("full recovered-state read-back failed");
+    return verified;
+  } catch(error){
+    if (!mutationAttempted) throw error;
+    let rollbackOk = false;
+    try {
+      if (previousMainRaw === null) localStorage.removeItem(STORAGE_KEY);
+      else localStorage.setItem(STORAGE_KEY, previousMainRaw);
+      rollbackOk = localStorage.getItem(STORAGE_KEY) === previousMainRaw;
+    } catch(_){ rollbackOk = false; }
+    if (!rollbackOk){
+      throw new Error(`CRITICAL: startup recovery failed and rollback could not be verified. The exact source bytes remain at ${backupKey}.`);
+    }
+    throw new Error(`Startup recovery failed; the original live bytes were restored and verified. ${error?.message || error}`);
+  }
+}
+
 function loadState(){
-  let raw=null, foundUnder=null;
-  try { raw = localStorage.getItem(STORAGE_KEY); if (raw) foundUnder = STORAGE_KEY; } catch(e){}
-  if (!raw){
+  let raw=null, foundUnder=null, previousMainRaw=null;
+  try { raw = localStorage.getItem(STORAGE_KEY); previousMainRaw = raw; if (raw !== null) foundUnder = STORAGE_KEY; } catch(e){}
+  if (raw === null){
     // v4: try legacy keys so a v3 user upgrades in-place with zero data loss
     for (const k of LEGACY_KEYS){
-      try { const v = localStorage.getItem(k); if (v){ raw = v; foundUnder = k; break; } } catch(e){}
+      try { const v = localStorage.getItem(k); if (v !== null){ raw = v; foundUnder = k; break; } } catch(e){}
     }
   }
-  if (!raw) return migrate(deepClone(DEFAULTS));
-  let parsed;
+  if (raw === null) return migrate(deepClone(DEFAULTS));
+  let parsed, parseFailed = false;
   try { parsed = JSON.parse(raw); }
   catch(e){
+    parseFailed = true;
     console.warn("state parse failed — attempting degraded recovery", e);
     // Try to salvage by searching for a top-level {"dataVersion": ...} JSON inside the blob
     const m = /\{[\s\S]*\}/.exec(raw||"");
-    if (m){ try { parsed = JSON.parse(m[0]); } catch(_){ parsed = {}; } }
-    else parsed = {};
+    if (m){ try { parsed = JSON.parse(m[0]); } catch(_){ parsed = null; } }
+    else parsed = null;
+  }
+  if (parseFailed || !isRecognizableRecoveryState(parsed)){
+    let recovered = null;
+    if (isRecognizableRecoveryState(parsed)){
+      try { recovered = migrate(deepClone(parsed)); } catch(_){ recovered = null; }
+    }
+    if (!recovered){
+      const found = findSafeRecoverySnapshot();
+      recovered = found && found.state;
+    }
+    if (!recovered){
+      throw new Error("Stored Focus Hero data is malformed and no valid recovery snapshot was found. The original bytes were not changed; use Export raw state or the Recovery page.");
+    }
+    return stageStartupRecoveryState(recovered, raw, previousMainRaw);
   }
   const migrated = migrate(parsed);
   if (foundUnder && foundUnder !== STORAGE_KEY){
@@ -5536,6 +5635,10 @@ function isStateSane(s){
   if (!milestoneState || typeof milestoneState !== "object" || Array.isArray(milestoneState)) return false;
   if (!Number.isSafeInteger(milestoneState.claimedThrough) || milestoneState.claimedThrough < 0) return false;
   if (!Number.isSafeInteger(milestoneState.announcedThrough) || milestoneState.announcedThrough < 0 || milestoneState.announcedThrough > milestoneState.claimedThrough) return false;
+  if (s.focusEconomy && typeof window.fhValidateFocusEconomy === "function"){
+    const economyCheck = window.fhValidateFocusEconomy(s.focusEconomy);
+    if (!economyCheck || !economyCheck.ok) return false;
+  }
   // Monotonicity check: the named counters MUST never decrease across saves.
   // A regression means something miscomputed and we should NOT promote it to LKG.
   try {
@@ -5552,6 +5655,16 @@ function isStateSane(s){
       if (psLevel > sLevel) return false;
       // At equal level, total XP earned should not regress either.
       if (psLevel === sLevel && (ps.hero?.xp|0) > (s.hero?.xp|0)) return false;
+      if (s.focusEconomy && ps.focusEconomy && typeof window.fhValidateFocusEconomy === "function"){
+        const economyCheck = window.fhValidateFocusEconomy(s.focusEconomy, ps.focusEconomy);
+        if (!economyCheck || !economyCheck.ok) return false;
+        const previousCheck = window.fhValidateFocusEconomy(ps.focusEconomy);
+        if (previousCheck && previousCheck.ok){
+          for (const kind of ["grants","spends","harvests"]){
+            if ((previousCheck.counts?.[kind]|0) > (economyCheck.counts?.[kind]|0)) return false;
+          }
+        }
+      }
     }
   } catch(_){}
   return true;
@@ -5574,6 +5687,17 @@ function notifySaveFailure(err){
   } catch(_){}
 }
 function saveState(opts={}){
+  if (startupRecoveryError){
+    console.warn("save blocked while startup recovery requires user action");
+    return false;
+  }
+  /* Persist dirty intent before serializing. If the app closes during the
+     debounce window or while offline, the next boot still knows cloud is
+     behind this device. Confirmed pushes clear this flag. */
+  if (state?.sync?.enabled && !opts.fromPull){
+    state.sync.pendingSync = true;
+    if (!(state.sync.pendingSince > 0)) state.sync.pendingSince = Date.now();
+  }
   let serialized = null;
   try { serialized = JSON.stringify(state); localStorage.setItem(STORAGE_KEY, serialized); }
   catch(e){ notifySaveFailure(e); }
@@ -5597,8 +5721,8 @@ function saveState(opts={}){
   if (!opts.suppressMilestoneAnnouncement) schedulePendingFocusMilestoneAnnouncement();
 }
 /* v4.2: emergency recovery helper exposed via window.__FocusHero.recover().
-   Reads the LKG snapshot, migrates it, and overwrites live state. Logs each
-   key it found to the console so you can see what's available. */
+   Every in-app restore is staged with cloud sync off, after an exact backup of
+   the current stored bytes has been written and read back successfully. */
 function listRecoverySnapshots(){
   const found = [];
   try {
@@ -5614,6 +5738,91 @@ function listRecoverySnapshots(){
   } catch(_){}
   return found;
 }
+function uniqueInAppRecoveryBackupKey(prefix){
+  const base = (prefix || `${STORAGE_KEY}.pre-in-app-recovery-`) + new Date().toISOString().replace(/[:.]/g,"-");
+  let key = base, suffix = 0;
+  while (localStorage.getItem(key) !== null){ suffix++; key = `${base}-${suffix}`; }
+  return key;
+}
+function stageInAppRecoveryState(candidate, backupPrefix, options={}){
+  if (!isRecognizableRecoveryState(candidate)){
+    throw new Error("Snapshot is not a valid Focus Hero state; live state was not changed.");
+  }
+  const identityOperation = beginSyncIdentityOperation(options.operation || "recovery");
+  if (!identityOperation) throw new Error("Another sync identity operation is still running; live state was not changed.");
+  const previousMemoryState = state;
+  let previousRaw = null, backupKey = null, mutationAttempted = false, keepSyncPaused = false;
+  try {
+    try { previousRaw = localStorage.getItem(STORAGE_KEY); }
+    catch(error){ throw new Error(`Could not read the live state; live state was not changed. ${error?.message || error}`); }
+    const staged = deepClone(candidate);
+    let previousStoredState = null;
+    try {
+      previousStoredState = previousRaw === null ? null : JSON.parse(previousRaw);
+      if (previousStoredState && typeof previousStoredState === "object" && !Array.isArray(previousStoredState) &&
+          previousStoredState.state && typeof previousStoredState.state === "object" && !Array.isArray(previousStoredState.state)){
+        previousStoredState = previousStoredState.state;
+      }
+    } catch(_){ previousStoredState = null; }
+    const syncSource = previousStoredState?.sync && typeof previousStoredState.sync === "object" && !Array.isArray(previousStoredState.sync)
+      ? previousStoredState.sync
+      : previousMemoryState?.sync && typeof previousMemoryState.sync === "object" && !Array.isArray(previousMemoryState.sync)
+        ? previousMemoryState.sync
+        : staged.sync && typeof staged.sync === "object" && !Array.isArray(staged.sync)
+          ? staged.sync : DEFAULTS.sync;
+    staged.sync = deepClone(syncSource);
+    staged.sync.enabled = false;
+    staged.sync.pendingSync = false;
+    staged.sync.pendingSince = 0;
+    staged.sync.retryCount = 0;
+    staged.sync.retryAfter = 0;
+    staged.sync.lastSyncError = options.syncMessage || "Recovery staged locally; verify it before re-enabling cloud sync.";
+    const desired = JSON.stringify(staged);
+    if (typeof desired !== "string") throw new Error("Snapshot could not be serialized; live state was not changed.");
+    const roundTrip = JSON.parse(desired);
+    if (!roundTrip || typeof roundTrip !== "object" || Array.isArray(roundTrip) || JSON.stringify(roundTrip) !== desired){
+      throw new Error("Snapshot serialization check failed; live state was not changed.");
+    }
+    if (previousRaw !== null){
+      backupKey = uniqueInAppRecoveryBackupKey(backupPrefix);
+      try {
+        localStorage.setItem(backupKey, previousRaw);
+        if (localStorage.getItem(backupKey) !== previousRaw) throw new Error("backup bytes differed");
+      } catch(error){
+        throw new Error(`Pre-recovery backup failed verification; live state was not changed. ${error?.message || error}`);
+      }
+    }
+    try {
+      mutationAttempted = true;
+      localStorage.setItem(STORAGE_KEY, desired);
+      const readBack = localStorage.getItem(STORAGE_KEY);
+      if (readBack !== desired) throw new Error("restored bytes differed from the selected snapshot");
+      const verified = JSON.parse(readBack);
+      if (!verified || typeof verified !== "object" || Array.isArray(verified) || JSON.stringify(verified) !== desired){
+        throw new Error("restored state failed its full read-back check");
+      }
+      state = verified;
+      if (bc){ try { bc.postMessage({ type:"state", state }); } catch(_){} }
+      return { backupKey, serialized:desired, syncPaused:true };
+    } catch(error){
+      state = previousMemoryState;
+      if (!mutationAttempted) throw error;
+      let rollbackOk = false;
+      try {
+        if (previousRaw === null) localStorage.removeItem(STORAGE_KEY);
+        else localStorage.setItem(STORAGE_KEY, previousRaw);
+        rollbackOk = localStorage.getItem(STORAGE_KEY) === previousRaw;
+      } catch(_){ rollbackOk = false; }
+      if (!rollbackOk){
+        keepSyncPaused = true;
+        throw new Error(`CRITICAL: restore verification failed and automatic rollback could not be verified. The pre-recovery backup remains at ${backupKey || "no backup key"}.`);
+      }
+      throw new Error(`Restore verification failed; the prior live state was restored and verified. ${error?.message || error}`);
+    }
+  } finally {
+    if (!keepSyncPaused) endSyncIdentityOperation(identityOperation);
+  }
+}
 function recoverFromSnapshot(key){
   key = key || LKG_KEY;
   try {
@@ -5621,10 +5830,14 @@ function recoverFromSnapshot(key){
     if (!raw) throw new Error(`no snapshot at ${key}`);
     const wrap = JSON.parse(raw);
     const candidate = wrap.state || wrap;
-    state = migrate(candidate);
-    saveState();
-    if (typeof renderAll === "function") renderAll();
-    return { ok:true, savedAt: wrap.savedAt };
+    if (!isRecognizableRecoveryState(candidate)) throw new Error("Snapshot is not a recognizable Focus Hero state; live state was not changed.");
+    const result = stageInAppRecoveryState(migrate(deepClone(candidate)));
+    let renderWarning = null;
+    if (typeof renderAll === "function"){
+      try { renderAll(); }
+      catch(error){ renderWarning = error?.message || String(error); console.warn("Recovered state committed, but rendering failed", error); }
+    }
+    return { ok:true, savedAt: wrap.savedAt, backupKey:result.backupKey, syncPaused:result.syncPaused, renderWarning };
   } catch(e){ return { ok:false, error: e.message||String(e) }; }
 }
 function scheduleSave(){
@@ -5652,7 +5865,7 @@ function renderLog(){
     return `<div class="app-log-line${e.isErr ? " err" : ""}"><span class="app-log-time">[${escapeHtml(stamp)}]</span> ${escapeHtml(e.text || "")}</div>`;
   }).join("");
 }
-function logLine(text, isErr){
+function logLine(text, isErr, localOnly){
   if (!Array.isArray(state.appLog)) state.appLog = [];
   state.appLog.push({
     id: (typeof uid === "function") ? uid() : String(Date.now()) + Math.random().toString(36).slice(2,8),
@@ -5663,7 +5876,10 @@ function logLine(text, isErr){
   });
   state.appLog = pruneTimedEntries(state.appLog, { cap: APP_LOG_CAP });
   renderLog();
-  try { scheduleSave(); } catch(_){}
+  try {
+    if (localOnly) saveState({fromPull:true});
+    else scheduleSave();
+  } catch(_){}
 }
 function toast(msg, kind="", actions=[]){
   const wrap = $("#toasts");
@@ -7154,8 +7370,6 @@ function updateGameModeIndicator(){
             : "background:rgba(74,222,128,.14);color:#86efac;border:1px solid rgba(74,222,128,.4);")
         : "background:rgba(148,163,184,.12);color:#cbd5e1;border:1px solid rgba(148,163,184,.3);");
   }
-  const reset = document.getElementById("btn-lockedin-reset");
-  if (reset) reset.hidden = !(on && state.timer && state.timer.running);
 }
 function toggleGameMode(){
   if (!state.settings) return;
@@ -7163,18 +7377,16 @@ function toggleGameMode(){
   try { saveState(); } catch(_){}
   try { setToggle("#tog-gamemode", state.settings.gameMode); } catch(_){}
   updateGameModeIndicator();
-  try { toast(state.settings.gameMode ? "🔒 Locked In ON — if you break focus, tap Reset run to wipe the run yourself." : "Locked In off.", state.settings.gameMode ? "good" : "info"); } catch(_){}
+  try { toast(state.settings.gameMode ? "🔒 Locked In ON — use the shared Cancel run button if the run should count for zero." : "Locked In off.", state.settings.gameMode ? "good" : "info"); } catch(_){}
 }
 function bindGameModeWatch(){
-  /* v9.4: Locked In is MANUAL — no automatic reset on leaving the app. You decide
-     if a run is broken and tap "Reset run" yourself (honor system). */
+  /* Locked In is manual. The same visible zero-credit Cancel run action is
+     shared by ordinary, Locked In, Priority, and combined runs. */
   const gmBadge = document.getElementById("game-mode-badge");
   if (gmBadge){
     gmBadge.addEventListener("click", toggleGameMode);
     gmBadge.addEventListener("keydown", e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); toggleGameMode(); } });
   }
-  const gmReset = document.getElementById("btn-lockedin-reset");
-  if (gmReset) gmReset.addEventListener("click", ()=>{ try{ gameModeResetSession(); }catch(_){} });
   updateGameModeIndicator();
 }
 /* v9.4: standard mobile swipe — horizontal swipe switches the main tabs
@@ -10092,12 +10304,13 @@ function markCloudPending(err){
   const message = String(err?.message || err || "Cloud sync unavailable").slice(0, 220);
   const wasPending = !!state.sync.pendingSync;
   state.sync.pendingSync = true;
+  if (!(state.sync.pendingSince > 0)) state.sync.pendingSince = Date.now();
   state.sync.retryCount = Math.min(20, (state.sync.retryCount|0) + 1);
   state.sync.retryAfter = Date.now() + cloudRetryDelay();
   state.sync.lastSyncError = message;
   const t = Date.now();
   if (!wasPending){
-    logLine("Cloud sync paused — your progress is saved on this device and will sync automatically.", false);
+    logLine("Cloud sync paused — your progress is saved on this device and will sync automatically.", false, true);
     state.sync.lastErrorLoggedAt = t;
   }
   saveState({ fromPull:true });
@@ -10107,6 +10320,7 @@ function markCloudPending(err){
 function markCloudSynced(){
   const recovered = !!state.sync.pendingSync;
   state.sync.pendingSync = false;
+  state.sync.pendingSince = 0;
   state.sync.retryCount = 0;
   state.sync.retryAfter = 0;
   state.sync.lastSyncError = null;
@@ -10114,7 +10328,7 @@ function markCloudSynced(){
   clearCloudRetryTimer();
   saveState({ fromPull:true });
   renderSyncStatus();
-  if (recovered) logLine("Cloud sync caught up — local and cloud progress are aligned.");
+  if (recovered) logLine("Cloud sync caught up — local and cloud progress are aligned.", false, true);
 }
 
 /* One public entry point serializes every caller. Saves that happen while a
@@ -10541,12 +10755,12 @@ function mergeRemoteState(local, remote){
   });
   var __lLoot = (local.loot && typeof local.loot === "object") ? local.loot : {};
   var __rLoot = (remote.loot && typeof remote.loot === "object") ? remote.loot : {};
-  out.loot = {
+  out.loot = Object.assign({}, deepClone(__rLoot), deepClone(__lLoot), {
     drops: [], pity: { common:0, uncommon:0, rare:0, epic:0, legendary:0, mythic:0 },
     materials: { dust:0, shards:0, essence:0 },
     dyesOwned: {}, gemsOwned: {}, consumables: {},
     loadout: { slot1:null, slot2:null, slot3:null }, loadoutUpdatedAt: 0
-  };
+  });
   var __allDrops = (Array.isArray(__lLoot.drops)?__lLoot.drops:[]).concat(Array.isArray(__rLoot.drops)?__rLoot.drops:[]);
   var __seenIds = new Set();
   out.loot.drops = __allDrops.filter(function(d){ if (!d || !d.id || __seenIds.has(d.id)) return false; __seenIds.add(d.id); return true; })
@@ -10568,6 +10782,15 @@ function mergeRemoteState(local, remote){
   out.loot.dyesOwned   = __mergeCounts(__lLoot.dyesOwned,   __rLoot.dyesOwned);
   out.loot.gemsOwned   = __mergeCounts(__lLoot.gemsOwned,   __rLoot.gemsOwned);
   out.loot.consumables = __mergeCounts(__lLoot.consumables, __rLoot.consumables);
+  out.loot.mountProgress = Math.max(nonNegativeNumber(__lLoot.mountProgress), nonNegativeNumber(__rLoot.mountProgress));
+  out.loot.mountFamilies = {};
+  new Set(Object.keys(__lLoot.mountFamilies||{}).concat(Object.keys(__rLoot.mountFamilies||{}))).forEach(function(family){
+    var lf = (__lLoot.mountFamilies||{})[family] || {};
+    var rf = (__rLoot.mountFamilies||{})[family] || {};
+    out.loot.mountFamilies[family] = Object.assign({}, deepClone(rf), deepClone(lf), {
+      collected: __mergeCounts(lf.collected, rf.collected)
+    });
+  });
   var __lLoad = __lLoot.loadoutUpdatedAt|0, __rLoad = __rLoot.loadoutUpdatedAt|0;
   if (__rLoad > __lLoad){
     out.loot.loadout = deepClone(__rLoot.loadout || { slot1:null, slot2:null, slot3:null });
@@ -10576,6 +10799,54 @@ function mergeRemoteState(local, remote){
     out.loot.loadout = deepClone(__lLoot.loadout || { slot1:null, slot2:null, slot3:null });
     out.loot.loadoutUpdatedAt = __lLoad;
   }
+  /* Vault is a location, not a second copy of inventory. Location markers
+     make future moves last-write-wins; for legacy conflicts, keeping the item
+     in protected storage is the conservative choice. No item is dropped when
+     two offline branches are reunited. */
+  var __lVault = (__lLoot.vault && typeof __lLoot.vault === "object") ? __lLoot.vault : {};
+  var __rVault = (__rLoot.vault && typeof __rLoot.vault === "object") ? __rLoot.vault : {};
+  var __lVaultInst = (__lVault.instances && typeof __lVault.instances === "object") ? __lVault.instances : {};
+  var __rVaultInst = (__rVault.instances && typeof __rVault.instances === "object") ? __rVault.instances : {};
+  var __lLocations = (__lVault.locations && typeof __lVault.locations === "object") ? __lVault.locations : {};
+  var __rLocations = (__rVault.locations && typeof __rVault.locations === "object") ? __rVault.locations : {};
+  out.loot.vault = Object.assign({}, deepClone(__rVault), deepClone(__lVault), { instances:{}, locations:{} });
+  function __validLocation(loc){
+    return loc && (loc.location === "vault" || loc.location === "inventory") && Number.isFinite(Number(loc.at));
+  }
+  function __newerLocation(a,b){
+    if (!__validLocation(a)) return __validLocation(b) ? b : null;
+    if (!__validLocation(b)) return a;
+    return Number(b.at) > Number(a.at) ? b : a;
+  }
+  function __betterInstance(items){
+    return items.filter(Boolean).reduce(function(best,item){
+      if (!best) return item;
+      return (item.level|0) > (best.level|0) ? item : best;
+    }, null);
+  }
+  var __equippedIids = new Set();
+  Object.keys((out.hero && out.hero.equipped) || {}).forEach(function(slot){
+    var eq = out.hero.equipped[slot];
+    if (eq && eq.instanceId) __equippedIids.add(eq.instanceId);
+  });
+  var __locationIids = new Set(
+    Object.keys(out.lootInstances).concat(Object.keys(__lVaultInst), Object.keys(__rVaultInst), Object.keys(__lLocations), Object.keys(__rLocations))
+  );
+  __locationIids.forEach(function(iid){
+    var marker = __newerLocation(__lLocations[iid], __rLocations[iid]);
+    var item = __betterInstance([out.lootInstances[iid], __lVaultInst[iid], __rVaultInst[iid]]);
+    if (!item) return;
+    var location = marker ? marker.location : ((__lVaultInst[iid] || __rVaultInst[iid]) ? "vault" : "inventory");
+    if (__equippedIids.has(iid)) location = "inventory";
+    if (location === "vault"){
+      out.loot.vault.instances[iid] = deepClone(item);
+      delete out.lootInstances[iid];
+    } else {
+      out.lootInstances[iid] = deepClone(item);
+    }
+    if (marker) out.loot.vault.locations[iid] = deepClone(marker);
+  });
+  out.loot.vault.cap = Math.max(100, __lVault.cap|0, __rVault.cap|0, Object.keys(out.loot.vault.instances).length);
   out.lootRework = deepClone(local.lootRework || { version:1, flags:{ animationsOn:true, showDropLog:true, autoSalvageCommonDupes:false } });
   if (remote.lootRework && remote.lootRework.flags){
     Object.keys(remote.lootRework.flags).forEach(function(k){
@@ -10642,6 +10913,9 @@ function mergeRemoteState(local, remote){
   } else if (!local.focusEconomy && remote.focusEconomy){
     out.focusEconomy = deepClone(remote.focusEconomy);
   }
+  if (typeof window.wdMergeProgressionState === "function"){
+    window.wdMergeProgressionState(local, remote, out);
+  }
   out.dataVersion = Math.max(local.dataVersion||0, remote.dataVersion||0, DATA_VERSION);
   out.sync = deepClone(local.sync);
   return out;
@@ -10670,10 +10944,27 @@ function renderSyncStatus(){
 }
 
 let pullPollTimer = null;
+let pullThenFlushInFlight = null;
+function pullThenFlushPending(reason){
+  if (pullThenFlushInFlight) return pullThenFlushInFlight;
+  const label = reason || "background";
+  const run = (async()=>{
+    const pulled = await cloudPull({ reason:label });
+    if (state.sync.pendingSync && navigator.onLine !== false){
+      await cloudPush({ reason:label + "-pending" });
+    }
+    return pulled;
+  })();
+  const wrapped = run.finally(()=>{
+    if (pullThenFlushInFlight === wrapped) pullThenFlushInFlight = null;
+  });
+  pullThenFlushInFlight = wrapped;
+  return wrapped;
+}
 function startPullPoll(){
   stopPullPoll();
   if (syncOperationsPaused || !state.sync.enabled) return;
-  pullPollTimer = setInterval(()=>{ if (!syncOperationsPaused && !cloudPushInFlight) cloudPull().catch(e=>console.warn("pull poll",e)); }, 30000);
+  pullPollTimer = setInterval(()=>{ if (!syncOperationsPaused && !cloudPushInFlight) pullThenFlushPending("poll").catch(e=>console.warn("pull poll",e)); }, 30000);
   // v5: heartbeat auto-save during active focus sessions (every 60s) so cloud snapshots
   // stay fresh even if no other state mutation triggers a push.
   if (!startPullPoll._heartbeat){
@@ -10782,7 +11073,7 @@ function bindSettings(){
   toggle("#tog-tick","tick");
   toggle("#tog-chime","chime");
   toggle("#tog-notif","notif", v=>{ if (v) requestNotifPermIfNeeded(); });
-  toggle("#tog-gamemode","gameMode", v=>{ try{ updateGameModeIndicator(); toast(v?"🔒 Locked In ON — tap Reset run yourself if you break focus.":"Locked In off.", v?"good":"info"); }catch(_){} });
+  toggle("#tog-gamemode","gameMode", v=>{ try{ updateGameModeIndicator(); toast(v?"🔒 Locked In ON — use Cancel run for zero credit if needed.":"Locked In off.", v?"good":"info"); }catch(_){} });
   toggle("#tog-keepalive","keepalive", v=>{ if (!v) stopKeepalive(); else if (state.timer.running && state.timer.mode==="focus") startKeepalive(); });
   toggle("#tog-wakelock","wakelock", v=>{ if (!v) releaseWakeLock(); else if (state.timer.running && state.timer.mode==="focus") acquireWakeLock(); });
   toggle("#tog-monthly-backup","monthlyBackup");
@@ -10795,8 +11086,29 @@ function bindSettings(){
     try {
       const parsed = JSON.parse(text);
       const candidate = parsed.state || parsed;
-      state = migrate(candidate); saveState(); renderAll();
-      toast("Import complete — migrated to v7","good");
+      if (!candidate || typeof candidate !== "object" || Array.isArray(candidate) ||
+          !Array.isArray(candidate.tasks) || !candidate.hero || !candidate.settings || !candidate.history){
+        throw new Error("This file is not a recognizable Focus Hero state");
+      }
+      const imported = migrate(deepClone(candidate));
+      const currentMinutes = Math.max(0, Number(state.totalFocusMin)||0);
+      const importedMinutes = Math.max(0, Number(imported.totalFocusMin)||0);
+      if (importedMinutes < currentMinutes){
+        throw new Error(`Older import blocked (${importedMinutes}m vs current ${currentMinutes}m). Use Recover for a verified rollback.`);
+      }
+      stageInAppRecoveryState(imported, `${STORAGE_KEY}.pre-import-recovery-`, {
+        operation:"import",
+        syncMessage:"Import staged locally; verify it before re-enabling cloud sync."
+      });
+      let renderWarning = false;
+      try { renderAll(); renderSyncStatus(); }
+      catch(error){ renderWarning = true; console.warn("Import committed, but rendering failed", error); }
+      toast(
+        renderWarning
+          ? "Import saved safely and cloud sync is paused. Reload to refresh the screen."
+          : "Import staged locally. Cloud sync is paused until you verify and re-enable it.",
+        renderWarning ? "warn" : "good"
+      );
     } catch(err){ toast("Import failed: "+(err.message||err),"bad"); }
     e.target.value = "";
   };
@@ -10826,8 +11138,15 @@ function bindSync(){
   togS.addEventListener("click", ()=>{
     const next = !readToggle("#tog-sync"); setToggle("#tog-sync",next);
     state.sync.enabled = next; state.sync.backend = currentBackend();
+    /* Re-enabling a confirmed identity after a staged import/recovery means
+       "verify, then sync". Mark it dirty before the safe pull so the merged
+       result is actually uploaded; a disabled staged profile never uploads. */
+    if (next && state.sync.playerId && (state.sync.cloudRev|0) > 0){
+      state.sync.pendingSync = true;
+      if (!(state.sync.pendingSince > 0)) state.sync.pendingSince = Date.now();
+    }
     saveState({fromPull:true}); renderSyncStatus(); renderSecurityPanel();
-    if (next){ startPullPoll(); cloudPull().then(()=>{ if (state.sync.pendingSync) scheduleCloudRetry(); }).catch(()=>{}); }
+    if (next){ startPullPoll(); pullThenFlushPending("sync-enabled").catch(()=>{ if (state.sync.pendingSync) scheduleCloudRetry(); }); }
     else { stopPullPoll(); clearCloudRetryTimer(); }
   });
   setToggle("#tog-sync", !!state.sync.enabled);
@@ -11848,11 +12167,15 @@ function canEditSessionRecord(rec){
 /* v8.9.0: deleteSessionRecord — removes the session entirely and reverses
    its stat contributions atomically. Never touches other sessions or any
    counter beyond the ones this session credited. */
+function offlineSyncedReductionBlocked(){
+  return !!(state?.sync?.enabled && typeof navigator !== "undefined" && navigator.onLine === false);
+}
 function deleteSessionRecord(sessionId){
   if (!sessionId) return { ok:false, reason:"no_id" };
   const idx = (state.sessionsLog||[]).findIndex(r => r && r.id === sessionId);
   if (idx < 0) return { ok:false, reason:"not_found" };
   const rec = state.sessionsLog[idx];
+  if (offlineSyncedReductionBlocked()) return { ok:false, reason:"reconnect before reducing or deleting synced time" };
   const day = todayKey(new Date(rec.at || now()));
   const minutes = rec.minutes | 0;
   const xp = rec.xp | 0;
@@ -11888,6 +12211,11 @@ function deleteSessionRecord(sessionId){
   }
   /* Remove loot drops from this session */
   let lootRemoved = 0;
+  /* Entitlement snapshots can outlive the bounded drop log. Revoke them first
+     so deleting a session still removes its exact item/instance even when the
+     visible drop entry has already aged out. */
+  const entitlementLootRemoved = revokeSessionLootThresholdEntitlements(rec, 0);
+  lootRemoved += entitlementLootRemoved.length;
   if (state.loot && Array.isArray(state.loot.drops)){
     const keep = [];
     for (const d of state.loot.drops){
@@ -11934,6 +12262,127 @@ function sessionEditXpPreview(rec, minutes){
 function sessionLootDrops(sessionId){
   if (!sessionId || !state.loot || !Array.isArray(state.loot.drops)) return [];
   return state.loot.drops.filter(d => d && d.sessionId === sessionId);
+}
+const SESSION_LOOT_EDIT_THRESHOLDS = Object.freeze([5,15,25,50,90,120]);
+function sessionLootEntitlementLedger(rec, create=false){
+  if (!rec) return null;
+  let ledger = rec.lootThresholdEntitlements;
+  if (!ledger || typeof ledger !== "object" || Array.isArray(ledger)){
+    if (!create) return null;
+    ledger = { version:1, thresholds:{} };
+    rec.lootThresholdEntitlements = ledger;
+  }
+  if (!ledger.thresholds || typeof ledger.thresholds !== "object" || Array.isArray(ledger.thresholds)){
+    if (!create) return null;
+    ledger.thresholds = {};
+  }
+  ledger.version = 1;
+  return ledger;
+}
+function clearLootInstanceFromEquipment(iid){
+  if (!iid || !state.hero || !state.hero.equipped) return;
+  const slots = (typeof EQUIP_SLOTS !== "undefined" && Array.isArray(EQUIP_SLOTS)) ? EQUIP_SLOTS : Object.keys(state.hero.equipped);
+  slots.forEach(slot=>{
+    const equipped = state.hero.equipped[slot];
+    if (equipped && equipped.instanceId === iid) state.hero.equipped[slot] = null;
+  });
+}
+function restoreSessionLootThresholdEntitlement(rec, entitlement){
+  if (!rec || !entitlement || entitlement.active || entitlement.spent || !entitlement.drop){
+    return { restored:false, reason:entitlement?.spent ? "spent" : "not_restorable" };
+  }
+  ensureV76StateShape(state);
+  if (!state.loot || !Array.isArray(state.loot.drops) || !state.lootInstances || !state.lootOwned){
+    return { restored:false, reason:"loot_unavailable" };
+  }
+  const already = state.loot.drops.find(d=>d && d.editEntitlementId === entitlement.id);
+  if (already){ entitlement.active = true; return { restored:false, reason:"already_active", drop:already }; }
+  const drop = deepClone(entitlement.drop);
+  let instance = entitlement.instance ? deepClone(entitlement.instance) : null;
+  if (drop.iid && instance){
+    if (state.lootInstances[drop.iid]){
+      const replacement = uid();
+      drop.iid = replacement;
+      instance.iid = replacement;
+    }
+    state.lootInstances[drop.iid] = instance;
+  } else if (drop.iid){
+    entitlement.spent = true;
+    return { restored:false, reason:"missing_instance" };
+  }
+  drop.sessionId = rec.id;
+  drop.editEntitlementId = entitlement.id;
+  drop.editThreshold = entitlement.threshold|0;
+  drop.at = now();
+  state.loot.drops.push(drop);
+  const cap = (typeof LR_DROP_LOG_CAP === "number" && LR_DROP_LOG_CAP > 0) ? LR_DROP_LOG_CAP : 500;
+  if (state.loot.drops.length > cap) state.loot.drops = state.loot.drops.slice(-cap);
+  if (drop.templateId) state.lootOwned[drop.templateId] = (state.lootOwned[drop.templateId]|0) + 1;
+  entitlement.drop = deepClone(drop);
+  entitlement.instance = instance ? deepClone(instance) : null;
+  entitlement.active = true;
+  entitlement.restoredAt = now();
+  try { logActivity({ category:"loot", action:"edit_entitlement_restored", sessionId:rec.id, taskId:rec.taskId||null, before:null, after:{templateId:drop.templateId,rarity:drop.rarity,threshold:entitlement.threshold|0}, source:"session-editor", note:"restored the same threshold reward; no reroll" }); } catch(_){}
+  return { restored:true, drop };
+}
+function grantSessionLootThresholdEntitlement(rec, action, threshold, resultingMinutes){
+  const ledger = sessionLootEntitlementLedger(rec, true);
+  const key = String(threshold|0);
+  const existing = ledger.thresholds[key];
+  if (existing){
+    if (existing.active) return { granted:false, reason:"already_active", entitlement:existing };
+    const restored = restoreSessionLootThresholdEntitlement(rec, existing);
+    return Object.assign({ granted:false, entitlement:existing }, restored);
+  }
+  if (typeof window.lrGrantEditThresholdEntitlement !== "function"){
+    return { granted:false, reason:"loot_pipeline_unavailable" };
+  }
+  /* Eligibility changes only at these walls, so the wall value is the exact
+     live-session gate for this entitlement even when one edit crosses several
+     walls. crossedAtMinutes keeps the resulting total for the audit trail. */
+  const rolled = window.lrGrantEditThresholdEntitlement(state, {
+    sessionId:rec.id, action, threshold, minutes:threshold
+  });
+  if (!rolled || !rolled.ok) return { granted:false, reason:rolled?.reason||"roll_failed" };
+  const entitlement = {
+    id:rolled.entitlementId, threshold:threshold|0, eligibleMinutes:threshold|0,
+    crossedAtMinutes:resultingMinutes|0, eligibleRarities:Array.isArray(rolled.eligibleRarities)?rolled.eligibleRarities.slice():[],
+    rolledAt:now(), active:!!rolled.entry, noDrop:!rolled.entry, spent:false,
+    drop:rolled.entry ? deepClone(rolled.entry) : null,
+    instance:rolled.instance ? deepClone(rolled.instance) : null
+  };
+  ledger.thresholds[key] = entitlement;
+  if (rolled.entry){
+    try { logActivity({ category:"loot", action:"edit_threshold_gain", sessionId:rec.id, taskId:rec.taskId||null, before:null, after:{templateId:rolled.entry.templateId,rarity:rolled.entry.rarity,threshold:threshold|0,minutes:resultingMinutes|0}, source:"session-editor", note:"stable threshold entitlement" }); } catch(_){}
+  }
+  return { granted:!!rolled.entry, entitlement, drop:rolled.entry||null };
+}
+function revokeSessionLootThresholdEntitlements(rec, newMinutes){
+  const ledger = sessionLootEntitlementLedger(rec, false);
+  if (!ledger || !state.loot || !Array.isArray(state.loot.drops)) return [];
+  const removed = [];
+  Object.keys(ledger.thresholds).forEach(key=>{
+    const entitlement = ledger.thresholds[key];
+    if (!entitlement || !entitlement.active || (entitlement.threshold|0) <= (newMinutes|0)) return;
+    const liveDrop = state.loot.drops.find(d=>d && d.editEntitlementId === entitlement.id);
+    const drop = liveDrop || entitlement.drop;
+    const iid = drop && drop.iid;
+    const currentInstance = iid && state.lootInstances && state.lootInstances[iid];
+    if (currentInstance) entitlement.instance = deepClone(currentInstance);
+    else if (iid) entitlement.spent = true;
+    if (iid){ clearLootInstanceFromEquipment(iid); if (state.lootInstances) delete state.lootInstances[iid]; }
+    state.loot.drops = state.loot.drops.filter(d=>!(d && d.editEntitlementId === entitlement.id));
+    if (drop && drop.templateId && state.lootOwned && (state.lootOwned[drop.templateId]|0) > 0){
+      state.lootOwned[drop.templateId] = Math.max(0, (state.lootOwned[drop.templateId]|0) - 1);
+      if (state.lootOwned[drop.templateId] === 0) delete state.lootOwned[drop.templateId];
+    }
+    entitlement.active = false;
+    entitlement.revokedAt = now();
+    if (drop) entitlement.drop = deepClone(drop);
+    removed.push({ iid:iid||null, templateId:drop?.templateId||null, rarity:drop?.rarity||null, threshold:entitlement.threshold|0, entitlement:true });
+    try { logActivity({ category:"loot", action:"loot_clawback", sessionId:rec.id, taskId:rec.taskId||null, before:{templateId:drop?.templateId||null,rarity:drop?.rarity||null,threshold:entitlement.threshold|0}, after:null, source:"session-editor", note:"session fell below its edit-loot threshold" }); } catch(_){}
+  });
+  return removed;
 }
 function lootClawbackPreviewForSession(sessionId, minutes, rec){
   const allowed = (typeof allowedRaritiesForMinutes === "function") ? allowedRaritiesForMinutes(minutes) : new Set();
@@ -12022,6 +12471,7 @@ function applySessionEdit(sessionId,newMinutes){
   const nm=Math.max(0,Math.min(cap,raw));
   const __clampedEdit=(raw!==nm); /* v9: surface silent clamps so an edit is never quietly inaccurate */
   if(nm===current)return{ok:false,reason:"no_change",clamped:__clampedEdit,requested:raw,newMinutesCap:cap};
+  if(nm<current && offlineSyncedReductionBlocked())return{ok:false,reason:"reconnect before reducing or deleting synced time"};
   const oldMinutes=rec.minutes|0, delta=oldMinutes-nm, day=todayKey(new Date(rec.at||now()));
   state.totalFocusMin=Math.max(0,(state.totalFocusMin|0)-delta);
   if(state.history&&typeof state.history==="object")state.history[day]=Math.max(0,(state.history[day]||0)-delta);
@@ -12064,13 +12514,18 @@ function applySessionEdit(sessionId,newMinutes){
      credit is intentionally NOT reconstructed — combo is a sequential chain
      and fabricating a retroactive link risks corrupting it. */
   rec.minutes=nm; rec.xp=xpInfo.xpAfter; rec.rewarded=xpInfo.willReward; rec.edited=true; rec.editedAt=now(); rec.adjustedFrom=rec.adjustedFrom||original;
-  /* v8.7.0 LOOT CLAWBACK: if edited DOWN, claw back any loot from this session
-     whose rarity wouldn't have been allowed at the new minute total. If edited
-     UP and the new minutes crosses a new rarity threshold, run a bonus mini-
-     session through the existing RNG pipeline (NOT guaranteed — same RNG). */
+  /* Loot correction uses the resulting canonical session total. Edit-down
+     removes rewards whose gate is no longer met. Edit-up crosses stable,
+     one-shot threshold entitlements; a later re-cross restores the same item
+     instead of creating an unlimited reroll. */
   var __clawbackResult = { removed: [], gained: [] };
   try {
     if (delta > 0 && typeof allowedRaritiesForMinutes === "function" && state.loot && Array.isArray(state.loot.drops)){
+      var __entitlementRemoved = revokeSessionLootThresholdEntitlements(rec, nm);
+      if (__entitlementRemoved.length){
+        __clawbackResult.removed.push.apply(__clawbackResult.removed, __entitlementRemoved);
+        refreshSessionLegacyLoot(rec, sessionId);
+      }
       var __lootPreview = lootClawbackPreviewForSession(sessionId, nm, rec);
       var allowedNow = __lootPreview.allowed;
       var __hadTrackedDrops = __lootPreview.trackedDrops.length > 0;
@@ -12111,27 +12566,22 @@ function applySessionEdit(sessionId,newMinutes){
       if (__clawbackResult.removed.length && typeof toast === "function"){
         toast("Loot clawback: "+__clawbackResult.removed.length+" item(s) removed (session edited down).", "warn");
       }
-    } else if (delta < 0 && !(xpInfo && xpInfo.timeOnly) && typeof window.lrSessionEndLootPipeline === "function"){
-      /* Edit UP: roll for additional loot using the delta as a bonus mini-session.
-         allowedRaritiesForMinutes(nm) tightens or loosens via the pipeline's
-         internal gate. Use a new sessionId so eggs/loot dedup doesn't reject. */
-      var __addMin = -delta;
-      var __editSessId = sessionId + "_edit_"+(now()|0);
-      var __rerollAction = action;
-      var __rerollRun = window.lrSessionEndLootPipeline(__rerollAction, __addMin, __editSessId);
-      if (__rerollRun && Array.isArray(__rerollRun.drops)){
-        for (var __ri=0; __ri<__rerollRun.drops.length; __ri++){
-          var __rd = __rerollRun.drops[__ri];
-          if (!__rd) continue;
-          __clawbackResult.gained.push({ iid:__rd.iid||null, templateId:__rd.templateId, rarity:__rd.rarity });
-          logActivity({ category:"loot", action:"edit_roll_gain", sessionId:sessionId, taskId:rec.taskId||null, before:null, after:{templateId:__rd.templateId,rarity:__rd.rarity}, source:"session-editor", note:"+"+__addMin+"m bonus roll" });
-        }
-        if (__rerollRun.drops.length && typeof toast === "function"){
-          toast("Bonus roll from edit-up: "+__rerollRun.drops.length+" item(s).", "good");
-        }
+    } else if (delta < 0 && !(xpInfo && xpInfo.timeOnly)){
+      var __crossedThresholds = SESSION_LOOT_EDIT_THRESHOLDS.filter(function(threshold){ return oldMinutes < threshold && nm >= threshold; });
+      for (var __ti=0; __ti<__crossedThresholds.length; __ti++){
+        var __threshold = __crossedThresholds[__ti];
+        var __grant = grantSessionLootThresholdEntitlement(rec, action, __threshold, nm);
+        var __gd = __grant && __grant.drop;
+        if (!__gd) continue;
+        __clawbackResult.gained.push({ iid:__gd.iid||null, templateId:__gd.templateId, rarity:__gd.rarity, threshold:__threshold, restored:!!__grant.restored });
+        if (__grant.granted && typeof unlockAchievementsByRarity === "function") unlockAchievementsByRarity(__gd.rarity);
+      }
+      if (__clawbackResult.gained.length){
+        refreshSessionLegacyLoot(rec, sessionId);
+        if (typeof toast === "function") toast((__clawbackResult.gained.some(function(x){return x.restored;}) ? "Threshold reward restored" : "Threshold reward gained")+": "+__clawbackResult.gained.length+" item(s).", "good");
       }
     }
-  } catch(__e){ console.warn("v8.7.0 loot clawback/reroll failed", __e); }
+  } catch(__e){ console.warn("session edit loot reconciliation failed", __e); }
   reconcileFocusMilestones(state);
   if (delta < 0 && typeof checkAchievements === "function"){
     try { checkAchievements({ source:"sessionEdit", suppressRewards:!!(xpInfo && xpInfo.timeOnly) }); } catch(_){}
@@ -12575,6 +13025,8 @@ function applyTaskMinutesFromEditor(delta){
     toast(`${result.delta >= 0 ? "Added" : "Removed"} ${Math.abs(result.delta)} min. Stats updated.`, "good");
   } else if (result && result.reason === "nothing_to_remove"){
     toast("That task has no minutes left to remove.", "warn");
+  } else if (result && String(result.reason||"").includes("reconnect")){
+    toast("Reconnect before reducing synced time. Your offline progress is still safe.", "warn");
   } else {
     toast("Enter a non-zero minute correction.", "warn");
   }
@@ -13016,10 +13468,46 @@ function bindKeys(){
   });
 }
 function bindMultiTab(){
-  if (bc){ bc.addEventListener("message", e=>{ if (e.data?.type==="state" && e.data.state){ state = migrate(e.data.state); renderAll(); syncPendingFocusClaimFromState(); } }); }
+  const applyPeerState = raw=>{
+    /* A broken or unrelated writer must never be migrated into a fresh default
+       profile in this tab. Leave the valid in-memory state untouched; Data
+       Guard retains the protected snapshots if the malformed storage write
+       itself survives until reload. */
+    if (!isRecognizableRecoveryState(raw)) return false;
+    const next = migrate(deepClone(raw));
+    const currentSync = state?.sync || {};
+    const nextSync = next?.sync || {};
+    const staged = /staged locally/i.test(String(nextSync.lastSyncError || ""));
+    const identityChanged = ["playerId","syncCode","syncSecretHash","backend","jsonstorageUrl"].some(key=>(currentSync[key]||null)!==(nextSync[key]||null));
+    const mustInvalidateCloud = staged || identityChanged || (!!currentSync.enabled && !nextSync.enabled);
+    if (mustInvalidateCloud){
+      /* A recovery/import in another tab must supersede this tab's delayed
+         pull before that result can write the old cloud state back locally. */
+      syncIdentityGeneration += 1;
+      syncIdentityOperation = null;
+      syncOperationsPaused = true;
+      pullThenFlushInFlight = null;
+      try { stopPullPoll(); } catch(_){}
+      try { clearCloudRetryTimer(); } catch(_){}
+      try { clearTimeout(cloudDebounce); } catch(_){}
+    }
+    try {
+      state = next;
+      renderAll();
+      syncPendingFocusClaimFromState();
+    } finally {
+      if (mustInvalidateCloud){
+        syncOperationsPaused = false;
+        if (state.sync.enabled) startPullPoll();
+        scheduleCloudRetry();
+      }
+    }
+    return true;
+  };
+  if (bc){ bc.addEventListener("message", e=>{ if (e.data?.type==="state" && e.data.state){ try { applyPeerState(e.data.state); } catch(_){} } }); }
   window.addEventListener("storage", e=>{
     if (e.key === STORAGE_KEY && e.newValue){
-      try { state = migrate(JSON.parse(e.newValue)); renderAll(); syncPendingFocusClaimFromState(); } catch(_){}
+      try { applyPeerState(JSON.parse(e.newValue)); } catch(_){}
     }
   });
 }
@@ -13125,6 +13613,7 @@ const __FocusHero = {
      to a pre-migration backup. */
   listSnapshots: listRecoverySnapshots,
   recover: recoverFromSnapshot,
+  stageRecovery: stageInAppRecoveryState,
   isStateSane
 };
 Object.assign(__FocusHero, {
@@ -13810,6 +14299,7 @@ function renderTestBanner(results){
 /* -------- Boot -------- */
 async function boot(){
   try {
+    if (startupRecoveryError){ showBootError(startupRecoveryError); return; }
     applyTheme();
     injectV76DomScaffolding();
     bindSettings(); bindSync(); bindHelp(); bindAnalytics(); bindTabs(); bindDesignShell(); bindModeTabs();
@@ -13830,21 +14320,21 @@ async function boot(){
     maybeWarnAboutFileMode();
     if (state.timer.running && state.timer.endAt && state.timer.mode === "focus"){ startKeepalive(); acquireWakeLock(); }
     try { maybeAutoBackup(); } catch(_){}
-    if (state.sync.enabled){ startPullPoll(); cloudPull().then(()=>{ if (state.sync.pendingSync) scheduleCloudRetry(); }).catch(()=>{}); }
-    window.addEventListener("focus", ()=>{ if (state.sync.enabled && !cloudPushInFlight) cloudPull().catch(()=>{}); });
+    if (state.sync.enabled){ startPullPoll(); pullThenFlushPending("boot").catch(()=>{ if (state.sync.pendingSync) scheduleCloudRetry(); }); }
+    window.addEventListener("focus", ()=>{ if (state.sync.enabled && !cloudPushInFlight) pullThenFlushPending("window-focus").catch(()=>{}); });
     /* v9 offline-first: the app already saves every session to this device immediately
        (localStorage), so it stays fully usable with no wifi/data. These listeners flush
        the cloud sync the instant a connection returns, and reassure the user when offline. */
     window.addEventListener("online", ()=>{
       if (state.sync.enabled){
         clearCloudRetryTimer();
-        cloudPull({reason:"reconnect"}).then(()=>cloudPush({reason:"reconnect"})).catch(()=>{});
+        pullThenFlushPending("reconnect").catch(()=>{});
       }
-      try { logLine("Back online — syncing queued progress."); } catch(_){}
+      try { logLine("Back online — syncing queued progress.", false, true); } catch(_){}
       try { toast("📶 Back online — syncing your progress…", "info"); } catch(_){}
     });
-    window.addEventListener("offline", ()=>{ clearCloudRetryTimer(); try { logLine("Offline mode — sessions still save locally and sync when reconnected."); } catch(_){} try { toast("✈️ Offline — sessions still save on this device and sync when you reconnect.", "info"); } catch(_){} });
-    document.addEventListener("visibilitychange", ()=>{ if (!document.hidden && state.sync.enabled && !cloudPushInFlight) cloudPull().catch(()=>{}); });
+    window.addEventListener("offline", ()=>{ clearCloudRetryTimer(); try { logLine("Offline mode — sessions still save locally and sync when reconnected.", false, true); } catch(_){} try { toast("✈️ Offline — sessions still save on this device and sync when you reconnect.", "info"); } catch(_){} });
+    document.addEventListener("visibilitychange", ()=>{ if (!document.hidden && state.sync.enabled && !cloudPushInFlight) pullThenFlushPending("visible").catch(()=>{}); });
     scheduleCloudRetry();
     handleUrlActions();
     registerSW();
@@ -13890,8 +14380,9 @@ function showBootError(err){
     };
     document.getElementById("__fh_restore").onclick = ()=>{
       try {
-        const recovered = safeRecoverState();
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(recovered));
+        const recovered = findSafeRecoverySnapshot();
+        if (!recovered) throw new Error("No valid recovery snapshot was found. Export the raw state before taking any other action.");
+        stageInAppRecoveryState(recovered.state);
         location.reload();
       } catch(e2){ alert("Restore failed: "+(e2 && (e2.message||e2))); }
     };
@@ -14111,6 +14602,7 @@ function applyTaskTimeAdjustment(taskId, deltaMin){
   if (!task) return { ok:false, reason:"no_task" };
   let d = Math.round(Number(deltaMin)||0);
   if (d === 0) return { ok:false, reason:"zero" };
+  if (d < 0 && offlineSyncedReductionBlocked()) return { ok:false, reason:"reconnect before reducing or deleting synced time" };
   const __requested = d; /* v9: remember requested amount so we can flag a silent cap */
   d = Math.max(-LEDGER_EDIT_CAP, Math.min(LEDGER_EDIT_CAP, d));
   let __capClamped = (d !== __requested);
@@ -14961,19 +15453,16 @@ else boot();
     if (typeof document==="undefined") return;
     if (!ensureShape()) return;
     ensureStyle();
-    var card=document.getElementById("fht-card");
-    if (!card){
-      card=document.createElement("div"); card.className="fht-card"; card.id="fht-card";
-      var anchor=document.getElementById("daily-recap");
-      if (anchor && anchor.parentNode){ anchor.parentNode.insertBefore(card, anchor); }
-      else { var hc=document.querySelector(".hero-card"); if (hc){ var dh=hc.querySelector(".daily-hours-card"); if (dh&&dh.nextSibling) dh.parentNode.insertBefore(card,dh.nextSibling); else hc.appendChild(card); } else document.body.appendChild(card); }
-    }
-    card.innerHTML=targetHtml(false);
+    var stale=document.getElementById("fht-card");
+    if (stale) stale.remove();
     var panel=document.getElementById("fht-tab-panel");
-    if (panel) panel.innerHTML='<div class="fht-card fht-card-full">'+targetHtml(true)+'</div>';
-    document.querySelectorAll("[data-fht-open]").forEach(function(btn){
-      btn.onclick=function(){ try{ if (typeof openProgressPanel==="function") openProgressPanel("targets"); }catch(_){} };
-    });
+    if (panel){
+      panel.innerHTML='<div class="fht-card fht-card-full">'+targetHtml(true)+'</div>';
+      /* The organized progression hub adds Current/History views around this
+         legacy card. Re-attach them after every direct target refresh (the
+         delayed target boot can run after the hub's initial install). */
+      try { if (typeof window.fhRenderProgressionHub==="function") window.fhRenderProgressionHub(); } catch(_){}
+    }
   }
   window.fhRenderTargetsCard=renderCard;
 
@@ -15002,5 +15491,6 @@ else boot();
 })();
 </script>
 <script src="./focus-economy.js"></script>
+<script src="./progression-hub.js"></script>
 </body>
 </html>

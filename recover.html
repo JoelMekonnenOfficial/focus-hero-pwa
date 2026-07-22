@@ -32,6 +32,7 @@
          background:#2a2f55; margin-left: 6px; vertical-align: middle; }
   .tag.gold { background:#5c4508; color:#ffd97a; }
   .tag.grey { background:#22263f; color:#9aa3c7; }
+  .tag.idb { background:#173a4a; color:#9ee9ff; }
   .stats { display: grid; grid-template-columns: repeat(auto-fill,minmax(130px,1fr));
            gap: 4px 12px; margin: 10px 0; font-size: 13.5px; }
   .stats b { font-size: 15px; }
@@ -54,17 +55,20 @@
 </style>
 </head>
 <body>
-<h1>🚑 Focus Hero — Data Recovery</h1>
+<h1>Focus Hero — Data Recovery</h1>
 <div class="sub">
-  This page only <b>reads</b> your device storage and lists every Focus Hero snapshot it finds,
+  This page only <b>reads</b> your device storage and lists every Focus Hero snapshot it finds in
+  localStorage and the separate IndexedDB guard ring,
   with its real numbers. Nothing is changed unless you press <b>Restore</b>.
-  Restoring first saves the current state to a new backup key, so it is always reversible.
+  Restoring first saves the current state to a new backup key, preserves the current sync identity,
+  and keeps cloud sync off until you verify the recovered profile.
 </div>
 <div id="status"></div>
 <div id="list"></div>
 
 <div class="footer">
-  Keys scanned: any localStorage key starting with <code>focusHero.</code> ·
+  Sources scanned: localStorage keys starting with <code>focusHero.</code> and
+  IndexedDB <code>fh-guard/snaps</code> ·
   <a href="./focus-hero.html">Open Focus Hero</a>
 </div>
 
@@ -72,17 +76,27 @@
 "use strict";
 /* ============================================================
  * Focus Hero standalone recovery page.
- * - READ-ONLY on load: enumerates focusHero.* keys, parses each,
- *   shows minutes / level / sessions / history range.
+ * - READ-ONLY on load: enumerates focusHero.* localStorage keys and
+ *   the IndexedDB fh-guard/snaps ring, then shows their real state.
  * - Restore: backs up current main state to
  *   focusHero.v4.state.pre-recovery-<ts>, then writes the chosen
- *   snapshot to focusHero.v4.state, then verifies by re-reading.
+ *   snapshot to focusHero.v4.state, preserves the current sync identity in a
+ *   paused state, and verifies every serialized byte of that staged state.
+ *   A failed post-write check rolls the previous state back and verifies it.
  * - No network calls. No app code. No automatic writes.
  * ============================================================ */
 var MAIN_KEY = "focusHero.v4.state";
+var GUARD_DB = "fh-guard", GUARD_STORE = "snaps";
+var lastEntries = [], lastWarnings = [], renderSequence = 0;
+
+function plainObject(value){ return !!value && typeof value === "object" && !Array.isArray(value); }
+function count(value){
+  var n = Number(value);
+  return Number.isFinite(n) && n > 0 ? Math.min(Number.MAX_SAFE_INTEGER, Math.floor(n)) : 0;
+}
 
 function fmtMin(m){
-  m = m|0;
+  m = count(m);
   var h = Math.floor(m/60), r = m%60;
   return h > 0 ? (h + "h " + r + "m") : (r + "m");
 }
@@ -101,8 +115,8 @@ function esc(s){
    wrapper like {savedAt, state} (LKG format) or {exportedAt, state} (backups).
    Returns {state, savedAt} or null. */
 function unwrapState(parsed){
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
-  if (parsed.state && typeof parsed.state === "object" && !Array.isArray(parsed.state)){
+  if (!plainObject(parsed)) return null;
+  if (plainObject(parsed.state)){
     return { state: parsed.state, savedAt: parsed.savedAt || parsed.exportedAt || null };
   }
   // Heuristic: a real state has at least one of these fields.
@@ -113,27 +127,69 @@ function unwrapState(parsed){
 }
 
 function summarize(state){
-  var hist = (state && typeof state.history === "object" && state.history) ? state.history : {};
+  state = plainObject(state) ? state : {};
+  var hist = plainObject(state.history) ? state.history : {};
   var days = Object.keys(hist).filter(function(k){ return /^\d{4}-\d{2}-\d{2}$/.test(k); }).sort();
   var histSum = 0;
-  for (var i=0;i<days.length;i++){ histSum += (hist[days[i]]|0); }
+  for (var i=0;i<days.length;i++){ histSum += count(hist[days[i]]); }
+  var economy = plainObject(state.focusEconomy) ? state.focusEconomy : {};
+  var grants = plainObject(economy.grants) ? economy.grants : {};
+  var spends = Array.isArray(economy.spends) ? economy.spends : [];
+  var harvests = Array.isArray(economy.harvests) ? economy.harvests : [];
+  var plots = Array.isArray(economy.plots) ? economy.plots : [];
+  var seen = Object.create(null), duplicate = Object.create(null);
+  function addEventId(item){
+    var id = item && typeof item.id === "string" ? item.id.trim() : "";
+    if (!id) return;
+    if (seen[id]) duplicate[id] = true; else seen[id] = true;
+  }
+  Object.keys(grants).forEach(function(key){ addEventId(grants[key]); });
+  spends.forEach(addEventId); harvests.forEach(addEventId);
+  var unlocked = Number(economy.unlockedPlots);
+  unlocked = Number.isFinite(unlocked) && Math.floor(unlocked) === unlocked && unlocked >= 2 && unlocked <= 3 ? unlocked : 0;
   return {
-    totalFocusMin: (state && state.totalFocusMin)|0,
-    level: (state && state.hero && state.hero.level)|0,
-    xp: (state && state.hero && state.hero.xp)|0,
-    sessions: (state && Array.isArray(state.sessionsLog)) ? state.sessionsLog.length : 0,
-    tasks: (state && Array.isArray(state.tasks)) ? state.tasks.length : 0,
-    coins: (state && state.coins)|0,
-    streak: (state && state.streak)|0,
+    totalFocusMin: count(state.totalFocusMin),
+    level: count(state.hero && state.hero.level),
+    xp: count(state.hero && state.hero.xp),
+    sessions: Array.isArray(state.sessionsLog) ? state.sessionsLog.length : 0,
+    tasks: Array.isArray(state.tasks) ? state.tasks.length : 0,
+    coins: count(state.coins),
+    streak: count(state.streak),
     histDays: days.length,
     histSum: histSum,
     firstDay: days[0] || null,
     lastDay: days[days.length-1] || null,
-    dataVersion: (state && state.dataVersion) || null
+    dataVersion: state.dataVersion || null,
+    economyGrants: Object.keys(grants).length,
+    economySpends: spends.length,
+    economyHarvests: harvests.length,
+    economyEvents: Object.keys(grants).length + spends.length + harvests.length,
+    economyPlots: plots.length,
+    unlockedPlots: unlocked,
+    duplicateEventIds: Object.keys(duplicate).length
   };
 }
 
-function scan(){
+function entryFromRaw(options){
+  var raw = options.raw;
+  var entry = {
+    id: options.id, key: options.key, source: options.source, sourceLabel: options.sourceLabel,
+    sourceDetail: options.sourceDetail || "", reason: options.reason || "", size: raw.length,
+    parsed: null, savedAt: options.savedAt || null, sum: null, raw: raw
+  };
+  try {
+    var parsed = JSON.parse(raw);
+    var unwrapped = unwrapState(parsed);
+    if (unwrapped){
+      entry.parsed = unwrapped.state;
+      entry.savedAt = options.savedAt || unwrapped.savedAt || null;
+      entry.sum = summarize(unwrapped.state);
+    }
+  } catch(_){ /* malformed entries remain visible but are never restorable/exportable */ }
+  return entry;
+}
+
+function scanLocalStorage(){
   var out = [];
   for (var i = 0; i < localStorage.length; i++){
     var k = localStorage.key(i);
@@ -141,19 +197,97 @@ function scan(){
     var raw = null;
     try { raw = localStorage.getItem(k); } catch(e){ continue; }
     if (raw == null) continue;
-    var entry = { key: k, size: raw.length, parsed: null, savedAt: null, sum: null, raw: raw };
-    try {
-      var p = JSON.parse(raw);
-      var un = unwrapState(p);
-      if (un){ entry.parsed = un.state; entry.savedAt = un.savedAt; entry.sum = summarize(un.state); }
-    } catch(e){ /* unparseable — still listed for download */ }
-    out.push(entry);
+    out.push(entryFromRaw({ id:"local:" + k, key:k, source:"localStorage", sourceLabel:"localStorage",
+      sourceDetail:k, raw:raw }));
   }
-  // Sort: most focus minutes first; unparseable last; main key pinned context handled in render.
+  return out;
+}
+
+async function guardDbExistsHint(){
+  if (!window.indexedDB || typeof indexedDB.databases !== "function") return null;
+  try {
+    var databases = await indexedDB.databases();
+    return databases.some(function(info){ return info && info.name === GUARD_DB; });
+  } catch(_){ return null; }
+}
+
+async function scanGuardSnapshots(){
+  if (!window.indexedDB) return [];
+  var exists = await guardDbExistsHint();
+  if (exists === false) return [];
+  return new Promise(function(resolve, reject){
+    var settled = false, db = null, createdByRead = false;
+    function finish(error, value){
+      if (settled) return; settled = true;
+      try { if (db) db.close(); } catch(_){}
+      if (error) reject(error); else resolve(value || []);
+    }
+    var request;
+    try { request = indexedDB.open(GUARD_DB); }
+    catch(error){ finish(error); return; }
+    request.onupgradeneeded = function(){
+      /* Opening an absent DB would create it. Abort so recovery remains truly
+         read-only when there is no guard ring yet. */
+      createdByRead = true;
+      try { request.transaction.abort(); } catch(_){}
+    };
+    request.onerror = function(){
+      if (createdByRead && request.error && request.error.name === "AbortError") finish(null, []);
+      else finish(request.error || new Error("IndexedDB open failed"));
+    };
+    request.onblocked = function(){ finish(new Error("IndexedDB guard database is blocked by another page")); };
+    request.onsuccess = function(){
+      if (settled) { try { request.result.close(); } catch(_){} return; }
+      db = request.result;
+      db.onversionchange = function(){ try { db.close(); } catch(_){} };
+      if (!db.objectStoreNames.contains(GUARD_STORE)){ finish(null, []); return; }
+      var records = [], transaction;
+      try {
+        transaction = db.transaction(GUARD_STORE, "readonly");
+        var cursor = transaction.objectStore(GUARD_STORE).openCursor();
+        cursor.onsuccess = function(){
+          var item = cursor.result;
+          if (!item) return;
+          records.push(item.value); item.continue();
+        };
+        cursor.onerror = function(){ finish(cursor.error || new Error("IndexedDB cursor failed")); };
+      } catch(error){ finish(error); return; }
+      transaction.oncomplete = function(){
+        var entries = [];
+        records.forEach(function(record, index){
+          var raw;
+          try { raw = JSON.stringify(record); } catch(_) { raw = ""; }
+          if (typeof raw !== "string") raw = "";
+          var date = plainObject(record) ? String(record.date || "unknown") : "unknown";
+          entries.push(entryFromRaw({
+            id:"idb:" + date + ":" + index,
+            key:"fh-guard/snaps · " + date,
+            source:"indexedDB", sourceLabel:"IndexedDB guard ring",
+            sourceDetail:"fh-guard/snaps" + (plainObject(record) && record.reason ? " · " + record.reason : ""),
+            reason:plainObject(record) ? String(record.reason || "") : "",
+            savedAt:plainObject(record) ? (record.savedAt || record.date || null) : null,
+            raw:raw
+          }));
+        });
+        finish(null, entries);
+      };
+      transaction.onerror = function(){ finish(transaction.error || new Error("IndexedDB read failed")); };
+      transaction.onabort = function(){ finish(transaction.error || new Error("IndexedDB read aborted")); };
+    };
+  });
+}
+
+async function scan(){
+  lastWarnings = [];
+  var out = [];
+  try { out = scanLocalStorage(); }
+  catch(error){ lastWarnings.push("localStorage snapshots could not be read: " + (error && error.message ? error.message : error)); }
+  try { out = out.concat(await scanGuardSnapshots()); }
+  catch(error){ lastWarnings.push("IndexedDB guard ring could not be read: " + (error && error.message ? error.message : error)); }
   out.sort(function(a,b){
-    var am = a.sum ? (a.sum.totalFocusMin || a.sum.histSum) : -1;
-    var bm = b.sum ? (b.sum.totalFocusMin || b.sum.histSum) : -1;
-    return bm - am;
+    var am = a.sum ? a.sum.totalFocusMin : -1, bm = b.sum ? b.sum.totalFocusMin : -1;
+    if (am !== bm) return bm - am;
+    return String(b.savedAt || "").localeCompare(String(a.savedAt || ""));
   });
   return out;
 }
@@ -167,61 +301,161 @@ function labelFor(key){
   return {t:"SNAPSHOT", cls:"grey"};
 }
 
+function labelForEntry(entry){
+  if (entry.source === "indexedDB") return {t:"GUARD RING", cls:"idb"};
+  return labelFor(entry.key);
+}
+
+function sanitizeRecoveryDownload(value){
+  var clone = JSON.parse(JSON.stringify(value));
+  var blocked = {userToken:true,refreshToken:true,tokenExpiresAt:true,accessToken:true,access_token:true,refresh_token:true};
+  function scrub(node){
+    if (Array.isArray(node)){ node.forEach(scrub); return; }
+    if (!plainObject(node)) return;
+    Object.keys(node).forEach(function(key){
+      if (blocked[key]) delete node[key];
+      else scrub(node[key]);
+    });
+  }
+  scrub(clone);
+  return clone;
+}
+
+function safeDownloadText(entry){
+  if (!entry || !entry.parsed) throw new Error("This record cannot be safely exported because its contents could not be validated.");
+  var parsed = JSON.parse(entry.raw);
+  return JSON.stringify(sanitizeRecoveryDownload(parsed), null, 2);
+}
+
 function download(entry){
   try {
-    var blob = new Blob([entry.raw], {type:"application/json"});
+    var safeText = safeDownloadText(entry);
+    var blob = new Blob([safeText], {type:"application/json"});
     var a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     var mins = entry.sum ? (entry.sum.totalFocusMin || 0) : 0;
-    a.download = "focus-hero-" + entry.key.replace(/[^a-z0-9.]/gi,"_") + "-" + mins + "min-" +
+    a.download = "focus-hero-" + entry.source + "-" + entry.key.replace(/[^a-z0-9.]/gi,"_") + "-" + mins + "min-sanitized-" +
       new Date().toISOString().slice(0,10) + ".json";
     document.body.appendChild(a); a.click();
     setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 2000);
   } catch(e){ alert("Download failed: " + (e.message||e)); }
 }
 
+function uniqueBackupKey(storage){
+  var base = MAIN_KEY + ".pre-recovery-" + new Date().toISOString().replace(/[:.]/g,"-");
+  var key = base, suffix = 0;
+  while (storage.getItem(key) !== null){ suffix++; key = base + "-" + suffix; }
+  return key;
+}
+
+function stageRecoveryState(state, previousRaw){
+  var staged = JSON.parse(JSON.stringify(state));
+  var previousState = null;
+  try {
+    previousState = previousRaw == null ? null : JSON.parse(previousRaw);
+    if (plainObject(previousState) && plainObject(previousState.state)) previousState = previousState.state;
+  } catch(_){ previousState = null; }
+  var syncSource = plainObject(previousState && previousState.sync) ? previousState.sync :
+    (plainObject(staged.sync) ? staged.sync : null);
+  if (syncSource){
+    staged.sync = JSON.parse(JSON.stringify(syncSource));
+    staged.sync.enabled = false;
+    staged.sync.pendingSync = false;
+    staged.sync.pendingSince = 0;
+    staged.sync.retryCount = 0;
+    staged.sync.retryAfter = 0;
+    staged.sync.lastSyncError = "Recovery staged locally; verify it before re-enabling cloud sync.";
+  }
+  return staged;
+}
+
+function verifiedRestore(entry, storage){
+  storage = storage || localStorage;
+  var state = entry && entry.parsed;
+  var hasStateMarker = plainObject(state && state.hero) || Array.isArray(state && state.tasks) ||
+    (state && typeof state.dataVersion === "number" && Number.isFinite(state.dataVersion));
+  if (!plainObject(state) || !Number.isSafeInteger(state.totalFocusMin) || state.totalFocusMin < 0 || !hasStateMarker){
+    throw new Error("Snapshot is not a valid Focus Hero state; live state was not changed.");
+  }
+  var previous;
+  try { previous = storage.getItem(MAIN_KEY); }
+  catch(error){ throw new Error("Could not read the live state; live state was not changed. " + (error.message || error)); }
+  var staged = stageRecoveryState(entry.parsed, previous);
+  var serialized = JSON.stringify(staged);
+  if (typeof serialized !== "string" || !plainObject(JSON.parse(serialized))){
+    throw new Error("Snapshot serialization failed; live state was not changed.");
+  }
+  var backupKey = null;
+  if (previous !== null){
+    try {
+      backupKey = uniqueBackupKey(storage);
+      storage.setItem(backupKey, previous);
+      if (storage.getItem(backupKey) !== previous) throw new Error("backup bytes differed");
+    } catch(error){
+      throw new Error("Pre-restore backup failed verification; live state was not changed. " + (error.message || error));
+    }
+  }
+  var mutationAttempted = false;
+  try {
+    mutationAttempted = true;
+    storage.setItem(MAIN_KEY, serialized);
+    var readBack = storage.getItem(MAIN_KEY);
+    if (readBack !== serialized) throw new Error("restored bytes differed from the selected snapshot");
+    var parsedBack = JSON.parse(readBack);
+    if (!plainObject(parsedBack) || JSON.stringify(parsedBack) !== serialized) throw new Error("full state read-back check failed");
+    return { backupKey:backupKey, serialized:serialized, syncPaused:!!(staged.sync && staged.sync.enabled === false) };
+  } catch(error){
+    if (!mutationAttempted) throw error;
+    var rollbackOk = false;
+    try {
+      if (previous === null) storage.removeItem(MAIN_KEY); else storage.setItem(MAIN_KEY, previous);
+      rollbackOk = storage.getItem(MAIN_KEY) === previous;
+    } catch(_){ rollbackOk = false; }
+    if (!rollbackOk){
+      throw new Error("CRITICAL: restore failed and automatic rollback could not be verified. The pre-restore backup remains at " + (backupKey || "no backup key") + ".");
+    }
+    throw new Error("Restore failed, but the prior live state was restored and verified. " + (error.message || error));
+  }
+}
+
 function restore(entry){
-  if (!entry.parsed){ alert("This snapshot could not be parsed and cannot be restored automatically."); return; }
+  if (!entry.parsed){ alert("This snapshot could not be parsed and cannot be restored automatically."); return false; }
   var s = entry.sum;
   var msg = "Restore this snapshot?\n\n" +
     "Focus time: " + fmtMin(s.totalFocusMin) + "\n" +
     "Level " + s.level + " · " + s.sessions + " sessions · " + s.histDays + " days of history\n" +
     (s.firstDay ? ("From " + s.firstDay + " to " + s.lastDay + "\n") : "") +
-    "\nThe current state will be backed up first. Nothing is lost.";
-  if (!confirm(msg)) return;
+    "\nThe restore proceeds only after the current state backup is written and verified. Cloud sync will stay off until you verify the recovered profile.";
+  if (!confirm(msg)) return false;
   var status = document.getElementById("status");
   try {
-    // 1. Back up whatever is currently in the main key (even if blank).
-    var cur = null;
-    try { cur = localStorage.getItem(MAIN_KEY); } catch(e){}
-    var backupKey = MAIN_KEY + ".pre-recovery-" + new Date().toISOString().replace(/[:.]/g,"-");
-    if (cur != null){ localStorage.setItem(backupKey, cur); }
-    // 2. Write the snapshot state (unwrapped) into the main key.
-    var serialized = JSON.stringify(entry.parsed);
-    localStorage.setItem(MAIN_KEY, serialized);
-    // 3. Verify by reading back and comparing the headline number.
-    var check = JSON.parse(localStorage.getItem(MAIN_KEY));
-    var okMin = ((check && check.totalFocusMin)|0) === (s.totalFocusMin|0);
-    var okSess = ((check && Array.isArray(check.sessionsLog)) ? check.sessionsLog.length : 0) === s.sessions;
-    if (!okMin || !okSess) throw new Error("Read-back verification failed — restore NOT confirmed.");
+    var result = verifiedRestore(entry, localStorage);
     status.innerHTML = '<div class="banner ok"><b>✅ Restored & verified.</b> ' +
       esc(fmtMin(s.totalFocusMin)) + " across " + s.histDays + " days is now the live state " +
-      "(read-back check passed). Your previous state was backed up to a new key.<br><br>" +
+      "(full byte-for-byte read-back check passed). " + (result.backupKey ? "Your previous state was backed up to <code>" + esc(result.backupKey) + "</code>." : "There was no previous live state to back up.") + "<br>" +
+      (result.syncPaused ? "<b>Cloud sync is paused.</b> The current sync identity was preserved, but no recovered state will upload until you verify it and turn sync back on.<br><br>" : "<br>") +
       '<b>Next:</b> <a href="./focus-hero.html">open Focus Hero</a>, confirm your stats look right, ' +
       "then IMMEDIATELY do Settings → Back up all data to save a copy off-device.</div>";
     window.scrollTo(0,0);
-    render(); // re-scan so the list reflects the new reality
+    void render(); // re-scan so the list reflects the new reality
+    return true;
   } catch(e){
     status.innerHTML = '<div class="banner bad"><b>❌ Restore failed:</b> ' + esc(e.message||e) +
-      "<br>Nothing further was changed. Your snapshots are untouched — screenshot this and tell Claude/ChatGPT.</div>";
+      "<br>The selected source snapshot was not modified. Keep this message with any named backup key.</div>";
+    return false;
   }
 }
 
-function render(){
+async function render(){
+  var sequence = ++renderSequence;
   var list = document.getElementById("list");
-  var entries = scan();
+  list.innerHTML = '<div class="banner">Reading localStorage and the IndexedDB guard ring…</div>';
+  var entries = await scan();
+  if (sequence !== renderSequence) return;
+  lastEntries = entries;
+  var warningHtml = lastWarnings.map(function(w){ return '<div class="banner bad">' + esc(w) + "</div>"; }).join("");
   if (!entries.length){
-    list.innerHTML = '<div class="banner bad">No <code>focusHero.*</code> keys found in this browser context.<br><br>' +
+    list.innerHTML = warningHtml + '<div class="banner bad">No Focus Hero localStorage snapshots or IndexedDB guard snapshots were found in this browser context.<br><br>' +
       "<b>Important:</b> the installed home-screen app and the plain browser have SEPARATE storage. " +
       "Open this page from INSIDE the app (Settings → 🚑 Recovery) — not in a separate browser tab.</div>";
     return;
@@ -233,13 +467,14 @@ function render(){
   }
   var html = "";
   entries.forEach(function(e, idx){
-    var lab = labelFor(e.key);
+    var lab = labelForEntry(e);
     var isBest = e.sum && e.sum.totalFocusMin === best && best > 0;
-    html += '<div class="snap' + (isBest ? " best" : "") + '">';
+    html += '<div class="snap' + (isBest ? " best" : "") + '" data-source="' + esc(e.source) + '" data-entry-index="' + idx + '">';
     html += "<h3>" + esc(e.key) +
       ' <span class="tag ' + lab.cls + '">' + lab.t + "</span>" +
       (isBest ? ' <span class="tag gold">MOST DATA</span>' : "") + "</h3>";
-    if (e.savedAt) html += '<div class="row-dates">Snapshot saved: ' + esc(e.savedAt) + "</div>";
+    html += '<div class="row-dates"><b>Source:</b> ' + esc(e.sourceLabel) + " · " + esc(e.sourceDetail) + "</div>";
+    if (e.savedAt) html += '<div class="row-dates"><b>Snapshot timestamp:</b> ' + esc(e.savedAt) + "</div>";
     if (e.sum){
       var s = e.sum;
       html += '<div class="stats">' +
@@ -249,24 +484,28 @@ function render(){
         "<div><span>History days</span><b>" + s.histDays + "</b></div>" +
         "<div><span>Tasks</span><b>" + s.tasks + "</b></div>" +
         "<div><span>Coins</span><b>" + s.coins + "</b></div>" +
+        "<div><span>Economy events</span><b>" + s.economyEvents + "</b></div>" +
+        "<div><span>Grants / spends / harvests</span><b>" + s.economyGrants + " / " + s.economySpends + " / " + s.economyHarvests + "</b></div>" +
+        "<div><span>Unlocked plots</span><b>" + (s.unlockedPlots || "—") + "</b></div>" +
+        "<div><span>Duplicate event IDs</span><b>" + s.duplicateEventIds + "</b></div>" +
         "</div>";
       if (s.firstDay) html += '<div class="row-dates">History: ' + esc(s.firstDay) + " → " + esc(s.lastDay) +
         " · logged sum " + esc(fmtMin(s.histSum)) + " · v" + esc(String(s.dataVersion)) + "</div>";
       if (s.totalFocusMin === 0 && s.sessions === 0)
         html += '<div class="row-dates empty">Empty / blank state</div>';
     } else {
-      html += '<div class="row-dates empty">Could not parse (' + fmtBytes(e.size) + ") — download it and send it to your assistant.</div>";
+      html += '<div class="row-dates empty">Could not parse (' + fmtBytes(e.size) + ") — raw download is disabled because device credentials cannot be safely removed.</div>";
     }
     html += '<div class="btns">';
-    if (e.key !== MAIN_KEY && e.parsed){
+    if (!(e.source === "localStorage" && e.key === MAIN_KEY) && e.parsed){
       html += '<button class="restore" data-idx="' + idx + '">⟲ Restore this</button>';
     }
-    html += '<button class="dl" data-dl="' + idx + '">⬇ Download copy</button>';
+    if (e.parsed) html += '<button class="dl" data-dl="' + idx + '">Download safe copy</button>';
     html += "</div>";
     html += '<div class="danger-note">' + fmtBytes(e.size) + "</div>";
     html += "</div>";
   });
-  list.innerHTML = html;
+  list.innerHTML = warningHtml + html;
   list.querySelectorAll("button.restore").forEach(function(b){
     b.addEventListener("click", function(){ restore(entries[b.dataset.idx|0]); });
   });
@@ -275,11 +514,18 @@ function render(){
   });
 }
 
-try { render(); }
-catch(e){
+window.__fhRecoveryTest = {
+  unwrapState:unwrapState, summarize:summarize, scanLocalStorage:scanLocalStorage,
+  scanGuardSnapshots:scanGuardSnapshots, scan:scan, render:render,
+  sanitizeRecoveryDownload:sanitizeRecoveryDownload, safeDownloadText:safeDownloadText,
+  stageRecoveryState:stageRecoveryState, verifiedRestore:verifiedRestore, restore:restore, download:download,
+  entries:function(){ return lastEntries.slice(); }, warnings:function(){ return lastWarnings.slice(); }
+};
+
+render().catch(function(e){
   document.getElementById("status").innerHTML =
     '<div class="banner bad">Recovery page error: ' + esc(e.message||e) + "</div>";
-}
+});
 </script>
 </body>
 </html>

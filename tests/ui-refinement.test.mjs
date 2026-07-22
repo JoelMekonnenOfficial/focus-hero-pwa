@@ -27,6 +27,11 @@ assert.doesNotMatch(html, /adv-status-slot|adv-status-pill|fh76-blink/);
 assert.doesNotMatch(sw, /RECOVER_LINK|data-nav-recover|withRecoverLink/);
 assert.match(sw, /async function withDataGuard/);
 assert.match(sw, /data-guard\.js/);
+assert.match(sw, /\.\/progression-hub\.js/);
+assert.equal((html.match(/id="btn-cancel-session"/g) || []).length, 1, "one shared live cancel control");
+assert.doesNotMatch(html, /id="btn-lock-reset"|id="btn-priority-cancel"/);
+assert.match(html, /#live-custom-min\{[^}]*min-height:48px/);
+assert.match(html, /<script src="\.\/progression-hub\.js"><\/script>/);
 
 const mime = {
   ".html":"text/html; charset=utf-8", ".js":"text/javascript; charset=utf-8",
@@ -52,12 +57,52 @@ await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
 const { port } = server.address();
 const browser = await chromium.launch({ headless:true, channel:"chrome" });
 try {
-  const context = await browser.newContext({ serviceWorkers:"block" });
+  const context = await browser.newContext({ serviceWorkers:"block", viewport:{ width:320, height:844 } });
   const page = await context.newPage();
   const pageErrors = [];
   page.on("pageerror", error => pageErrors.push(String(error)));
   await page.goto(`http://127.0.0.1:${port}/`, { waitUntil:"domcontentloaded" });
   await page.waitForFunction(() => Boolean(window.__FocusHero?.stateRef));
+  await page.waitForSelector(".progress-browse");
+
+  const organized = await page.evaluate(async () => {
+    await new Promise(resolve => setTimeout(resolve, 50));
+    const browse = document.querySelector(".progress-browse");
+    const live = document.querySelector("#live-adjust");
+    if (live) live.hidden = false;
+    const inputRect = document.querySelector("#live-custom-min")?.getBoundingClientRect();
+    const wrapRect = document.querySelector("#live-custom-wrap")?.getBoundingClientRect();
+    browse.open = true;
+    document.querySelector('[data-tab="world"]')?.click();
+    await new Promise(resolve => setTimeout(resolve, 20));
+    const targetButtons = Array.from(document.querySelectorAll(".fht-view-switch button")).map(button => button.textContent.trim());
+    return {
+      groups:browse.querySelectorAll(".progress-tab-group").length,
+      current:browse.querySelector("[data-progress-current]")?.textContent,
+      closesAfterChoice:!browse.open,
+      world:/Adventure map/.test(document.querySelector("#world-panel")?.textContent || ""),
+      challenges:/Goals with rewards/.test(document.querySelector("#quests-v85-panel")?.textContent || ""),
+      vault:/Protected item storage/.test(document.querySelector("#vault-panel")?.textContent || ""),
+      targetButtons,
+      duplicateTargets:document.querySelectorAll("#fht-card").length,
+      cancelCount:document.querySelectorAll("#btn-cancel-session").length,
+      inputWidth:inputRect?.width || 0,
+      inputHeight:inputRect?.height || 0,
+      customFits:!!inputRect && !!wrapRect && inputRect.right <= wrapRect.right + 1 && inputRect.left >= wrapRect.left - 1
+    };
+  });
+  assert.equal(organized.groups, 6);
+  assert.equal(organized.current, "World");
+  assert.equal(organized.closesAfterChoice, true);
+  assert.equal(organized.world, true);
+  assert.equal(organized.challenges, true);
+  assert.equal(organized.vault, true);
+  assert.deepEqual(organized.targetButtons, ["Current targets", "Reward history"]);
+  assert.equal(organized.duplicateTargets, 0);
+  assert.equal(organized.cancelCount, 1);
+  assert.ok(organized.inputWidth >= 140, `custom minute input width was ${organized.inputWidth}`);
+  assert.ok(organized.inputHeight >= 48, `custom minute input height was ${organized.inputHeight}`);
+  assert.equal(organized.customFits, true);
 
   const encounter = await page.evaluate(() => {
     const stage = document.querySelector("#encounter-stage");

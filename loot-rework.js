@@ -719,10 +719,11 @@
 
   function lrCommitDrop(s, drop, ctx){
     s = lrEnsureShape(s || _state());
+    ctx = ctx || {};
     var template = drop.template;
     var templateId = _lootId(template);
     var __wasOwned = ((s.lootOwned[templateId]|0) > 0); /* v9: owned before this drop => duplicate */
-    var instance = lrMintInstance(template, { source:{ kind:"drop", action:ctx.action, enemyId:ctx.enemyId } });
+    var instance = lrMintInstance(template, { rng:ctx.rng, source:{ kind:ctx.sourceKind||"drop", action:ctx.action, enemyId:ctx.enemyId } });
     s.lootInstances[instance.iid] = instance;
     s.lootOwned[templateId] = (s.lootOwned[templateId]|0) + 1;
     var idx = LR_RARITIES.indexOf(drop.rarity);
@@ -753,13 +754,17 @@
       fromMonsterTable: !!drop.fromMonsterTable,
       outcome: ctx.outcome || null
     };
+    if (ctx.editEntitlementId){
+      entry.editEntitlementId = String(ctx.editEntitlementId);
+      entry.editThreshold = Math.max(0, ctx.editThreshold|0);
+    }
     s.loot.drops.push(entry);
     if (s.loot.drops.length > LR_DROP_LOG_CAP) s.loot.drops.shift();
     var flags = (s.lootRework && s.lootRework.flags) || {};
     /* v9: a drop you ALREADY own is a duplicate (rarity pool exhausted -- see
        lrPickTemplateInRarity). Auto-convert it to materials so dupes still feel
        rewarding instead of "the same item again". Opt-out via flag; default on. */
-    if (__wasOwned && flags.autoSalvageDupes !== false){
+    if (!ctx.disableAutoSalvage && __wasOwned && flags.autoSalvageDupes !== false){
       var __sv = lrSalvageInstance(s, instance.iid);
       if (__sv && __sv.ok){
         entry.autoSalvaged = true; entry.dupeConverted = true;
@@ -772,7 +777,7 @@
         if (__sv.gemDropped && LR_GEM_DEFS[__sv.gemDropped]) __bits.push("+"+LR_GEM_DEFS[__sv.gemDropped].sym+" "+LR_GEM_DEFS[__sv.gemDropped].name);
         try { _toast("♻️ Duplicate "+__tname+" -> "+(__bits.join(", ")||"materials"), "info"); } catch(_){}
       }
-    } else if (flags.autoSalvageCommonDupes && drop.rarity === "common"){
+    } else if (!ctx.disableAutoSalvage && flags.autoSalvageCommonDupes && drop.rarity === "common"){
       var dupes = 0;
       var keys = Object.keys(s.lootInstances);
       for (var k=0; k<keys.length; k++){
@@ -785,6 +790,42 @@
       }
     }
     return entry;
+  }
+
+  /* Session-history edit loot is an entitlement at a newly crossed minute
+     wall, not a fresh live session. Roll exactly once with the same rarity
+     weights/template pools as a normal session, but use a stable
+     session+threshold seed and keep the drop on the canonical session id so
+     an edit-down can reverse the exact item. Auto-salvage is disabled only for
+     these reversible entitlements; otherwise materials could not be clawed
+     back exactly after the source item had already been converted. */
+  function lrGrantEditThresholdEntitlement(s, opts){
+    s = lrEnsureShape(s || _state());
+    opts = opts || {};
+    var sessionId = String(opts.sessionId || "");
+    var threshold = Math.max(0, opts.threshold|0);
+    var minutes = Math.max(0, opts.minutes|0);
+    var action = opts.action || "Loot";
+    if (!sessionId || !threshold || minutes < threshold){
+      return { ok:false, reason:"invalid_entitlement" };
+    }
+    var entitlementId = sessionId + "|loot-threshold|" + threshold;
+    var rng = lrSeededRng(lrHashStr(entitlementId));
+    var allowed = Array.from(_allowedRaritiesForMinutes(minutes));
+    var drop = lrRollDropForEncounter(s, action, minutes, null, "solid", rng);
+    if (!drop){
+      return { ok:true, entitlementId:entitlementId, threshold:threshold,
+        minutes:minutes, eligibleRarities:allowed, entry:null, instance:null };
+    }
+    var entry = lrCommitDrop(s, drop, {
+      sessionId:sessionId, action:action, enemyId:null, outcome:"solid", rng:rng,
+      sourceKind:"session-edit-threshold", editEntitlementId:entitlementId,
+      editThreshold:threshold, disableAutoSalvage:true
+    });
+    var instance = entry && entry.iid && s.lootInstances[entry.iid]
+      ? _deepClone(s.lootInstances[entry.iid]) : null;
+    return { ok:true, entitlementId:entitlementId, threshold:threshold,
+      minutes:minutes, eligibleRarities:allowed, entry:entry, instance:instance };
   }
 
   function lrRunSessionCombat(s, opts){
@@ -1526,6 +1567,7 @@
     lrToggleLock: lrToggleLock,
     lrPickEnemy: lrPickEnemy, lrResolveEncounter: lrResolveEncounter,
     lrRollDropForEncounter: lrRollDropForEncounter, lrCommitDrop: lrCommitDrop,
+    lrGrantEditThresholdEntitlement: lrGrantEditThresholdEntitlement,
     lrRunSessionCombat: lrRunSessionCombat,
     lrSessionEndLootPipeline: lrSessionEndLootPipeline,
     lrEnsureShape: lrEnsureShape, lrEnsureInstanceForSlot: lrEnsureInstanceForSlot,

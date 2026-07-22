@@ -63,8 +63,14 @@ async function scenario(handler, run){
   page.on("pageerror", e => pageErrors.push(String(e)));
   await page.goto(`http://127.0.0.1:${port}/`, { waitUntil:"domcontentloaded" });
   await page.waitForFunction(() => window.__FocusHero && typeof window.claimSyncCode === "function" && typeof window.cloudPull === "function");
+  await page.waitForFunction(() => typeof window.fhRenderProgressionHub === "function");
+  // Let the app's intentional delayed Targets/progression initializers finish
+  // before a fixture replaces state. Otherwise their one-time shape save can
+  // race a failed cloud operation and make an unrelated byte-for-byte storage
+  // assertion flaky.
+  await page.waitForTimeout(400);
   try {
-    await run(page, traffic);
+    await run(page, traffic, context);
     assert.deepEqual(pageErrors, [], pageErrors.join("\n"));
   } finally {
     await context.close();
@@ -103,6 +109,13 @@ async function fixture(page, syncOverrides={}, dataOverrides={}){
       refreshToken:"fixture-refresh-token",
       tokenExpiresAt:Date.now()+3_600_000
     }, syncOverrides);
+    /* Canonicalize render-owned additive shapes before taking exact-byte
+       snapshots. Otherwise the delayed Targets/Challenges installers can
+       legitimately save their first-run shape in the middle of a sync test. */
+    const requestedSyncEnabled = !!current.sync.enabled;
+    current.sync.enabled = false;
+    window.renderAll?.();
+    current.sync.enabled = requestedSyncEnabled;
     localStorage.clear();
     localStorage.setItem("focusHero.v4.state", JSON.stringify(current));
   }, { syncOverrides, dataOverrides });
@@ -409,6 +422,112 @@ try {
     });
   });
 
+  await test("A peer-tab staged recovery supersedes a delayed cloud pull before it can overwrite local data", async () => {
+    let remoteRows = [];
+    let releasePull;
+    let signalPullStarted;
+    const pullGate = new Promise(resolve => { releasePull = resolve; });
+    const pullStarted = new Promise(resolve => { signalPullStarted = resolve; });
+    await scenario(async (route, req) => {
+      if (req.url.includes("/rest/v1/players") && req.method === "GET"){
+        signalPullStarted();
+        await pullGate;
+        return json(route, remoteRows);
+      }
+      throw new Error(`unexpected request ${req.method} ${req.url}`);
+    }, async (page, traffic, context) => {
+      const peer = await context.newPage();
+      const peerErrors = [];
+      peer.on("pageerror", error => peerErrors.push(String(error)));
+      await peer.goto(`http://127.0.0.1:${port}/`, { waitUntil:"domcontentloaded" });
+      await peer.waitForFunction(() => window.__FocusHero?.stageRecovery && typeof window.cloudPull === "function");
+      await fixture(page, { enabled:true });
+      await page.waitForFunction(() => window.__FocusHero.stateRef().sync.enabled === true);
+      await peer.waitForFunction(() => window.__FocusHero.stateRef().sync.playerId === "old-player");
+      remoteRows = await page.evaluate(() => {
+        const remote = JSON.parse(JSON.stringify(window.__FocusHero.DEFAULTS));
+        remote.totalFocusMin = 999;
+        remote.completedFocusSessions = 30;
+        remote.history = { "2026-07-01":999 };
+        remote.settings.e2eEncryption = false;
+        return [{ data:{ plain:remote }, cloud_rev:99 }];
+      });
+      await page.evaluate(() => {
+        window.__delayedPeerPullDone = false;
+        window.__delayedPeerPullError = "";
+        window.cloudPull({force:true})
+          .catch(error => { window.__delayedPeerPullError = String(error?.code||error?.message||error); })
+          .finally(() => { window.__delayedPeerPullDone = true; });
+      });
+      await Promise.race([pullStarted, new Promise((_, reject) => setTimeout(() => reject(new Error("delayed pull did not start")), 5000))]);
+      const staged = await peer.evaluate(() => {
+        const candidate = JSON.parse(JSON.stringify(window.__FocusHero.DEFAULTS));
+        candidate.totalFocusMin = 333;
+        candidate.completedFocusSessions = 11;
+        candidate.history = { "2026-07-21":333 };
+        return window.__FocusHero.stageRecovery(candidate, "focusHero.v4.state.pre-peer-test-", {
+          operation:"import",
+          syncMessage:"Import staged locally; verify it before re-enabling cloud sync."
+        });
+      });
+      assert.equal(staged.syncPaused, true);
+      await page.waitForFunction(() => {
+        const state = window.__FocusHero.stateRef();
+        return state.totalFocusMin === 333 && state.sync.enabled === false;
+      });
+      releasePull();
+      await page.waitForFunction(() => window.__delayedPeerPullDone === true);
+      const final = await page.evaluate(() => {
+        const state = window.__FocusHero.stateRef();
+        return {
+          total:state.totalFocusMin,
+          sessions:state.completedFocusSessions,
+          rev:state.sync.cloudRev,
+          code:state.sync.syncCode,
+          enabled:state.sync.enabled,
+          error:window.__delayedPeerPullError,
+          stored:JSON.parse(localStorage.getItem("focusHero.v4.state"))
+        };
+      });
+      assert.deepEqual(
+        { total:final.total, sessions:final.sessions, rev:final.rev, code:final.code, enabled:final.enabled },
+        { total:333, sessions:11, rev:9, code:"OLDCODE1", enabled:false }
+      );
+      assert.equal(final.stored.totalFocusMin,333);
+      assert.equal(final.stored.sync.enabled,false);
+      assert.match(final.error,/FH_SYNC_SUPERSEDED/);
+      assert.equal(restWrites(traffic).length,0);
+      assert.deepEqual(peerErrors,[],peerErrors.join("\n"));
+    });
+  });
+
+  await test("A malformed peer-tab storage write cannot replace the valid in-memory profile", async () => {
+    await scenario(async (_route, req) => {
+      throw new Error(`unexpected request ${req.method} ${req.url}`);
+    }, async (page, traffic, context) => {
+      await fixture(page);
+      const peer = await context.newPage();
+      await peer.goto(`http://127.0.0.1:${port}/`, { waitUntil:"domcontentloaded" });
+      await peer.waitForFunction(() => window.__FocusHero?.stateRef);
+      await peer.waitForTimeout(400);
+      const before = await page.evaluate(() => {
+        const current = window.__FocusHero.stateRef();
+        return { total:current.totalFocusMin, sessions:current.completedFocusSessions, code:current.sync.syncCode };
+      });
+      await peer.evaluate(() => localStorage.setItem("focusHero.v4.state", "{}"));
+      await page.waitForTimeout(100);
+      const after = await page.evaluate(() => {
+        const current = window.__FocusHero.stateRef();
+        return { total:current.totalFocusMin, sessions:current.completedFocusSessions, code:current.sync.syncCode };
+      });
+      assert.deepEqual(after,before);
+      await page.evaluate(() => window.saveState({fromPull:true}));
+      const stored = await page.evaluate(() => JSON.parse(localStorage.getItem("focusHero.v4.state")));
+      assert.equal(stored.totalFocusMin,before.total);
+      assert.equal(restWrites(traffic).length,0);
+    });
+  });
+
   await test("A delayed old-identity push cannot mutate Claim state or revision", async () => {
     let newRows = [];
     let releaseOldPush;
@@ -695,6 +814,66 @@ try {
       }
       assert.equal(result.live.userToken, "fixture-fresh-token");
       assert.equal(result.live.refreshToken, "fixture-refresh-token");
+    });
+  });
+
+  await test("Cloud merge preserves Vault locations and remote progression on a fresh device", async () => {
+    await scenario(async (_route, req) => { throw new Error(`unexpected request ${req.method} ${req.url}`); }, async (page) => {
+      const result = await page.evaluate(() => {
+        const fh = window.__FocusHero;
+        const local = fh.migrate(JSON.parse(JSON.stringify(fh.DEFAULTS)));
+        const remote = fh.migrate(JSON.parse(JSON.stringify(fh.DEFAULTS)));
+        const vaulted = { iid:"vaulted", lootId:"blade", tier:"rare", level:2 };
+        const withdrawn = { iid:"withdrawn", lootId:"helm", tier:"epic", level:1 };
+        local.lootInstances = { vaulted:{...vaulted,level:1}, withdrawn };
+        local.loot.vault = { instances:{}, locations:{ withdrawn:{location:"inventory",at:200} }, cap:100 };
+        remote.lootInstances = {};
+        remote.loot.vault = {
+          instances:{ vaulted, withdrawn:{...withdrawn,level:2} },
+          locations:{ withdrawn:{location:"vault",at:100} }, cap:100
+        };
+        remote.loot.mountProgress = 4321;
+        remote.loot.mountFamilies = { dragon:{ collected:{ ember_drake:1 } } };
+        remote.crystalShards = 70;
+        remote.crystalShardsEarned = 100;
+        remote.crystalShardsSpent = 30;
+        remote.craftingDust = 12;
+        remote.world = {
+          currentZone:"frostpeak", unlockedZones:{verdant_vale:true,frostpeak:true},
+          zonesVisited:{verdant_vale:2,frostpeak:3}, bossesDefeated:4,
+          mysteryBoxesOpened:2, artifactsFound:{worldseed:20}, questCounters:{craft_actions:3}
+        };
+        const today = window.wdTodayKey(), week = window.wdWeekKey(), month = window.wdMonthKey();
+        remote.questSystem = {
+          lastRoll:{daily:today,weekly:week,seasonal:month},
+          daily:[{id:"remote-daily",kind:"minutes",target:25,progress:20,completed:false,claimed:false,rolledAt:2}],
+          weekly:[], seasonal:[], dailyClaimedCount:2, weeklyClaimedCount:0, seasonalClaimedCount:0
+        };
+        remote.achievementsV85 = { remote_achievement:123 };
+        const merged = fh.mergeRemoteState(local, remote);
+        return {
+          vaultedProtected:!!merged.loot.vault.instances.vaulted,
+          vaultedDuplicated:!!merged.lootInstances.vaulted,
+          withdrawnActive:!!merged.lootInstances.withdrawn,
+          withdrawnDuplicated:!!merged.loot.vault.instances.withdrawn,
+          withdrawnLevel:merged.lootInstances.withdrawn?.level,
+          mountProgress:merged.loot.mountProgress,
+          mountCollected:merged.loot.mountFamilies.dragon?.collected?.ember_drake,
+          shards:merged.crystalShards, spent:merged.crystalShardsSpent,
+          dust:merged.craftingDust, zone:merged.world.currentZone,
+          frostpeak:merged.world.unlockedZones.frostpeak,
+          quest:merged.questSystem.daily[0]?.id,
+          claimed:merged.questSystem.dailyClaimedCount,
+          achievement:merged.achievementsV85.remote_achievement
+        };
+      });
+      assert.deepEqual(result, {
+        vaultedProtected:true, vaultedDuplicated:false,
+        withdrawnActive:true, withdrawnDuplicated:false, withdrawnLevel:2,
+        mountProgress:4321, mountCollected:1,
+        shards:70, spent:30, dust:12, zone:"frostpeak", frostpeak:true,
+        quest:"remote-daily", claimed:2, achievement:123
+      });
     });
   });
 

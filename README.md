@@ -51,9 +51,9 @@ Leave `SUPABASE_URL` / `SUPABASE_ANON_KEY` blank in `focus-hero.html`. Sync → 
 
 6. Reload. Sync panel now says "Encrypted cloud sync active."
 
-### Supabase heartbeat backup
+### Supabase metadata heartbeat
 
-v7.5 adds a daily GitHub Action that pings the configured Supabase project and writes a stable `backups/focus-hero-supabase-players.json` snapshot when rows change. Add `SUPABASE_SERVICE_ROLE_KEY` as a repository secret so the backup can bypass RLS and capture every `public.players` row; without that secret, the heartbeat still runs but the dump is limited to anon-visible rows.
+The daily GitHub Action performs a privacy-safe, read-only health check and writes only aggregate metadata to `backups/backup-status.json` (row count, newest update time, and status). It never exports player rows or Focus Hero payloads. Add `SUPABASE_SERVICE_ROLE_KEY` as a repository secret so the heartbeat can verify aggregate row visibility through RLS. This heartbeat is monitoring evidence, not a restorable player-data backup; recovery still depends on encrypted cloud state plus the device-local snapshot ring and user exports.
 
 ## Pairing devices
 

@@ -100,15 +100,30 @@ try {
     s.combo={count:2,date:day};s.streak=3;s.lastFocusDate=day;
     if(s.targets){for(const scope of ["daily","weekly"]){if(s.targets[scope])s.targets[scope].claimed={easy:true,medium:true,hard:true};}}
     window.applyTaskTimeAdjustment(task.id,70);
-    const rec=s.sessionsLog.find(r=>r?.source==="ledger"&&r.taskId===task.id), oldXp=rec.xp, mult=rec.xpMultiplierApplied;
+    const rec=s.sessionsLog.find(r=>r?.source==="ledger"&&r.taskId===task.id), oldXp=rec.xp, oldCoins=rec.coins, mult=rec.xpMultiplierApplied;
     const raw=window.__FocusHero.computeXpBreakdown(30,{comboCount:2,streakDays:3,settings:s.settings}).total;
     const expected=Math.round(raw*mult), result=window.applySessionEdit(rec.id,30), eco=window.__fhEconomyTest.totals();
-    return {oldXp,expected,newXp:rec.xp,result,minutes:rec.minutes,eco};
+    return {oldXp,oldCoins,expected,newXp:rec.xp,newCoins:rec.coins,coinBalance:s.coins,result,minutes:rec.minutes,eco};
   });
   assert.equal(sessionEdit.minutes,30);
   assert.equal(sessionEdit.newXp,sessionEdit.expected);
   assert.equal(sessionEdit.result.xpDelta,sessionEdit.expected-sessionEdit.oldXp);
+  assert.deepEqual({old:sessionEdit.oldCoins,current:sessionEdit.newCoins,balance:sessionEdit.coinBalance,delta:sessionEdit.result.coinDelta},{old:22,current:9,balance:9,delta:-13},"modern records keep exact recorded coin parity on edit");
   assert.deepEqual(sessionEdit.eco,{orbs:1,materials:{seed:1,herb:0,timber:2,ore:0},farmMinutes:30});
+
+  await reset();
+  const legacyCoinEdit = await page.evaluate(()=>{
+    const s=window.__FocusHero.stateRef(),task=window.__FocusHero.createTask({name:"Legacy coin provenance",emoji:"C"}),now=new Date(),day=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
+    const oldMinutes=70,newMinutes=30,oldCoins=window.computeCoins(oldMinutes,true),newCoins=window.computeCoins(newMinutes,true);
+    const xp=window.__FocusHero.computeXpBreakdown(oldMinutes,{comboCount:0,streakDays:0,settings:s.settings});
+    s.totalFocusMin=oldMinutes;s.history[day]=oldMinutes;task.totalFocusMin=oldMinutes;task.dailyMin[day]=oldMinutes;
+    s.coins=oldCoins;s.coinsEarned=oldCoins;s.coinsSpent=0;
+    const rec=window.buildSessionLogRecordV76({id:"legacy-no-coin-provenance",at:Date.now(),type:"focus",source:"timer",minutes:oldMinutes,taskId:task.id,taskName:task.name,xpBreakdown:xp,rewarded:true,comboPriorCount:0,streakBefore:0,streakForCalc:0,action:"Travel"});
+    delete rec.coins;delete rec.originalCoins;delete rec.coinMultiplierApplied;s.sessionsLog.push(rec);
+    const result=window.applySessionEdit(rec.id,newMinutes);
+    return {oldCoins,newCoins,balance:s.coins,coinDelta:result.coinDelta,recordCoins:rec.coins,inferred:rec.coinBaselineInferred,inferredMinutes:rec.coinBaselineInferredFromMinutes,inferredCoins:rec.coinBaselineInferredCoins};
+  });
+  assert.deepEqual(legacyCoinEdit,{oldCoins:22,newCoins:9,balance:9,coinDelta:-13,recordCoins:9,inferred:true,inferredMinutes:70,inferredCoins:22},"legacy sessions infer their already-paid base once instead of duplicating coins on edit");
 
   await reset();
   const eggParity = await page.evaluate(()=>{
@@ -251,8 +266,67 @@ try {
   assert.deepEqual(merge.spends.map(x=>x.id),["a","b"]);
   assert.equal(merge.unlockedPlots,3);
 
+  const longHistory = await page.evaluate(()=>{
+    const plots=()=>[1,2,3].map(i=>({id:`plot${i}`,crop:null,plantedAt:0,updatedAt:0}));
+    const grant=i=>({id:`grant_${i}`,sessionId:`grant_${i}`,source:"session",minutes:30,action:"Travel",priority:false,orbs:1,materials:{seed:1,herb:0,timber:2,ore:0},farmMinutes:30,at:i,updatedAt:i,deleted:false});
+    const spend=i=>({id:`spend_${i}`,kind:"plant",cost:{orbs:0,materials:{seed:1,herb:0,timber:0,ore:0}},effect:{crop:"herb"},at:i,updatedAt:i});
+    const harvest=i=>({id:`harvest_${i}`,plotId:`plot${i%3+1}`,crop:"herb",yield:{seed:0,herb:4,timber:0,ore:0},at:i,updatedAt:i});
+    function economy(from,to,unlocked){
+      const grants={};for(let i=from;i<to;i++)grants[`grant_${i}`]=grant(i);
+      return {version:1,grants,spends:Array.from({length:to-from},(_,j)=>spend(from+j)),harvests:Array.from({length:to-from},(_,j)=>harvest(from+j)),plots:plots(),unlockedPlots:unlocked,installedAt:1};
+    }
+    const local=economy(0,1105,2),remote=economy(100,1205,3);
+    const merged=window.__fhEconomyTest.merge(local,remote),again=window.__fhEconomyTest.merge(merged,merged);
+    const validation=window.__fhEconomyTest.validate(merged,{unlockedPlots:3});
+    const invalid=economy(0,2,2);invalid.spends[1].id=invalid.spends[0].id;invalid.harvests[0].crop="unknown";
+    const invalidA=window.__fhEconomyTest.validate(invalid,{unlockedPlots:3}),invalidB=window.__fhEconomyTest.validate(invalid,{unlockedPlots:3});
+    return {counts:validation.counts,ok:validation.ok,errors:validation.errors,duplicateIds:invalidA.duplicateIds,
+      invalidErrors:invalidA.errors,deterministic:JSON.stringify(invalidA)===JSON.stringify(invalidB),idempotent:JSON.stringify(merged)===JSON.stringify(again),
+      firstSpend:merged.spends[0].id,lastSpend:merged.spends.at(-1).id,unlockedPlots:merged.unlockedPlots};
+  });
+  assert.deepEqual(longHistory.counts,{grants:1205,spends:1205,harvests:1205,plots:3},"merge retains every accounting event past the former 1,000-event boundary");
+  assert.equal(longHistory.ok,true,longHistory.errors.join("\n"));
+  assert.equal(longHistory.idempotent,true,"merging a complete economy with itself is idempotent");
+  assert.equal(longHistory.deterministic,true,"validation returns deterministic results");
+  assert.deepEqual(longHistory.duplicateIds,["spend_0"],"validation identifies duplicate event IDs deterministically");
+  assert.ok(longHistory.invalidErrors.some(x=>x.includes("unknown crop")),"validation rejects unknown crops");
+  assert.ok(longHistory.invalidErrors.some(x=>x.includes("must not decrease from 3 to 2")),"validation rejects a decreasing unlocked plot count");
+  assert.deepEqual({first:longHistory.firstSpend,last:longHistory.lastSpend,plots:longHistory.unlockedPlots},{first:"spend_0",last:"spend_1204",plots:3});
+
+  await reset();
+  const farmLifecycle = await page.evaluate(()=>{
+    const api=window.__fhEconomyTest,s=window.__FocusHero.stateRef(),e=api.ensure(),now=Date.now();
+    e.grants.bootstrap={id:"bootstrap",sessionId:"bootstrap",source:"session",minutes:60,action:"Travel",priority:false,orbs:5,materials:{seed:2,herb:0,timber:0,ore:0},farmMinutes:60,at:now,updatedAt:now,deleted:false};
+    api.render();
+    const beforePlant={spends:e.spends.length,plantDisabled:document.querySelector('[data-fhe-plant="plot1"]')?.disabled};
+    const planted=api.plant("plot1","herb"),plantedAgain=api.plant("plot1","herb"),afterPlant=api.ensure();
+    afterPlant.grants.growth={id:"growth",sessionId:"growth",source:"session",minutes:60,action:"Travel",priority:false,orbs:0,materials:{seed:0,herb:0,timber:0,ore:0},farmMinutes:60,at:now+1,updatedAt:now+1,deleted:false};
+    api.render();
+    const progress=document.querySelector('[data-fhe-harvest="plot1"]')?.previousElementSibling?.previousElementSibling;
+    const beforeHarvest={now:progress?.getAttribute("aria-valuenow"),max:progress?.getAttribute("aria-valuemax"),ready:!document.querySelector('[data-fhe-harvest="plot1"]')?.disabled};
+    const harvested=api.harvest("plot1"),harvestedAgain=api.harvest("plot1"),afterHarvest=api.ensure();
+    const originalNow=Date.now,originalRandom=Math.random;Date.now=()=>123456789;Math.random=()=>0;
+    try{api.accelerate();api.accelerate();}finally{Date.now=originalNow;Math.random=originalRandom;}
+    const afterBoosts=api.ensure(),ids=afterBoosts.spends.map(x=>x.id),countsBeforeRender={spends:afterBoosts.spends.length,harvests:afterBoosts.harvests.length};
+    api.render();api.render();
+    const finalEconomy=api.ensure(),validation=api.validate(finalEconomy,{unlockedPlots:2}),totals=api.totals();
+    return {beforePlant,planted,plantedAgain,plantCrop:afterPlant.plots[0].crop,plantSpends:afterPlant.spends.length,beforeHarvest,harvested,harvestedAgain,
+      harvestCount:afterHarvest.harvests.length,harvestCrop:afterHarvest.plots[0].crop,countsBeforeRender,countsAfterRender:{spends:finalEconomy.spends.length,harvests:finalEconomy.harvests.length},
+      uniqueIds:new Set(ids).size===ids.length,validation,totals,historyText:document.querySelector(".fhe-history")?.textContent||""};
+  });
+  assert.deepEqual(farmLifecycle.beforePlant,{spends:0,plantDisabled:false},"planting advertises affordability without mutating the ledger");
+  assert.deepEqual({first:farmLifecycle.planted,repeat:farmLifecycle.plantedAgain,crop:farmLifecycle.plantCrop,spends:farmLifecycle.plantSpends},{first:true,repeat:false,crop:"herb",spends:1},"planting charges once and is idempotent for an occupied plot");
+  assert.deepEqual(farmLifecycle.beforeHarvest,{now:"60",max:"60",ready:true},"farm progress exposes exact credited, required, and ready semantics");
+  assert.deepEqual({first:farmLifecycle.harvested,repeat:farmLifecycle.harvestedAgain,count:farmLifecycle.harvestCount,crop:farmLifecycle.harvestCrop},{first:true,repeat:false,count:1,crop:null},"harvesting credits yield once and clears the plot");
+  assert.equal(farmLifecycle.uniqueIds,true,"same-millisecond economy events retain unique IDs");
+  assert.equal(farmLifecycle.validation.ok,true,farmLifecycle.validation.errors.join("\n"));
+  assert.deepEqual(farmLifecycle.countsAfterRender,farmLifecycle.countsBeforeRender,"repeated rendering never writes accounting events");
+  assert.deepEqual(farmLifecycle.totals,{orbs:3,materials:{seed:1,herb:4,timber:0,ore:0},farmMinutes:170},"plant, harvest, and boosts preserve exact existing rates");
+  assert.match(farmLifecycle.historyText,/Moon herbs/);
+  assert.match(farmLifecycle.historyText,/\+4 herb/);
+
   assert.deepEqual(pageErrors,[],pageErrors.join("\n"));
-  console.log("ok - live XP/egg/target parity, Priority cancellation/verification, Expedition grants, and merge safety");
+  console.log("ok - live XP/egg/target parity, Priority cancellation/verification, retained Expedition history, farm lifecycle, and merge safety");
 } finally {
   await context.close(); await browser.close(); await new Promise(resolve=>server.close(resolve));
 }

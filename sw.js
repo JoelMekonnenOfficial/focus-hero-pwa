@@ -14,6 +14,8 @@
  * deliberately invisible to users — the only place a version-looking string
  * lives is in the cache name in DevTools.
  *
+ * v10.7.0: resilient offline queue/recovery ring, exact edited-session loot,
+ * organized progression views, and integrity-hardened Expedition farming.
  * v10.6.2: Trophy Room artifact grid exposes list/listitem semantics.
  * v10.6.1: queued, top-safe achievement banners + unique named/slogan-bearing
  * milestone artifacts; all presentation-only with no player-data schema change.
@@ -33,7 +35,7 @@
  * fallback (and skipped injection). Fetch by URL string instead, and inject
  * into cache-served HTML too.
  */
-const BUILD_ID    = "fh-2026-07-22-v10-6-2-trophy-room-a11y";
+const BUILD_ID    = "fh-2026-07-22-v10-7-0-resilient-adventure";
 const CACHE_NAME  = `focus-hero-${BUILD_ID}`;
 const PRECACHE = [
   "./",
@@ -41,6 +43,7 @@ const PRECACHE = [
   "./recover.html",
   "./data-guard.js",
   "./focus-economy.js",
+  "./progression-hub.js",
   "./focus-hero-logo.svg",
   "./loot-rework.js",
   "./character-rebuild.js",
@@ -97,18 +100,40 @@ async function withDataGuard(resp){
 /* -------------------------------------------------------------------------- */
 
 self.addEventListener("install", event => {
-  self.skipWaiting();
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(cache =>
-      Promise.all(PRECACHE.map(u => cache.add(u).catch(err => console.warn("precache miss", u, err))))
-    )
-  );
+  event.waitUntil((async () => {
+    try {
+      const cache = await caches.open(CACHE_NAME);
+      const fetched = await Promise.all(PRECACHE.map(async asset => {
+        const requestUrl = new URL(asset, self.registration.scope).href;
+        const response = await fetch(requestUrl, { cache:"no-store", credentials:"same-origin" });
+        if (!response || !response.ok) throw new Error(`Precache failed for ${asset}: ${response && response.status}`);
+        const contentType = (response.headers.get("content-type") || "").toLowerCase();
+        const expectsHtml = asset === "./" || /\.html$/i.test(asset);
+        if (expectsHtml && !contentType.includes("text/html")) throw new Error(`Precache received non-HTML for ${asset}`);
+        if (!expectsHtml && contentType.includes("text/html")) throw new Error(`Precache received HTML fallback for ${asset}`);
+        /* Fully read each response here. Holding several unread bodies while
+           waiting for every fetch can exhaust the browser's per-origin
+           connection pool and deadlock installation on mobile/Chromium. */
+        const body = await response.arrayBuffer();
+        const headers = new Headers(response.headers);
+        headers.delete("content-length");
+        return [requestUrl, new Response(body, {
+          status:response.status, statusText:response.statusText, headers
+        })];
+      }));
+      await Promise.all(fetched.map(([request, response]) => cache.put(request, response)));
+      await self.skipWaiting();
+    } catch (error) {
+      await caches.delete(CACHE_NAME);
+      throw error;
+    }
+  })());
 });
 
 self.addEventListener("activate", event => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
-    await Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)));
+    await Promise.all(keys.filter(k => k.startsWith("focus-hero-") && k !== CACHE_NAME).map(k => caches.delete(k)));
     await self.clients.claim();
     // Tell existing pages a new version is live; they decide whether to reload.
     const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
@@ -147,14 +172,19 @@ self.addEventListener("fetch", event => {
           // Mirror under both keys so the next offline launch works regardless
           // of whether the request was for "/" or "/focus-hero.html".
           if (injectHere) {
-            try { cache.put("./focus-hero.html", fresh.clone()); } catch (_) {}
-            try { cache.put("./", fresh.clone()); } catch (_) {}
+            try { await cache.put("./focus-hero.html", fresh.clone()); } catch (_) {}
+            try { await cache.put("./", fresh.clone()); } catch (_) {}
           } else {
-            try { cache.put(req, fresh.clone()); } catch (_) {}
+            try { await cache.put(req, fresh.clone()); } catch (_) {}
           }
           return fresh;
         }
-        return fresh; // non-ok response — still return it
+        const cached = await cache.match(req, { ignoreSearch:true })
+          || (injectHere && (await cache.match("./focus-hero.html") || await cache.match("./")))
+          || null;
+        if (cached && injectHere) return withDataGuard(await unredirect(cached));
+        if (cached) return unredirect(cached);
+        return fresh;
       } catch (_) {
         // Offline. Fall back to whichever cached HTML we have.
         const cached = await cache.match(req, { ignoreSearch:true })
@@ -177,7 +207,7 @@ self.addEventListener("fetch", event => {
     if (cached) return cached;
     try {
       const resp = await fetch(req);
-      if (resp && resp.ok && resp.type === "basic") cache.put(req, resp.clone());
+      if (resp && resp.ok && resp.type === "basic") await cache.put(req, resp.clone());
       return resp;
     } catch (e) {
       return new Response("", { status: 504 });

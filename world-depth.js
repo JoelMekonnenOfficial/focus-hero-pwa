@@ -647,26 +647,125 @@
 
   function wdEnsureQuestRolls(s){
     s = s || (typeof window !== "undefined" ? window.state : null);
-    if (!s) return;
+    if (!s) return false;
+    var changed = false;
     if (!s.questSystem || typeof s.questSystem !== "object"){
       s.questSystem = { daily:[], weekly:[], seasonal:[], lastRoll:{ daily:null, weekly:null, seasonal:null } };
+      changed = true;
     }
     var qs = s.questSystem;
+    if (!qs.lastRoll || typeof qs.lastRoll !== "object"){
+      qs.lastRoll = { daily:null, weekly:null, seasonal:null };
+      changed = true;
+    }
     var todayK = wdTodayKey();
     var weekK = wdWeekKey();
     var monthK = wdMonthKey();
     if (qs.lastRoll.daily !== todayK){
       qs.daily = wdRollQuestSet(WD_QUEST_DAILY, 3);
       qs.lastRoll.daily = todayK;
+      changed = true;
     }
     if (qs.lastRoll.weekly !== weekK){
       qs.weekly = wdRollQuestSet(WD_QUEST_WEEKLY, 3);
       qs.lastRoll.weekly = weekK;
+      changed = true;
     }
     if (qs.lastRoll.seasonal !== monthK){
       qs.seasonal = wdRollQuestSet(WD_QUEST_SEASONAL, 1);
       qs.lastRoll.seasonal = monthK;
+      changed = true;
     }
+    return changed;
+  }
+
+  function wdWeekKeyForDate(d){
+    d = d instanceof Date ? d : new Date(d);
+    if (!isFinite(d.getTime())) return "";
+    var first = new Date(d.getFullYear(),0,1);
+    var dayOfYear = Math.floor((d - first) / 86400000) + 1;
+    return d.getFullYear() + "-W" + String(Math.ceil(dayOfYear / 7)).padStart(2,"0");
+  }
+
+  function wdDateKeyForDate(d){
+    d = d instanceof Date ? d : new Date(d);
+    if (!isFinite(d.getTime())) return "";
+    return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+  }
+
+  function wdInQuestPeriod(value, scope){
+    var d = value instanceof Date ? value : new Date(value);
+    if (!isFinite(d.getTime())) return false;
+    if (scope === "daily") return wdDateKeyForDate(d) === wdTodayKey();
+    if (scope === "weekly") return wdWeekKeyForDate(d) === wdWeekKey();
+    return d.getFullYear() === new Date().getFullYear() && d.getMonth() === new Date().getMonth();
+  }
+
+  function wdQuestPeriodMinutes(s, scope){
+    var total = 0;
+    Object.keys((s && s.history) || {}).forEach(function(key){
+      var d = new Date(key + "T12:00:00");
+      if (wdInQuestPeriod(d, scope)) total += Math.max(0, Number(s.history[key]) || 0);
+    });
+    return Math.floor(total);
+  }
+
+  function wdQuestPeriodSessions(s, scope){
+    return ((s && s.sessionsLog) || []).filter(function(rec){
+      if (!rec || rec.timeOnly || rec.type !== "focus") return false;
+      return wdInQuestPeriod(rec.at || rec.completedAt || rec.startedAt, scope);
+    });
+  }
+
+  function wdQuestDerivedValue(s, scope, kind){
+    var sessions = wdQuestPeriodSessions(s, scope);
+    var action = function(rec){ return String((rec && rec.action) || "").toLowerCase(); };
+    var actionCount = function(name){ return sessions.filter(function(rec){ return action(rec) === name; }).length; };
+    var drops = (((s || {}).loot || {}).drops || []).filter(function(drop){
+      return drop && wdInQuestPeriod(drop.at, scope);
+    });
+    switch(kind){
+      case "minutes": return wdQuestPeriodMinutes(s, scope);
+      case "sessions": return sessions.length;
+      case "action_fight": return actionCount("fight");
+      case "action_hunt": return actionCount("hunt");
+      case "action_craft": return actionCount("craft");
+      case "craft_action": return actionCount("craft");
+      case "meditate_min": return sessions.reduce(function(n, rec){ return n + (action(rec) === "meditate" ? Math.max(0, rec.minutes|0) : 0); }, 0);
+      case "enemy_kills": return sessions.filter(function(rec){ return action(rec) === "fight" || action(rec) === "hunt"; }).length;
+      case "boss_kills": return sessions.filter(function(rec){ return (action(rec) === "fight" || action(rec) === "hunt") && (rec.minutes|0) >= 90; }).length;
+      case "rare_drop": return drops.filter(function(drop){ return ["rare","epic","legendary","mythic","cursed","artifact"].indexOf(String(drop.rarity||"").toLowerCase()) >= 0; }).length;
+      case "epic_drop": return drops.filter(function(drop){ return ["epic","legendary","mythic","cursed","artifact"].indexOf(String(drop.rarity||"").toLowerCase()) >= 0; }).length;
+      case "combo": return scope === "daily" && s.combo && s.combo.date === wdTodayKey() ? Math.max(0, s.combo.count|0) : 0;
+      case "streak": return Math.max(0, s.streak|0);
+      case "zones_visited": return Object.keys((s.world && s.world.zonesVisited) || {}).length;
+      case "zones_unlocked": return Object.keys((s.world && s.world.unlockedZones) || {}).filter(function(id){ return s.world.unlockedZones[id]; }).length;
+      case "mount_pity_unlocks": return Math.max(0, Number(s.world && s.world.questCounters && s.world.questCounters.mount_pity_unlocks) || 0);
+      case "artifacts_found": return Object.keys((s.world && s.world.artifactsFound) || {}).length;
+      default: return null;
+    }
+  }
+
+  /* Reconcile values that can be derived from canonical history/session/drop
+     records. This makes minute/session challenges follow edits downward as
+     well as upward instead of relying on one-way counter increments. */
+  function wdReconcileQuestProgress(s){
+    s = s || (typeof window !== "undefined" ? window.state : null);
+    if (!s) return false;
+    var changed = wdEnsureQuestRolls(s);
+    ["daily","weekly","seasonal"].forEach(function(scope){
+      (s.questSystem[scope] || []).forEach(function(q){
+        if (!q || q.claimed) return;
+        var derived = wdQuestDerivedValue(s, scope, q.kind);
+        if (derived === null) return;
+        var nextProgress = Math.max(0, Math.min(q.target|0, Math.floor(derived)));
+        var nextCompleted = nextProgress >= (q.target|0);
+        if ((q.progress|0) !== nextProgress || !!q.completed !== nextCompleted) changed = true;
+        q.progress = nextProgress;
+        q.completed = nextCompleted;
+      });
+    });
+    return changed;
   }
 
   /* Quest progress nudges - increment per-quest progress and mark
@@ -693,6 +792,8 @@
     s = s || (typeof window !== "undefined" ? window.state : null);
     if (!s) return { ok:false, reason:"no_state" };
     wdEnsureQuestRolls(s);
+    wdReconcileQuestProgress(s);
+    var scopeNames = ["daily","weekly","seasonal"];
     var pools = [s.questSystem.daily, s.questSystem.weekly, s.questSystem.seasonal];
     for (var i=0; i<pools.length; i++){
       var pool = pools[i];
@@ -704,9 +805,19 @@
         q.claimed = true;
         if (typeof s.crystalShards !== "number") s.crystalShards = 0;
         s.crystalShards += q.shards|0;
+        s.crystalShardsEarned = (s.crystalShardsEarned|0) + (q.shards|0);
         s.coins = (s.coins|0) + (q.coins|0);
         s.coinsEarned = (s.coinsEarned|0) + (q.coins|0);
-        return { ok:true, shards:q.shards|0, coins:q.coins|0, xp:q.xp|0 };
+        var xpAwarded = 0;
+        if (typeof window !== "undefined" && typeof window.awardXp === "function"){
+          xpAwarded = window.awardXp(q.xp|0) || (q.xp|0);
+        } else if (s.hero && typeof s.hero === "object"){
+          s.hero.xp = Math.max(0, s.hero.xp|0) + (q.xp|0);
+          xpAwarded = q.xp|0;
+        }
+        var countKey = scopeNames[i] + "ClaimedCount";
+        s.questSystem[countKey] = (s.questSystem[countKey]|0) + 1;
+        return { ok:true, scope:scopeNames[i], shards:q.shards|0, coins:q.coins|0, xp:xpAwarded };
       }
     }
     return { ok:false, reason:"not_found" };
@@ -801,6 +912,7 @@
     }
     if (typeof s.loot.vault.cap !== "number") s.loot.vault.cap = 100;
     if (!s.loot.vault.instances) s.loot.vault.instances = {};
+    if (!s.loot.vault.locations || typeof s.loot.vault.locations !== "object") s.loot.vault.locations = {};
     return s.loot.vault;
   }
 
@@ -810,8 +922,14 @@
     if (!vault) return { ok:false, reason:"no_vault" };
     var inst = s.lootInstances && s.lootInstances[iid];
     if (!inst) return { ok:false, reason:"unknown_instance" };
+    var equipped = s.hero && s.hero.equipped ? Object.keys(s.hero.equipped).some(function(slot){
+      return s.hero.equipped[slot] && s.hero.equipped[slot].instanceId === iid;
+    }) : false;
+    if (equipped) return { ok:false, reason:"equipped_instance" };
     if (Object.keys(vault.instances).length >= vault.cap) return { ok:false, reason:"vault_full" };
+    if (vault.instances[iid]) return { ok:false, reason:"already_in_vault" };
     vault.instances[iid] = inst;
+    vault.locations[iid] = { location:"vault", at:Date.now() };
     delete s.lootInstances[iid];
     return { ok:true };
   }
@@ -823,7 +941,9 @@
     var inst = vault.instances[iid];
     if (!inst) return { ok:false, reason:"unknown_instance" };
     if (!s.lootInstances) s.lootInstances = {};
+    if (s.lootInstances[iid]) return { ok:false, reason:"inventory_conflict" };
     s.lootInstances[iid] = inst;
+    vault.locations[iid] = { location:"inventory", at:Date.now() };
     delete vault.instances[iid];
     return { ok:true };
   }
@@ -1068,6 +1188,7 @@
     if (typeof s.world.mysteryBoxesOpened !== "number") s.world.mysteryBoxesOpened = 0;
     if (!s.world.artifactsFound) s.world.artifactsFound = {};
     if (!s.world.questCounters) s.world.questCounters = {};
+    if (typeof s.world.currentZoneUpdatedAt !== "number") s.world.currentZoneUpdatedAt = 0;
     return s.world;
   }
 
@@ -1078,6 +1199,7 @@
     if (!WD_ZONES[zoneId]) return { ok:false, reason:"unknown_zone" };
     if (!world.unlockedZones[zoneId]) return { ok:false, reason:"locked_zone" };
     world.currentZone = zoneId;
+    world.currentZoneUpdatedAt = Date.now();
     world.zonesVisited[zoneId] = (world.zonesVisited[zoneId]|0) + 1;
     return { ok:true };
   }
@@ -1097,15 +1219,131 @@
       return { ok:true, via:"map" };
     }
     if (zone.unlockShards){
-      var spend = wdSpendShards(s, "zone_unlock");
-      // (wdSpendShards uses generic cost 250; we still allow unlock if shards >= unlockShards)
-      var unlockCost = zone.unlockShards;
-      if ((s.crystalShards|0) + (spend.spent||0) < unlockCost && !spend.ok){
-        return { ok:false, reason:"insufficient_shards", need: unlockCost };
+      var unlockCost = Math.max(0, zone.unlockShards|0);
+      var available = Math.max(0, s.crystalShards|0);
+      if (available < unlockCost){
+        return { ok:false, reason:"insufficient_shards", need:unlockCost, have:available };
       }
+      /* Exact, atomic charge. The old generic 250-shard spend could overcharge
+         Frostpeak, undercharge late zones, or unlock without deducting. */
+      s.crystalShards = available - unlockCost;
+      s.crystalShardsSpent = (s.crystalShardsSpent|0) + unlockCost;
     }
     world.unlockedZones[zoneId] = true;
-    return { ok:true, via:"shards" };
+    return { ok:true, via:"shards", spent:Math.max(0, zone.unlockShards|0) };
+  }
+
+  /* Merge the v8.5+ progression branch without letting a fresh device erase
+     the established cloud state. Earned/spent counters keep Crystal Shards
+     spend-safe, world unlocks are monotonic, and the cloud's generated quest
+     set is authoritative when two devices rolled different quests for the
+     same period. The caller supplies the already-merged top-level state. */
+  function wdMergeProgressionState(local, remote, out){
+    local = local && typeof local === "object" ? local : {};
+    remote = remote && typeof remote === "object" ? remote : {};
+    out = out && typeof out === "object" ? out : {};
+    var clone = function(value){
+      if (value === undefined) return undefined;
+      return JSON.parse(JSON.stringify(value));
+    };
+    var nn = function(value){ value = Number(value); return isFinite(value) && value > 0 ? value : 0; };
+    var maxNumberMap = function(a,b){
+      a = a && typeof a === "object" && !Array.isArray(a) ? a : {};
+      b = b && typeof b === "object" && !Array.isArray(b) ? b : {};
+      var result = {};
+      Object.keys(a).concat(Object.keys(b)).forEach(function(key){
+        result[key] = Math.max(nn(a[key]), nn(b[key]));
+      });
+      return result;
+    };
+    var unionMap = function(a,b){
+      a = a && typeof a === "object" && !Array.isArray(a) ? a : {};
+      b = b && typeof b === "object" && !Array.isArray(b) ? b : {};
+      var result = clone(b) || {};
+      Object.keys(a).forEach(function(key){
+        if (typeof a[key] === "number" && typeof b[key] === "number") result[key] = Math.max(a[key], b[key]);
+        else if (typeof a[key] === "boolean" || typeof b[key] === "boolean") result[key] = !!a[key] || !!b[key];
+        else result[key] = clone(a[key]);
+      });
+      return result;
+    };
+
+    var localEarned = nn(local.crystalShardsEarned);
+    var remoteEarned = nn(remote.crystalShardsEarned);
+    var localSpent = nn(local.crystalShardsSpent);
+    var remoteSpent = nn(remote.crystalShardsSpent);
+    var localBalance = nn(local.crystalShards);
+    var remoteBalance = nn(remote.crystalShards);
+    var inheritedCredit = Math.max(
+      0,
+      localBalance - localEarned + localSpent,
+      remoteBalance - remoteEarned + remoteSpent
+    );
+    out.crystalShardsEarned = Math.max(localEarned, remoteEarned);
+    out.crystalShardsSpent = Math.max(localSpent, remoteSpent);
+    out.crystalShards = Math.max(0, Math.floor(inheritedCredit + out.crystalShardsEarned - out.crystalShardsSpent));
+    out.craftingDust = Math.max(nn(local.craftingDust), nn(remote.craftingDust));
+
+    var lw = local.world && typeof local.world === "object" ? local.world : {};
+    var rw = remote.world && typeof remote.world === "object" ? remote.world : {};
+    out.world = Object.assign({}, clone(rw) || {}, clone(lw) || {});
+    out.world.unlockedZones = unionMap(lw.unlockedZones, rw.unlockedZones);
+    out.world.unlockedZones.verdant_vale = true;
+    out.world.zonesVisited = maxNumberMap(lw.zonesVisited, rw.zonesVisited);
+    if (!out.world.zonesVisited.verdant_vale) out.world.zonesVisited.verdant_vale = 1;
+    out.world.bossesDefeated = Math.max(nn(lw.bossesDefeated), nn(rw.bossesDefeated));
+    out.world.mysteryBoxesOpened = Math.max(nn(lw.mysteryBoxesOpened), nn(rw.mysteryBoxesOpened));
+    out.world.artifactsFound = unionMap(lw.artifactsFound, rw.artifactsFound);
+    out.world.questCounters = maxNumberMap(lw.questCounters, rw.questCounters);
+    var localZoneAt = nn(lw.currentZoneUpdatedAt);
+    var remoteZoneAt = nn(rw.currentZoneUpdatedAt);
+    var zoneScore = function(world){
+      var unlocked = Object.keys(world.unlockedZones || {}).filter(function(id){ return world.unlockedZones[id]; }).length;
+      var visits = Object.keys(world.zonesVisited || {}).reduce(function(total,id){ return total + nn(world.zonesVisited[id]); }, 0);
+      return unlocked * 1000000 + visits;
+    };
+    var chosenZone = "verdant_vale";
+    if (remoteZoneAt > localZoneAt) chosenZone = rw.currentZone || chosenZone;
+    else if (localZoneAt > remoteZoneAt) chosenZone = lw.currentZone || chosenZone;
+    else chosenZone = zoneScore(rw) > zoneScore(lw) ? (rw.currentZone || chosenZone) : (lw.currentZone || rw.currentZone || chosenZone);
+    out.world.currentZone = out.world.unlockedZones[chosenZone] ? chosenZone : "verdant_vale";
+    out.world.currentZoneUpdatedAt = Math.max(localZoneAt, remoteZoneAt);
+
+    var lq = local.questSystem && typeof local.questSystem === "object" ? local.questSystem : {};
+    var rq = remote.questSystem && typeof remote.questSystem === "object" ? remote.questSystem : {};
+    var llr = lq.lastRoll && typeof lq.lastRoll === "object" ? lq.lastRoll : {};
+    var rlr = rq.lastRoll && typeof rq.lastRoll === "object" ? rq.lastRoll : {};
+    out.questSystem = Object.assign({}, clone(rq) || {}, clone(lq) || {});
+    out.questSystem.lastRoll = {};
+    ["daily","weekly","seasonal"].forEach(function(scope){
+      var lk = String(llr[scope] || "");
+      var rk = String(rlr[scope] || "");
+      var useRemote = rk > lk || (rk === lk && Array.isArray(rq[scope]) && rq[scope].length > 0);
+      var primary = useRemote ? rq[scope] : lq[scope];
+      var secondary = useRemote ? lq[scope] : rq[scope];
+      primary = Array.isArray(primary) ? primary : [];
+      secondary = Array.isArray(secondary) ? secondary : [];
+      if (!primary.length && secondary.length) primary = secondary;
+      var secondaryById = {};
+      secondary.forEach(function(q){ if (q && q.id) secondaryById[q.id] = q; });
+      out.questSystem[scope] = primary.map(function(q){
+        var other = q && q.id ? secondaryById[q.id] : null;
+        if (!other) return clone(q);
+        var merged = Object.assign({}, clone(other), clone(q));
+        merged.progress = Math.max(nn(q.progress), nn(other.progress));
+        merged.claimed = !!q.claimed || !!other.claimed;
+        merged.completed = merged.claimed || !!q.completed || !!other.completed;
+        merged.rolledAt = Math.max(nn(q.rolledAt), nn(other.rolledAt));
+        return merged;
+      });
+      out.questSystem.lastRoll[scope] = rk > lk ? rk : lk;
+    });
+    ["dailyClaimedCount","weeklyClaimedCount","seasonalClaimedCount"].forEach(function(key){
+      out.questSystem[key] = Math.max(nn(lq[key]), nn(rq[key]));
+    });
+
+    out.achievementsV85 = unionMap(local.achievementsV85, remote.achievementsV85);
+    return out;
   }
 
   /* ---------- BOOT + EXPORTS ---------- */
@@ -1125,7 +1363,30 @@
   }
 
   function wdBoot(){
-    wdEnsureAllShape(window.state);
+    var live = window.state;
+    if (!live) return;
+    var before = "";
+    try {
+      before = JSON.stringify({
+        crystalShards:live.crystalShards, crystalShardsEarned:live.crystalShardsEarned,
+        crystalShardsSpent:live.crystalShardsSpent, craftingDust:live.craftingDust,
+        questSystem:live.questSystem, world:live.world,
+        vault:live.loot && live.loot.vault, achievementsV85:live.achievementsV85
+      });
+    } catch(_){}
+    wdEnsureAllShape(live);
+    var after = "";
+    try {
+      after = JSON.stringify({
+        crystalShards:live.crystalShards, crystalShardsEarned:live.crystalShardsEarned,
+        crystalShardsSpent:live.crystalShardsSpent, craftingDust:live.craftingDust,
+        questSystem:live.questSystem, world:live.world,
+        vault:live.loot && live.loot.vault, achievementsV85:live.achievementsV85
+      });
+    } catch(_){}
+    if (before !== after && typeof window.saveState === "function"){
+      try { window.saveState(); } catch(_){}
+    }
   }
   if (typeof document !== "undefined"){
     if (document.readyState === "loading"){
@@ -1158,6 +1419,8 @@
     wdEarnShards: wdEarnShards,
     wdSpendShards: wdSpendShards,
     wdEnsureQuestRolls: wdEnsureQuestRolls,
+    wdReconcileQuestProgress: wdReconcileQuestProgress,
+    wdQuestDerivedValue: wdQuestDerivedValue,
     wdAdvanceQuests: wdAdvanceQuests,
     wdClaimQuest: wdClaimQuest,
     wdShouldSpawnBoss: wdShouldSpawnBoss,
@@ -1170,6 +1433,7 @@
     wdOpenMysteryBox: wdOpenMysteryBox,
     wdCheckAchievements: wdCheckAchievements,
     wdEnsureWorld: wdEnsureWorld,
+    wdMergeProgressionState: wdMergeProgressionState,
     wdSwitchZone: wdSwitchZone,
     wdUnlockZone: wdUnlockZone,
     wdAllEnemies: wdAllEnemies,

@@ -12,12 +12,25 @@
   var MATERIALS = ["seed","herb","timber","ore"];
   var pendingPriority = null;
   var priorityBypass = false;
+  var idSequence = 0;
 
   function S(){ return window.state; }
   function n(v){ v=Number(v); return Number.isFinite(v)?v:0; }
   function int(v){ return Math.trunc(n(v)); }
   function clone(v){ try{return JSON.parse(JSON.stringify(v));}catch(_){return v;} }
-  function id(prefix){ return prefix+"_"+Date.now()+"_"+Math.random().toString(36).slice(2,9); }
+  function eventIdExists(candidate){
+    var e=S()&&S().focusEconomy;if(!e)return false;
+    if(e.grants&&Object.prototype.hasOwnProperty.call(e.grants,candidate))return true;
+    return [e.spends,e.harvests].some(function(list){return Array.isArray(list)&&list.some(function(item){return item&&item.id===candidate;});});
+  }
+  function id(prefix){
+    var candidate;
+    do{
+      idSequence+=1;
+      candidate=prefix+"_"+Date.now()+"_"+idSequence.toString(36)+"_"+Math.random().toString(36).slice(2,9);
+    }while(eventIdExists(candidate));
+    return candidate;
+  }
   function esc(v){
     if (typeof window.escapeHtml === "function") return window.escapeHtml(String(v==null?"":v));
     return String(v==null?"":v).replace(/[&<>"']/g,function(c){return({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"})[c];});
@@ -28,7 +41,7 @@
       if(!e||!e.id)return; var cur=map.get(e.id);
       if(!cur || n(e.updatedAt||e.at)>=n(cur.updatedAt||cur.at)) map.set(e.id,clone(e));
     }); });
-    return Array.from(map.values()).sort(function(x,y){return n(x.at)-n(y.at);}).slice(-1000);
+    return Array.from(map.values()).sort(function(x,y){return n(x.at)-n(y.at);});
   }
   function normalized(raw){
     var e=(raw&&typeof raw==="object"&&!Array.isArray(raw))?clone(raw):{};
@@ -44,6 +57,84 @@
       if(!e.plots[i].id)e.plots[i].id="plot"+(i+1);
     }
     return e;
+  }
+  function plainObject(v){return !!v&&typeof v==="object"&&!Array.isArray(v);}
+  function finiteInteger(v){return Number.isFinite(Number(v))&&Math.trunc(Number(v))===Number(v);}
+  function validMaterialMap(map,allowNegative){
+    if(!plainObject(map))return false;
+    return MATERIALS.every(function(k){var value=map[k]==null?0:Number(map[k]);return finiteInteger(value)&&(allowNegative||value>=0);});
+  }
+  function duplicateEventIds(raw){
+    var seen=new Set(),duplicates=new Set(),e=plainObject(raw)?raw:{};
+    function add(value){var key=value&&typeof value.id==="string"?value.id.trim():"";if(!key)return;if(seen.has(key))duplicates.add(key);else seen.add(key);}
+    if(plainObject(e.grants))Object.keys(e.grants).sort().forEach(function(k){add(e.grants[k]);});
+    (Array.isArray(e.spends)?e.spends:[]).forEach(add);
+    (Array.isArray(e.harvests)?e.harvests:[]).forEach(add);
+    return Array.from(duplicates).sort();
+  }
+  function validateEconomy(raw,previous){
+    var errors=[],e=raw;
+    function fail(path,message){errors.push(path+": "+message);}
+    function validId(value){return typeof value==="string"&&value.trim().length>0;}
+    function validTime(value){return finiteInteger(value)&&Number(value)>=0;}
+    if(!plainObject(e))return {ok:false,errors:["focusEconomy: expected an object"],duplicateIds:[],counts:{grants:0,spends:0,harvests:0,plots:0},unlockedPlots:0};
+    if(!plainObject(e.grants))fail("grants","expected an object");
+    else Object.keys(e.grants).sort().forEach(function(key){
+      var g=e.grants[key],path="grants."+key;
+      if(!plainObject(g)){fail(path,"expected an event object");return;}
+      if(!validId(g.id))fail(path+".id","expected a non-empty string");
+      if(g.id!==key)fail(path+".id","must match its grant key");
+      if(!finiteInteger(g.orbs))fail(path+".orbs","expected an integer");
+      if(!finiteInteger(g.farmMinutes))fail(path+".farmMinutes","expected an integer");
+      if(!validMaterialMap(g.materials,true))fail(path+".materials","expected integer material amounts");
+      if(!validTime(g.at))fail(path+".at","expected a non-negative integer timestamp");
+      if(!validTime(g.updatedAt))fail(path+".updatedAt","expected a non-negative integer timestamp");
+    });
+    if(!Array.isArray(e.spends))fail("spends","expected an array");
+    else e.spends.forEach(function(sp,i){
+      var path="spends["+i+"]";
+      if(!plainObject(sp)){fail(path,"expected an event object");return;}
+      if(!validId(sp.id))fail(path+".id","expected a non-empty string");
+      if(typeof sp.kind!=="string"||!sp.kind)fail(path+".kind","expected a non-empty string");
+      if(!plainObject(sp.cost)||!finiteInteger(sp.cost.orbs)||Number(sp.cost.orbs)<0||!validMaterialMap(sp.cost.materials,false))fail(path+".cost","expected non-negative integer costs");
+      if(!plainObject(sp.effect))fail(path+".effect","expected an object");
+      if(!validTime(sp.at))fail(path+".at","expected a non-negative integer timestamp");
+      if(!validTime(sp.updatedAt))fail(path+".updatedAt","expected a non-negative integer timestamp");
+    });
+    if(!Array.isArray(e.harvests))fail("harvests","expected an array");
+    else e.harvests.forEach(function(h,i){
+      var path="harvests["+i+"]";
+      if(!plainObject(h)){fail(path,"expected an event object");return;}
+      if(!validId(h.id))fail(path+".id","expected a non-empty string");
+      if(!validId(h.plotId))fail(path+".plotId","expected a non-empty string");
+      if(!Object.prototype.hasOwnProperty.call(CROPS,h.crop))fail(path+".crop","unknown crop");
+      if(!validMaterialMap(h.yield,false))fail(path+".yield","expected non-negative integer material amounts");
+      if(!validTime(h.at))fail(path+".at","expected a non-negative integer timestamp");
+      if(!validTime(h.updatedAt))fail(path+".updatedAt","expected a non-negative integer timestamp");
+    });
+    if(!Array.isArray(e.plots))fail("plots","expected an array");
+    else{
+      var plotIds=new Set();
+      if(e.plots.length!==3)fail("plots","expected exactly 3 persistent plot records");
+      e.plots.forEach(function(p,i){
+        var path="plots["+i+"]";
+        if(!plainObject(p)){fail(path,"expected a plot object");return;}
+        if(!validId(p.id))fail(path+".id","expected a non-empty string");
+        else if(plotIds.has(p.id))fail(path+".id","duplicate plot id "+p.id);else plotIds.add(p.id);
+        if(p.crop!==null&&!Object.prototype.hasOwnProperty.call(CROPS,p.crop))fail(path+".crop","unknown crop");
+        if(!validTime(p.plantedAt))fail(path+".plantedAt","expected a non-negative integer");
+        if(!validTime(p.updatedAt))fail(path+".updatedAt","expected a non-negative integer timestamp");
+      });
+    }
+    var unlocked=Number(e.unlockedPlots);
+    if(!finiteInteger(unlocked)||unlocked<2||unlocked>3)fail("unlockedPlots","expected an integer from 2 to 3");
+    if(previous!=null){
+      var before=plainObject(previous)?Number(previous.unlockedPlots):Number(previous);
+      if(finiteInteger(before)&&finiteInteger(unlocked)&&unlocked<before)fail("unlockedPlots","must not decrease from "+before+" to "+unlocked);
+    }
+    var duplicates=duplicateEventIds(e);duplicates.forEach(function(value){fail("events.id","duplicate id "+value);});
+    errors.sort();
+    return {ok:errors.length===0,errors:errors,duplicateIds:duplicates,counts:{grants:plainObject(e.grants)?Object.keys(e.grants).length:0,spends:Array.isArray(e.spends)?e.spends.length:0,harvests:Array.isArray(e.harvests)?e.harvests.length:0,plots:Array.isArray(e.plots)?e.plots.length:0},unlockedPlots:finiteInteger(unlocked)?unlocked:0};
   }
   function ensure(){
     var s=S(); if(!s)return null;
@@ -122,9 +213,10 @@
   }
   function canAfford(cost){var t=totals();if(int(cost.orbs)>t.orbs)return false;return MATERIALS.every(function(m){return int(cost.materials&&cost.materials[m])<=t.materials[m];});}
   function spend(kind,cost,effect){
-    var e=ensure(); cost=cost||{}; if(!e||!canAfford(cost))return false;
+    cost=cost||{}; if(!ensure()||!canAfford(cost))return false;
+    var e=ensure();
     e.spends.push({id:id("spend"),kind:kind,cost:{orbs:int(cost.orbs),materials:Object.assign(materialZero(),cost.materials||{})},effect:effect||{},at:Date.now(),updatedAt:Date.now()});
-    e.spends=e.spends.slice(-1000); return true;
+    return true;
   }
 
   function today(){
@@ -163,6 +255,16 @@
     rec.coins=int(ctx.coins); rec.originalCoins=Math.max(int(rec.originalCoins),int(ctx.coins)); rec.coinMultiplierApplied=n(ctx.coinMultiplier)||1;
     rec.comboPriorCount=int(ctx.combo); rec.streakForCalc=int(ctx.streak);
   }
+  function sessionCoinBaseline(rec){
+    if(!rec)return {coins:0,inferred:false};
+    if(typeof rec.coins==="number"&&isFinite(rec.coins))return {coins:int(rec.coins),inferred:false};
+    if(!rec.rewarded||recordTimeOnly(rec)||typeof window.computeCoins!=="function")return {coins:0,inferred:true};
+    var base=int(window.computeCoins(int(rec.minutes),false)),mult=n(rec.coinMultiplierApplied);
+    /* Pre-v10.5 records did not persist their coin amount or gear multiplier.
+       One times the historical base is the only conservative, reproducible
+       fallback; using current equipment would fabricate a past bonus. */
+    return {coins:Math.round(base*(mult>0?mult:1)),inferred:true};
+  }
   function newRecord(before){var log=S().sessionsLog||[];for(var i=log.length-1;i>=0;i--){if(log[i]&&log[i].id&&!before.has(log[i].id))return log[i];}return null;}
   function saveRender(){try{window.saveState();}catch(_){}try{window.renderAll();}catch(_){}try{render();updatePriorityUi();}catch(_){}}
   function latestEditId(){var log=S().editLog||[], edit=log[log.length-1];return edit&&edit.id?String(edit.id):"";}
@@ -196,7 +298,7 @@
     var editFn=window.applySessionEdit;
     if(typeof editFn==="function"&&!editFn.__fh105){
       var ew=function(sessionId,newMinutes){
-        var rec=(S().sessionsLog||[]).find(function(r){return r&&r.id===sessionId;}), old=rec?clone(rec):null, oldXp=rec?int(rec.xp):0, oldCoins=rec?int(rec.coins):0;
+        var rec=(S().sessionsLog||[]).find(function(r){return r&&r.id===sessionId;}), old=rec?clone(rec):null, oldXp=rec?int(rec.xp):0, oldCoinInfo=sessionCoinBaseline(old), oldCoins=oldCoinInfo.coins;
         var result=editFn.apply(this,arguments); if(!result||!result.ok||!rec)return result;
         var rawInfo=window.computeXpBreakdown(int(rec.minutes),{comboCount:rec.source==="stopwatch"?0:int(rec.comboPriorCount),streakDays:int(rec.streakForCalc||rec.streakBefore),settings:S().settings});
         var rewarded=!!rec.rewarded&&!recordTimeOnly(rec), raw=rewarded?int(rawInfo.total):0, mult=n(old&&old.xpMultiplierApplied)||1, desired=Math.round(raw*mult);
@@ -204,6 +306,7 @@
         rec.xpRaw=raw;rec.xpMultiplierApplied=mult;rec.originalXp=Math.max(int(rec.originalXp),oldXp);
         var coinBase=rewarded?int(window.computeCoins(rec.minutes,false)):0, coinMult=n(old&&old.coinMultiplierApplied)||1, coins=rewarded?Math.round(coinBase*coinMult):0;
         applyCoinDelta(coins-oldCoins);rec.coins=coins;rec.coinMultiplierApplied=coinMult;rec.originalCoins=Math.max(int(rec.originalCoins),oldCoins);
+        if(oldCoinInfo.inferred){rec.coinBaselineInferred=true;rec.coinBaselineInferredAt=Date.now();rec.coinBaselineInferredFromMinutes=int(old&&old.minutes);rec.coinBaselineInferredCoins=oldCoins;}
         upsertGrant(rec);
         var oldEggMinutes=old&&old.rewarded?int(old.minutes):0;
         var newEggMinutes=rec.rewarded&&!recordTimeOnly(rec)?int(rec.minutes):0;
@@ -244,52 +347,82 @@
     ["resetTimer","cancelSession","gameModeResetSession"].forEach(function(name){var orig=window[name];if(typeof orig!=="function"||orig.__fhPriority)return;var w=function(){var r=orig.apply(this,arguments);if(r!==false){S().timer.priorityRun=false;updatePriorityUi();}return r;};w.__fhPriority=true;window[name]=w;});
   }
 
-  function plotProgress(plot){var spec=plot&&CROPS[plot.crop];if(!spec)return 0;return Math.max(0,Math.min(spec.required,totals().farmMinutes-int(plot.plantedAt)));}
-  function plant(plotId,cropId){var e=ensure(),p=e.plots.find(function(x){return x.id===plotId;}),spec=CROPS[cropId];if(!p||!spec||p.crop)return;if(!spend("plant",{materials:{seed:1}},{crop:cropId}))return void window.toast("You need 1 seed.","warn");p.crop=cropId;p.plantedAt=totals().farmMinutes;p.updatedAt=Date.now();saveRender();}
-  function harvest(plotId){var e=ensure(),p=e.plots.find(function(x){return x.id===plotId;}),spec=p&&CROPS[p.crop];if(!p||!spec||plotProgress(p)<spec.required)return;var h={id:id("harvest"),plotId:plotId,crop:p.crop,yield:clone(spec.yield),at:Date.now(),updatedAt:Date.now()};e.harvests.push(h);e.harvests=e.harvests.slice(-1000);p.crop=null;p.plantedAt=0;p.updatedAt=Date.now();window.toast(spec.name+" harvested.","good");saveRender();}
+  function plotProgress(plot,availableFarmMinutes){var spec=plot&&CROPS[plot.crop];if(!spec)return 0;var available=availableFarmMinutes==null?totals().farmMinutes:int(availableFarmMinutes);return Math.max(0,Math.min(spec.required,available-int(plot.plantedAt)));}
+  function plant(plotId,cropId){var e=ensure(),p=e.plots.find(function(x){return x.id===plotId;}),spec=CROPS[cropId];if(!p||!spec||p.crop)return false;if(!spend("plant",{materials:{seed:1}},{crop:cropId})){window.toast("You need 1 seed.","warn");return false;}var plantedAt=totals().farmMinutes;e=ensure();p=e.plots.find(function(x){return x.id===plotId;});if(!p)return false;p.crop=cropId;p.plantedAt=plantedAt;p.updatedAt=Date.now();saveRender();return true;}
+  function recordHarvest(e,p,at){
+    var spec=p&&CROPS[p.crop];if(!e||!p||!spec)return null;
+    var h={id:id("harvest"),plotId:p.id,crop:p.crop,yield:clone(spec.yield),at:at,updatedAt:at};
+    e.harvests.push(h);p.crop=null;p.plantedAt=0;p.updatedAt=at;return {event:h,name:spec.name};
+  }
+  function harvest(plotId){var e=ensure(),p=e.plots.find(function(x){return x.id===plotId;}),spec=p&&CROPS[p.crop];if(!p||!spec)return false;var available=totals().farmMinutes;e=ensure();p=e.plots.find(function(x){return x.id===plotId;});spec=p&&CROPS[p.crop];if(!p||!spec||plotProgress(p,available)<spec.required)return false;var result=recordHarvest(e,p,Date.now());window.toast(result.name+" harvested.","good");saveRender();return true;}
+  function harvestAllReady(){
+    var e=ensure(),available=totals().farmMinutes;e=ensure();var ready=e.plots.slice(0,e.unlockedPlots).filter(function(p){var spec=CROPS[p.crop];return !!spec&&plotProgress(p,available)>=spec.required;});
+    if(!ready.length){window.toast("No plots are ready to harvest yet.","info");return false;}
+    var at=Date.now(),names=[];ready.forEach(function(p){var result=recordHarvest(e,p,at);if(result)names.push(result.name);});
+    window.toast(names.length+" plot"+(names.length===1?"":"s")+" harvested.","good");saveRender();return true;
+  }
   function accelerate(){if(!spend("farm-boost",{orbs:1},{farmMinutes:25}))return void window.toast("You need 1 Focus Orb.","warn");window.toast("Farm advanced by 25 focus minutes.","good");saveRender();}
-  function unlockPlot(){var e=ensure();if(e.unlockedPlots>=3)return;if(!spend("unlock-plot",{orbs:3,materials:{timber:5,ore:4}},{unlockedPlot:3}))return void window.toast("Need 3 Orbs, 5 Timber, and 4 Ore.","warn");e.unlockedPlots=3;saveRender();}
+  function unlockPlot(){var e=ensure();if(e.unlockedPlots>=3)return false;if(!spend("unlock-plot",{orbs:3,materials:{timber:5,ore:4}},{unlockedPlot:3})){window.toast("Need 3 Orbs, 5 Timber, and 4 Ore.","warn");return false;}e=ensure();e.unlockedPlots=3;saveRender();return true;}
   function craftTonic(){if(!spend("focus-tonic",{orbs:1,materials:{herb:4}},{boost:"xp25"}))return void window.toast("Need 1 Orb and 4 Herbs.","warn");if(!S().store||typeof S().store!=="object")S().store={purchased:[],boosts:[],unlockedThemes:[]};if(!Array.isArray(S().store.boosts))S().store.boosts=[];S().store.boosts.push({uid:id("farm_tonic"),kind:"xp",mult:1.25,durationMs:45*60000,name:"Farm Focus Tonic",purchasedAt:Date.now(),activatedAt:null,used:false});window.toast("Focus Tonic crafted. Activate it in Store.","good");saveRender();}
   function craftForgeKit(){if(!spend("forge-kit",{orbs:1,materials:{timber:3,ore:3}},{dust:8,shards:1}))return void window.toast("Need 1 Orb, 3 Timber, and 3 Ore.","warn");if(!S().loot||typeof S().loot!=="object")S().loot={};if(!S().loot.materials||typeof S().loot.materials!=="object")S().loot.materials={dust:0,shards:0,essence:0};S().loot.materials.dust=int(S().loot.materials.dust)+8;S().loot.materials.shards=int(S().loot.materials.shards)+1;window.toast("Forge Kit crafted: +8 Dust, +1 Shard.","good");saveRender();}
 
+  function yieldText(values){var parts=[];MATERIALS.forEach(function(k){var amount=int(values&&values[k]);if(amount)parts.push("+"+amount+" "+(k==="seed"?"seed"+(amount===1?"":"s"):k));});return parts.join(", ")||"No materials";}
+  function historyTime(value){var d=new Date(n(value));return Number.isFinite(d.getTime())?d.toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}):"Unknown time";}
   function render(){
-    var host=document.getElementById("focus-economy-panel");if(!host)return;var e=ensure(),t=totals();
-    var plots=e.plots.slice(0,e.unlockedPlots).map(function(p){var spec=CROPS[p.crop],progress=plotProgress(p),pct=spec?Math.min(100,Math.round(progress/spec.required*100)):0;
-      if(!spec)return '<div class="fhe-plot"><b>Empty plot</b><span>Plant 1 seed. Growth advances only from credited focus minutes.</span><select data-fhe-crop="'+esc(p.id)+'"><option value="herb">Moon herbs · 60m</option><option value="timber">Sunwood · 90m</option><option value="ore">Ironroot · 120m</option></select><button type="button" data-fhe-plant="'+esc(p.id)+'">Plant</button></div>';
-      return '<div class="fhe-plot"><b>'+esc(spec.name)+'</b><span>'+progress+' / '+spec.required+' growth minutes · '+esc(spec.note)+'</span><div class="fhe-track"><i style="width:'+pct+'%"></i></div><button type="button" data-fhe-harvest="'+esc(p.id)+'" '+(progress<spec.required?'disabled':'')+'>Harvest</button></div>';
+    var host=document.getElementById("focus-economy-panel");if(!host)return;var e=ensure(),t=totals(),hasSeed=t.materials.seed>=1;
+    var readyCount=0;
+    var plots=e.plots.slice(0,e.unlockedPlots).map(function(p){var spec=CROPS[p.crop],progress=plotProgress(p,t.farmMinutes),pct=spec?Math.min(100,Math.round(progress/spec.required*100)):0;
+      if(!spec)return '<div class="fhe-plot"><div class="fhe-plot-title"><b>Empty plot</b><strong>Needs 1 seed</strong></div><span>Choose a crop. Only credited focus minutes grow it.</span><select aria-label="Crop for '+esc(p.id)+'" data-fhe-crop="'+esc(p.id)+'"><option value="herb">Moon herbs · 60m → 4 herbs</option><option value="timber">Sunwood · 90m → 4 timber</option><option value="ore">Ironroot · 120m → 3 ore</option></select><button type="button" data-fhe-plant="'+esc(p.id)+'" '+(hasSeed?'':'disabled')+'>Plant · 1 seed</button><small>'+(hasSeed?'Affordable now':'Earn a seed with 30 credited minutes')+'</small></div>';
+      var remaining=Math.max(0,spec.required-progress),ready=remaining===0;if(ready)readyCount+=1;
+      return '<div class="fhe-plot '+(ready?'ready':'')+'"><div class="fhe-plot-title"><b>'+esc(spec.name)+'</b><strong>'+(ready?'READY':remaining+'m left')+'</strong></div><span>Yield: '+esc(yieldText(spec.yield))+' · '+esc(spec.note)+'</span><div class="fhe-track" role="progressbar" aria-label="'+esc(spec.name)+' growth" aria-valuemin="0" aria-valuemax="'+spec.required+'" aria-valuenow="'+progress+'"><i style="width:'+pct+'%"></i></div><small>'+progress+' of '+spec.required+' credited growth minutes</small><button type="button" data-fhe-harvest="'+esc(p.id)+'" '+(ready?'':'disabled')+'>'+(ready?'Harvest '+esc(yieldText(spec.yield)):'Growing · '+remaining+'m remaining')+'</button></div>';
     }).join("");
-    host.innerHTML='<div class="fhe-head"><div><h3>Expedition</h3><p>One organized home for Orbs, materials, farming, and crafting.</p></div><button type="button" data-fhe-boost>Spend 1 Orb · +25 growth</button></div>'+
-      '<div class="fhe-res"><div><b>'+t.orbs+'</b><span>Focus Orbs</span></div><div><b>'+t.materials.seed+'</b><span>Seeds</span></div><div><b>'+t.materials.herb+'</b><span>Herbs</span></div><div><b>'+t.materials.timber+'</b><span>Timber</span></div><div><b>'+t.materials.ore+'</b><span>Ore</span></div></div>'+
-      '<p class="fhe-rule">Credited sessions earn 1 Orb per 25 minutes, 1 action-based material per 15 minutes, and 1 seed per 30 minutes. A verified Priority run adds 1 Orb. Minute corrections recalculate these same grants.</p>'+
-      '<h4>Focus farm</h4><div class="fhe-plots">'+plots+'</div>'+(e.unlockedPlots<3?'<button type="button" data-fhe-unlock>Unlock third plot · 3 Orbs + 5 Timber + 4 Ore</button>':'')+
-      '<h4>Workshop</h4><div class="fhe-work"><button type="button" data-fhe-tonic><b>Focus Tonic</b><span>1 Orb + 4 Herbs → +25% XP boost for 45m</span></button><button type="button" data-fhe-forge><b>Forge Kit</b><span>1 Orb + 3 Timber + 3 Ore → 8 Dust + 1 Shard</span></button></div>';
+    var recent=e.harvests.slice().sort(function(a,b){return n(b&&b.at)-n(a&&a.at);}).slice(0,5).map(function(h){var spec=CROPS[h&&h.crop];return '<li><div><b>'+esc(spec?spec.name:(h&&h.crop)||"Harvest")+'</b><span>'+esc(historyTime(h&&h.at))+'</span></div><strong>'+esc(yieldText(h&&h.yield))+'</strong></li>';}).join("");
+    var boostAffordable=canAfford({orbs:1}),unlockAffordable=canAfford({orbs:3,materials:{timber:5,ore:4}}),tonicAffordable=canAfford({orbs:1,materials:{herb:4}}),forgeAffordable=canAfford({orbs:1,materials:{timber:3,ore:3}});
+    host.innerHTML='<div class="fhe-head"><div><h3>Expedition</h3><p>Earn resources from focus, grow crops, then spend them in the workshop.</p></div><button type="button" data-fhe-boost '+(boostAffordable?'':'disabled')+'>+25 growth · 1 Orb</button></div>'+
+      '<div class="fhe-res" aria-label="Expedition resources"><div><b>'+t.orbs+'</b><span>Focus Orbs</span><small>Earn: 25m · Use: boosts &amp; crafting</small></div><div><b>'+t.materials.seed+'</b><span>Seeds</span><small>Earn: 30m · Use: planting</small></div><div><b>'+t.materials.herb+'</b><span>Herbs</span><small>Farm/Hunt · Use: tonics</small></div><div><b>'+t.materials.timber+'</b><span>Timber</span><small>Farm/Travel · Use: building</small></div><div><b>'+t.materials.ore+'</b><span>Ore</span><small>Farm/Fight · Use: forging</small></div></div>'+
+      '<div class="fhe-guide"><b>How it flows</b><span>Credited focus → Orbs, seeds, action materials, and '+t.farmMinutes+' total growth minutes</span><span>Planting &amp; crafting → spends those resources; session edits recalculate the original grants.</span></div>'+
+      '<p class="fhe-rule">Rates are unchanged: 1 Orb per 25 credited minutes, 1 action-based material per 15 minutes, and 1 seed per 30 minutes. A verified Priority run adds 1 Orb.</p>'+
+      '<div class="fhe-section-title"><h4>Focus farm</h4><button type="button" data-fhe-harvest-all '+(readyCount?'':'disabled')+'>Harvest all ready ('+readyCount+')</button></div><div class="fhe-plots">'+plots+'</div>'+(e.unlockedPlots<3?'<button type="button" data-fhe-unlock '+(unlockAffordable?'':'disabled')+'>Unlock third plot · 3 Orbs + 5 Timber + 4 Ore'+(unlockAffordable?'':' · Not affordable yet')+'</button>':'')+
+      '<h4>Workshop</h4><div class="fhe-work"><button type="button" data-fhe-tonic '+(tonicAffordable?'':'disabled')+'><b>Focus Tonic</b><span>1 Orb + 4 Herbs → +25% XP boost for 45m</span><small>'+(tonicAffordable?'Affordable now':'Keep gathering Herbs and Orbs')+'</small></button><button type="button" data-fhe-forge '+(forgeAffordable?'':'disabled')+'><b>Forge Kit</b><span>1 Orb + 3 Timber + 3 Ore → 8 Dust + 1 Shard</span><small>'+(forgeAffordable?'Affordable now':'Keep gathering Timber, Ore, and Orbs')+'</small></button></div>'+
+      '<h4>Recent harvests</h4><ul class="fhe-history">'+(recent||'<li class="empty">No harvests yet. Your last five harvests will appear here.</li>')+'</ul>';
     host.querySelectorAll("[data-fhe-plant]").forEach(function(b){b.onclick=function(){var sel=host.querySelector('[data-fhe-crop="'+CSS.escape(b.dataset.fhePlant)+'"]');plant(b.dataset.fhePlant,sel&&sel.value);};});
     host.querySelectorAll("[data-fhe-harvest]").forEach(function(b){b.onclick=function(){harvest(b.dataset.fheHarvest);};});
-    var b=host.querySelector("[data-fhe-boost]");if(b)b.onclick=accelerate;b=host.querySelector("[data-fhe-unlock]");if(b)b.onclick=unlockPlot;b=host.querySelector("[data-fhe-tonic]");if(b)b.onclick=craftTonic;b=host.querySelector("[data-fhe-forge]");if(b)b.onclick=craftForgeKit;
+    var b=host.querySelector("[data-fhe-boost]");if(b)b.onclick=accelerate;b=host.querySelector("[data-fhe-harvest-all]");if(b)b.onclick=harvestAllReady;b=host.querySelector("[data-fhe-unlock]");if(b)b.onclick=unlockPlot;b=host.querySelector("[data-fhe-tonic]");if(b)b.onclick=craftTonic;b=host.querySelector("[data-fhe-forge]");if(b)b.onclick=craftForgeKit;
   }
   window.fhRenderFocusEconomy=render;
+  window.fhValidateFocusEconomy=validateEconomy;
 
   function updateToggle(){var el=document.getElementById("tog-prioritymode"),on=!!(S()&&S().settings&&S().settings.priorityMode);if(!el)return;el.setAttribute("aria-checked",on?"true":"false");el.classList.toggle("on",on);}
   function updatePriorityUi(){
     var s=S();if(!s)return;ensure();var badge=document.getElementById("priority-mode-badge"),armed=!!s.timer.priorityRun&&(s.timer.running||int(s.timer.swAccumulatedMs)>0||int(s.timer.msLeft)===0),on=!!s.settings.priorityMode;
     if(badge){badge.textContent=armed?"Priority run · verify at finish":(on?"Priority mode · ON":"Priority mode · OFF");badge.classList.toggle("armed",armed);badge.setAttribute("aria-pressed",on?"true":"false");}
-    var reset=document.getElementById("btn-priority-reset");if(reset)reset.hidden=!armed;updateToggle();
+    updateToggle();
   }
   function togglePriority(){ensure();S().settings.priorityMode=!S().settings.priorityMode;window.saveState();updatePriorityUi();window.toast(S().settings.priorityMode?"Priority mode on for new focus runs.":"Priority mode off for new focus runs.","info");}
   function installDom(){
-    if(!document.getElementById("fhe-style")){var st=document.createElement("style");st.id="fhe-style";st.textContent=".fhe-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.fhe-head h3{margin:0}.fhe-head p,.fhe-rule{margin:4px 0 10px;color:var(--ink-dim);font-size:.76rem;line-height:1.45}.fhe-res{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px;margin:10px 0}.fhe-res div,.fhe-plot,.fhe-work button{border:1px solid var(--border);background:rgba(255,255,255,.035);border-radius:12px;padding:9px}.fhe-res b{display:block;font-size:1.05rem}.fhe-res span,.fhe-plot span,.fhe-work span{display:block;color:var(--ink-dim);font-size:.67rem;margin-top:2px}.fhe-plots{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:7px 0 10px}.fhe-plot select{width:100%;margin:8px 0}.fhe-track{height:8px;background:rgba(0,0,0,.28);border-radius:8px;margin:8px 0;overflow:hidden}.fhe-track i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2));border-radius:inherit}.fhe-work{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.fhe-work button{text-align:left}.priority-mode-badge{display:block;width:fit-content;max-width:92%;margin:6px auto 0;padding:5px 13px;border-radius:999px;font-size:.74rem;font-weight:700;background:rgba(148,163,184,.12);color:#cbd5e1;border:1px solid rgba(148,163,184,.3)}.priority-mode-badge.armed{background:rgba(96,165,250,.18);color:#bfdbfe;border-color:rgba(96,165,250,.55)}#btn-priority-reset{display:block;width:fit-content;margin:6px auto 0;padding:6px 14px;border-radius:999px;font-size:.74rem;color:#ff9aa7;border-color:rgba(255,122,138,.5)}.priority-check-copy{color:var(--ink-dim);line-height:1.5}.priority-check-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}@media(max-width:680px){.fhe-res{grid-template-columns:repeat(3,1fr)}.fhe-plots,.fhe-work{grid-template-columns:1fr}}";(document.head||document.documentElement).appendChild(st);}
-    if(!document.getElementById("priority-mode-badge")){var anchor=document.getElementById("btn-lockedin-reset")||document.getElementById("game-mode-badge");if(anchor){anchor.insertAdjacentHTML("afterend",'<button type="button" id="priority-mode-badge" class="priority-mode-badge" aria-pressed="false">Priority mode · OFF</button><button type="button" id="btn-priority-reset" hidden>Cancel this Priority run</button>');}}
+    if(!document.getElementById("fhe-style")){
+      var st=document.createElement("style");st.id="fhe-style";st.textContent=[
+        ".fhe-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.fhe-head h3{margin:0}.fhe-head p,.fhe-rule{margin:4px 0 10px;color:var(--ink-dim);font-size:.76rem;line-height:1.45}",
+        ".fhe-head>button,.fhe-section-title button{white-space:nowrap}.fhe-res{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px;margin:10px 0}",
+        ".fhe-res div,.fhe-plot,.fhe-work button,.fhe-guide,.fhe-history{border:1px solid var(--border);background:rgba(255,255,255,.035);border-radius:12px;padding:9px}.fhe-res b{display:block;font-size:1.05rem}.fhe-res span,.fhe-plot span,.fhe-work span,.fhe-guide span{display:block;color:var(--ink-dim);font-size:.69rem;margin-top:2px;line-height:1.35}.fhe-res small,.fhe-plot small,.fhe-work small{display:block;color:var(--ink-dim);font-size:.62rem;line-height:1.35;margin-top:5px}",
+        ".fhe-guide{display:grid;gap:2px;margin-bottom:8px}.fhe-guide b{font-size:.78rem}.fhe-section-title,.fhe-plot-title{display:flex;align-items:center;justify-content:space-between;gap:8px}.fhe-section-title h4{margin:10px 0 7px}.fhe-plot-title strong{font-size:.65rem;color:var(--ink-dim)}.fhe-plot.ready{border-color:rgba(74,222,128,.55);box-shadow:inset 0 0 0 1px rgba(74,222,128,.12)}.fhe-plot.ready .fhe-plot-title strong{color:#86efac}",
+        ".fhe-plots{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:7px 0 10px}.fhe-plot select{width:100%;margin:8px 0}.fhe-plot button{width:100%;margin-top:8px}.fhe-track{height:9px;background:rgba(0,0,0,.28);border-radius:8px;margin:8px 0 4px;overflow:hidden}.fhe-track i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2));border-radius:inherit}.fhe-work{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.fhe-work button{text-align:left}",
+        ".fhe-history{list-style:none;margin:7px 0 0;display:grid;gap:7px}.fhe-history li{display:flex;justify-content:space-between;gap:10px;align-items:center;padding-bottom:7px;border-bottom:1px solid var(--border)}.fhe-history li:last-child{padding-bottom:0;border-bottom:0}.fhe-history li div span{display:block;color:var(--ink-dim);font-size:.66rem;margin-top:2px}.fhe-history li strong{font-size:.72rem;color:#86efac;text-align:right}.fhe-history .empty{color:var(--ink-dim);font-size:.72rem}",
+        ".priority-mode-badge{display:block;width:fit-content;max-width:92%;margin:6px auto 0;padding:5px 13px;border-radius:999px;font-size:.74rem;font-weight:700;background:rgba(148,163,184,.12);color:#cbd5e1;border:1px solid rgba(148,163,184,.3)}.priority-mode-badge.armed{background:rgba(96,165,250,.18);color:#bfdbfe;border-color:rgba(96,165,250,.55)}.priority-check-copy{color:var(--ink-dim);line-height:1.5}.priority-check-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}",
+        "@media(max-width:680px){.fhe-head{align-items:stretch;flex-direction:column}.fhe-head>button{width:100%}.fhe-res{grid-template-columns:repeat(2,1fr)}.fhe-plots,.fhe-work{grid-template-columns:1fr}.fhe-section-title{align-items:flex-start;flex-direction:column}.fhe-section-title button{width:100%}}"
+      ].join("");(document.head||document.documentElement).appendChild(st);
+    }
+    if(!document.getElementById("priority-mode-badge")){var anchor=document.getElementById("game-mode-badge");if(anchor){anchor.insertAdjacentHTML("afterend",'<button type="button" id="priority-mode-badge" class="priority-mode-badge" aria-pressed="false">Priority mode · OFF</button>');}}
     if(!document.getElementById("priority-check-modal")){document.body.insertAdjacentHTML("beforeend",'<div class="modal-backdrop" id="priority-check-modal" hidden data-locked="true"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="priority-check-title"><h3 id="priority-check-title">Priority check</h3><p class="priority-check-copy">Did you work in the right priority order for this run? This is your manual honor-system checkpoint.</p><div class="priority-check-actions"><button type="button" id="btn-priority-cancel">Cancel entire run · 0 credit</button><button type="button" class="primary" id="btn-priority-keep">Yes · keep full session</button></div></div></div>');}
     var tog=document.getElementById("tog-prioritymode");if(tog&&!tog.dataset.bound){tog.dataset.bound="1";tog.onclick=togglePriority;}
     var badge=document.getElementById("priority-mode-badge");if(badge&&!badge.dataset.bound){badge.dataset.bound="1";badge.onclick=togglePriority;}
-    var reset=document.getElementById("btn-priority-reset");if(reset&&!reset.dataset.bound){reset.dataset.bound="1";reset.onclick=function(){if(pendingPriority)cancelPriorityRun();else if(typeof window.cancelSession==="function")window.cancelSession();};}
     var keep=document.getElementById("btn-priority-keep");if(keep&&!keep.dataset.bound){keep.dataset.bound="1";keep.onclick=function(){var p=pendingPriority;if(!p)return;pendingPriority=null;document.getElementById("priority-check-modal").hidden=true;if(p.args&&p.args[0])p.args[0].priorityVerified=true;try{if(typeof window.markPendingFocusClaimPriorityVerified==="function")window.markPendingFocusClaimPriorityVerified();}catch(_){}finishRecordedSession(p.original,p.args,true);try{if(typeof window.clearPendingFocusClaim==="function")window.clearPendingFocusClaim(p.args&&p.args[0]&&p.args[0].sessionId);}catch(_){}};}
     var cancel=document.getElementById("btn-priority-cancel");if(cancel&&!cancel.dataset.bound){cancel.dataset.bound="1";cancel.onclick=cancelPriorityRun;}
   }
   function wrapRender(){var r=window.renderAll;if(typeof r==="function"&&!r.__fhEconomy){var w=function(){var x=r.apply(this,arguments);try{render();updatePriorityUi();}catch(_){}return x;};w.__fhEconomy=true;window.renderAll=w;}}
 
-  function boot(){ensure();installDom();installRewardParity();installPriorityWrappers();wrapRender();render();updatePriorityUi();try{window.saveState();}catch(_){}
-    window.__fhEconomyTest={ensure:ensure,totals:totals,rewardGrant:rewardGrant,liveRewardContext:liveRewardContext,upsertGrant:upsertGrant,grantForRecord:grantForRecord,plant:plant,harvest:harvest,accelerate:accelerate,merge:window.fhMergeFocusEconomy};
+  function boot(){var before="";try{before=JSON.stringify({focusEconomy:S()&&S().focusEconomy,priorityMode:S()&&S().settings&&S().settings.priorityMode,priorityRun:S()&&S().timer&&S().timer.priorityRun});}catch(_){}ensure();installDom();installRewardParity();installPriorityWrappers();wrapRender();render();updatePriorityUi();var after="";try{after=JSON.stringify({focusEconomy:S()&&S().focusEconomy,priorityMode:S()&&S().settings&&S().settings.priorityMode,priorityRun:S()&&S().timer&&S().timer.priorityRun});}catch(_){}if(before!==after){try{window.saveState();}catch(_){}}
+    window.__fhEconomyTest={ensure:ensure,totals:totals,rewardGrant:rewardGrant,liveRewardContext:liveRewardContext,upsertGrant:upsertGrant,grantForRecord:grantForRecord,plant:plant,harvest:harvest,harvestAllReady:harvestAllReady,accelerate:accelerate,render:render,merge:window.fhMergeFocusEconomy,validate:validateEconomy,duplicateEventIds:duplicateEventIds};
   }
   if(document.readyState==="loading")window.addEventListener("DOMContentLoaded",function(){setTimeout(boot,0);});else setTimeout(boot,0);
 })();
