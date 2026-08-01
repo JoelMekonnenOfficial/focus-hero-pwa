@@ -16,6 +16,9 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const html = await fs.readFile(path.join(root, "focus-hero.html"), "utf8");
 const index = await fs.readFile(path.join(root, "index.html"), "utf8");
 const sw = await fs.readFile(path.join(root, "sw.js"), "utf8");
+const economy = await fs.readFile(path.join(root, "focus-economy.js"), "utf8");
+const lootRework = await fs.readFile(path.join(root, "loot-rework.js"), "utf8");
+const characterRebuild = await fs.readFile(path.join(root, "character-rebuild.js"), "utf8");
 
 assert.equal(index, html, "index.html and focus-hero.html must remain exact mirrors");
 assert.doesNotMatch(html, /data-tab="sessions"[^>]*>[^<]*[\p{Extended_Pictographic}]/u);
@@ -30,7 +33,15 @@ assert.match(sw, /data-guard\.js/);
 assert.match(sw, /\.\/progression-hub\.js/);
 assert.equal((html.match(/id="btn-cancel-session"/g) || []).length, 1, "one shared live cancel control");
 assert.doesNotMatch(html, /id="btn-lock-reset"|id="btn-priority-cancel"/);
+assert.doesNotMatch(economy, /priority-check-modal|btn-priority-keep|btn-priority-cancel/, "Priority completion must not inject a separate yes/no prompt");
 assert.match(html, /#live-custom-min\{[^}]*min-height:48px/);
+assert.match(html, /id="live-exact-min"/);
+assert.match(html, /id="live-exact-apply"/);
+assert.match(html, /id="minute-exact-input"/);
+assert.match(html, /id="btn-minute-exact"/);
+assert.match(html, /id="session-edit-exact"/);
+assert.match(lootRework, /data-battle-report-edit-time/);
+assert.doesNotMatch(characterRebuild, /crWireDeltaEdit\(\);/, "runtime must not replace exact-total editing with delta-only controls");
 assert.match(html, /<script src="\.\/progression-hub\.js"><\/script>/);
 
 const mime = {
@@ -80,7 +91,7 @@ try {
       groups:browse.querySelectorAll(".progress-tab-group").length,
       current:browse.querySelector("[data-progress-current]")?.textContent,
       closesAfterChoice:!browse.open,
-      world:/Adventure map/.test(document.querySelector("#world-panel")?.textContent || ""),
+      world:/Adventure command/.test(document.querySelector("#world-panel")?.textContent || ""),
       challenges:/Goals with rewards/.test(document.querySelector("#quests-v85-panel")?.textContent || ""),
       vault:/Protected item storage/.test(document.querySelector("#vault-panel")?.textContent || ""),
       targetButtons,
@@ -103,6 +114,38 @@ try {
   assert.ok(organized.inputWidth >= 140, `custom minute input width was ${organized.inputWidth}`);
   assert.ok(organized.inputHeight >= 48, `custom minute input height was ${organized.inputHeight}`);
   assert.equal(organized.customFits, true);
+
+  const editSurfaces = await page.evaluate(async () => {
+    const fh = window.__FocusHero;
+    const task = fh.createTask({ name:"Surface parity", emoji:"S" });
+    const added = window.applyTaskTimeAdjustment(task.id, 10, { operationId:"surface_parity_test", surface:"test" });
+    if (!added?.ok) throw new Error("surface fixture failed");
+    const state = fh.stateRef();
+    const rec = state.sessionsLog.find(record=>record?.manualOperationId === "surface_parity_test");
+    window.showXpBreakdown(rec.xp, { sessionId:rec.id, lrRun:{ sessionId:rec.id, drops:[], encounters:[] } });
+    window.openSessionEndEditTime(rec.id);
+    await new Promise(resolve => setTimeout(resolve, 650));
+    const postExact = !!document.querySelector("#xp-edit-input");
+    const postDelta = !!document.querySelector("#xp-edit-delta");
+    const legacyDeltaOverride = !!document.querySelector(".cr-delta");
+    window.openSessionEditModal(rec.id, { surface:"test" });
+    const completedExact = !!document.querySelector("#session-edit-exact");
+    const completedDelta = !!document.querySelector("#session-edit-delta");
+    window.showBattleReport({ sessionId:rec.id, drops:[], encounters:[] });
+    const battleEdit = !!document.querySelector("[data-battle-report-edit-time]");
+    if (typeof window.closeModal === "function") { window.closeModal("battle-report-modal"); window.closeModal("session-edit-modal"); }
+    return {
+      liveExact:!!document.querySelector("#live-exact-min") && !!document.querySelector("#live-exact-apply"),
+      liveDelta:!!document.querySelector("#live-custom-min") && !!document.querySelector("#live-custom-apply"),
+      taskExact:!!document.querySelector("#minute-exact-input") && !!document.querySelector("#btn-minute-exact"),
+      taskDelta:!!document.querySelector("#minute-custom-input") && !!document.querySelector("#btn-minute-apply"),
+      completedExact, completedDelta, postExact, postDelta, legacyDeltaOverride, battleEdit
+    };
+  });
+  assert.deepEqual(editSurfaces, {
+    liveExact:true, liveDelta:true, taskExact:true, taskDelta:true, completedExact:true, completedDelta:true,
+    postExact:true, postDelta:true, legacyDeltaOverride:false, battleEdit:true
+  });
 
   const encounter = await page.evaluate(() => {
     const stage = document.querySelector("#encounter-stage");

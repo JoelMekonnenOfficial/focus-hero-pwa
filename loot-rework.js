@@ -29,6 +29,10 @@
   var LR_RARITIES = ["common","uncommon","rare","epic","legendary","mythic"];
   var LR_DROP_LOG_CAP = 200;
   var LR_BATTLE_REPORT_CAP = 30;
+  var LR_SESSION_REWARD_POLICY_VERSION = 3;
+  var LR_SESSION_REWARD_DETAIL_CAP = 64;
+  var LR_SESSION_REWARD_TOMBSTONE_CAP = 2048;
+  var LR_SESSION_REWARD_STORAGE_BYTE_CAP = 512 * 1024;
   if (typeof window !== "undefined"){
     try { window.LR_RARITIES = LR_RARITIES; } catch(_){}
     try { window.LR_DROP_LOG_CAP = LR_DROP_LOG_CAP; } catch(_){}
@@ -238,6 +242,13 @@
   function _lootById(id){ return window.lootById ? window.lootById(id) : null; }
   function _lootSlot(item){ return window.lootSlot ? window.lootSlot(item) : (item ? item[4] : "none"); }
   function _isEquippableSlot(slot){ return window.isEquippableSlot ? window.isEquippableSlot(slot) : (window.EQUIP_SLOTS||[]).indexOf(slot) >= 0; }
+  function lrInstanceSlot(instance){
+    var template = instance && _lootById(instance.lootId);
+    return template ? _lootSlot(template) : "none";
+  }
+  function lrInstanceSupportsForgeMutation(instance){
+    return !!instance && _isEquippableSlot(lrInstanceSlot(instance));
+  }
   function _allowedRaritiesForMinutes(minutes){
     if (typeof window.allowedRaritiesForMinutes === "function") return window.allowedRaritiesForMinutes(minutes);
     var out = new Set(LR_RARITIES); return out;
@@ -259,7 +270,8 @@
     if (!s.loot || typeof s.loot !== "object" || Array.isArray(s.loot)){
       s.loot = { drops:[], pity:{common:0,uncommon:0,rare:0,epic:0,legendary:0,mythic:0},
                  materials:{dust:0,shards:0,essence:0}, dyesOwned:{}, gemsOwned:{},
-                 consumables:{}, loadout:{slot1:null,slot2:null,slot3:null}, loadoutUpdatedAt:0 };
+                 consumables:{}, loadout:{slot1:null,slot2:null,slot3:null}, loadoutUpdatedAt:0,
+                 instanceTombstones:{}, sessionRewardReceipts:{}, sessionRewardReceiptTombstones:{} };
     } else {
       if (!Array.isArray(s.loot.drops)) s.loot.drops = [];
       if (!s.loot.pity) s.loot.pity = { common:0, uncommon:0, rare:0, epic:0, legendary:0, mythic:0 };
@@ -269,6 +281,14 @@
       if (!s.loot.consumables) s.loot.consumables = {};
       if (!s.loot.loadout) s.loot.loadout = { slot1:null, slot2:null, slot3:null };
       if (typeof s.loot.loadoutUpdatedAt !== "number") s.loot.loadoutUpdatedAt = 0;
+      if (!s.loot.instanceTombstones || typeof s.loot.instanceTombstones !== "object" || Array.isArray(s.loot.instanceTombstones)) s.loot.instanceTombstones = {};
+      /* A completed session is an immutable reward boundary.  This receipt is
+         deliberately local state only for now: the durable event ledger owns
+         cross-device ordering.  It prevents an in-process/retry replay from
+         applying the same session's loot, pity, combat and consumable effects
+         twice while that integration is being built. */
+      if (!s.loot.sessionRewardReceipts || typeof s.loot.sessionRewardReceipts !== "object" || Array.isArray(s.loot.sessionRewardReceipts)) s.loot.sessionRewardReceipts = {};
+      if (!s.loot.sessionRewardReceiptTombstones || typeof s.loot.sessionRewardReceiptTombstones !== "object" || Array.isArray(s.loot.sessionRewardReceiptTombstones)) s.loot.sessionRewardReceiptTombstones = {};
     }
     if (!s.lootRework || typeof s.lootRework !== "object") s.lootRework = { version:1, flags:{ animationsOn:true, showDropLog:true, autoSalvageCommonDupes:false, autoSalvageDupes:true } };
     if (s.lootRework && s.lootRework.flags && typeof s.lootRework.flags.autoSalvageDupes === "undefined") s.lootRework.flags.autoSalvageDupes = true; /* v9: default dupe->materials on */
@@ -293,6 +313,546 @@
       h = Math.imul(h, 16777619) >>> 0;
     }
     return h >>> 0;
+  }
+  function lrStableId(prefix, seed){
+    seed = String(seed || "");
+    var left = lrHashStr(seed).toString(36).padStart(7, "0");
+    var right = lrHashStr("focus-hero|" + seed).toString(36).padStart(7, "0");
+    return String(prefix || "lr") + "_" + left + right;
+  }
+
+  function lrSha256Hex(input){
+    var text = String(input === undefined || input === null ? "" : input);
+    var bytes = [];
+    for (var i=0; i<text.length; i++){
+      var code = text.charCodeAt(i);
+      if (code >= 0xD800 && code <= 0xDBFF && i + 1 < text.length){
+        var low = text.charCodeAt(i + 1);
+        if (low >= 0xDC00 && low <= 0xDFFF){
+          code = 0x10000 + ((code - 0xD800) << 10) + (low - 0xDC00);
+          i++;
+        }
+      }
+      if (code < 0x80) bytes.push(code);
+      else if (code < 0x800){
+        bytes.push(0xC0 | (code >>> 6), 0x80 | (code & 0x3F));
+      } else if (code < 0x10000){
+        bytes.push(0xE0 | (code >>> 12), 0x80 | ((code >>> 6) & 0x3F), 0x80 | (code & 0x3F));
+      } else {
+        bytes.push(0xF0 | (code >>> 18), 0x80 | ((code >>> 12) & 0x3F),
+          0x80 | ((code >>> 6) & 0x3F), 0x80 | (code & 0x3F));
+      }
+    }
+    var bitLength = bytes.length * 8;
+    bytes.push(0x80);
+    while ((bytes.length % 64) !== 56) bytes.push(0);
+    var high = Math.floor(bitLength / 0x100000000);
+    var lowBits = bitLength >>> 0;
+    for (var hb=3; hb>=0; hb--) bytes.push((high >>> (hb * 8)) & 0xFF);
+    for (var lb=3; lb>=0; lb--) bytes.push((lowBits >>> (lb * 8)) & 0xFF);
+    var h = [
+      0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,
+      0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19
+    ];
+    var k = [
+      0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+      0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+      0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+      0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+      0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+      0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+      0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+      0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
+    ];
+    var rotr = function(value, bits){ return (value >>> bits) | (value << (32 - bits)); };
+    var w = new Array(64);
+    for (var offset=0; offset<bytes.length; offset+=64){
+      for (var wi=0; wi<16; wi++){
+        var pos = offset + wi * 4;
+        w[wi] = ((bytes[pos] << 24) | (bytes[pos+1] << 16) | (bytes[pos+2] << 8) | bytes[pos+3]) >>> 0;
+      }
+      for (var wx=16; wx<64; wx++){
+        var s0 = rotr(w[wx-15],7) ^ rotr(w[wx-15],18) ^ (w[wx-15] >>> 3);
+        var s1 = rotr(w[wx-2],17) ^ rotr(w[wx-2],19) ^ (w[wx-2] >>> 10);
+        w[wx] = (w[wx-16] + s0 + w[wx-7] + s1) >>> 0;
+      }
+      var a=h[0], b=h[1], c=h[2], d=h[3], e=h[4], f=h[5], g=h[6], hh=h[7];
+      for (var round=0; round<64; round++){
+        var sum1 = rotr(e,6) ^ rotr(e,11) ^ rotr(e,25);
+        var choose = (e & f) ^ ((~e) & g);
+        var temp1 = (hh + sum1 + choose + k[round] + w[round]) >>> 0;
+        var sum0 = rotr(a,2) ^ rotr(a,13) ^ rotr(a,22);
+        var majority = (a & b) ^ (a & c) ^ (b & c);
+        var temp2 = (sum0 + majority) >>> 0;
+        hh=g; g=f; f=e; e=(d+temp1)>>>0; d=c; c=b; b=a; a=(temp1+temp2)>>>0;
+      }
+      h[0]=(h[0]+a)>>>0; h[1]=(h[1]+b)>>>0; h[2]=(h[2]+c)>>>0; h[3]=(h[3]+d)>>>0;
+      h[4]=(h[4]+e)>>>0; h[5]=(h[5]+f)>>>0; h[6]=(h[6]+g)>>>0; h[7]=(h[7]+hh)>>>0;
+    }
+    return h.map(function(value){ return value.toString(16).padStart(8, "0"); }).join("");
+  }
+
+  function lrCanonicalRewardValue(value){
+    if (value === null) return null;
+    if (typeof value === "number") return Number.isFinite(value) ? value : null;
+    if (typeof value === "string" || typeof value === "boolean") return value;
+    if (Array.isArray(value)){
+      return value.map(function(item){
+        return item === undefined || typeof item === "function" ? null : lrCanonicalRewardValue(item);
+      });
+    }
+    if (typeof value !== "object") return null;
+    var out = {};
+    Object.keys(value).sort().forEach(function(key){
+      var item = value[key];
+      if (item === undefined || typeof item === "function") return;
+      out[key] = lrCanonicalRewardValue(item);
+    });
+    return out;
+  }
+
+  function lrRewardContentCommitment(snapshot){
+    return "sha256:" + lrSha256Hex(JSON.stringify(lrCanonicalRewardValue(snapshot)));
+  }
+
+  function lrLegacyRewardContentCommitment(snapshot){
+    return lrStableId("reward", JSON.stringify(lrCanonicalRewardValue(snapshot)));
+  }
+
+  function lrRewardSemanticCommitment(sessionId, action, minutes, policyVersion){
+    return "sha256:" + lrSha256Hex(JSON.stringify(lrCanonicalRewardValue({
+      policyVersion:Math.max(1, policyVersion|0),
+      sessionId:String(sessionId || ""),
+      action:String(action || ""),
+      minutes:Math.max(0, minutes|0)
+    })));
+  }
+
+  function lrStripRewardAuditFields(value){
+    if (value === null || typeof value !== "object") return value;
+    if (Array.isArray(value)) return value.map(lrStripRewardAuditFields);
+    var out = {};
+    Object.keys(value).sort().forEach(function(key){
+      if (key === "at" || key === "createdAt" || key === "updatedAt" ||
+          key === "firstSeenAt" || key === "lastEncounteredAt" ||
+          key === "currentZoneUpdatedAt") return;
+      out[key] = lrStripRewardAuditFields(value[key]);
+    });
+    return out;
+  }
+
+  function lrRewardCounterSnapshot(s){
+    s = s || {};
+    var loot = s.loot || {};
+    var achievements = {};
+    Object.keys(s.achievements || {}).sort().forEach(function(key){
+      if (s.achievements[key]) achievements[key] = true;
+    });
+    return {
+      pity:lrCanonicalRewardValue(loot.pity || {}),
+      materials:lrCanonicalRewardValue(loot.materials || {}),
+      consumables:lrCanonicalRewardValue(loot.consumables || {}),
+      lootOwned:lrCanonicalRewardValue(s.lootOwned || {}),
+      gemsOwned:lrCanonicalRewardValue(loot.gemsOwned || {}),
+      instanceTombstones:lrCanonicalRewardValue(loot.instanceTombstones || {}),
+      mountFamilies:lrCanonicalRewardValue(loot.mountFamilies || {}),
+      mountProgress:Math.max(0, Number(loot.mountProgress) || 0),
+      bestiary:lrCanonicalRewardValue(lrStripRewardAuditFields(s.bestiary || {})),
+      world:lrCanonicalRewardValue(lrStripRewardAuditFields(s.world || {})),
+      achievements:achievements,
+      heroHp:Number(s.hero && s.hero.hp) || 0,
+      crystalShards:Number(s.crystalShards) || 0,
+      crystalShardsEarned:Number(s.crystalShardsEarned) || 0
+    };
+  }
+
+  function lrNumericMapDelta(before, after){
+    before = before || {};
+    after = after || {};
+    var delta = {};
+    Array.from(new Set(Object.keys(before).concat(Object.keys(after)))).sort().forEach(function(key){
+      var difference = (Number(after[key]) || 0) - (Number(before[key]) || 0);
+      if (difference) delta[key] = difference;
+    });
+    return delta;
+  }
+
+  function lrRewardObjectPatch(before, after){
+    var beforeFlat = {}, afterFlat = {};
+    var flatten = function(value, prefix, target){
+      if (value !== null && typeof value === "object" && !Array.isArray(value)){
+        var keys = Object.keys(value).sort();
+        if (keys.length){
+          keys.forEach(function(key){ flatten(value[key], prefix ? prefix + "." + key : key, target); });
+          return;
+        }
+      }
+      target[prefix] = lrCanonicalRewardValue(value);
+    };
+    flatten(before || {}, "", beforeFlat);
+    flatten(after || {}, "", afterFlat);
+    var set = {}, remove = [];
+    Array.from(new Set(Object.keys(beforeFlat).concat(Object.keys(afterFlat)))).sort().forEach(function(path){
+      var beforeHas = Object.prototype.hasOwnProperty.call(beforeFlat, path);
+      var afterHas = Object.prototype.hasOwnProperty.call(afterFlat, path);
+      if (!afterHas){ remove.push(path); return; }
+      if (!beforeHas || JSON.stringify(beforeFlat[path]) !== JSON.stringify(afterFlat[path])){
+        set[path] = afterFlat[path];
+      }
+    });
+    return { set:set, remove:remove };
+  }
+
+  function lrRewardDropContent(drop){
+    var out = lrCanonicalRewardValue(_deepClone(drop || {}));
+    /* Wall-clock values are replica-local audit metadata, not reward
+       identity. Keep the roll, rarity, item and stable IDs immutable. */
+    delete out.at;
+    delete out.updatedAt;
+    return out;
+  }
+
+  function lrRewardInstanceContent(instance){
+    if (!instance) return null;
+    var out = lrCanonicalRewardValue(_deepClone(instance));
+    delete out.createdAt;
+    delete out.updatedAt;
+    return out;
+  }
+
+  function lrRewardBossContent(boss){
+    if (!boss) return null;
+    var out = lrCanonicalRewardValue({
+      eligible:!!boss.eligible,
+      duplicate:!!boss.duplicate,
+      receipt:boss.receipt ? _deepClone(boss.receipt) : null
+    });
+    if (out.receipt && typeof out.receipt === "object") delete out.receipt.at;
+    return out;
+  }
+
+  function lrBuildSessionRewardSnapshot(s, result, meta, before){
+    var after = lrRewardCounterSnapshot(s);
+    var drops = (result.drops || []).map(function(drop){
+      var iid = drop && drop.iid ? String(drop.iid) : "";
+      return {
+        drop:lrRewardDropContent(drop),
+        instance:iid && s.lootInstances && s.lootInstances[iid]
+          ? lrRewardInstanceContent(s.lootInstances[iid]) : null
+      };
+    });
+    return lrCanonicalRewardValue({
+      schemaVersion:LR_SESSION_REWARD_POLICY_VERSION,
+      sessionId:String(meta.sessionId || ""),
+      action:String(meta.action || ""),
+      minutes:Math.max(0, meta.minutes|0),
+      legacyItemId:result.legacyItem ? _lootId(result.legacyItem) : null,
+      zoneId:result.zoneId || null,
+      boss:lrRewardBossContent(result.boss),
+      drops:drops,
+      consumed:_deepClone(result.consumed || []),
+      effects:{
+        pity:lrNumericMapDelta(before.pity, after.pity),
+        materials:lrNumericMapDelta(before.materials, after.materials),
+        consumables:lrNumericMapDelta(before.consumables, after.consumables),
+        lootOwned:lrNumericMapDelta(before.lootOwned, after.lootOwned),
+        gemsOwned:lrNumericMapDelta(before.gemsOwned, after.gemsOwned),
+        instanceTombstones:lrRewardObjectPatch(before.instanceTombstones, after.instanceTombstones),
+        mountFamilies:lrRewardObjectPatch(before.mountFamilies, after.mountFamilies),
+        mountProgress:(Number(after.mountProgress)||0) - (Number(before.mountProgress)||0),
+        bestiary:lrRewardObjectPatch(before.bestiary, after.bestiary),
+        world:lrRewardObjectPatch(before.world, after.world),
+        achievements:lrRewardObjectPatch(before.achievements, after.achievements),
+        heroHp:(Number(after.heroHp)||0) - (Number(before.heroHp)||0),
+        crystalShards:(Number(after.crystalShards)||0) - (Number(before.crystalShards)||0),
+        crystalShardsEarned:(Number(after.crystalShardsEarned)||0) - (Number(before.crystalShardsEarned)||0)
+      }
+    });
+  }
+
+  function lrRewardReceiptSessionId(sessionId){
+    var value = String(sessionId === undefined || sessionId === null ? "" : sessionId);
+    if (!value || value.length > 200) throw new Error("Invalid session reward receipt id");
+    return value;
+  }
+
+  function lrValidateRewardSnapshotSchema(sessionId, snapshot, policyVersion){
+    if (policyVersion !== LR_SESSION_REWARD_POLICY_VERSION) return;
+    if (Object.prototype.hasOwnProperty.call(snapshot, "encounters")){
+      throw new Error("Verbose encounter history is forbidden in session reward receipt " + sessionId);
+    }
+    if (!Array.isArray(snapshot.drops) || !Array.isArray(snapshot.consumed) ||
+        !snapshot.effects || typeof snapshot.effects !== "object" || Array.isArray(snapshot.effects)){
+      throw new Error("Session reward receipt effect schema is incomplete for " + sessionId);
+    }
+    var required = [
+      "pity","materials","consumables","lootOwned","gemsOwned",
+      "instanceTombstones","mountFamilies","mountProgress","bestiary","world","achievements",
+      "heroHp","crystalShards","crystalShardsEarned"
+    ];
+    required.forEach(function(key){
+      if (!Object.prototype.hasOwnProperty.call(snapshot.effects, key)){
+        throw new Error("Session reward receipt effect schema omits " + key + " for " + sessionId);
+      }
+    });
+    ["instanceTombstones","mountFamilies","bestiary","world","achievements"].forEach(function(key){
+      var patch = snapshot.effects[key];
+      if (!patch || typeof patch !== "object" || Array.isArray(patch) ||
+          !patch.set || typeof patch.set !== "object" || Array.isArray(patch.set) ||
+          !Array.isArray(patch.remove)){
+        throw new Error("Session reward receipt patch is invalid for " + key + " in " + sessionId);
+      }
+    });
+    snapshot.drops.forEach(function(row){
+      if (!row || typeof row !== "object" || !row.drop || typeof row.drop !== "object" ||
+          !Object.prototype.hasOwnProperty.call(row, "instance")){
+        throw new Error("Session reward receipt drop schema is invalid for " + sessionId);
+      }
+    });
+    if (snapshot.boss && Object.prototype.hasOwnProperty.call(snapshot.boss, "encounter")){
+      throw new Error("Verbose boss encounter history is forbidden in session reward receipt " + sessionId);
+    }
+  }
+
+  function lrNormalizeSessionRewardReceipt(sessionId, raw){
+    sessionId = lrRewardReceiptSessionId(sessionId);
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)){
+      throw new Error("Invalid session reward receipt for " + sessionId);
+    }
+    var policyVersion = Number(raw.policyVersion);
+    if (!Number.isInteger(policyVersion) || (policyVersion !== 1 && policyVersion !== 2 && policyVersion !== LR_SESSION_REWARD_POLICY_VERSION)){
+      throw new Error("Unsupported session reward receipt policy for " + sessionId);
+    }
+    if (!raw.rewardSnapshot || typeof raw.rewardSnapshot !== "object" || Array.isArray(raw.rewardSnapshot)){
+      throw new Error("Session reward receipt snapshot is missing for " + sessionId);
+    }
+    if (typeof raw.contentCommitment !== "string" || !raw.contentCommitment){
+      throw new Error("Session reward receipt commitment is missing for " + sessionId);
+    }
+    var snapshot = lrCanonicalRewardValue(_deepClone(raw.rewardSnapshot));
+    var schemaVersion = Number(snapshot.schemaVersion);
+    if (!Number.isInteger(schemaVersion) || schemaVersion !== policyVersion ||
+        String(snapshot.sessionId || "") !== sessionId){
+      throw new Error("Session reward receipt snapshot mismatch for " + sessionId);
+    }
+    lrValidateRewardSnapshotSchema(sessionId, snapshot, policyVersion);
+    var action = String(snapshot.action || "");
+    var minutes = Math.max(0, snapshot.minutes|0);
+    if (raw.action !== undefined && String(raw.action || "") !== action){
+      throw new Error("Session reward receipt action mismatch for " + sessionId);
+    }
+    if (raw.minutes !== undefined && Math.max(0, raw.minutes|0) !== minutes){
+      throw new Error("Session reward receipt minutes mismatch for " + sessionId);
+    }
+    var expectedContent = policyVersion === 1
+      ? lrLegacyRewardContentCommitment(snapshot)
+      : lrRewardContentCommitment(snapshot);
+    if (raw.contentCommitment !== expectedContent){
+      throw new Error("Session reward receipt content mismatch for " + sessionId);
+    }
+    var expectedSemantic = lrRewardSemanticCommitment(sessionId, action, minutes, policyVersion);
+    if (policyVersion === LR_SESSION_REWARD_POLICY_VERSION &&
+        (typeof raw.semanticCommitment !== "string" || raw.semanticCommitment !== expectedSemantic)){
+      throw new Error("Session reward receipt semantic commitment mismatch for " + sessionId);
+    }
+    if (raw.semanticCommitment !== undefined && String(raw.semanticCommitment) !== expectedSemantic){
+      throw new Error("Session reward receipt semantic commitment mismatch for " + sessionId);
+    }
+    var normalized = lrCanonicalRewardValue(_deepClone(raw));
+    normalized.at = Math.max(0, Math.trunc(Number(raw.at) || 0));
+    normalized.policyVersion = policyVersion;
+    normalized.semanticCommitment = expectedSemantic;
+    normalized.contentCommitment = expectedContent;
+    normalized.rewardSnapshot = snapshot;
+    return normalized;
+  }
+
+  function lrNormalizeSessionRewardTombstone(sessionId, raw){
+    sessionId = lrRewardReceiptSessionId(sessionId);
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)){
+      throw new Error("Invalid session reward tombstone for " + sessionId);
+    }
+    var policyVersion = Number(raw.policyVersion);
+    if (!Number.isInteger(policyVersion) || (policyVersion !== 1 && policyVersion !== 2 && policyVersion !== LR_SESSION_REWARD_POLICY_VERSION)){
+      throw new Error("Unsupported session reward tombstone policy for " + sessionId);
+    }
+    if (typeof raw.semanticCommitment !== "string" || !/^sha256:[0-9a-f]{64}$/.test(raw.semanticCommitment)){
+      throw new Error("Session reward tombstone semantic proof is missing for " + sessionId);
+    }
+    var validContent = policyVersion === 1
+      ? /^reward_[a-z0-9]{14}$/.test(String(raw.contentCommitment || ""))
+      : /^sha256:[0-9a-f]{64}$/.test(String(raw.contentCommitment || ""));
+    if (!validContent){
+      throw new Error("Session reward tombstone content proof is missing for " + sessionId);
+    }
+    return lrCanonicalRewardValue({
+      policyVersion:policyVersion,
+      semanticCommitment:String(raw.semanticCommitment),
+      contentCommitment:String(raw.contentCommitment)
+    });
+  }
+
+  function lrRewardTombstoneFromReceipt(sessionId, receipt){
+    var normalized = lrNormalizeSessionRewardReceipt(sessionId, receipt);
+    return lrNormalizeSessionRewardTombstone(sessionId, {
+      policyVersion:normalized.policyVersion,
+      semanticCommitment:normalized.semanticCommitment,
+      contentCommitment:normalized.contentCommitment
+    });
+  }
+
+  function lrSessionRewardStorageBytes(receipts, tombstones){
+    return JSON.stringify({ receipts:receipts || {}, tombstones:tombstones || {} }).length;
+  }
+
+  function lrCompactSessionRewardReceiptState(s){
+    s = lrEnsureShape(s || _state());
+    var rawReceipts = s.loot.sessionRewardReceipts || {};
+    var rawTombstones = s.loot.sessionRewardReceiptTombstones || {};
+    var receipts = {}, tombstones = {};
+    Object.keys(rawTombstones).sort().forEach(function(sessionId){
+      tombstones[sessionId] = lrNormalizeSessionRewardTombstone(sessionId, rawTombstones[sessionId]);
+    });
+    Object.keys(rawReceipts).sort().forEach(function(sessionId){
+      var receipt = lrNormalizeSessionRewardReceipt(sessionId, rawReceipts[sessionId]);
+      var proof = lrRewardTombstoneFromReceipt(sessionId, receipt);
+      if (tombstones[sessionId] &&
+          JSON.stringify(tombstones[sessionId]) !== JSON.stringify(proof)){
+        throw new Error("Conflicting session reward evidence for " + sessionId);
+      }
+      tombstones[sessionId] = proof;
+      receipts[sessionId] = receipt;
+    });
+    if (Object.keys(tombstones).length > LR_SESSION_REWARD_TOMBSTONE_CAP){
+      throw new Error("Session reward proof capacity exhausted; durable ledger integration required");
+    }
+    var tombstoneBytes = lrSessionRewardStorageBytes({}, tombstones);
+    if (tombstoneBytes > LR_SESSION_REWARD_STORAGE_BYTE_CAP){
+      throw new Error("Session reward proof byte capacity exhausted; durable ledger integration required");
+    }
+    var detailIds = Object.keys(receipts).sort(function(a,b){
+      var byTime = (Number(receipts[b].at)||0) - (Number(receipts[a].at)||0);
+      return byTime || a.localeCompare(b);
+    });
+    while (detailIds.length > LR_SESSION_REWARD_DETAIL_CAP){
+      delete receipts[detailIds.pop()];
+    }
+    while (detailIds.length && lrSessionRewardStorageBytes(receipts, tombstones) > LR_SESSION_REWARD_STORAGE_BYTE_CAP){
+      delete receipts[detailIds.pop()];
+    }
+    if (lrSessionRewardStorageBytes(receipts, tombstones) > LR_SESSION_REWARD_STORAGE_BYTE_CAP){
+      throw new Error("Session reward receipt byte capacity exhausted; durable ledger integration required");
+    }
+    s.loot.sessionRewardReceipts = lrCanonicalRewardValue(receipts);
+    s.loot.sessionRewardReceiptTombstones = lrCanonicalRewardValue(tombstones);
+    return {
+      receipts:s.loot.sessionRewardReceipts,
+      tombstones:s.loot.sessionRewardReceiptTombstones,
+      detailCount:Object.keys(receipts).length,
+      proofCount:Object.keys(tombstones).length,
+      bytes:lrSessionRewardStorageBytes(receipts, tombstones)
+    };
+  }
+
+  function lrValidateSessionRewardReceiptState(loot){
+    try {
+      if (!loot || typeof loot !== "object" || Array.isArray(loot)) return { ok:false, reason:"invalid_loot" };
+      var holder = { loot:{
+        sessionRewardReceipts:_deepClone(loot.sessionRewardReceipts || {}),
+        sessionRewardReceiptTombstones:_deepClone(loot.sessionRewardReceiptTombstones || {})
+      }};
+      var stats = lrCompactSessionRewardReceiptState(holder);
+      if (Object.keys(loot.sessionRewardReceipts || {}).length !== stats.detailCount){
+        return { ok:false, reason:"detail_retention_exceeded" };
+      }
+      if (Object.keys(loot.sessionRewardReceiptTombstones || {}).length !== stats.proofCount){
+        return { ok:false, reason:"proof_missing" };
+      }
+      return { ok:true, receipts:stats.receipts, tombstones:stats.tombstones, bytes:stats.bytes };
+    } catch (error){
+      return { ok:false, reason:String(error && error.message || error) };
+    }
+  }
+
+  function lrRewardReceiptEvidenceMap(loot){
+    if (!loot || typeof loot !== "object" || Array.isArray(loot)){
+      throw new Error("Invalid session reward receipt state");
+    }
+    /* A pre-v2 LKG can legitimately predate the compact proof map. Derive a
+       proof only from a fully validated detailed receipt; never invent a
+       missing content commitment. Current live state remains subject to the
+       stricter validator above, which requires every proof to be persisted. */
+    var holder = { loot:{
+      sessionRewardReceipts:_deepClone(loot.sessionRewardReceipts || {}),
+      sessionRewardReceiptTombstones:_deepClone(loot.sessionRewardReceiptTombstones || {})
+    }};
+    return _deepClone(lrCompactSessionRewardReceiptState(holder).tombstones);
+  }
+
+  function lrMergeSessionRewardReceiptStores(localLoot, remoteLoot){
+    var left = { loot:{
+      sessionRewardReceipts:_deepClone(localLoot && localLoot.sessionRewardReceipts || {}),
+      sessionRewardReceiptTombstones:_deepClone(localLoot && localLoot.sessionRewardReceiptTombstones || {})
+    }};
+    var right = { loot:{
+      sessionRewardReceipts:_deepClone(remoteLoot && remoteLoot.sessionRewardReceipts || {}),
+      sessionRewardReceiptTombstones:_deepClone(remoteLoot && remoteLoot.sessionRewardReceiptTombstones || {})
+    }};
+    var l = lrCompactSessionRewardReceiptState(left);
+    var r = lrCompactSessionRewardReceiptState(right);
+    var merged = { loot:{ sessionRewardReceipts:{}, sessionRewardReceiptTombstones:{} } };
+    new Set(Object.keys(l.tombstones).concat(Object.keys(r.tombstones))).forEach(function(sessionId){
+      var a = l.tombstones[sessionId], b = r.tombstones[sessionId];
+      if (a && b && JSON.stringify(a) !== JSON.stringify(b)){
+        throw new Error("Conflicting session reward receipt for " + sessionId + "; merge refused");
+      }
+      merged.loot.sessionRewardReceiptTombstones[sessionId] = _deepClone(a || b);
+      var ar = l.receipts[sessionId], br = r.receipts[sessionId];
+      if (ar && br){
+        var ac = _deepClone(ar), bc = _deepClone(br);
+        ac.at = 0; bc.at = 0;
+        if (JSON.stringify(lrCanonicalRewardValue(ac)) !== JSON.stringify(lrCanonicalRewardValue(bc))){
+          throw new Error("Conflicting session reward receipt for " + sessionId + "; merge refused");
+        }
+        var times = [Number(ar.at)||0, Number(br.at)||0].filter(function(value){ return value > 0; });
+        var chosen = _deepClone(ar);
+        chosen.at = times.length ? Math.min.apply(Math, times) : 0;
+        merged.loot.sessionRewardReceipts[sessionId] = chosen;
+      } else if (ar || br){
+        merged.loot.sessionRewardReceipts[sessionId] = _deepClone(ar || br);
+      }
+    });
+    return lrCompactSessionRewardReceiptState(merged);
+  }
+
+  function lrAssertSessionRewardCapacity(s, sessionId, action, minutes){
+    sessionId = lrRewardReceiptSessionId(sessionId);
+    s = s || _state();
+    if (!s || !s.loot || typeof s.loot !== "object" || Array.isArray(s.loot)){
+      throw new Error("Session reward capacity check requires shaped loot state");
+    }
+    /* Preflight is deliberately clone-only. A rejected helper/direct call
+       must not normalize legacy details or evict retained detail before the
+       enclosing accounting transaction has committed successfully. */
+    var holder = { loot:{
+      sessionRewardReceipts:_deepClone(s.loot.sessionRewardReceipts || {}),
+      sessionRewardReceiptTombstones:_deepClone(s.loot.sessionRewardReceiptTombstones || {})
+    }};
+    var compact = lrCompactSessionRewardReceiptState(holder);
+    if (compact.tombstones[sessionId]) return compact;
+    if (compact.proofCount >= LR_SESSION_REWARD_TOMBSTONE_CAP){
+      throw new Error("Session reward proof capacity exhausted; reward refused until durable ledger integration");
+    }
+    var probe = _deepClone(compact.tombstones);
+    probe[sessionId] = {
+      policyVersion:LR_SESSION_REWARD_POLICY_VERSION,
+      semanticCommitment:lrRewardSemanticCommitment(sessionId, action, minutes, LR_SESSION_REWARD_POLICY_VERSION),
+      contentCommitment:"sha256:" + "0".repeat(64)
+    };
+    if (lrSessionRewardStorageBytes({}, probe) > LR_SESSION_REWARD_STORAGE_BYTE_CAP){
+      throw new Error("Session reward proof byte capacity exhausted; reward refused until durable ledger integration");
+    }
+    return compact;
   }
 
   function lrTemplateSources(templateId){
@@ -380,15 +940,17 @@
     }
     var sockets = [];
     for (var k=0; k<caps.sockets; k++) sockets.push({ gemId:null });
+    var createdAt = _now();
     return {
-      iid: _uid(),
+      iid: opts.iid || _uid(),
       lootId: templateId,
       tier: tier,
       level: 0,
       affixes: affixes,
       sockets: sockets,
       dyeId: null,
-      createdAt: _now(),
+      createdAt: createdAt,
+      updatedAt: createdAt,
       source: opts.source || { kind:"drop" },
       locked: false
     };
@@ -445,6 +1007,7 @@
     opts = opts || {};
     var inst = s.lootInstances[iid];
     if (!inst) return { ok:false, reason:"unknown_instance" };
+    if (!lrInstanceSupportsForgeMutation(inst)) return { ok:false, reason:"unsupported_slot", slot:lrInstanceSlot(inst) };
     if (inst.locked) return { ok:false, reason:"locked" };
     var a = inst.affixes && inst.affixes[affixIndex];
     if (!a) return { ok:false, reason:"unknown_affix" };
@@ -457,6 +1020,7 @@
     if (!next) return { ok:false, reason:"no_pool" };
     var before = JSON.parse(JSON.stringify(a));
     inst.affixes[affixIndex] = next;
+    inst.updatedAt = _now();
     s.loot.materials.dust = dust - cost;
     return { ok:true, before:before, after:next, costPaid:cost };
   }
@@ -465,6 +1029,7 @@
     s = lrEnsureShape(s || _state());
     var inst = s.lootInstances[iid];
     if (!inst) return { ok:false, reason:"unknown_instance" };
+    if (!lrInstanceSupportsForgeMutation(inst)) return { ok:false, reason:"unsupported_slot", slot:lrInstanceSlot(inst) };
     var caps = LR_RARITY_CAPS[inst.tier] || LR_RARITY_CAPS.common;
     if (inst.level >= caps.maxLevel) return { ok:false, reason:"max_level", cap:caps.maxLevel };
     var nextLevel = inst.level + 1;
@@ -475,6 +1040,7 @@
     if (haveShards < shardsCost) return { ok:false, reason:"insufficient_shards", need:shardsCost, have:haveShards };
     if (haveCoins  < coinCost)   return { ok:false, reason:"insufficient_coins",  need:coinCost,   have:haveCoins };
     inst.level = nextLevel;
+    inst.updatedAt = _now();
     s.loot.materials.shards = haveShards - shardsCost;
     s.coins = haveCoins - coinCost;
     s.coinsSpent = (s.coinsSpent|0) + coinCost;
@@ -485,6 +1051,7 @@
     s = lrEnsureShape(s || _state());
     var inst = s.lootInstances[iid];
     if (!inst) return { ok:false, reason:"unknown_instance" };
+    if (!lrInstanceSupportsForgeMutation(inst)) return { ok:false, reason:"unsupported_slot", slot:lrInstanceSlot(inst) };
     if (inst.locked) return { ok:false, reason:"locked" };
     if (socketIdx < 0 || socketIdx >= inst.sockets.length) return { ok:false, reason:"no_socket" };
     if (inst.sockets[socketIdx].gemId) return { ok:false, reason:"socket_full" };
@@ -493,6 +1060,7 @@
     if (owned <= 0) return { ok:false, reason:"no_gem_owned" };
     s.loot.gemsOwned[gemId] = owned - 1;
     inst.sockets[socketIdx] = { gemId:gemId };
+    inst.updatedAt = _now();
     return { ok:true, gemId:gemId, socketIdx:socketIdx };
   }
 
@@ -500,11 +1068,13 @@
     s = lrEnsureShape(s || _state());
     var inst = s.lootInstances[iid];
     if (!inst) return { ok:false, reason:"unknown_instance" };
+    if (!lrInstanceSupportsForgeMutation(inst)) return { ok:false, reason:"unsupported_slot", slot:lrInstanceSlot(inst) };
     if (inst.locked) return { ok:false, reason:"locked" };
     if (socketIdx < 0 || socketIdx >= inst.sockets.length) return { ok:false, reason:"no_socket" };
     var g = inst.sockets[socketIdx].gemId;
     if (!g) return { ok:false, reason:"empty_socket" };
     inst.sockets[socketIdx] = { gemId:null };
+    inst.updatedAt = _now();
     return { ok:true, destroyed:g };
   }
 
@@ -512,14 +1082,18 @@
     s = lrEnsureShape(s || _state());
     var inst = s.lootInstances[iid];
     if (!inst) return { ok:false, reason:"unknown_instance" };
+    if (!lrInstanceSupportsForgeMutation(inst)) return { ok:false, reason:"unsupported_slot", slot:lrInstanceSlot(inst) };
     if (dyeId !== null && !LR_DYE_DEFS[dyeId]) return { ok:false, reason:"unknown_dye" };
     if (dyeId !== null && !(s.loot.dyesOwned[dyeId]|0)) return { ok:false, reason:"no_dye_owned" };
     inst.dyeId = dyeId;
+    inst.updatedAt = _now();
     return { ok:true, dyeId:dyeId };
   }
 
-  function lrSalvageInstance(s, iid){
+  function lrSalvageInstance(s, iid, opts){
     s = lrEnsureShape(s || _state());
+    opts = opts || {};
+    var rng = opts.rng || Math.random;
     var inst = s.lootInstances[iid];
     if (!inst) return { ok:false, reason:"unknown_instance" };
     if (inst.locked) return { ok:false, reason:"locked" };
@@ -528,9 +1102,9 @@
     s.loot.materials.shards  = (s.loot.materials.shards|0)  + yieldRow.shards;
     s.loot.materials.essence = (s.loot.materials.essence|0) + yieldRow.essence;
     var gemDropped = null;
-    if (yieldRow.gemChance > 0 && Math.random() < yieldRow.gemChance){
+    if (yieldRow.gemChance > 0 && rng() < yieldRow.gemChance){
       var gemIds = Object.keys(LR_GEM_DEFS);
-      gemDropped = gemIds[Math.floor(Math.random() * gemIds.length)];
+      gemDropped = gemIds[Math.floor(rng() * gemIds.length)];
       s.loot.gemsOwned[gemDropped] = (s.loot.gemsOwned[gemDropped]|0) + 1;
     }
     if (s.hero && s.hero.equipped){
@@ -542,6 +1116,12 @@
         }
       }
     }
+    s.loot.instanceTombstones[iid] = Math.max(
+      Number(s.loot.instanceTombstones[iid]) || 0,
+      Number(inst.updatedAt) || 0,
+      Number(inst.createdAt) || 0,
+      Number(opts.tombstoneAt) || _now()
+    );
     delete s.lootInstances[iid];
     return { ok:true, yield:yieldRow, gemDropped:gemDropped };
   }
@@ -551,17 +1131,64 @@
     var inst = s.lootInstances[iid];
     if (!inst) return { ok:false, reason:"unknown_instance" };
     inst.locked = !inst.locked;
+    inst.updatedAt = _now();
     return { ok:true, locked:inst.locked };
   }
 
   /* ---------- combat ---------- */
 
-  function lrPickEnemy(level, rng){
+  function lrWorldEnemyRow(enemy, zoneId){
+    if (Array.isArray(enemy)) return enemy;
+    if (!enemy || typeof enemy !== "object") return null;
+    var row = [
+      enemy.tier || "t1",
+      String(enemy.id || "focus_wisp"),
+      enemy.sym || "✦",
+      enemy.name || "Focus Wisp",
+      Math.max(1, enemy.level|0),
+      Math.max(1, enemy.hp|0),
+      []
+    ];
+    row.__lrTraits = {
+      tags:Array.isArray(enemy.tags) ? enemy.tags.slice() : [],
+      weak:Array.isArray(enemy.weak) ? enemy.weak.slice() : [],
+      resist:Array.isArray(enemy.resist) ? enemy.resist.slice() : [],
+      dmg:Math.max(1, enemy.dmg|0),
+      acc:Number(enemy.acc) > 0 ? Number(enemy.acc) : 0.85,
+      boss:!!enemy.boss
+    };
+    row.__lrZone = String(zoneId || (Array.isArray(enemy.biomes) && enemy.biomes[0]) || "verdant_vale");
+    return row;
+  }
+
+  function lrEnemyIsBoss(enemyRow){
+    if (!enemyRow) return false;
+    if (enemyRow.__lrTraits && enemyRow.__lrTraits.boss) return true;
+    var traits = LR_MONSTER_TRAITS[enemyRow[1]];
+    return !!(traits && traits.boss);
+  }
+
+  function lrZoneEnemyRows(zoneId){
+    if (!zoneId || typeof window.wdEnemiesForZone !== "function") return [];
+    var worldEnemies = window.wdEnemiesForZone(zoneId) || [];
+    return worldEnemies.map(function(enemy){ return lrWorldEnemyRow(enemy, zoneId); }).filter(Boolean);
+  }
+
+  function lrPickEnemy(level, rng, zoneId){
     rng = rng || Math.random;
-    var MS = _MONSTERS() || [];
+    var zoneRows = lrZoneEnemyRows(zoneId).filter(function(enemy){ return !lrEnemyIsBoss(enemy); });
+    var MS = zoneRows.length
+      ? zoneRows
+      : (_MONSTERS() || []).filter(function(enemy){ return !lrEnemyIsBoss(enemy); });
     var lv = Math.max(1, level|0);
     var candidates = MS.filter(function(m){ return m[4] <= lv + 5 && m[4] >= lv - 30; });
     var pool = candidates.length ? candidates : MS.slice(0,3);
+    if (!pool.length){
+      var fallback = ["t1","focus_wisp","✦","Focus Wisp",1,3,["common"]];
+      fallback.__lrTraits = { tags:["spirit"], weak:[], resist:[], dmg:3, acc:0.8, boss:false };
+      fallback.__lrZone = String(zoneId || "verdant_vale");
+      return fallback;
+    }
     var total = 0;
     var weights = pool.map(function(m){
       var dist = Math.abs(m[4] - lv);
@@ -579,13 +1206,31 @@
     return pool[0];
   }
 
+  function lrPickBossEnemy(level, rng, zoneId){
+    rng = rng || Math.random;
+    if (typeof window.wdPickBoss === "function"){
+      var worldBoss = window.wdPickBoss(Math.max(1, level|0), zoneId, rng);
+      var worldRow = lrWorldEnemyRow(worldBoss, zoneId);
+      if (worldRow) return worldRow;
+    }
+    var legacyBosses = (_MONSTERS() || []).filter(lrEnemyIsBoss);
+    if (legacyBosses.length) return legacyBosses[Math.floor(rng() * legacyBosses.length)];
+    var fallback = ["t5","focus_colossus","◆","Focus Colossus",Math.max(1,level|0),60,["epic"]];
+    fallback.__lrTraits = { tags:["boss"], weak:[], resist:[], dmg:40, acc:0.9, boss:true };
+    fallback.__lrZone = String(zoneId || "verdant_vale");
+    return fallback;
+  }
+
   function lrResolveEncounter(ctx, encounterIdx, rng){
     rng = rng || Math.random;
-    var enemyRow = ctx.enemyOverride || lrPickEnemy(ctx.heroLevel, rng);
+    var enemyRow = ctx.enemyOverride || lrPickEnemy(ctx.heroLevel, rng, ctx.zoneId);
     var enemyId = enemyRow[1];
-    var traits = LR_MONSTER_TRAITS[enemyId] || { tags:[], weak:[], resist:[], dmg:10, acc:0.85 };
+    var traits = enemyRow.__lrTraits || LR_MONSTER_TRAITS[enemyId] || { tags:[], weak:[], resist:[], dmg:10, acc:0.85 };
     var stats = ctx.heroStats || {};
-    var baseAtk = 8 + Math.floor((ctx.heroLevel || 1) * 1.5);
+    /* Physical damage used to be rolled and displayed on gear but ignored by
+       the encounter formula. Keep the level baseline, then route the equipped
+       weapon's capped physical power through the same deterministic combat. */
+    var baseAtk = 8 + Math.floor((ctx.heroLevel || 1) * 1.5) + Math.max(0, stats.dmgPhys || 0);
     var atkByType = {
       dmgFire:   stats.dmgFire   || 0,
       dmgFrost:  stats.dmgFrost  || 0,
@@ -599,8 +1244,8 @@
       if (atkByType[tt] > primaryAmt){ primary = tt; primaryAmt = atkByType[tt]; }
     }
     var heroHP = Math.max(5, Math.min(100, (ctx.heroHP|0) || 100));
-    var enemyHPMax = Math.round(enemyRow[5] * (1 + 0.04 * ((ctx.heroLevel||1) - enemyRow[4])));
-    var enemyHP = Math.max(5, enemyHPMax);
+    var enemyHPMax = Math.max(5, Math.round(enemyRow[5] * (1 + 0.04 * ((ctx.heroLevel||1) - enemyRow[4]))));
+    var enemyHP = enemyHPMax;
     var heroHPStart = heroHP;
     var critChance = Math.min(60, stats.critPct || 0);
     var dodgeChance = Math.min(50, stats.dodgePct || 0);
@@ -645,7 +1290,8 @@
     return {
       encounterIdx: encounterIdx,
       enemy: { id:enemyId, sym:enemyRow[2], name:enemyRow[3], level:enemyRow[4], hpMax:enemyHPMax,
-               tier:enemyRow[0], weak:traits.weak, resist:traits.resist, boss:!!traits.boss },
+               tier:enemyRow[0], weak:traits.weak, resist:traits.resist, boss:!!traits.boss,
+               zoneId:enemyRow.__lrZone || ctx.zoneId || null },
       heroHPStart: heroHPStart, heroHPEnd: heroHP,
       primary: primary, primaryAmt: primaryAmt, baseAtk: baseAtk,
       rounds: log,
@@ -653,7 +1299,7 @@
     };
   }
 
-  function lrRollDropForEncounter(s, action, minutes, enemyRow, outcome, rng){
+  function lrRollDropForEncounter(s, action, minutes, enemyRow, outcome, rng, utilityCtx){
     s = lrEnsureShape(s || _state());
     rng = rng || Math.random;
     var bias = LR_OUTCOME_BIAS[outcome] || 1.0;
@@ -667,6 +1313,19 @@
       biased[r] = weights[r] * m;
       sum += biased[r];
     }
+    var gearUtility = null;
+    if ((!utilityCtx || utilityCtx.enabled !== false) && typeof window.fhGearUtilityAdjustRarityWeights === "function"){
+      try {
+        gearUtility = window.fhGearUtilityAdjustRarityWeights(biased, s, {
+          action:action,
+          minutes:minutes,
+          sessionId:utilityCtx && utilityCtx.sessionId || null
+        });
+        if (gearUtility && gearUtility.weights) biased = gearUtility.weights;
+      } catch (_) { gearUtility = null; }
+    }
+    sum = 0;
+    for (var gi=0; gi<LR_RARITIES.length; gi++) sum += Math.max(0, biased[LR_RARITIES[gi]] || 0);
     if (sum > 0) for (var j=0; j<LR_RARITIES.length; j++) biased[LR_RARITIES[j]] /= sum;
     var allowed = _allowedRaritiesForMinutes(minutes);
     var sum2 = 0;
@@ -711,7 +1370,12 @@
     if (!template) return null;
     return {
       rarity: rarity, template: template,
-      odds: { ratio:ratio, rolled:roll },
+      odds: {
+        ratio:ratio,
+        rolled:roll,
+        gearUtilityPct:gearUtility ? (gearUtility.qualityBiasPct|0) : 0,
+        gearUtilitySources:gearUtility && Array.isArray(gearUtility.sources) ? gearUtility.sources.slice(0,5) : []
+      },
       pity: { tier:rarity, sinceLast:s.loot.pity[rarity]|0, bumped:lrPityMultiplier(rarity, s.loot.pity[rarity]) > 1 },
       fromMonsterTable: fromMonsterTable
     };
@@ -723,7 +1387,11 @@
     var template = drop.template;
     var templateId = _lootId(template);
     var __wasOwned = ((s.lootOwned[templateId]|0) > 0); /* v9: owned before this drop => duplicate */
-    var instance = lrMintInstance(template, { rng:ctx.rng, source:{ kind:ctx.sourceKind||"drop", action:ctx.action, enemyId:ctx.enemyId } });
+    var instance = lrMintInstance(template, {
+      rng:ctx.rng,
+      iid:ctx.instanceId || null,
+      source:{ kind:ctx.sourceKind||"drop", action:ctx.action, enemyId:ctx.enemyId }
+    });
     s.lootInstances[instance.iid] = instance;
     s.lootOwned[templateId] = (s.lootOwned[templateId]|0) + 1;
     var idx = LR_RARITIES.indexOf(drop.rarity);
@@ -742,17 +1410,25 @@
       ent.lastEncounteredAt = _now();
     }
     var entry = {
-      id: _uid(), at: _now(),
+      id: ctx.dropId || _uid(), at: _now(),
       sessionId: ctx.sessionId || null,
       iid: instance.iid,
       templateId: templateId,
       rarity: drop.rarity,
       sourceAction: ctx.action,
       enemyId: ctx.enemyId || null,
-      odds: { rolled: drop.odds.rolled, total: 1, ratio: drop.odds.ratio },
+      odds: {
+        rolled: drop.odds.rolled,
+        total: 1,
+        ratio: drop.odds.ratio,
+        gearUtilityPct:drop.odds.gearUtilityPct|0,
+        gearUtilitySources:Array.isArray(drop.odds.gearUtilitySources) ? drop.odds.gearUtilitySources.slice(0,5) : []
+      },
       pity: drop.pity,
       fromMonsterTable: !!drop.fromMonsterTable,
-      outcome: ctx.outcome || null
+      outcome: ctx.outcome || null,
+      earnedAtMinutes: Math.max(0, ctx.earnedAtMinutes|0),
+      rewardOrdinal: Math.max(0, ctx.rewardOrdinal|0)
     };
     if (ctx.editEntitlementId){
       entry.editEntitlementId = String(ctx.editEntitlementId);
@@ -765,14 +1441,18 @@
        lrPickTemplateInRarity). Auto-convert it to materials so dupes still feel
        rewarding instead of "the same item again". Opt-out via flag; default on. */
     if (!ctx.disableAutoSalvage && __wasOwned && flags.autoSalvageDupes !== false){
-      var __sv = lrSalvageInstance(s, instance.iid);
+      var __sv = lrSalvageInstance(s, instance.iid, {
+        rng:ctx.rng,
+        tombstoneAt:Number.MAX_SAFE_INTEGER - lrHashStr(String(ctx.sessionId || "") + "|" + instance.iid)
+      });
       if (__sv && __sv.ok){
         entry.autoSalvaged = true; entry.dupeConverted = true;
         var __y = __sv.yield || {};
+        entry.autoSalvageYield = { dust:__y.dust|0, shards:__y.shards|0, essence:__y.essence|0, gemId:__sv.gemDropped||null };
         var __tname = (template[1] || templateId);
         var __bits = [];
         if (__y.dust)    __bits.push("+"+__y.dust+" dust");
-        if (__y.shards)  __bits.push("+"+__y.shards+" shards");
+        if (__y.shards)  __bits.push("+"+__y.shards+" Forge Shards");
         if (__y.essence) __bits.push("+"+__y.essence+" essence");
         if (__sv.gemDropped && LR_GEM_DEFS[__sv.gemDropped]) __bits.push("+"+LR_GEM_DEFS[__sv.gemDropped].sym+" "+LR_GEM_DEFS[__sv.gemDropped].name);
         try { _toast("♻️ Duplicate "+__tname+" -> "+(__bits.join(", ")||"materials"), "info"); } catch(_){}
@@ -785,8 +1465,12 @@
         if (it.lootId === templateId) dupes++;
       }
       if (dupes >= 4){
-        lrSalvageInstance(s, instance.iid);
+        var __commonSalvage = lrSalvageInstance(s, instance.iid, {
+          rng:ctx.rng,
+          tombstoneAt:Number.MAX_SAFE_INTEGER - lrHashStr(String(ctx.sessionId || "") + "|" + instance.iid)
+        });
         entry.autoSalvaged = true;
+        if (__commonSalvage && __commonSalvage.ok){ var __cy=__commonSalvage.yield||{}; entry.autoSalvageYield={dust:__cy.dust|0,shards:__cy.shards|0,essence:__cy.essence|0,gemId:__commonSalvage.gemDropped||null}; }
       }
     }
     return entry;
@@ -812,7 +1496,9 @@
     var entitlementId = sessionId + "|loot-threshold|" + threshold;
     var rng = lrSeededRng(lrHashStr(entitlementId));
     var allowed = Array.from(_allowedRaritiesForMinutes(minutes));
-    var drop = lrRollDropForEncounter(s, action, minutes, null, "solid", rng);
+    /* Historical edit entitlements are bound to their original minute wall.
+       Current equipment must not retroactively change or farm that roll. */
+    var drop = lrRollDropForEncounter(s, action, minutes, null, "solid", rng, { enabled:false });
     if (!drop){
       return { ok:true, entitlementId:entitlementId, threshold:threshold,
         minutes:minutes, eligibleRarities:allowed, entry:null, instance:null };
@@ -820,7 +1506,9 @@
     var entry = lrCommitDrop(s, drop, {
       sessionId:sessionId, action:action, enemyId:null, outcome:"solid", rng:rng,
       sourceKind:"session-edit-threshold", editEntitlementId:entitlementId,
-      editThreshold:threshold, disableAutoSalvage:true
+      editThreshold:threshold, earnedAtMinutes:threshold, rewardOrdinal:Math.max(0,[5,25,50,90,120].indexOf(threshold)), disableAutoSalvage:true,
+      instanceId:lrStableId("iid", entitlementId + "|instance"),
+      dropId:lrStableId("drop", entitlementId + "|drop")
     });
     var instance = entry && entry.iid && s.lootInstances[entry.iid]
       ? _deepClone(s.lootInstances[entry.iid]) : null;
@@ -836,12 +1524,36 @@
     var sessionId = opts.sessionId || ("sess_" + _now());
     var rng = opts.rng || lrSeededRng(lrHashStr(sessionId));
     var heroStats = lrEquippedStats(s.hero);
+    if (typeof window.fhGearUtilityCombatStats === "function"){
+      try {
+        heroStats = window.fhGearUtilityCombatStats(heroStats, s, {
+          action:action,
+          minutes:minutes,
+          sessionId:sessionId
+        }) || heroStats;
+      } catch (_) {}
+    }
     var heroLevel = (s.hero && s.hero.level)|0 || 1;
     var baseHP = (s.hero && s.hero.hp)|0 || 100;
     /* v9.8: only the Fight action runs the combat/encounter engine. Hunt is a
        quiet tracking source for hunt-tagged loot, not a mandatory animal fight. */
     var combatActions = { Fight:true };
     var isCombat = !!combatActions[action];
+    var zoneId = String((s.world && s.world.currentZone) || "verdant_vale");
+    var bossEligible = isCombat && (
+      typeof window.wdShouldSpawnBoss === "function"
+        ? window.wdShouldSpawnBoss(minutes, action)
+        : minutes >= 90
+    );
+    var priorBossReceipt = bossEligible && typeof window.wdBossReceiptForSession === "function"
+      ? window.wdBossReceiptForSession(s, sessionId)
+      : null;
+    if (priorBossReceipt){
+      return {
+        encounters:[], drops:[], consumed:[], zoneId:zoneId, duplicate:true,
+        boss:{ eligible:true, duplicate:true, receipt:priorBossReceipt }
+      };
+    }
     var encounters = [];
     var drops = [];
     var runningHP = baseHP;
@@ -873,6 +1585,7 @@
       heroStats.resPhys = (heroStats.resPhys|0) + buffResPhys;
     }
     var N = isCombat ? lrEncountersForMinutes(minutes) : 0;
+    var bossEncounter = null;
     for (var i=0; i<N; i++){
       if (i > 0 && runningHP < 40 && s.loot && s.loot.loadout){
         var slotKeys2 = ["slot1","slot2","slot3"];
@@ -907,11 +1620,15 @@
           break;
         }
       }
-      var encCtx = { heroStats:Object.assign({}, heroStats), heroLevel:heroLevel, heroHP:runningHP };
+      var encCtx = { heroStats:Object.assign({}, heroStats), heroLevel:heroLevel, heroHP:runningHP, zoneId:zoneId };
+      encCtx.enemyOverride = bossEligible && i === N - 1
+        ? lrPickBossEnemy(heroLevel, rng, zoneId)
+        : lrPickEnemy(heroLevel, rng, zoneId);
       if (bombBonus){
         encCtx.heroStats[bombBonus.damageType] = (encCtx.heroStats[bombBonus.damageType] || 0) + bombBonus.value;
       }
       var enc = lrResolveEncounter(encCtx, i, rng);
+      if (enc.enemy && enc.enemy.boss) bossEncounter = enc;
       runningHP = enc.heroHPEnd;
       encounters.push(enc);
       _recordEncounter(enc.enemy.id);
@@ -920,9 +1637,20 @@
           var MS = _MONSTERS() || [];
           var enemyRow = null;
           for (var mi=0; mi<MS.length; mi++) if (MS[mi][1] === enc.enemy.id) { enemyRow = MS[mi]; break; }
-          var d = lrRollDropForEncounter(s, action, minutes, enemyRow, enc.outcome, rng);
+          var d = lrRollDropForEncounter(s, action, minutes, enemyRow, enc.outcome, rng, {
+            enabled:true,
+            sessionId:sessionId
+          });
           if (d){
-            var e = lrCommitDrop(s, d, { sessionId:sessionId, action:action, enemyId:enc.enemy.id, outcome:enc.outcome });
+            var ordinal = drops.length;
+            var idBase = String(sessionId) + "|drop|" + ordinal;
+            var e = lrCommitDrop(s, d, {
+              sessionId:sessionId, action:action, enemyId:enc.enemy.id,
+              outcome:enc.outcome, rng:rng,
+              instanceId:lrStableId("iid", idBase + "|instance"),
+              dropId:lrStableId("drop", idBase + "|entry"),
+              earnedAtMinutes:[5,25,50,90,120][i] || 120, rewardOrdinal:i
+            });
             drops.push(e);
           } else if (rerollsLeft > 0){
             tryRoll(rerollsLeft - 1);
@@ -932,16 +1660,52 @@
       }
     }
     if (!isCombat && minutes > 0){
-      var d = lrRollDropForEncounter(s, action, minutes, null, "solid", rng);
+      var d = lrRollDropForEncounter(s, action, minutes, null, "solid", rng, {
+        enabled:true,
+        sessionId:sessionId
+      });
       if (d){
-        var e = lrCommitDrop(s, d, { sessionId:sessionId, action:action, enemyId:null, outcome:"solid" });
+        var ordinal = drops.length;
+        var idBase = String(sessionId) + "|drop|" + ordinal;
+        var e = lrCommitDrop(s, d, {
+          sessionId:sessionId, action:action, enemyId:null, outcome:"solid",
+          rng:rng,
+          instanceId:lrStableId("iid", idBase + "|instance"),
+          dropId:lrStableId("drop", idBase + "|entry"),
+          earnedAtMinutes:5, rewardOrdinal:0
+        });
         drops.push(e);
       }
     }
     if (s.hero && isCombat){
       s.hero.hp = Math.max(1, Math.min(100, runningHP));
     }
-    return { encounters:encounters, drops:drops, consumed:consumedLog };
+    var bossResult = null;
+    if (bossEligible && bossEncounter){
+      if (typeof window.wdRecordBossOutcome === "function"){
+        var recorded = window.wdRecordBossOutcome(s, {
+          sessionId:sessionId,
+          action:action,
+          minutes:minutes,
+          zoneId:zoneId,
+          bossId:bossEncounter.enemy.id,
+          tier:bossEncounter.enemy.tier,
+          defeated:!!bossEncounter.killed
+        });
+        bossResult = {
+          eligible:true,
+          duplicate:!!(recorded && recorded.duplicate),
+          receipt:recorded && recorded.receipt || null,
+          encounter:bossEncounter
+        };
+        if (recorded && recorded.receipt && recorded.receipt.shardsAwarded > 0){
+          _toast("Boss defeated: " + bossEncounter.enemy.name + " · +" + recorded.receipt.shardsAwarded + " World Shards", "good");
+        }
+      } else {
+        bossResult = { eligible:true, duplicate:false, receipt:null, encounter:bossEncounter };
+      }
+    }
+    return { encounters:encounters, drops:drops, consumed:consumedLog, zoneId:zoneId, boss:bossResult, duplicate:false };
   }
 
   /* ---------- audio + visual ---------- */
@@ -994,7 +1758,53 @@
       var legacy = window.rollLoot ? window.rollLoot(minutes) : null;
       return { legacyItem: legacy, drops:[], encounters:[] };
     }
+    var receiptKey = sessionId ? String(sessionId) : "";
+    var priorReceipt = receiptKey && s.loot.sessionRewardReceipts && s.loot.sessionRewardReceipts[receiptKey];
+    var priorProof = receiptKey && s.loot.sessionRewardReceiptTombstones && s.loot.sessionRewardReceiptTombstones[receiptKey];
+    if (priorReceipt){
+      var requestedAction = String(action || "");
+      var requestedMinutes = Math.max(0, minutes|0);
+      var normalizedPrior = lrNormalizeSessionRewardReceipt(receiptKey, priorReceipt);
+      var priorSnapshot = normalizedPrior.rewardSnapshot;
+      if (String(priorSnapshot.action || "") !== requestedAction ||
+          Math.max(0, priorSnapshot.minutes|0) !== requestedMinutes){
+        throw new Error("Session reward receipt semantic mismatch for " + receiptKey + "; retry refused");
+      }
+      var derivedProof = lrRewardTombstoneFromReceipt(receiptKey, normalizedPrior);
+      if (priorProof && JSON.stringify(lrNormalizeSessionRewardTombstone(receiptKey, priorProof)) !== JSON.stringify(derivedProof)){
+        throw new Error("Session reward receipt proof mismatch for " + receiptKey + "; retry refused");
+      }
+      s.loot.sessionRewardReceipts[receiptKey] = normalizedPrior;
+      s.loot.sessionRewardReceiptTombstones[receiptKey] = derivedProof;
+      lrCompactSessionRewardReceiptState(s);
+      return {
+        legacyItem:null, drops:[], encounters:[], consumed:[],
+        boss:priorSnapshot.boss || null, zoneId:priorSnapshot.zoneId || null, duplicate:true,
+        rewardSnapshot:_deepClone(priorSnapshot)
+      };
+    }
+    if (priorProof){
+      var normalizedProof = lrNormalizeSessionRewardTombstone(receiptKey, priorProof);
+      var expectedSemantic = lrRewardSemanticCommitment(
+        receiptKey, String(action || ""), Math.max(0, minutes|0), normalizedProof.policyVersion
+      );
+      if (normalizedProof.semanticCommitment !== expectedSemantic){
+        throw new Error("Session reward receipt semantic mismatch for " + receiptKey + "; retry refused");
+      }
+      return {
+        legacyItem:null, drops:[], encounters:[], consumed:[],
+        boss:null, zoneId:null, duplicate:true, rewardSnapshot:null
+      };
+    }
+    if (receiptKey) lrAssertSessionRewardCapacity(s, receiptKey, action, minutes);
+    var rewardBefore = lrRewardCounterSnapshot(s);
     var out = lrRunSessionCombat(s, { action:action, minutes:minutes, sessionId:sessionId });
+    if (out.duplicate){
+      return {
+        legacyItem:null, drops:[], encounters:[], consumed:[],
+        boss:out.boss || null, zoneId:out.zoneId, duplicate:true
+      };
+    }
     var best = null;
     for (var i=0; i<out.drops.length; i++){
       var d = out.drops[i];
@@ -1038,21 +1848,62 @@
        Pomodoro session lengths, because lrCommitDrop only advances pity for
        rarities ABOVE the dropped rarity — and most sessions drop nothing or
        just common/uncommon. */
-    try {
-      if (s && s.loot && s.loot.pity){
-        var topIdx = -1;
-        for (var pi=0; pi<out.drops.length; pi++){
-          var pii = LR_RARITIES.indexOf(out.drops[pi].rarity);
-          if (pii > topIdx) topIdx = pii;
-        }
-        /* Advance pity for everything ABOVE the top dropped rarity (or all rarities if no drop). */
-        for (var pj=topIdx+1; pj<LR_RARITIES.length; pj++){
-          var rk = LR_RARITIES[pj];
-          s.loot.pity[rk] = (s.loot.pity[rk]|0) + 1;
-        }
+    if (s && s.loot && s.loot.pity){
+      var topIdx = -1;
+      for (var pi=0; pi<out.drops.length; pi++){
+        var pii = LR_RARITIES.indexOf(out.drops[pi].rarity);
+        if (pii > topIdx) topIdx = pii;
       }
-    } catch(e){}
-    return { legacyItem: legacyItem, drops: out.drops, encounters: out.encounters, consumed: out.consumed };
+      /* Advance pity for everything ABOVE the top dropped rarity (or all rarities if no drop). */
+      for (var pj=topIdx+1; pj<LR_RARITIES.length; pj++){
+        var rk = LR_RARITIES[pj];
+        s.loot.pity[rk] = (s.loot.pity[rk]|0) + 1;
+      }
+    }
+    var result = {
+      legacyItem:legacyItem, drops:out.drops, encounters:out.encounters, consumed:out.consumed, sessionId:receiptKey,
+      boss:out.boss || null, zoneId:out.zoneId, duplicate:false
+    };
+    if (receiptKey){
+      if (typeof window.crApplySessionMountRewards === "function"){
+        var mountOutcome = window.crApplySessionMountRewards(s, {
+          action:String(action || ""),
+          minutes:Math.max(0, minutes|0),
+          sessionId:receiptKey,
+          rng:lrSeededRng(lrHashStr(receiptKey + "|mount-reward-policy-v1"))
+        });
+        result.mountGrants = (mountOutcome.grants || []).map(function(grant){
+          if (grant && grant.entry) result.drops.push(grant.entry);
+          return {
+            reason:grant && grant.entry && grant.entry.mountReason || null,
+            mount:grant && grant.mount ? _deepClone(grant.mount) : null,
+            iid:grant && grant.instance && grant.instance.iid || null,
+            dropId:grant && grant.entry && grant.entry.id || null
+          };
+        });
+      }
+      var rewardSnapshot = lrBuildSessionRewardSnapshot(s, result, {
+        sessionId:receiptKey, action:action, minutes:minutes
+      }, rewardBefore);
+      var semanticCommitment = lrRewardSemanticCommitment(
+        receiptKey, String(action || ""), Math.max(0, minutes|0), LR_SESSION_REWARD_POLICY_VERSION
+      );
+      var contentCommitment = lrRewardContentCommitment(rewardSnapshot);
+      s.loot.sessionRewardReceipts[receiptKey] = {
+        at:_now(),
+        policyVersion:LR_SESSION_REWARD_POLICY_VERSION,
+        semanticCommitment:semanticCommitment,
+        rewardSnapshot:rewardSnapshot,
+        contentCommitment:contentCommitment
+      };
+      s.loot.sessionRewardReceiptTombstones[receiptKey] = {
+        policyVersion:LR_SESSION_REWARD_POLICY_VERSION,
+        semanticCommitment:semanticCommitment,
+        contentCommitment:contentCommitment
+      };
+      lrCompactSessionRewardReceiptState(s);
+    }
+    return result;
   }
 
   function lrAffixLabel(a){
@@ -1155,6 +2006,256 @@
     host.innerHTML = pityHtml + rows;
   }
 
+  function lrGearUtilityPanelHtml(s){
+    if (typeof window.fhGearUtilitySummary !== "function"){
+      return '<section class="forge-resource-guide" aria-label="Loadout utility unavailable"><b>Loadout utility</b><span>The read-only utility summary is unavailable. Existing gear effects remain unchanged.</span></section>';
+    }
+    try {
+      var action = typeof window.currentAdventureActionId === "function"
+        ? window.currentAdventureActionId()
+        : String((s.adventure && s.adventure.action) || "Loot");
+      var summary = window.fhGearUtilitySummary(s, { action:action });
+      var rows = (summary.rows || []).map(function(row){
+        return '<span style="display:inline-flex;padding:4px 7px;border:1px solid rgba(255,255,255,.13);border-radius:999px;background:rgba(8,15,27,.42);font-size:.72rem">' + _escapeHtml(row) + '</span>';
+      }).join("");
+      var planned = (summary.plannedRows || []).map(function(row){
+        return '<span style="display:block;color:#fde68a;font-size:.68rem;line-height:1.35">' + _escapeHtml(row) + '</span>';
+      }).join("");
+      var sources = (summary.sources || []).map(function(source){
+        var meta = [source.tier, source.role].filter(Boolean).join(" / ");
+        var pieces = (source.pieces || []).map(function(piece){
+          return '<span style="display:block;color:#cbd5e1;font-size:.7rem;line-height:1.35">' + _escapeHtml(piece) + '</span>';
+        }).join("");
+        var plannedPieces = (source.plannedPieces || []).map(function(piece){
+          return '<span style="display:block;color:#fde68a;font-size:.66rem;line-height:1.35">' + _escapeHtml(piece) + '</span>';
+        }).join("");
+        return '<div style="padding:7px 8px;border:1px solid rgba(255,255,255,.1);border-radius:9px;background:rgba(2,6,14,.28)">' +
+          '<b style="display:block;font-size:.76rem">' + _escapeHtml(source.name || source.id || "Source") + '</b>' +
+          (meta ? '<span style="display:block;color:#94a3b8;font-size:.65rem;text-transform:capitalize;margin:2px 0 4px">' + _escapeHtml(meta) + '</span>' : '') +
+          (pieces || '<span style="display:block;color:#94a3b8;font-size:.7rem">No active stat routed.</span>') +
+          plannedPieces +
+        '</div>';
+      }).join("");
+      return '<section class="forge-resource-guide" aria-label="Active loadout utility" style="gap:8px">' +
+        '<b>Loadout utility / ' + _escapeHtml(summary.headline) + '</b>' +
+        '<span>Current action: <strong>' + _escapeHtml(action) + '</strong>. Totals below are active now. New combat, loot, and farm utility is hard-capped; existing XP, coin, and energy totals are reported exactly as the reward engine computes them. Recorded focus minutes never change.</span>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:5px">' + (rows || '<span class="muted">Equip gameplay gear to activate utility.</span>') + '</div>' +
+        (planned ? '<div style="padding:6px 7px;border-left:3px solid #f59e0b;background:rgba(245,158,11,.08)"><b style="display:block;font-size:.68rem;color:#fde68a">Planned - not active</b>' + planned + '</div>' : '') +
+        '<details' + (sources ? ' open' : '') + ' style="width:100%"><summary style="cursor:pointer;font-size:.74rem;font-weight:800;color:#e2e8f0">Exact item, mount, and set sources</summary>' +
+          '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:6px;margin-top:7px">' + (sources || '<span class="muted">No active sources.</span>') + '</div>' +
+        '</details>' +
+      '</section>';
+    } catch (_) {
+      return '<section class="forge-resource-guide" aria-label="Loadout utility unavailable"><b>Loadout utility</b><span>The read-only utility summary could not be rendered. No rewards or inventory were changed.</span></section>';
+    }
+  }
+
+  function lrPurposeEntries(){
+    if (typeof window.fhLootPurposeRegistry !== "function") return [];
+    try { return window.fhLootPurposeRegistry({ includeDormant:false }) || []; }
+    catch (_) { return []; }
+  }
+
+  function lrUtilityOptionsHtml(s, slot, entries){
+    var current = s.loot && s.loot.loadout ? s.loot.loadout[slot] : null;
+    var wanted = slot === "charm" ? "charm" : "relic";
+    var options = '<option value="">— none —</option>';
+    var sawCurrent = !current;
+    entries.filter(function(entry){
+      return entry && entry.action === "utility_loadout" && entry.loadoutKind === wanted;
+    }).sort(function(a,b){
+      return String(a.name || a.id).localeCompare(String(b.name || b.id));
+    }).forEach(function(entry){
+      var owned = Math.max(0, (s.lootOwned && s.lootOwned[entry.id])|0);
+      if (owned <= 0 && current !== entry.id) return;
+      var valid = true;
+      if (typeof window.fhLootPurposeValidateLoadoutChoice === "function"){
+        try { valid = !!window.fhLootPurposeValidateLoadoutChoice(s, slot, entry.id).ok; }
+        catch (_) { valid = false; }
+      }
+      if (current === entry.id) sawCurrent = true;
+      options += '<option value="' + _escapeHtml(entry.id) + '"' +
+        (current === entry.id ? ' selected' : '') +
+        (!valid && current !== entry.id ? ' disabled' : '') + '>' +
+        _escapeHtml(entry.name || entry.id) + ' ×' + owned + ' · ' +
+        _escapeHtml(entry.effectSummary || entry.purpose || "utility") +
+        '</option>';
+    });
+    if (current && !sawCurrent){
+      options += '<option value="' + _escapeHtml(current) + '" selected disabled>' +
+        _escapeHtml(current) + ' · unavailable; choose none to remove</option>';
+    }
+    return options;
+  }
+
+  function lrReforgeTargetToken(iid, affixIndex){
+    return encodeURIComponent(String(iid || "")) + "|" + Math.max(0, affixIndex|0);
+  }
+
+  function lrParseReforgeTarget(token){
+    var parts = String(token || "").split("|");
+    if (parts.length !== 2) return null;
+    var index = Number(parts[1]);
+    if (!Number.isInteger(index) || index < 0) return null;
+    try { return { iid:decodeURIComponent(parts[0]), affixIndex:index }; }
+    catch (_) { return null; }
+  }
+
+  function lrPreviewPurposeReforge(s, token, reagentId){
+    var target = lrParseReforgeTarget(token);
+    if (!target || !reagentId || typeof window.fhLootPurposeReforgeAffix !== "function"){
+      return { ok:false, reason:"choose_item_affix_and_recipe" };
+    }
+    try {
+      var draft = _deepClone(s);
+      return window.fhLootPurposeReforgeAffix(
+        draft,
+        target.iid,
+        target.affixIndex,
+        reagentId,
+        { updatedAt:_now() }
+      );
+    } catch (_) {
+      return { ok:false, reason:"preview_unavailable" };
+    }
+  }
+
+  function lrLootPurposeControlsHtml(s, instances){
+    var entries = lrPurposeEntries();
+    if (!entries.length){
+      return '<section class="forge-section"><h4>Keys, recipes, and utility loadout</h4><div class="muted">The deterministic loot-purpose controls are unavailable. No inventory was changed.</div></section>';
+    }
+
+    var utilityHtml =
+      '<div class="forge-loadout" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr))">' +
+        '<label style="display:grid;gap:4px;font-size:.72rem"><b>Charm</b><select data-fh-utility-slot="charm">' + lrUtilityOptionsHtml(s, "charm", entries) + '</select></label>' +
+        '<label style="display:grid;gap:4px;font-size:.72rem"><b>Relic I</b><select data-fh-utility-slot="relic1">' + lrUtilityOptionsHtml(s, "relic1", entries) + '</select></label>' +
+        '<label style="display:grid;gap:4px;font-size:.72rem"><b>Relic II</b><select data-fh-utility-slot="relic2">' + lrUtilityOptionsHtml(s, "relic2", entries) + '</select></label>' +
+      '</div>' +
+      '<div class="muted" style="font-size:.72rem;margin-top:6px">Only selected items apply. Effects are capped to optional Fight encounters, existing loot-roll quality, or explicit harvest yield; they never rewrite minutes, XP, or coins.</div>';
+
+    var keyRows = entries.filter(function(entry){
+      return entry && entry.kind === "key" && entry.action === "open_key_chest" &&
+        Math.max(0, (s.lootOwned && s.lootOwned[entry.id])|0) > 0;
+    }).sort(function(a,b){
+      return String(a.name || a.id).localeCompare(String(b.name || b.id));
+    }).map(function(entry){
+      var available = typeof window.fhLootPurposeKeyAvailability === "function"
+        ? window.fhLootPurposeKeyAvailability(s, entry.id)
+        : { owned:(s.lootOwned && s.lootOwned[entry.id])|0, used:0, available:0 };
+      var plan = available.available > 0 && typeof window.fhLootPurposePlanKeyChest === "function"
+        ? window.fhLootPurposePlanKeyChest(s, entry.id)
+        : null;
+      var preview = plan && plan.ok
+        ? _escapeHtml(plan.itemName) + ' · ' + _escapeHtml(plan.rewardTier) + ' ' + _escapeHtml(plan.itemSlot)
+        : (available.available > 0 ? 'No safe active reward pool' : 'All owned copies opened');
+      return '<div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:8px;border:1px solid rgba(255,255,255,.1);border-radius:10px;background:rgba(2,6,14,.25)">' +
+        '<div><b style="display:block;font-size:.76rem">' + _escapeHtml(entry.name || entry.id) + '</b>' +
+          '<span style="display:block;color:#94a3b8;font-size:.66rem">Owned ' + available.owned + ' · opened ' + available.used + ' · available ' + available.available + '</span>' +
+          '<span style="display:block;color:#cbd5e1;font-size:.68rem;margin-top:3px">Exact next reward: ' + preview + '</span></div>' +
+        '<button type="button" data-fh-open-key="' + _escapeHtml(entry.id) + '"' +
+          (!(plan && plan.ok && available.available > 0) ? ' disabled' : '') + '>Open</button>' +
+      '</div>';
+    }).join("");
+
+    var reagents = entries.filter(function(entry){
+      return entry && entry.kind === "reagent" && entry.action === "reforge_affix" &&
+        Math.max(0, (s.lootOwned && s.lootOwned[entry.id])|0) > 0;
+    }).sort(function(a,b){
+      return String(a.name || a.id).localeCompare(String(b.name || b.id));
+    });
+    var targets = [];
+    (instances || []).forEach(function(inst){
+      if (!inst || inst.locked) return;
+      (Array.isArray(inst.affixes) ? inst.affixes : []).forEach(function(affix, index){
+        if (!affix || affix.fixed) return;
+        var tmpl = _lootById(inst.lootId);
+        targets.push({
+          token:lrReforgeTargetToken(inst.iid, index),
+          label:(tmpl ? tmpl[1] : inst.lootId) + " · " + lrAffixLabel(affix)
+        });
+      });
+    });
+    var targetOptions = targets.map(function(target){
+      return '<option value="' + _escapeHtml(target.token) + '">' + _escapeHtml(target.label) + '</option>';
+    }).join("");
+    var reagentOptions = reagents.map(function(entry){
+      return '<option value="' + _escapeHtml(entry.id) + '">' +
+        _escapeHtml(entry.name || entry.id) + ' · ' + _escapeHtml(entry.affixId || "recipe") +
+        '</option>';
+    }).join("");
+    var reforgeHtml;
+    if (!reagents.length){
+      reforgeHtml = '<div class="muted" style="font-size:.74rem">No reagent recipe unlocked. Each supported reagent is purchased once, then remains a reusable recipe.</div>';
+    } else if (!targets.length){
+      reforgeHtml = '<div class="muted" style="font-size:.74rem">No unlocked gear has a non-fixed affix available for reforging.</div>';
+    } else {
+      reforgeHtml =
+        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:7px">' +
+          '<label style="display:grid;gap:4px;font-size:.7rem"><b>Item + affix</b><select data-fh-reforge-target>' + targetOptions + '</select></label>' +
+          '<label style="display:grid;gap:4px;font-size:.7rem"><b>Unlocked recipe</b><select data-fh-reforge-reagent>' + reagentOptions + '</select></label>' +
+        '</div>' +
+        '<div data-fh-reforge-preview style="margin-top:7px;padding:7px 8px;border-left:3px solid #22d3ee;background:rgba(34,211,238,.07);font-size:.7rem;color:#cbd5e1">Calculating exact result…</div>' +
+        '<button type="button" data-fh-apply-reforge style="margin-top:7px">Apply deterministic reforge</button>' +
+        '<div class="muted" style="font-size:.68rem;margin-top:5px">The reagent is a reusable recipe unlock and is never consumed. Arcane Dust uses the same rarity cost as a normal reroll.</div>';
+    }
+
+    return '<section class="forge-section" aria-label="Keys, recipes, and utility loadout">' +
+      '<h4>Utility Loadout</h4>' + utilityHtml +
+      '<h4 style="margin-top:14px">Key Chests</h4>' +
+      (keyRows || '<div class="muted" style="font-size:.74rem">No usable keys owned. Every key shows its exact deterministic reward before opening.</div>') +
+      '<h4 style="margin-top:14px">Reagent Reforge</h4>' + reforgeHtml +
+    '</section>';
+  }
+
+  function lrUpdatePurposeReforgePreview(host, s){
+    var target = host.querySelector("[data-fh-reforge-target]");
+    var reagent = host.querySelector("[data-fh-reforge-reagent]");
+    var previewHost = host.querySelector("[data-fh-reforge-preview]");
+    var apply = host.querySelector("[data-fh-apply-reforge]");
+    if (!target || !reagent || !previewHost || !apply) return;
+    var preview = lrPreviewPurposeReforge(s, target.value, reagent.value);
+    apply.disabled = !preview.ok;
+    if (!preview.ok){
+      previewHost.textContent = "Unavailable: " + String(preview.reason || "unknown reason").replace(/_/g, " ") + ".";
+      apply.textContent = "Apply deterministic reforge";
+      return;
+    }
+    previewHost.textContent = "Exact result: " + lrAffixLabel(preview.after) +
+      " · cost " + preview.costPaid + " Arcane Dust · reagent kept.";
+    apply.textContent = "Apply exact result (" + preview.costPaid + " Dust)";
+  }
+
+  function lrLootPurposeGuideHtml(s){
+    if (typeof window.fhGearUtilityContentAudit !== "function") return "";
+    try {
+      var audit = window.fhGearUtilityContentAudit(s);
+      var categories = (audit.categories || []).map(function(category){
+        var statuses = [];
+        if (category.ready) statuses.push('<span style="color:#86efac">Ready ' + category.ready + '</span>');
+        if (category.dormant) statuses.push('<span style="color:#fde68a">Dormant / unavailable ' + category.dormant + '</span>');
+        if (category.deadEnds) statuses.push('<span style="color:#fca5a5">Obtainable dead ends ' + category.deadEnds + '</span>');
+        return '<div style="padding:7px 8px;border:1px solid rgba(255,255,255,.1);border-radius:9px;background:rgba(2,6,14,.25)">' +
+          '<b style="display:block;font-size:.75rem">' + _escapeHtml(category.label || category.category) + '</b>' +
+          '<span style="display:block;color:#94a3b8;font-size:.67rem;line-height:1.35;margin:2px 0 4px">' + _escapeHtml(category.purpose || "") + '</span>' +
+          '<span style="display:flex;flex-wrap:wrap;gap:4px 8px;font-size:.64rem;font-weight:800">' + statuses.join("") + '</span>' +
+        '</div>';
+      }).join("");
+      var deadNames = (audit.deadEnds || []).map(function(item){ return item.name; })
+        .filter(function(name,idx,list){ return list.indexOf(name) === idx; });
+      return '<section class="forge-resource-guide" aria-label="Loot purpose guide" style="gap:7px">' +
+        '<b>Loot purpose guide</b>' +
+        '<span><strong style="color:#86efac">Ready</strong> means a visible action works now. <strong style="color:#fde68a">Dormant / unavailable</strong> means acquisition is deliberately suppressed until a complete consumer ships. <strong style="color:#fca5a5">Obtainable dead ends</strong> should remain zero.</span>' +
+        '<details style="width:100%"><summary style="cursor:pointer;font-size:.74rem;font-weight:800;color:#e2e8f0">Purpose by loot category</summary>' +
+          '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:6px;margin-top:7px">' + categories + '</div>' +
+          (deadNames.length ? '<p style="margin:5px 0 0;color:#fca5a5;font-size:.68rem">Obtainable dead ends: ' + _escapeHtml(deadNames.join(", ")) + '.</p>' : '<p style="margin:6px 0 0;color:#86efac;font-size:.68rem">No registered obtainable loot type is left without a purpose.</p>') +
+        '</details>' +
+      '</section>';
+    } catch (_) {
+      return '<section class="forge-resource-guide" aria-label="Loot purpose guide unavailable"><b>Loot purpose guide</b><span>Purpose status could not be read. No unwired item is being presented as usable.</span></section>';
+    }
+  }
+
   function renderForgePanel(){
     var host = document.getElementById("forge-panel");
     if (!host) return;
@@ -1168,10 +2269,11 @@
           || (b.createdAt - a.createdAt);
     });
     var matsHtml = '<div class="forge-mats">' +
-      '<div class="forge-mat"><b>✨ ' + (mat.dust|0) + '</b><div class="mat-name">Arcane Dust</div></div>' +
-      '<div class="forge-mat"><b>💎 ' + (mat.shards|0) + '</b><div class="mat-name">Crystal Shards</div></div>' +
-      '<div class="forge-mat"><b>🌌 ' + (mat.essence|0) + '</b><div class="mat-name">Mythic Essence</div></div>' +
-      '</div>';
+      '<div class="forge-mat"><b>' + (mat.dust|0) + '</b><div class="mat-name">Arcane Dust</div><small>Common+ salvage · rerolls</small></div>' +
+      '<div class="forge-mat"><b>' + (mat.shards|0) + '</b><div class="mat-name">Forge Shards</div><small>Uncommon+ salvage · upgrades</small></div>' +
+      '<div class="forge-mat"><b>' + (mat.essence|0) + '</b><div class="mat-name">Mythic Essence</div><small>Epic+ salvage · high-tier crafting</small></div>' +
+      '</div>' +
+      '<div class="forge-resource-guide"><b>Forge resources are separate from World Shards.</b><span>Salvage unwanted gear below, or craft a Forge Kit in Expedition for 8 Arcane Dust and 1 Forge Shard. World Shards come from Challenges and never pay Forge costs.</span><div><button type="button" data-lr-open-expedition>Open Expedition</button><button type="button" data-lr-open-challenges>Open Challenges</button></div></div>';
     var equippedIids = new Set();
     var slots = _EQUIP_SLOTS() || [];
     for (var i=0; i<slots.length; i++){
@@ -1224,6 +2326,9 @@
     }).join("") || '<div class="muted" style="font-size:.78rem">No gems yet — salvage rare+ items or run Craft sessions.</div>';
     host.innerHTML =
       matsHtml +
+      lrGearUtilityPanelHtml(s) +
+      lrLootPurposeControlsHtml(s, instances) +
+      lrLootPurposeGuideHtml(s) +
       '<div class="forge-section">' +
         '<h4>Instances</h4>' + instancesHtml +
       '</div>' +
@@ -1245,6 +2350,22 @@
         '<h4>Gems</h4>' +
         '<div class="forge-cons">' + gemsHtml + '</div>' +
       '</div>';
+    var openExpedition = host.querySelector("[data-lr-open-expedition]");
+    if (openExpedition) openExpedition.addEventListener("click", function(){
+      if (typeof window.openProgressPanel === "function") window.openProgressPanel("expedition");
+      else {
+        var tab = document.querySelector('[data-tab="expedition"]');
+        if (tab) tab.click();
+      }
+    });
+    var openChallenges = host.querySelector("[data-lr-open-challenges]");
+    if (openChallenges) openChallenges.addEventListener("click", function(){
+      if (typeof window.openProgressPanel === "function") window.openProgressPanel("challenges");
+      else {
+        var tab = document.querySelector('[data-tab="challenges"]');
+        if (tab) tab.click();
+      }
+    });
     var iidBtns = host.querySelectorAll("[data-lr-iid]");
     Array.prototype.forEach.call(iidBtns, function(btn){
       btn.addEventListener("click", function(){
@@ -1262,6 +2383,71 @@
         _saveState(); renderForgePanel();
       });
     });
+    Array.prototype.forEach.call(host.querySelectorAll("[data-fh-utility-slot]"), function(sel){
+      sel.addEventListener("change", function(){
+        if (typeof window.fhLootPurposeSetLoadout !== "function") return;
+        var result = window.fhLootPurposeSetLoadout(
+          _state(),
+          sel.getAttribute("data-fh-utility-slot"),
+          sel.value || null,
+          { updatedAt:_now() }
+        );
+        if (!result.ok){
+          _toast("Can't change utility loadout: " + String(result.reason || "unknown").replace(/_/g, " "), "warn");
+          renderForgePanel();
+          return;
+        }
+        _saveState();
+        renderForgePanel();
+        _toast("Utility loadout updated.", "good");
+      });
+    });
+    Array.prototype.forEach.call(host.querySelectorAll("[data-fh-open-key]"), function(btn){
+      btn.addEventListener("click", function(){
+        if (typeof window.fhLootPurposeOpenKeyChest !== "function") return;
+        var result = window.fhLootPurposeOpenKeyChest(
+          _state(),
+          btn.getAttribute("data-fh-open-key"),
+          { updatedAt:_now() }
+        );
+        if (!result.ok){
+          _toast("Can't open key chest: " + String(result.reason || "unknown").replace(/_/g, " "), "warn");
+          return;
+        }
+        _saveState();
+        renderForgePanel();
+        if (typeof window.renderLoot === "function") window.renderLoot();
+        _toast("Key chest opened → " + result.plan.itemName + " (" + result.plan.rewardTier + ")", "good");
+      });
+    });
+    var purposeTarget = host.querySelector("[data-fh-reforge-target]");
+    var purposeReagent = host.querySelector("[data-fh-reforge-reagent]");
+    if (purposeTarget) purposeTarget.addEventListener("change", function(){ lrUpdatePurposeReforgePreview(host, _state()); });
+    if (purposeReagent) purposeReagent.addEventListener("change", function(){ lrUpdatePurposeReforgePreview(host, _state()); });
+    var purposeApply = host.querySelector("[data-fh-apply-reforge]");
+    if (purposeApply) purposeApply.addEventListener("click", function(){
+      var target = lrParseReforgeTarget(purposeTarget && purposeTarget.value);
+      var preview = lrPreviewPurposeReforge(_state(), purposeTarget && purposeTarget.value, purposeReagent && purposeReagent.value);
+      if (!target || !preview.ok){
+        _toast("Can't reforge: " + String(preview.reason || "invalid target").replace(/_/g, " "), "warn");
+        return;
+      }
+      var result = window.fhLootPurposeReforgeAffix(
+        _state(),
+        target.iid,
+        target.affixIndex,
+        purposeReagent.value,
+        { operationId:preview.operationId, updatedAt:_now() }
+      );
+      if (!result.ok){
+        _toast("Can't reforge: " + String(result.reason || "unknown").replace(/_/g, " "), "warn");
+        return;
+      }
+      _saveState();
+      renderForgePanel();
+      _toast("Reforged exactly → " + lrAffixLabel(result.after) + " (" + result.costPaid + " Dust)", "good");
+    });
+    lrUpdatePurposeReforgePreview(host, s);
   }
 
   function openLootInspector(iid){
@@ -1282,22 +2468,37 @@
     var sym = tmpl ? tmpl[0] : "?";
     var name = tmpl ? tmpl[1] : inst.lootId;
     var slot = tmpl ? _lootSlot(tmpl) : "none";
+    var forgeSupported = lrInstanceSupportsForgeMutation(inst);
     var caps = LR_RARITY_CAPS[inst.tier] || LR_RARITY_CAPS.common;
     var mat = s.loot.materials || { dust:0, shards:0, essence:0 };
     var rerollCost = LR_REROLL_DUST[inst.tier] || 5;
     var upCost = { shards: (inst.level+1)*10, coins: (inst.level+1)*25 };
     var affRows = (inst.affixes || []).map(function(a, i){
       var label = lrAffixLabel(a);
-      var meta = a.fixed
+      var meta = !forgeSupported
+        ? '<span class="aff-fixed">collection · read-only</span>'
+        : a.fixed
         ? '<span class="aff-fixed">baseline · can\'t reroll</span>'
         : '<span class="aff-cost">' + rerollCost + ' ✨</span>';
-      var btn = a.fixed
+      var btn = !forgeSupported
+        ? ''
+        : a.fixed
         ? '<button disabled>Reroll</button>'
         : '<button data-lr-reroll="' + i + '" ' + ((mat.dust|0)<rerollCost?"disabled":"") + '>Reroll</button>';
       return '<div class="li-aff-row"><span>' + _escapeHtml(label) + '</span>' + meta + btn + '</div>';
     }).join("") || '<div class="muted" style="font-size:.78rem">No affixes on this item.</div>';
-    var socketsHtml = inst.sockets.length
-      ? inst.sockets.map(function(sk, i){
+    var sockets = Array.isArray(inst.sockets) ? inst.sockets : [];
+    var socketsHtml = !forgeSupported
+      ? (sockets.length
+        ? sockets.map(function(sk){
+            var readOnlyGem = sk && sk.gemId ? LR_GEM_DEFS[sk.gemId] : null;
+            return '<div class="li-socket' + (readOnlyGem ? ' filled' : '') + '">' +
+              (readOnlyGem ? (readOnlyGem.sym + ' ' + _escapeHtml(readOnlyGem.name)) : 'Empty socket') +
+              ' <span class="muted">read-only</span></div>';
+          }).join("")
+        : '<div class="muted" style="font-size:.78rem">No sockets on this collection item.</div>')
+      : sockets.length
+      ? sockets.map(function(sk, i){
           if (sk.gemId){
             var g = LR_GEM_DEFS[sk.gemId];
             return '<div class="li-socket filled">' + (g?g.sym:"") + ' ' + (g?_escapeHtml(g.name):sk.gemId) + ' <button data-lr-unsocket="' + i + '" style="margin-left:6px;font-size:.7rem">Remove</button></div>';
@@ -1310,14 +2511,22 @@
           return '<div class="li-socket">Empty <select data-lr-socket="' + i + '">' + opts + '</select></div>';
         }).join("")
       : '<div class="muted" style="font-size:.78rem">No sockets on this rarity.</div>';
-    var dyeHtml = Object.keys(LR_DYE_DEFS).map(function(k){
+    var dyeHtml = forgeSupported ? Object.keys(LR_DYE_DEFS).map(function(k){
       var d = LR_DYE_DEFS[k];
       var owned = (s.loot.dyesOwned[k]|0) > 0;
       if (!owned && inst.dyeId !== k) return "";
       return '<span class="li-dye' + (inst.dyeId===k?" active":"") + '" data-lr-dye="' + k + '" title="' + _escapeHtml(d.name) + '" style="background:' + d.color + '"></span>';
-    }).join("");
+    }).join("") : "";
+    var dyeSection = forgeSupported
+      ? '<div class="li-section"><h5>Dye</h5><div class="li-dyes">' + (dyeHtml || '<div class="muted" style="font-size:.78rem">No dyes owned yet.</div>') + '<span class="li-dye' + (inst.dyeId===null?" active":"") + '" data-lr-dye="" title="Default" style="background:transparent;border-style:dashed"></span></div></div>'
+      : '<div class="li-section"><h5>Dye</h5><div class="muted" style="font-size:.78rem">Forge dyes are not available for collection or purpose items.</div></div>';
     var lockLabel = inst.locked ? "Unlock" : "Lock";
     var upgradeDisabled = inst.level >= caps.maxLevel || (mat.shards|0) < upCost.shards || (s.coins|0) < upCost.coins;
+    var upgradeButton = forgeSupported
+      ? '<button data-lr-upgrade ' + (upgradeDisabled?"disabled":"") + '>Upgrade +1 (' + upCost.shards + ' 💎 + ' + upCost.coins + ' 🪙)</button>'
+      : '';
+    var forgeNotice = forgeSupported ? '' :
+      '<div class="li-section"><div class="muted" style="font-size:.8rem">Collection / purpose item. Forge mutations are unavailable; its collection and purpose actions remain available in Forge.</div></div>';
     var stats = lrInstanceStats(inst);
     var statsLines = Object.keys(stats).map(function(k){
       var def = LR_AFFIX_DEFS[k];
@@ -1329,15 +2538,16 @@
         '<div class="li-sym">' + sym + '</div>' +
         '<div>' +
           '<h4>' + _escapeHtml(name) + '</h4>' +
-          '<div class="li-sub">' + inst.tier + ' · +' + inst.level + '/' + caps.maxLevel + ' · slot: ' + slot + '</div>' +
-          '<div class="li-sub" style="margin-top:3px;color:var(--ink)">Effective: ' + statsLines + '</div>' +
+          '<div class="li-sub">' + inst.tier + (forgeSupported ? (' · +' + inst.level + '/' + caps.maxLevel) : ' · collection') + ' · slot: ' + slot + '</div>' +
+          '<div class="li-sub" style="margin-top:3px;color:var(--ink)">' + (forgeSupported ? 'Effective' : 'Stored roll') + ': ' + statsLines + '</div>' +
         '</div>' +
       '</div>' +
+      forgeNotice +
       '<div class="li-section"><h5>Affixes</h5>' + affRows + '</div>' +
-      '<div class="li-section"><h5>Sockets (' + inst.sockets.length + ')</h5><div class="li-sockets">' + socketsHtml + '</div></div>' +
-      '<div class="li-section"><h5>Dye</h5><div class="li-dyes">' + (dyeHtml || '<div class="muted" style="font-size:.78rem">No dyes owned yet.</div>') + '<span class="li-dye' + (inst.dyeId===null?" active":"") + '" data-lr-dye="" title="Default" style="background:transparent;border-style:dashed"></span></div></div>' +
+      '<div class="li-section"><h5>Sockets (' + sockets.length + ')</h5><div class="li-sockets">' + socketsHtml + '</div></div>' +
+      dyeSection +
       '<div class="li-actions">' +
-        '<button data-lr-upgrade ' + (upgradeDisabled?"disabled":"") + '>Upgrade +1 (' + upCost.shards + ' 💎 + ' + upCost.coins + ' 🪙)</button>' +
+        upgradeButton +
         '<button data-lr-lock>' + lockLabel + '</button>' +
         '<button data-lr-salvage ' + (inst.locked?"disabled":"") + '>Salvage</button>' +
       '</div>';
@@ -1400,45 +2610,41 @@
       if (window.closeModal) window.closeModal("loot-inspector-modal");
       renderForgePanel();
       if (window.renderLoot) window.renderLoot();
-      _toast("Salvaged → +" + r.yield.dust + " ✨ +" + r.yield.shards + " 💎 +" + r.yield.essence + " 🌌" + (r.gemDropped?(" +1 " + LR_GEM_DEFS[r.gemDropped].name):""), "good");
+      _toast("Salvaged → +" + r.yield.dust + " Arcane Dust · +" + r.yield.shards + " Forge Shards · +" + r.yield.essence + " Mythic Essence" + (r.gemDropped?(" · +1 " + LR_GEM_DEFS[r.gemDropped].name):""), "good");
     });
   }
 
   function showBattleReport(run){
-    if (!run || !run.encounters || !run.encounters.length){
-      _toast("Battle Report: no encounters this session.", "info");
-      return;
-    }
+    if (!run) return;
     var host = document.getElementById("battle-report-body");
     if (!host) return;
-    var rows = run.encounters.map(function(enc){
+    var encounters = Array.isArray(run.encounters) ? run.encounters : [];
+    var rows = encounters.map(function(enc){
       var hpPct = Math.max(0, Math.min(100, Math.round((enc.heroHPEnd/100)*100)));
       var enemy = enc.enemy;
       var drop = null;
-      for (var di=0; di<run.drops.length; di++) if (run.drops[di].enemyId === enemy.id) { drop = run.drops[di]; break; }
-      var dropMeta = drop
-        ? ("Drop: " + (function(){ var t=_lootById(drop.templateId); return t?t[1]:drop.templateId; })() + " (" + drop.rarity + ")")
-        : "No drop";
+      for (var di=0; di<(run.drops||[]).length; di++) if (run.drops[di].enemyId === enemy.id) { drop = run.drops[di]; break; }
+      var dropMeta = drop ? ("Drop: " + (function(){ var t=_lootById(drop.templateId); return t?t[1]:drop.templateId; })() + " (" + drop.rarity + ")") : "No drop";
       var weakHit = false, resistHit = false;
-      for (var ri=0; ri<enc.rounds.length; ri++){
-        if (enc.rounds[ri].weak) weakHit = true;
-        if (enc.rounds[ri].resist) resistHit = true;
-      }
+      for (var ri=0; ri<enc.rounds.length; ri++){ if (enc.rounds[ri].weak) weakHit = true; if (enc.rounds[ri].resist) resistHit = true; }
       return '<div class="br-encounter">' +
         '<div class="br-enemy">' + enemy.sym + '</div>' +
-        '<div>' +
-          '<div class="br-name">' + _escapeHtml(enemy.name) + ' <span class="muted" style="font-weight:400;font-size:.72rem">lv ' + enemy.level + (enemy.boss?" · BOSS":"") + '</span></div>' +
-          '<div class="br-detail">' + enc.rounds.length + ' round' + (enc.rounds.length>1?"s":"") + ' · ' + (weakHit?"weakness hit · ":"") + (resistHit?"resisted · ":"") + 'HP ' + enc.heroHPStart + ' → ' + enc.heroHPEnd + '</div>' +
-          '<div class="br-hpbar"><div style="width:' + hpPct + '%"></div></div>' +
-          '<div class="br-detail" style="margin-top:3px">' + _escapeHtml(dropMeta) + '</div>' +
-        '</div>' +
-        '<div class="br-outcome ' + enc.outcome + '">' + enc.outcome + '</div>' +
-      '</div>';
+        '<div><div class="br-name">' + _escapeHtml(enemy.name) + ' <span class="muted" style="font-weight:400;font-size:.72rem">lv ' + enemy.level + (enemy.boss?" · BOSS":"") + '</span></div>' +
+        '<div class="br-detail">' + enc.rounds.length + ' round' + (enc.rounds.length>1?"s":"") + ' · ' + (weakHit?"weakness hit · ":"") + (resistHit?"resisted · ":"") + 'HP ' + enc.heroHPStart + ' → ' + enc.heroHPEnd + '</div>' +
+        '<div class="br-hpbar"><div style="width:' + hpPct + '%"></div></div><div class="br-detail" style="margin-top:3px">' + _escapeHtml(dropMeta) + '</div></div>' +
+        '<div class="br-outcome ' + enc.outcome + '">' + enc.outcome + '</div></div>';
     }).join("");
-    host.innerHTML = rows;
+    if (!rows) rows = '<div class="muted" style="padding:8px 0">No combat encounters were generated for this session.</div>';
+    var sessionId = typeof run.sessionId === "string" ? run.sessionId : "";
+    var edit = sessionId ? '<div class="actions" style="margin-top:10px"><button type="button" data-battle-report-edit-time>Adjust or set exact session time</button></div>' : "";
+    host.innerHTML = rows + edit;
+    var editBtn = host.querySelector("[data-battle-report-edit-time]");
+    if (editBtn) editBtn.addEventListener("click", function(){
+      if (window.closeModal) window.closeModal("battle-report-modal");
+      if (typeof window.openSessionEditModal === "function") window.openSessionEditModal(sessionId,{surface:"battle-report"});
+    });
     if (window.openModal) window.openModal("battle-report-modal");
   }
-
   /* Settings toggle wiring — re-binds after the inline script's bindSettings
      has already run. Looks up the three new toggles and attaches handlers. */
   function lrWireSettings(){
@@ -1554,7 +2760,21 @@
     LR_MONSTER_TRAITS: LR_MONSTER_TRAITS, LR_MONSTER_DROPS: LR_MONSTER_DROPS,
     LR_REROLL_DUST: LR_REROLL_DUST, LR_SALVAGE_YIELD: LR_SALVAGE_YIELD,
     LR_DROP_LOG_CAP: LR_DROP_LOG_CAP, LR_OUTCOME_BIAS: LR_OUTCOME_BIAS,
-    lrSeededRng: lrSeededRng, lrHashStr: lrHashStr,
+    LR_SESSION_REWARD_POLICY_VERSION:LR_SESSION_REWARD_POLICY_VERSION,
+    LR_SESSION_REWARD_DETAIL_CAP:LR_SESSION_REWARD_DETAIL_CAP,
+    LR_SESSION_REWARD_TOMBSTONE_CAP:LR_SESSION_REWARD_TOMBSTONE_CAP,
+    LR_SESSION_REWARD_STORAGE_BYTE_CAP:LR_SESSION_REWARD_STORAGE_BYTE_CAP,
+    lrSeededRng: lrSeededRng, lrHashStr: lrHashStr, lrStableId:lrStableId, lrSha256Hex:lrSha256Hex,
+    lrCanonicalRewardValue:lrCanonicalRewardValue,
+    lrRewardContentCommitment:lrRewardContentCommitment,
+    lrRewardSemanticCommitment:lrRewardSemanticCommitment,
+    lrNormalizeSessionRewardReceipt:lrNormalizeSessionRewardReceipt,
+    lrNormalizeSessionRewardTombstone:lrNormalizeSessionRewardTombstone,
+    lrCompactSessionRewardReceiptState:lrCompactSessionRewardReceiptState,
+    lrValidateSessionRewardReceiptState:lrValidateSessionRewardReceiptState,
+    lrRewardReceiptEvidenceMap:lrRewardReceiptEvidenceMap,
+    lrMergeSessionRewardReceiptStores:lrMergeSessionRewardReceiptStores,
+    lrAssertSessionRewardCapacity:lrAssertSessionRewardCapacity,
     lrTemplateSources: lrTemplateSources, lrPityMultiplier: lrPityMultiplier,
     lrRarityWeightsForAction: lrRarityWeightsForAction,
     lrEligibleTemplates: lrEligibleTemplates,
@@ -1565,7 +2785,8 @@
     lrSocketGem: lrSocketGem, lrUnsocketGem: lrUnsocketGem,
     lrApplyDye: lrApplyDye, lrSalvageInstance: lrSalvageInstance,
     lrToggleLock: lrToggleLock,
-    lrPickEnemy: lrPickEnemy, lrResolveEncounter: lrResolveEncounter,
+    lrWorldEnemyRow: lrWorldEnemyRow, lrZoneEnemyRows: lrZoneEnemyRows,
+    lrPickEnemy: lrPickEnemy, lrPickBossEnemy: lrPickBossEnemy, lrResolveEncounter: lrResolveEncounter,
     lrRollDropForEncounter: lrRollDropForEncounter, lrCommitDrop: lrCommitDrop,
     lrGrantEditThresholdEntitlement: lrGrantEditThresholdEntitlement,
     lrRunSessionCombat: lrRunSessionCombat,

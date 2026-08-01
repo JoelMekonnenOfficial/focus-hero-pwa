@@ -66,6 +66,23 @@ test("challenge progress derives from canonical history and follows edits down",
   assert.equal(state.questSystem.daily[0].completed, false);
 });
 
+test("new challenge rolls exclude unsupported objectives and labels match their predicates", () => {
+  const wd = loadWorldDepth();
+  const unsupported = new Set(["zone_min","mount_collected","enchant_action","mount_pity_unlocks","sets_complete","artifacts_found"]);
+  const pools = [wd.WD_QUEST_DAILY, wd.WD_QUEST_WEEKLY, wd.WD_QUEST_SEASONAL];
+  const state = {
+    history:{}, sessionsLog:[], combo:{date:"",count:0}, streak:0,
+    questSystem:{ daily:[], weekly:[], seasonal:[], lastRoll:{daily:null,weekly:null,seasonal:null} }
+  };
+  wd.wdEnsureQuestRolls(state);
+  const rolled = state.questSystem.daily.concat(state.questSystem.weekly,state.questSystem.seasonal);
+  assert.ok(rolled.length > 0);
+  assert.ok(rolled.every(q => wd.wdQuestIsRollable(q)));
+  assert.ok(rolled.every(q => !unsupported.has(q.kind)));
+  assert.equal(pools.flat().find(q => q.id === "qd_kill_enemy").label, "Complete 3 Fight sessions");
+  assert.equal(pools.flat().find(q => q.id === "qw_craft").label, "Complete 1 Craft focus session");
+});
+
 test("claim grants XP, coins, shards and increments the correct claimed counter once", () => {
   const wd = loadWorldDepth();
   const today = wd.wdTodayKey();
@@ -150,6 +167,95 @@ test("progression merge preserves remote world, quests, achievements, and shard 
   assert.equal(merged.questSystem.dailyClaimedCount, 2);
   assert.equal(merged.achievementsV85.local, 10);
   assert.equal(merged.achievementsV85.remote, 20);
+});
+
+test("craft combine rejects duplicate or equipped inputs and tombstones every consumed instance", () => {
+  const wd = loadWorldDepth();
+  const instance = id => ({
+    iid:id, lootId:"blade", tier:"common", level:0, affixes:[], sockets:[],
+    locked:false, createdAt:100, updatedAt:200
+  });
+  const state = {
+    loot:{instanceTombstones:{},vault:{instances:{},locations:{}}},
+    lootInstances:{a:instance("a"),b:instance("b"),c:instance("c")},
+    lootOwned:{blade:5,untouched:7},
+    hero:{equipped:{weapon:{instanceId:"a"}}},
+    craftingDust:0
+  };
+
+  const equippedBefore = JSON.stringify(state);
+  assert.equal(wd.wdCombineForUpgrade(state, ["a","b","c"]).reason, "equipped_instance");
+  assert.equal(JSON.stringify(state), equippedBefore);
+
+  state.hero.equipped.weapon = null;
+  const duplicateBefore = JSON.stringify(state);
+  assert.equal(wd.wdCombineForUpgrade(state, ["a","a","b"]).reason, "duplicate_instance");
+  assert.equal(JSON.stringify(state), duplicateBefore);
+
+  const validOwnership = state.lootOwned;
+  state.lootOwned = [];
+  const invalidOwnershipBefore = JSON.stringify(state);
+  assert.equal(wd.wdCombineForUpgrade(state, ["a","b","c"]).reason, "invalid_ownership");
+  assert.equal(JSON.stringify(state), invalidOwnershipBefore);
+  state.lootOwned = validOwnership;
+
+  const result = wd.wdCombineForUpgrade(state, ["a","b","c"]);
+  assert.equal(result.ok, true);
+  assert.equal(result.newInstance.tier, "uncommon");
+  assert.equal(state.lootInstances.a, undefined);
+  assert.equal(state.lootInstances.b, undefined);
+  assert.equal(state.lootInstances.c, undefined);
+  assert.equal(state.lootInstances[result.newInstance.iid], result.newInstance);
+  assert.ok(["a","b","c"].every(id => state.loot.instanceTombstones[id] >= 200));
+  assert.equal(state.lootOwned.blade, 3, "three consumed templates and one crafted template must net minus two");
+  assert.equal(state.lootOwned.untouched, 7, "unrelated ownership counts must remain unchanged");
+  assert.equal(state.craftingDust, 5);
+});
+
+test("craft combine reconciles each source template with the crafted template", () => {
+  const wd = loadWorldDepth();
+  const instance = (id, lootId) => ({
+    iid:id, lootId, tier:"common", level:0, affixes:[], sockets:[],
+    locked:false, createdAt:100, updatedAt:200
+  });
+  const state = {
+    loot:{instanceTombstones:{},vault:{instances:{},locations:{}}},
+    lootInstances:{
+      a:instance("a", "blade"),
+      b:instance("b", "helm"),
+      c:instance("c", "boots")
+    },
+    lootOwned:{blade:4,helm:3,boots:2,untouched:7},
+    hero:{equipped:{weapon:null}},
+    craftingDust:0
+  };
+
+  const result = wd.wdCombineForUpgrade(state, ["a","b","c"]);
+  assert.equal(result.ok, true);
+  const craftedId = result.newInstance.lootId;
+  assert.equal(state.lootOwned.blade, 3 + Number(craftedId === "blade"));
+  assert.equal(state.lootOwned.helm, 2 + Number(craftedId === "helm"));
+  assert.equal(state.lootOwned.boots, 1 + Number(craftedId === "boots"));
+  assert.equal(state.lootOwned.untouched, 7);
+});
+
+test("craft combine retains ownership for the newly crafted instance when legacy counts were low", () => {
+  const wd = loadWorldDepth();
+  const instance = id => ({
+    iid:id, lootId:"blade", tier:"common", level:0, affixes:[], sockets:[],
+    locked:false, createdAt:100, updatedAt:200
+  });
+  const state = {
+    loot:{instanceTombstones:{},vault:{instances:{},locations:{}}},
+    lootInstances:{a:instance("a"),b:instance("b"),c:instance("c")},
+    lootOwned:{blade:1},
+    hero:{equipped:{weapon:null}},
+    craftingDust:0
+  };
+
+  const result = wd.wdCombineForUpgrade(state, ["a","b","c"]);
+  assert.equal(result.ok, true);
+  assert.equal(state.lootOwned.blade, 1, "the crafted instance must remain represented in ownership");
 });
 
 test("embedded world-depth smoke suite remains green", () => {

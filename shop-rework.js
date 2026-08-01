@@ -58,6 +58,56 @@
     return d.getFullYear() + "-" + (d.getMonth()+1) + "-" + d.getDate();
   }
 
+  /* ---------- CATALOG ELIGIBILITY ----------
+     World owns several forward-looking catalogs whose effects are not wired
+     into playable actions yet. Keeping eligibility in one fail-closed gate
+     prevents those items from leaking through normal, cursed, featured, or
+     direct-purchase paths. */
+
+  var SR_DORMANT_WORLD_CATALOGS = [
+    "WD_RUNES", "WD_TOMES", "WD_GEMS", "WD_MAPS", "WD_TROPHIES", "WD_ARTIFACTS"
+  ];
+
+  function srDormantWorldIdSet(){
+    var ids = {};
+    if (typeof window === "undefined") return ids;
+    SR_DORMANT_WORLD_CATALOGS.forEach(function(catalogName){
+      var catalog = window[catalogName];
+      if (!Array.isArray(catalog)) return;
+      catalog.forEach(function(item){
+        if (item && item.id) ids[String(item.id)] = true;
+      });
+    });
+    return ids;
+  }
+
+  function srLootPurposeIsUsable(id){
+    if (typeof window === "undefined" || typeof window.fhLootPurposeIsUsable !== "function") return false;
+    try { return window.fhLootPurposeIsUsable(id) === true; }
+    catch (_) { return false; }
+  }
+
+  function srItemCanSurface(item){
+    if (!item || !item.id) return false;
+    var family = String(item.worldCatalog || "").toLowerCase();
+    if (["rune","tome","gem","map","trophy","artifact"].indexOf(family) >= 0) return false;
+
+    var dormant = srDormantWorldIdSet();
+    var ids = [item.id, item.lootSlug, String(item.id).replace(/^gear_/, "")].filter(Boolean);
+    if (ids.some(function(id){ return dormant[String(id)] === true; })) return false;
+
+    if (family === "relic" || family === "charm" || item.slot === "relic" || item.slot === "charm"){
+      return srLootPurposeIsUsable(item.id);
+    }
+    return true;
+  }
+
+  function srReagentUnlockOwned(s, item){
+    var reagentUnlock = !!(item && (item.reagent || item.recipeUnlock
+      || String(item.worldCatalog || "").toLowerCase() === "reagent"));
+    return !!(s && reagentUnlock && s.lootOwned && (s.lootOwned[item.id]|0) > 0);
+  }
+
   /* ---------- INVENTORY SOURCING ----------
      The shop draws from:
        - LOOT_TABLE gear items (from inline script)
@@ -98,21 +148,24 @@
     if (typeof window !== "undefined" && Array.isArray(window.WD_RELICS)){
       window.WD_RELICS.forEach(function(r){
         if (r.tier === "artifact") return; // artifacts not buyable
-        inv.push({
+        var relicItem = {
           id: r.id, name: r.name, sym: r.sym, rarity: r.tier,
           slot: "relic", priceBase: SR_PRICE_BY_RARITY[r.tier] || 100,
-          category: "gear", lore: r.lore,
+          category: "gear", worldCatalog: "relic", lore: r.lore,
           effectText: r.effect ? srEffectText(r.effect) : ""
-        });
+        };
+        if (srItemCanSurface(relicItem)) inv.push(relicItem);
       });
     }
     if (typeof window !== "undefined" && Array.isArray(window.WD_CHARMS)){
       window.WD_CHARMS.forEach(function(c){
-        inv.push({
+        var charmItem = {
           id: c.id, name: c.name, sym: c.sym, rarity: c.tier,
           slot: "charm", priceBase: SR_PRICE_BY_RARITY[c.tier] || 60,
-          category: "gear", effectText: c.effect ? srEffectText(c.effect) : ""
-        });
+          category: "gear", worldCatalog: "charm",
+          effectText: c.effect ? srEffectText(c.effect) : ""
+        };
+        if (srItemCanSurface(charmItem)) inv.push(charmItem);
       });
     }
     if (typeof window !== "undefined" && Array.isArray(window.WD_KEYS)){
@@ -121,7 +174,8 @@
         inv.push({
           id: k.id, name: k.name, sym: k.sym, rarity: k.tier,
           slot: "key", priceBase: SR_PRICE_BY_RARITY[k.tier] || 40,
-          category: "special", effectText: "Opens a " + k.chestTier + " chest"
+          category: "special", worldCatalog: "key",
+          effectText: "Opens a " + k.chestTier + " chest"
         });
       });
     }
@@ -130,8 +184,8 @@
         inv.push({
           id: r.id, name: r.name, sym: r.sym, rarity: r.tier,
           slot: "reagent", priceBase: SR_PRICE_BY_RARITY[r.tier] || 25,
-          category: "crafting", reagent: true,
-          effectText: "Crafting reagent"
+          category: "crafting", worldCatalog: "reagent", reagent: true,
+          recipeUnlock: true, effectText: "Forge recipe unlock"
         });
       });
     }
@@ -143,7 +197,7 @@
       effectText: "Guaranteed Epic+ drop. Limited 1/week.",
       mysteryBox: true
     });
-    return inv;
+    return inv.filter(srItemCanSurface);
   }
 
   var SR_PRICE_BY_RARITY = {
@@ -182,6 +236,7 @@
     var rng = srMulberry32(srHash("featured-" + key));
     // Bias toward rare+ items
     var pool = inventory.filter(function(it){
+      if (!srItemCanSurface(it)) return false;
       var idx = ["common","uncommon","rare","epic","legendary","mythic"].indexOf(it.rarity);
       return idx >= 1; // uncommon+
     });
@@ -226,14 +281,24 @@
     var owned = (s.lootOwned) || {};
     var coins = s.coins | 0;
     var shards = s.crystalShards | 0;
-    var dust = s.craftingDust | 0;
+    var forgeMaterials = s.loot && s.loot.materials ? s.loot.materials : {};
+    var dust = forgeMaterials.dust | 0;
+    var legacyDust = s.craftingDust | 0;
 
     // Currency HUD
     var hud = '<div class="sr-hud">' +
-      '<div class="sr-coin"><span class="sr-coin-sym">🪙</span> <b>' + coins.toLocaleString() + '</b> coins</div>' +
-      '<div class="sr-coin sr-shard"><span class="sr-coin-sym">💎</span> <b>' + shards.toLocaleString() + '</b> shards</div>' +
-      '<div class="sr-coin sr-dust"><span class="sr-coin-sym">✨</span> <b>' + dust.toLocaleString() + '</b> dust</div>' +
-    '</div>';
+      '<div class="sr-coin"><span class="sr-currency-mark coin" aria-hidden="true"></span><b>' + coins.toLocaleString() + '</b><span>Coins</span><small>Session rewards · Store purchases</small></div>' +
+      '<div class="sr-coin sr-shard"><span class="sr-currency-mark shard" aria-hidden="true"></span><b>' + shards.toLocaleString() + '</b><span>World Shards</span><small>Claim Challenges · Unlock zones and special stock</small></div>' +
+      '<div class="sr-coin sr-dust"><span class="sr-currency-mark dust" aria-hidden="true"></span><b>' + dust.toLocaleString() + '</b><span>Arcane Dust</span><small>Salvage gear or craft Forge Kits · Reroll gear</small></div>' +
+    '</div>' +
+    '<div class="sr-resource-guide" aria-label="Resource routes">' +
+      '<div><b>Nothing here is passive or missing.</b><span>World Shards are claimed in Challenges. Arcane Dust comes from salvaging gear or crafting a Forge Kit in Expedition.</span>' +
+      (legacyDust > 0 ? '<small>' + legacyDust.toLocaleString() + ' legacy Crafting Dust is preserved separately and has not been converted.</small>' : '') +
+      '</div><div class="sr-resource-actions">' +
+        '<button type="button" data-sr-open="challenges">Open Challenges</button>' +
+        '<button type="button" data-sr-open="expedition">Open Expedition</button>' +
+        '<button type="button" data-sr-open="forge">Open Forge</button>' +
+      '</div></div>';
 
     // Featured carousel
     var featured = srFeaturedToday(inv);
@@ -242,6 +307,7 @@
       '<div class="sr-featured-grid">' +
       featured.map(function(f){
         var have = (owned[f.item.lootSlug || f.item.id] | 0) > 0;
+        var oneTimeOwned = (have && f.item.category === "gear") || srReagentUnlockOwned(s, f.item);
         return '<div class="sr-featured-card rar-' + f.item.rarity + (have ? ' owned' : '') + '">' +
           '<div class="sr-feat-sym">' + (f.item.sym || "❓") + '</div>' +
           '<div class="sr-feat-name">' + escSr(f.item.name) + '</div>' +
@@ -251,7 +317,7 @@
             '<span class="sr-price-new">' + f.price + ' 🪙</span> ' +
             '<span class="sr-discount-badge">-' + f.discountPct + '%</span>' +
           '</div>' +
-          (have ? '<div class="sr-owned-badge">OWNED</div>' :
+          (oneTimeOwned ? '<div class="sr-owned-badge">' + (f.item.reagent ? 'UNLOCKED' : 'OWNED') + '</div>' :
             '<button type="button" class="sr-buy-btn" data-sr-buy="' + escSr(f.item.id) + '" data-sr-price="' + f.price + '">Buy</button>') +
         '</div>';
       }).join("") +
@@ -320,7 +386,8 @@
         filtered.map(function(it){
           var have = (owned[it.lootSlug || it.id] | 0) > 0;
           var afford = it.currency === "shards" ? (shards >= it._priceToday) : (coins >= it._priceToday);
-          var disabled = (have && it.category === "gear") || !afford;
+          var oneTimeOwned = (have && it.category === "gear") || srReagentUnlockOwned(s, it);
+          var disabled = oneTimeOwned || !afford;
           var currencyIcon = it.currency === "shards" ? "💎" : "🪙";
           return '<div class="sr-grid-card rar-' + it.rarity + (have ? " owned" : "") + '" data-sr-item="' + escSr(it.id) + '">' +
             '<div class="sr-card-sym">' + (it.sym || "❓") + '</div>' +
@@ -328,8 +395,8 @@
             '<div class="sr-card-meta">' + it.rarity + ' · ' + (it.slot || "") + '</div>' +
             '<div class="sr-card-eff">' + escSr(it.effectText || "") + '</div>' +
             '<div class="sr-card-price">' + it._priceToday.toLocaleString() + ' ' + currencyIcon + '</div>' +
-            (have && it.category === "gear" ?
-              '<div class="sr-owned-badge">OWNED</div>' :
+            (oneTimeOwned ?
+              '<div class="sr-owned-badge">' + (it.reagent ? 'UNLOCKED' : 'OWNED') + '</div>' :
               '<button type="button" class="sr-buy-btn"' + (disabled ? " disabled" : "") + ' data-sr-buy="' + escSr(it.id) + '" data-sr-price="' + it._priceToday + '" data-sr-currency="' + (it.currency || "coins") + '">Buy</button>') +
           '</div>';
         }).join("")) +
@@ -338,6 +405,17 @@
     host.innerHTML = hud + featuredHtml + catTabs + filtersHtml + gridHtml;
 
     // Wire interactions
+    host.querySelectorAll("[data-sr-open]").forEach(function(b){
+      b.addEventListener("click", function(){
+        var tab = b.getAttribute("data-sr-open");
+        if (typeof window.openProgressPanel === "function"){
+          window.openProgressPanel(tab);
+          return;
+        }
+        var fallback = document.querySelector('[data-tab="' + tab + '"]');
+        if (fallback) fallback.click();
+      });
+    });
     host.querySelectorAll("[data-sr-cat]").forEach(function(b){
       b.addEventListener("click", function(){
         window._srState.category = b.getAttribute("data-sr-cat");
@@ -427,6 +505,8 @@
   function srExecutePurchase(item, price, currency){
     var s = window.state;
     if (!s) return { ok:false, reason:"no_state" };
+    if (!srItemCanSurface(item)) return { ok:false, reason:"item_not_usable" };
+    if (srReagentUnlockOwned(s, item)) return { ok:false, reason:"recipe_already_unlocked" };
     if (currency === "shards"){
       if ((s.crystalShards|0) < price) return { ok:false, reason:"insufficient_shards" };
       s.crystalShards -= price;
@@ -546,6 +626,8 @@
   window.srBaseInventory = srBaseInventory;
   window.srFeaturedToday = srFeaturedToday;
   window.srExecutePurchase = srExecutePurchase;
+  window.srItemCanSurface = srItemCanSurface;
+  window.srReagentUnlockOwned = srReagentUnlockOwned;
   window.SR_CATEGORIES = SR_CATEGORIES;
   window.SR_PRICE_BY_RARITY = SR_PRICE_BY_RARITY;
 
@@ -561,7 +643,13 @@
         SR_PRICE_BY_RARITY.artifact > SR_PRICE_BY_RARITY.mythic);
     // Deterministic featured items
     var inv = srBaseInventory();
-    add("base inventory has 50+ items", inv.length >= 50, "actual=" + inv.length);
+    add("base inventory retains ordinary stock",
+        inv.some(function(it){ return it.category === "gear"; })
+        && inv.some(function(it){ return it.category === "consumable"; })
+        && inv.some(function(it){ return it.slot === "key"; })
+        && inv.some(function(it){ return it.reagent; }), "actual=" + inv.length);
+    add("dormant World catalogs never enter shop inventory",
+        inv.every(function(it){ return srItemCanSurface(it); }));
     var f1 = srFeaturedToday(inv);
     var f2 = srFeaturedToday(inv);
     add("featured items: 3 picks", f1.length === 3);

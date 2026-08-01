@@ -124,15 +124,15 @@ try {
       { total:result.total, history:result.history, taskToday:result.taskToday, taskTotal:result.taskTotal },
       { total:100, history:100, taskToday:100, taskTotal:100 }
     );
-    assert.equal(result.recordedMinutes, 105, "positive records intentionally remain immutable");
+    assert.equal(result.recordedMinutes, 100, "session-linked reduction must reconcile recorded and authoritative minutes");
     assert.equal(result.summary.histMinutes, 100);
-    assert.equal(result.summary.recordedMinutes, 105);
-    assert.equal(result.summary.sessions, 0, "ledger corrections are not completed focus sessions");
+    assert.equal(result.summary.recordedMinutes, 100);
+    assert.equal(result.summary.sessions, 4, "every positive manual addition counts as one session");
     assert.equal(result.summary.topTask, "Life");
     assert.equal(result.recapFocused, "100m");
-    assert.deepEqual(result.cards.slice(0, 2), [["30d sessions","0"],["30d time","1h 40m"]]);
-    assert.match(result.historyText, /Standalone Time Ledger correction/);
-    assert.match(result.historyText, /−5m/);
+    assert.deepEqual(result.cards.slice(0, 2), [["30d sessions","4"],["30d time","1h 40m"]]);
+    assert.doesNotMatch(result.historyText, /Standalone Time Ledger correction/);
+    assert.match(result.historyText, /10m → 5m/);
   });
 
   await test("session editor supports both exact totals and relative adjustments", async () => {
@@ -176,6 +176,53 @@ try {
       { total:result.total, history:result.history, taskToday:result.taskToday, taskTotal:result.taskTotal },
       { total:105, history:105, taskToday:105, taskTotal:105 }
     );
+  });
+
+  await test("session history retains pause duration and time-change details", async () => {
+    await resetFixture();
+    const result = await page.evaluate(() => {
+      const task = window.__FocusHero.createTask({ name:"Detailed session", emoji:"D" });
+      window.applyTaskTimeAdjustment(task.id, 20, { operationId:"detail-session", surface:"test" });
+      const state = window.__FocusHero.stateRef();
+      const rec = state.sessionsLog.find(record=>record?.manualOperationId === "detail-session");
+      const base = Date.now()-180_000;
+      window.beginTimerRunDetails(base);
+      window.pauseTimerRunDetails(base+60_000);
+      window.resumeTimerRunDetails(base+120_000);
+      window.recordTimerTimeChange("live-session","exact",20,90,base+150_000);
+      rec.sessionDetails = window.snapshotTimerRunDetails(base+180_000);
+      window.renderSessionHistoryPanel();
+      return { details:rec.sessionDetails, text:document.querySelector("#sessions-panel")?.textContent||"" };
+    });
+    assert.equal(result.details.pauses.length, 1);
+    assert.equal(result.details.pauses[0].durationMs, 60_000);
+    assert.equal(result.details.timeChanges.length, 1);
+    assert.match(result.text, /1 pause · 1m paused/);
+    assert.match(result.text, /1 time change/);
+  });
+
+  await test("20 plus 70 is exactly 90, retries are idempotent, and the audit detects duplicate evidence", async () => {
+    await resetFixture();
+    const result = await page.evaluate(() => {
+      const task = window.__FocusHero.createTask({ name:"Exact ninety", emoji:"N" });
+      const first = window.applyTaskTimeAdjustment(task.id, 20, { operationId:"exact-90-a", surface:"test" });
+      const retry = window.applyTaskTimeAdjustment(task.id, 20, { operationId:"exact-90-a", surface:"test" });
+      const second = window.applyTaskTimeAdjustment(task.id, 70, { operationId:"exact-90-b", surface:"test" });
+      const state = window.__FocusHero.stateRef();
+      const clean = window.auditAccountingState(state);
+      const source = state.sessionsLog.find(record=>record?.manualOperationId === "exact-90-a");
+      state.sessionsLog.push({ ...JSON.parse(JSON.stringify(source)), id:"synthetic-duplicate-session" });
+      const flagged = window.auditAccountingState(state);
+      return { first, retry, second, total:state.totalFocusMin, taskTotal:state.tasks.find(item=>item.id===task.id)?.totalFocusMin, sessions:state.completedFocusSessions, records:state.sessionsLog.length-1, clean, flagged };
+    });
+    assert.equal(result.first.ok, true);
+    assert.equal(result.retry.duplicate, true);
+    assert.equal(result.retry.delta, 0);
+    assert.equal(result.second.ok, true);
+    assert.deepEqual({ total:result.total, task:result.taskTotal, sessions:result.sessions, records:result.records }, { total:90, task:90, sessions:2, records:2 });
+    assert.equal(result.clean.ok, true);
+    assert.equal(result.flagged.ok, false);
+    assert.match(result.flagged.issues.join(" "), /Duplicate manual edit operation IDs/);
   });
 
   assert.deepEqual(pageErrors, [], pageErrors.join("\n"));

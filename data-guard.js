@@ -13,8 +13,9 @@
  *     so the standalone recovery page lists it too.
  *  3. On every boot: compares live state against the guard high-water mark.
  *     If focus minutes collapse or append-only structural data regresses, it
- *     shows a BLOCKING full-screen prompt with one-tap restore. Fail-closed: an
- *     unsafe state can never quietly replace protected snapshots.
+ *     shows a BLOCKING full-screen prompt that routes to the isolated recovery
+ *     page. Fail-closed: an unsafe state can never quietly replace protected
+ *     snapshots, and recovery never races the live app's cloud workers.
  *  4. Snapshots are monotonic per day (never replaced by a smaller state) and
  *     the all-time high-water snapshot is never pruned.
  */
@@ -100,15 +101,183 @@
         .concat(Object.keys(plotUpdatedAt).sort().map(function (id) { return id + "@" + plotUpdatedAt[id]; })))
     };
   }
+  function uniqueSortedIds(values) {
+    var seen = Object.create(null), out = [];
+    (values || []).forEach(function (value) {
+      var id = typeof value === "string" ? value.trim() : "";
+      if (!id || seen[id]) return;
+      seen[id] = true;
+      out.push(id);
+    });
+    return out.sort();
+  }
+  function idsFromObject(raw, prefix, includeValue) {
+    if (!plainObject(raw)) return [];
+    return Object.keys(raw).filter(function (key) {
+      return typeof includeValue === "function" ? includeValue(raw[key], key) : true;
+    }).map(function (key) { return String(prefix || "") + key; });
+  }
+  function worldProgressSummary(state) {
+    state = plainObject(state) ? state : {};
+    var world = plainObject(state.world) ? state.world : {};
+    var quests = plainObject(state.questSystem) ? state.questSystem : {};
+    var counters = Object.create(null);
+    function put(key, value) { counters[key] = count(value); }
+    put("crystalShardsEarned", state.crystalShardsEarned);
+    put("crystalShardsSpent", state.crystalShardsSpent);
+    put("craftingDust", state.craftingDust);
+    put("bossesDefeated", world.bossesDefeated);
+    put("mysteryBoxesOpened", world.mysteryBoxesOpened);
+    put("dailyClaimedCount", quests.dailyClaimedCount);
+    put("weeklyClaimedCount", quests.weeklyClaimedCount);
+    put("seasonalClaimedCount", quests.seasonalClaimedCount);
+    if (plainObject(world.zonesVisited)) Object.keys(world.zonesVisited).forEach(function (id) {
+      put("zoneVisit:" + id, world.zonesVisited[id]);
+    });
+    if (plainObject(world.questCounters)) Object.keys(world.questCounters).forEach(function (id) {
+      put("questCounter:" + id, world.questCounters[id]);
+    });
+    var unlockIds = uniqueSortedIds(
+      idsFromObject(world.unlockedZones, "zone:", function (value) { return !!value; })
+        .concat(idsFromObject(world.artifactsFound, "artifact:", function (value) { return value !== null && value !== undefined && value !== false; }))
+        .concat(idsFromObject(world.bossSessionRewards, "bossReceipt:", function (value) { return value !== null && value !== undefined; }))
+        .concat(idsFromObject(state.achievementsV85, "achievement:", function (value) { return !!value; }))
+    );
+    var counterKeys = Object.keys(counters).sort();
+    var total = counterKeys.reduce(function (sum, key) {
+      return Math.min(Number.MAX_SAFE_INTEGER, sum + count(counters[key]));
+    }, 0);
+    return {
+      worldCounters: counters,
+      worldCounterTotal: total,
+      worldUnlockIds: unlockIds,
+      worldUnlocks: unlockIds.length,
+      worldRevision: stableSignature(unlockIds.concat(counterKeys.map(function (key) {
+        return key + "@" + counters[key];
+      })))
+    };
+  }
+  function eggProgressSummary(raw) {
+    var eggs = plainObject(raw) ? raw : {};
+    var ids = [];
+    ["owned", "incubating", "hatched", "quarantined"].forEach(function (bucket) {
+      (Array.isArray(eggs[bucket]) ? eggs[bucket] : []).forEach(function (egg) {
+        if (egg && typeof egg.id === "string" && egg.id.trim()) ids.push(egg.id.trim());
+      });
+    });
+    ids = uniqueSortedIds(ids);
+    return {
+      eggIds: ids,
+      eggCount: ids.length,
+      eggRevision: stableSignature(ids)
+    };
+  }
+  function lootProgressSummary(state) {
+    state = plainObject(state) ? state : {};
+    var loot = plainObject(state.loot) ? state.loot : {};
+    var vault = plainObject(loot.vault) ? loot.vault : {};
+    var inventory = plainObject(state.lootInstances) ? state.lootInstances : {};
+    var vaultInstances = plainObject(vault.instances) ? vault.instances : {};
+    var tombstones = plainObject(loot.instanceTombstones) ? loot.instanceTombstones : {};
+    var dropTombstonesRaw = plainObject(loot.dropTombstones) ? loot.dropTombstones : {};
+    var sessionTombstonesRaw = plainObject(state.sessionTombstones) ? state.sessionTombstones : {};
+    var ids = [], updatedAt = Object.create(null), deletedAt = Object.create(null);
+    var dropDeletedAt = Object.create(null), sessionDeletedAt = Object.create(null);
+    function addInstances(source) {
+      Object.keys(source).forEach(function (iid) {
+        var id = String(iid || "").trim();
+        if (!id) return;
+        ids.push(id);
+        var item = source[iid];
+        var stamp = Math.max(count(item && item.updatedAt), count(item && item.createdAt));
+        updatedAt[id] = Math.max(count(updatedAt[id]), stamp);
+      });
+    }
+    addInstances(inventory);
+    addInstances(vaultInstances);
+    Object.keys(tombstones).forEach(function (iid) {
+      var id = String(iid || "").trim();
+      var stamp = count(tombstones[iid]);
+      if (id && stamp > 0) deletedAt[id] = stamp;
+    });
+    Object.keys(dropTombstonesRaw).forEach(function (dropId) {
+      var id = String(dropId || "").trim();
+      var stamp = count(dropTombstonesRaw[dropId]);
+      if (id && stamp > 0) dropDeletedAt[id] = stamp;
+    });
+    Object.keys(sessionTombstonesRaw).forEach(function (sessionId) {
+      var id = String(sessionId || "").trim();
+      var stamp = count(sessionTombstonesRaw[sessionId]);
+      if (id && stamp > 0) sessionDeletedAt[id] = stamp;
+    });
+    ids = uniqueSortedIds(ids);
+    var tombstoneIds = Object.keys(deletedAt).sort();
+    var dropTombstoneIds = Object.keys(dropDeletedAt).sort();
+    var sessionTombstoneIds = Object.keys(sessionDeletedAt).sort();
+    return {
+      lootInstanceIds: ids,
+      lootInstanceCount: ids.length,
+      lootInstanceUpdatedAt: updatedAt,
+      lootInstanceTombstones: deletedAt,
+      lootInstanceTombstoneCount: tombstoneIds.length,
+      lootDropTombstones: dropDeletedAt,
+      lootDropTombstoneCount: dropTombstoneIds.length,
+      sessionTombstones: sessionDeletedAt,
+      sessionTombstoneCount: sessionTombstoneIds.length,
+      lootInstanceRevision: stableSignature(ids.map(function (id) {
+        return id + "@" + count(updatedAt[id]);
+      }).concat(tombstoneIds.map(function (id) {
+        return "deleted:" + id + "@" + deletedAt[id];
+      })).concat(dropTombstoneIds.map(function (id) {
+        return "drop-deleted:" + id + "@" + dropDeletedAt[id];
+      })).concat(sessionTombstoneIds.map(function (id) {
+        return "session-deleted:" + id + "@" + sessionDeletedAt[id];
+      })))
+    };
+  }
+  function idLookup(ids) {
+    var out = Object.create(null);
+    (ids || []).forEach(function (id) { if (typeof id === "string" && id) out[id] = true; });
+    return out;
+  }
+  function hasIdLoss(currentIds, protectedIds) {
+    var current = idLookup(currentIds);
+    return (protectedIds || []).some(function (id) { return !current[id]; });
+  }
+  function hasNumberMapRegression(current, guard) {
+    current = current || {};
+    guard = guard || {};
+    return Object.keys(guard).some(function (key) { return count(current[key]) < count(guard[key]); });
+  }
+  function hasMeaningfulMinuteRegression(currentMinutes, guardMinutes) {
+    var current = count(currentMinutes), guard = count(guardMinutes);
+    if (current >= guard) return false;
+    var loss = guard - current;
+    return loss > Math.max(120, guard * 0.05);
+  }
+  function profileEpochValue(state) {
+    var raw = state && state.profileEpoch;
+    if (typeof raw === "string") return raw.trim().slice(0, 256);
+    if (plainObject(raw) && typeof raw.id === "string") return raw.id.trim().slice(0, 256);
+    return "";
+  }
   function summarize(state) {
     state = plainObject(state) ? state : {};
     var historyValid = plainObject(state.history);
     var hist = historyValid ? state.history : {};
     var days = Object.keys(hist).filter(function (k) { return /^\d{4}-\d{2}-\d{2}$/.test(k); }).length;
     var economy = focusEconomySummary(state.focusEconomy);
+    var world = worldProgressSummary(state);
+    var eggs = eggProgressSummary(state.eggs);
+    var loot = lootProgressSummary(state);
+    var profileEpoch = profileEpochValue(state);
     return {
+      profileEpoch: profileEpoch,
       minutes: count(state.totalFocusMin),
       level: count(state.hero && state.hero.level),
+      coinsEarned: count(state.coinsEarned),
+      coinsSpent: count(state.coinsSpent),
+      milestoneOrdinal: count(state.focusMilestones && state.focusMilestones.claimedThrough),
       sessions: Array.isArray(state.sessionsLog) ? state.sessionsLog.length : 0,
       histDays: days,
       tasks: Array.isArray(state.tasks) ? state.tasks.length : 0,
@@ -128,7 +297,25 @@
       economyGrantIds: economy.economyGrantIds,
       economyGrantUpdatedAt: economy.economyGrantUpdatedAt,
       economyPlotUpdatedAt: economy.economyPlotUpdatedAt,
-      economyRevision: economy.economyRevision
+      economyRevision: economy.economyRevision,
+      worldCounters: world.worldCounters,
+      worldCounterTotal: world.worldCounterTotal,
+      worldUnlockIds: world.worldUnlockIds,
+      worldUnlocks: world.worldUnlocks,
+      worldRevision: world.worldRevision,
+      eggIds: eggs.eggIds,
+      eggCount: eggs.eggCount,
+      eggRevision: eggs.eggRevision,
+      lootInstanceIds: loot.lootInstanceIds,
+      lootInstanceCount: loot.lootInstanceCount,
+      lootInstanceUpdatedAt: loot.lootInstanceUpdatedAt,
+      lootInstanceTombstones: loot.lootInstanceTombstones,
+      lootInstanceTombstoneCount: loot.lootInstanceTombstoneCount,
+      lootDropTombstones: loot.lootDropTombstones,
+      lootDropTombstoneCount: loot.lootDropTombstoneCount,
+      sessionTombstones: loot.sessionTombstones,
+      sessionTombstoneCount: loot.sessionTombstoneCount,
+      lootInstanceRevision: loot.lootInstanceRevision
     };
   }
   /* Structural checks intentionally use only invariants the app treats as
@@ -139,13 +326,39 @@
   function anomalyReasons(current, guard) {
     if (typeof current === "number" || typeof guard === "number") {
       var currentMin = count(current), guardMin = count(guard);
-      return guardMin >= 60 && currentMin < Math.max(10, Math.round(guardMin * 0.10)) ? ["focus-minutes-collapse"] : [];
+      return hasMeaningfulMinuteRegression(currentMin, guardMin) ? ["focus-minutes-regression"] : [];
     }
     current = current || summarize(null); guard = guard || summarize(null);
+    /* A deliberately created local profile starts a new lineage. Older guard
+       snapshots remain recoverable, but they must not be mistaken for the new
+       profile's high-water mark. If the current epoch disappears later, the
+       comparison is intentionally active again and catches the wipe. */
+    if (current.profileEpoch && current.profileEpoch !== guard.profileEpoch) return [];
     var reasons = [];
-    if (guard.minutes >= 60 && current.minutes < Math.max(10, Math.round(guard.minutes * 0.10))) {
-      reasons.push("focus-minutes-collapse");
+    if (hasMeaningfulMinuteRegression(current.minutes, guard.minutes)) reasons.push("focus-minutes-regression");
+    if (count(current.coinsEarned) < count(guard.coinsEarned)) reasons.push("coins-earned-rollback");
+    if (count(current.coinsSpent) < count(guard.coinsSpent)) reasons.push("coins-spent-rollback");
+    if (count(current.milestoneOrdinal) < count(guard.milestoneOrdinal)) reasons.push("focus-milestone-rollback");
+    if (hasNumberMapRegression(current.worldCounters, guard.worldCounters)) reasons.push("world-counter-rollback");
+    if (hasIdLoss(current.worldUnlockIds, guard.worldUnlockIds)) reasons.push("world-unlock-id-loss");
+    if (hasIdLoss(current.eggIds, guard.eggIds)) reasons.push("egg-id-loss");
+    if (hasNumberMapRegression(current.lootInstanceTombstones, guard.lootInstanceTombstones)) {
+      reasons.push("loot-instance-tombstone-rollback");
     }
+    if (hasNumberMapRegression(current.lootDropTombstones, guard.lootDropTombstones)) {
+      reasons.push("loot-drop-tombstone-rollback");
+    }
+    if (hasNumberMapRegression(current.sessionTombstones, guard.sessionTombstones)) {
+      reasons.push("session-tombstone-rollback");
+    }
+    var currentLootIds = idLookup(current.lootInstanceIds);
+    var missingLoot = (guard.lootInstanceIds || []).some(function (iid) {
+      if (currentLootIds[iid]) return false;
+      var protectedStamp = count(guard.lootInstanceUpdatedAt && guard.lootInstanceUpdatedAt[iid]);
+      var tombstoneStamp = count(current.lootInstanceTombstones && current.lootInstanceTombstones[iid]);
+      return !(tombstoneStamp > 0 && tombstoneStamp >= protectedStamp);
+    });
+    if (missingLoot) reasons.push("loot-instance-id-loss");
     if (guard.focusEconomyPresent && guard.focusEconomyValid) {
       if (!current.focusEconomyPresent || !current.focusEconomyValid) {
         if (guard.economyEvents > 0 || guard.unlockedPlots > 2) reasons.push("focus-economy-subtree-loss");
@@ -208,7 +421,10 @@
     guard = guard || {};
     return [guardDate, count(guard.minutes), count(guard.economyGrants), count(guard.economySpends),
       count(guard.economyHarvests), count(guard.unlockedPlots), count(guard.duplicateEventIds),
-      String(guard.economyRevision || "0")].join(":");
+      count(guard.coinsEarned), count(guard.coinsSpent), count(guard.milestoneOrdinal),
+      String(guard.economyRevision || "0"), String(guard.worldRevision || "0"),
+      String(guard.eggRevision || "0"), String(guard.lootInstanceRevision || "0"),
+      String(guard.profileEpoch || "legacy")].join(":");
   }
   function todayKey() { return new Date().toISOString().slice(0, 10); }
 
@@ -286,10 +502,17 @@
   function compactSummary(sum) {
     return {
       minutes: sum.minutes, level: sum.level, sessions: sum.sessions, histDays: sum.histDays, tasks: sum.tasks,
+      coinsEarned: sum.coinsEarned, coinsSpent: sum.coinsSpent, milestoneOrdinal: sum.milestoneOrdinal,
       economyGrants: sum.economyGrants, economySpends: sum.economySpends,
       economyHarvests: sum.economyHarvests, economyEvents: sum.economyEvents,
       economyPlots: sum.economyPlots, unlockedPlots: sum.unlockedPlots,
-      duplicateEventIds: sum.duplicateEventIds, invalidEventIds: sum.invalidEventIds
+      duplicateEventIds: sum.duplicateEventIds, invalidEventIds: sum.invalidEventIds,
+      worldUnlocks: sum.worldUnlocks, worldCounterTotal: sum.worldCounterTotal,
+      eggCount: sum.eggCount, lootInstanceCount: sum.lootInstanceCount,
+      lootInstanceTombstoneCount: sum.lootInstanceTombstoneCount,
+      lootDropTombstoneCount: sum.lootDropTombstoneCount,
+      sessionTombstoneCount: sum.sessionTombstoneCount,
+      profileEpoch: sum.profileEpoch
     };
   }
   function betterProtectedSnapshot(left, right) {
@@ -297,7 +520,10 @@
     if (!right) return left;
     var a = left._guardSummary || summaryForSnapshot(left);
     var b = right._guardSummary || summaryForSnapshot(right);
-    var keys = ["minutes", "economyEvents", "unlockedPlots", "sessions", "histDays", "tasks"];
+    var keys = ["minutes", "coinsEarned", "coinsSpent", "milestoneOrdinal", "worldUnlocks",
+      "worldCounterTotal", "eggCount", "lootInstanceCount", "lootInstanceTombstoneCount",
+      "lootDropTombstoneCount", "sessionTombstoneCount",
+      "economyEvents", "unlockedPlots", "sessions", "histDays", "tasks"];
     for (var i = 0; i < keys.length; i++) {
       if (a[keys[i]] !== b[keys[i]]) return a[keys[i]] > b[keys[i]] ? left : right;
     }
@@ -305,6 +531,7 @@
   }
   function findAnomalousGuard(snapshots, currentSummary) {
     var best = null;
+    var latestLineageGuard = null;
     for (var i = 0; i < snapshots.length; i++) {
       var snapshot = snapshots[i];
       if (!snapshot || !plainObject(snapshot.state)) continue;
@@ -314,14 +541,27 @@
       snapshot._guardSummary = protectedSummary;
       snapshot._guardReasons = reasons;
       best = betterProtectedSnapshot(best, snapshot);
+      /* If the active state's epoch vanished during a wipe, prefer the newest
+         explicit profile lineage rather than an older profile with a larger
+         historical total. All snapshots remain available on Recovery. */
+      if (!currentSummary.profileEpoch && protectedSummary.profileEpoch &&
+          (!latestLineageGuard ||
+           String(snapshot.savedAt || snapshot.date || "") >
+             String(latestLineageGuard.savedAt || latestLineageGuard.date || ""))) {
+        latestLineageGuard = snapshot;
+      }
     }
-    return best;
+    return latestLineageGuard || best;
   }
   function uniqueBackupKey(storage, prefix) {
     var base = prefix + new Date().toISOString().replace(/[:.]/g, "-");
     var key = base, suffix = 0;
     while (storage.getItem(key) !== null) { suffix++; key = base + "-" + suffix; }
     return key;
+  }
+  function snapshotKeyFor(date, summary) {
+    var epoch = summary && typeof summary.profileEpoch === "string" ? summary.profileEpoch : "";
+    return epoch ? date + "#" + stableSignature([epoch]) : date;
   }
   function stageRecoveryState(state, previousRaw) {
     var staged = JSON.parse(JSON.stringify(state));
@@ -394,6 +634,7 @@
       var db = await openDb();
       var all = await idbAll(db);
       var mirror = readMirrorSnapshot();
+      var mirrorSummary = mirror ? summaryForSnapshot(mirror) : null;
       var protectedSnapshots = mirror ? all.concat([mirror]) : all.slice();
       var unsafeGuard = findAnomalousGuard(protectedSnapshots, sum);
       if (unsafeGuard) {
@@ -401,8 +642,9 @@
         showOverlay(unsafeGuard, sum, unsafeGuard._guardReasons || []);
         return;
       }
-      var date = todayKey();
-      var existing = null, maxMin = mirror ? summaryForSnapshot(mirror).minutes : 0, dateToMin = {};
+      var calendarDate = todayKey();
+      var date = snapshotKeyFor(calendarDate, sum);
+      var existing = null, maxMin = mirrorSummary ? mirrorSummary.minutes : 0, dateToMin = {};
       for (var i = 0; i < all.length; i++) {
         var protectedSum = summaryForSnapshot(all[i]);
         dateToMin[all[i].date] = protectedSum.minutes;
@@ -419,7 +661,9 @@
       for (var d = 0; d < toDelete.length; d++) { try { await idbDelete(db, toDelete[d]); } catch (_) {} }
       db.close();
       /* Mirror the best-known state for the standalone recovery page. */
-      if (sum.minutes >= maxMin) {
+      var mirrorReplaceOk = !mirrorSummary ||
+        (sum.minutes >= mirrorSummary.minutes && !isAnomaly(sum, mirrorSummary));
+      if (sum.minutes >= maxMin && mirrorReplaceOk) {
         try { localStorage.setItem(MIRROR, JSON.stringify({ savedAt: savedAt, summary: compactSummary(sum), state: state })); } catch (_) {}
       }
     } catch (_) { /* never break the app */ }
@@ -455,16 +699,16 @@
         escHtml(guard.savedAt || guard.date || "unknown") + "), while the live state has <b>" + fmtH(currentSummary.minutes) + "</b>.</p>" +
         '<p style="opacity:.85">The guard detected: <code>' + escHtml(reasons.join(", ") || "protected-data regression") +
         '</code>. The unsafe state has not replaced protected snapshots. Choose:</p>' +
-        '<button id="fh-guard-restore" style="font:inherit;display:block;width:100%;margin:8px 0;padding:12px;border:0;border-radius:10px;background:#2456d9;color:#fff;font-weight:600">⟲ Restore my data (' + fmtH(protectedSummary.minutes) + ")</button>" +
+        '<button id="fh-guard-restore" style="font:inherit;display:block;width:100%;margin:8px 0;padding:12px;border:0;border-radius:10px;background:#2456d9;color:#fff;font-weight:600">Review protected snapshot (' + fmtH(protectedSummary.minutes) + ")</button>" +
         '<button id="fh-guard-recover" style="font:inherit;display:block;width:100%;margin:8px 0;padding:12px;border:0;border-radius:10px;background:#2a2f55;color:#fff">Open recovery page (all snapshots)</button>' +
         '<button id="fh-guard-dismiss" style="font:inherit;display:block;width:100%;margin:8px 0;padding:10px;border:0;border-radius:10px;background:transparent;color:#8a93b3">I reset on purpose — dismiss</button>' +
         "</div>";
       (document.body || document.documentElement).appendChild(o);
       document.getElementById("fh-guard-restore").onclick = function () {
-        try {
-          verifiedRestore(localStorage, guard.state, MAIN + ".pre-guard-restore-");
-          location.reload();
-        } catch (e) { alert("Restore failed: " + (e && e.message ? e.message : e) + " — use the recovery page instead."); }
+        /* Never mutate the live app while its sync workers may still be in
+           flight. The standalone recovery page has no cloud poller, debounce,
+           BroadcastChannel writer, or in-memory app state to race. */
+        location.href = "./recover.html";
       };
       document.getElementById("fh-guard-recover").onclick = function () { location.href = "./recover.html"; };
       document.getElementById("fh-guard-dismiss").onclick = function () {
@@ -501,6 +745,7 @@
       anomalyReasons: anomalyReasons, isAnomaly: isAnomaly, sameDayReplaceOk: sameDayReplaceOk,
       pruneDates: pruneDates, anomalyId: anomalyId, compactSummary: compactSummary,
       stageRecoveryState: stageRecoveryState, verifiedRestore: verifiedRestore,
+      snapshotKeyFor: snapshotKeyFor, findAnomalousGuard: findAnomalousGuard,
       takeSnapshot: takeSnapshot, openDb: openDb, idbAll: idbAll };
   } catch (_) {}
 })();

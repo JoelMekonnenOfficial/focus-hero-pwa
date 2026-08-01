@@ -1,0 +1,13 @@
+{
+  "name": "focus-hero-browser-ledger-isolated-component",
+  "version": "0.4.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test ../tests/browser-ledger.test.mjs ../tests/cloud-write-gate.test.mjs ../tests/final-authority-sealing.test.mjs ../tests/accounting-receipt-bridge.test.mjs ../tests/accounting-ledger-integration-gate.test.mjs tests/durable-ledger.test.mjs tests/domain-receipt-ledger.test.mjs tests/accounting-command-bridge.test.mjs",
+    "test:durable": "node --test tests/durable-ledger.test.mjs tests/accounting-command-bridge.test.mjs"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "6.2.5"
+  }
+}

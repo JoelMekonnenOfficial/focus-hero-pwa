@@ -1,4 +1,4 @@
-/* Focus Hero v10.7 — organized progression hub.
+/* Focus Hero v10.9 — organized progression and World command hub.
  * Presentation and bindings for the existing World, Challenges, Vault and
  * Targets systems. State mutations continue through world-depth.js helpers.
  */
@@ -8,6 +8,7 @@
   window.__fhProgressionHubInstalled = true;
 
   var targetView = "current";
+  var worldPreviewZone = null;
   var TAB_LABELS = {
     targets:"Targets", expedition:"Expedition", loot:"Loot", "quests-v85":"Challenges",
     world:"World", vault:"Vault", stable:"Stable", mounts:"Mounts", pets:"Pets",
@@ -57,14 +58,22 @@
       ".progress-tab-group>div{display:flex;flex-wrap:wrap;gap:6px}.progress-tab-group button{min-height:40px;flex:1 1 auto}"+
       ".hub-kicker{font-size:.72rem;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.08em}.hub-title{margin:2px 0 4px;font-size:1.08rem;color:var(--ink)}"+
       ".hub-copy{margin:0 0 12px;color:var(--ink-dim);font-size:.82rem;line-height:1.5}.hub-empty{padding:16px;border:1px dashed var(--border);border-radius:10px;color:var(--ink-dim);text-align:center;font-size:.82rem}"+
-      ".w85-zone-dot{display:inline-block;width:13px;height:13px;border-radius:50%;margin-right:8px;vertical-align:-1px;box-shadow:0 0 0 3px rgba(255,255,255,.06)}"+
-      ".w85-zone-meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;color:var(--ink-dim);font-size:.7rem}.w85-zone-actions button{min-height:40px}"+
+      ".world-command{display:grid;gap:12px}.world-command-hero{--zone:#64748b;position:relative;isolation:isolate;overflow:hidden;padding:18px;border:1px solid color-mix(in srgb,var(--zone) 58%,var(--border));border-radius:18px;background:linear-gradient(135deg,color-mix(in srgb,var(--zone) 24%,var(--panel)) 0%,var(--panel) 58%,color-mix(in srgb,var(--zone) 10%,var(--panel-2)) 100%)}"+
+      ".world-command-hero:before{content:'';position:absolute;z-index:-1;inset:-40% -10% auto 38%;height:240px;border-radius:50%;background:radial-gradient(circle,color-mix(in srgb,var(--zone) 34%,transparent),transparent 68%)}"+
+      ".world-command-top{display:flex;justify-content:space-between;gap:14px;align-items:flex-start}.world-command-title{display:flex;gap:12px;align-items:center}.world-zone-mark{width:48px;height:48px;display:grid;place-items:center;border-radius:14px;border:1px solid color-mix(in srgb,var(--zone) 62%,white 10%);background:color-mix(in srgb,var(--zone) 26%,rgba(0,0,0,.28));font-weight:900;letter-spacing:.05em;color:var(--ink)}"+
+      ".world-command-title h3{margin:0;font-size:1.35rem;color:var(--ink)}.world-command-title p{margin:4px 0 0;max-width:58ch;color:var(--ink-dim);line-height:1.45;font-size:.8rem}.world-command-status{display:grid;justify-items:end;gap:5px;text-align:right}.world-command-status b{font-size:.72rem;text-transform:uppercase;letter-spacing:.1em;color:color-mix(in srgb,var(--zone) 70%,white)}.world-command-status span{font-size:.72rem;color:var(--ink-dim)}"+
+      ".world-command-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:16px}.world-command-metrics>div{padding:9px 10px;border-radius:11px;border:1px solid rgba(255,255,255,.08);background:rgba(0,0,0,.16)}.world-command-metrics b{display:block;color:var(--ink);font-size:.86rem}.world-command-metrics span{display:block;margin-top:2px;color:var(--ink-dim);font-size:.65rem;text-transform:uppercase;letter-spacing:.07em}"+
+      ".world-loop{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}.world-loop-step{position:relative;padding:10px 11px;border:1px solid var(--border);border-radius:11px;background:var(--panel-2);min-width:0}.world-loop-step:not(:last-child):after{content:'›';position:absolute;right:-7px;top:50%;z-index:2;transform:translateY(-50%);width:14px;height:20px;display:grid;place-items:center;color:var(--ink-dim);background:var(--panel)}.world-loop-step b{display:block;color:var(--ink);font-size:.75rem}.world-loop-step span{display:block;color:var(--ink-dim);font-size:.66rem;margin-top:3px;line-height:1.35}"+
+      ".world-route{display:flex;align-items:stretch;gap:0;padding:9px;border:1px solid var(--border);border-radius:14px;background:var(--panel-2);overflow-x:auto}.world-route-node{--zone:#64748b;position:relative;min-width:116px;flex:1;border:0;background:transparent;color:var(--ink-dim);padding:8px 7px;cursor:pointer;text-align:center}.world-route-node:not(:last-child):after{content:'';position:absolute;top:21px;left:64%;right:-36%;height:2px;background:var(--border-strong)}.world-route-node span{position:relative;z-index:1;width:28px;height:28px;margin:0 auto 6px;display:grid;place-items:center;border-radius:50%;border:2px solid var(--border-strong);background:var(--panel);font-size:.62rem;font-weight:900}.world-route-node b{display:block;font-size:.67rem;white-space:nowrap}.world-route-node.unlocked span{border-color:var(--zone);box-shadow:0 0 0 4px color-mix(in srgb,var(--zone) 15%,transparent)}.world-route-node.preview{color:var(--ink)}.world-route-node.preview span{background:var(--zone);color:#fff}.world-route-node:focus-visible{outline:2px solid var(--accent);outline-offset:-2px;border-radius:8px}"+
+      ".w85-zones{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.w85-zone-card{--zone:#64748b;position:relative;overflow:hidden;padding:13px;border:1px solid var(--border);border-radius:14px;background:linear-gradient(145deg,color-mix(in srgb,var(--zone) 8%,var(--panel-2)),var(--panel-2) 58%)}.w85-zone-card:before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--zone)}.w85-zone-card.locked{filter:saturate(.62);opacity:.72}.w85-zone-card.current{border-color:color-mix(in srgb,var(--zone) 72%,white 10%);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--zone) 18%,transparent)}"+
+      ".w85-zone-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.w85-zone-title{display:flex;gap:9px;align-items:center}.w85-zone-dot{display:inline-block;width:14px;height:14px;border-radius:4px;transform:rotate(45deg);background:var(--zone);box-shadow:0 0 0 3px color-mix(in srgb,var(--zone) 14%,transparent)}.w85-zone-name{font-weight:800;color:var(--ink)}.w85-zone-state{font-size:.62rem;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-dim)}"+
+      ".w85-zone-lore{font-size:.74rem;color:var(--ink-dim);margin:7px 0 9px;line-height:1.45}.w85-zone-intel{display:grid;grid-template-columns:1fr 1fr;gap:7px}.w85-zone-intel>div{padding:8px;border-radius:9px;border:1px solid rgba(255,255,255,.06);background:rgba(0,0,0,.12)}.w85-zone-intel b{display:block;color:var(--ink);font-size:.67rem}.w85-zone-intel span{display:block;color:var(--ink-dim);font-size:.64rem;margin-top:3px;line-height:1.35}.w85-zone-meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;color:var(--ink-dim);font-size:.66rem}.w85-zone-actions{display:flex;gap:7px;margin-top:10px}.w85-zone-actions button{min-height:40px;flex:1}.w85-zone-preview{border:1px solid var(--border);background:transparent;color:var(--ink)}"+
       ".q85-q-bar{position:relative}.q85-q-bar>div{min-width:0}.q85-q-claim{min-height:40px}.q85-summary{font-size:.72rem;color:var(--ink-dim)}"+
       ".vault-columns{display:grid;grid-template-columns:1fr 1fr;gap:12px}.vault-section h4{margin:0 0 8px;color:var(--ink)}.vault-cell-btn{min-height:36px}"+
       ".fht-view-switch{display:flex;gap:6px;margin:0 0 10px}.fht-view-switch button{min-height:42px;flex:1}.fht-history-list{display:grid;gap:7px}.fht-history-row{display:grid;grid-template-columns:1fr auto;gap:8px;padding:9px 10px;border:1px solid var(--border);border-radius:10px;background:var(--panel-2)}"+
       ".fht-history-row b{font-size:.82rem}.fht-history-row span{font-size:.72rem;color:var(--ink-dim)}"+
-      "@media(max-width:760px){.progress-browse .tabs{grid-template-columns:1fr 1fr}.vault-columns{grid-template-columns:1fr}}"+
-      "@media(max-width:430px){.progress-browse .tabs{grid-template-columns:1fr}.progress-tab-group button{min-height:44px}.w85-zones{grid-template-columns:1fr}.q85-quest{grid-template-columns:1fr}.q85-q-claim{width:100%}}";
+      "@media(max-width:760px){.progress-browse .tabs{grid-template-columns:1fr 1fr}.vault-columns{grid-template-columns:1fr}.world-command-metrics,.world-loop{grid-template-columns:1fr 1fr}.w85-zones{grid-template-columns:1fr}.world-command-top{align-items:stretch}.world-command-status{justify-items:start;text-align:left}}"+
+      "@media(max-width:430px){.progress-browse .tabs{grid-template-columns:1fr}.progress-tab-group button{min-height:44px}.world-command-hero{padding:14px}.world-command-top{display:grid}.world-command-metrics,.world-loop{grid-template-columns:1fr}.world-loop-step:not(:last-child):after{display:none}.world-route-node{min-width:100px}.w85-zone-intel{grid-template-columns:1fr}.q85-quest{grid-template-columns:1fr}.q85-q-claim{width:100%}}";
     (document.head || document.documentElement).appendChild(style);
   }
 
@@ -120,37 +129,71 @@
     if (!root || !s() || typeof window.wdEnsureWorld !== "function") return;
     var world = window.wdEnsureWorld(s());
     var zones = window.WD_ZONES || {};
-    var current = zones[world.currentZone] || zones.verdant_vale;
+    var zoneIds = Object.keys(zones);
+    if (!worldPreviewZone || !zones[worldPreviewZone]) worldPreviewZone = world.currentZone;
+    var selectedId = worldPreviewZone || world.currentZone;
+    var current = zones[selectedId] || zones[world.currentZone] || zones.verdant_vale;
+    var selectedUnlocked = !!world.unlockedZones[selectedId];
+    var selectedActive = world.currentZone === selectedId;
     var shardCount = Math.max(0, s().crystalShards|0);
-    root.innerHTML = '<div><div class="hub-kicker">Adventure map</div><h3 class="hub-title">World</h3><p class="hub-copy">Choose where future Fight and Hunt encounters happen. Locked zones charge exactly the price shown, once.</p></div>'+
-      '<div class="w85-current"><b>Current zone: '+esc(current && current.label || "Verdant Vale")+'</b><br><span>'+esc(current && current.lore || "")+' · '+shardCount.toLocaleString()+' Crystal Shards</span></div>'+
-      '<div class="w85-zones">'+Object.keys(zones).map(function(id){
+    var unlockedCount = zoneIds.filter(function(id){ return !!world.unlockedZones[id]; }).length;
+    var roster = typeof window.wdEnemiesForZone === "function" ? window.wdEnemiesForZone(selectedId) : [];
+    var bosses = roster.filter(function(enemy){ return !!enemy.boss; });
+    var regular = roster.filter(function(enemy){ return !enemy.boss; });
+    var bossName = bosses.length ? bosses[0].name : "Regional apex";
+    var mark = String(current && current.label || "World").split(/\s+/).map(function(word){ return word.charAt(0); }).join("").slice(0,2).toUpperCase();
+    root.innerHTML = '<div class="world-command">'+
+      '<div><div class="hub-kicker">Adventure command</div><h3 class="hub-title">World</h3><p class="hub-copy">The selected zone controls optional Fight encounters. Travel, Hunt, Craft, Loot, Meditate, and every other action remain peaceful.</p></div>'+
+      '<section class="world-command-hero" style="--zone:'+esc(current && current.tint || "#64748b")+'" aria-label="'+esc(current && current.label || "Current zone")+' briefing">'+
+        '<div class="world-command-top"><div class="world-command-title"><span class="world-zone-mark" aria-hidden="true">'+esc(mark)+'</span><div><h3>'+esc(current && current.label || "Verdant Vale")+'</h3><p>'+esc(current && current.lore || "")+'</p></div></div>'+
+        '<div class="world-command-status"><b>'+(selectedActive ? "Active Fight zone" : selectedUnlocked ? "Unlocked preview" : "Locked preview")+'</b><span>'+shardCount.toLocaleString()+' World Shards available</span></div></div>'+
+        '<div class="world-command-metrics"><div><b>'+unlockedCount+' / '+zoneIds.length+'</b><span>Zones unlocked</span></div><div><b>'+regular.length+'</b><span>Encounter types</span></div><div><b>'+esc(bossName)+'</b><span>90m Fight boss</span></div><div><b>'+Math.max(0,world.bossesDefeated|0)+'</b><span>Bosses defeated</span></div></div>'+
+      '</section>'+
+      '<div class="world-loop" aria-label="World gameplay loop"><div class="world-loop-step"><b>1 · Choose a zone</b><span>Preview its roster, boss, mounts, and loot signals.</span></div><div class="world-loop-step"><b>2 · Start Fight</b><span>Only the explicit Fight action activates combat.</span></div><div class="world-loop-step"><b>3 · Build your loadout</b><span>Gear and mount utility shape the encounter outcome.</span></div><div class="world-loop-step"><b>4 · Claim progression</b><span>Earn drops and one-time boss World Shards.</span></div></div>'+
+      '<nav class="world-route" aria-label="Zone route">'+zoneIds.map(function(id, index){
+        var zone = zones[id], unlocked = !!world.unlockedZones[id], preview = selectedId === id;
+        return '<button type="button" class="world-route-node'+(unlocked?" unlocked":" locked")+(preview?" preview":"")+'" data-zone-preview="'+esc(id)+'" style="--zone:'+esc(zone.tint || "#64748b")+'" aria-pressed="'+(preview?"true":"false")+'"><span>'+(index+1)+'</span><b>'+esc(zone.label)+'</b></button>';
+      }).join("")+'</nav>'+
+      '<div class="w85-zones">'+zoneIds.map(function(id){
         var zone = zones[id], unlocked = !!world.unlockedZones[id], active = world.currentZone === id;
         var hasMap = !!(zone.unlockMap && s().lootOwned && (s().lootOwned[zone.unlockMap]|0) > 0);
         var cost = Math.max(0, zone.unlockShards|0);
-        var action = active ? '<button class="w85-zone-btn" disabled>Active</button>'
-          : unlocked ? '<button class="w85-zone-btn" data-zone-switch="'+esc(id)+'">Travel here</button>'
-          : '<button class="w85-zone-btn" data-zone-unlock="'+esc(id)+'"'+(!hasMap && shardCount < cost ? ' disabled title="Need '+cost+' Crystal Shards"' : '')+'>'+(hasMap ? "Use map to unlock" : "Unlock · "+cost+" shards")+'</button>';
-        return '<article class="w85-zone-card'+(unlocked?"":" locked")+(active?" current":"")+'"><div><span class="w85-zone-dot" style="background:'+esc(zone.tint || "#64748b")+'"></span><span class="w85-zone-name">'+esc(zone.label)+'</span></div><div class="w85-zone-lore">'+esc(zone.lore)+'</div><div class="w85-zone-meta"><span>'+(unlocked?"Unlocked":"Locked")+'</span><span>'+(zone.enemyBias||[]).length+' enemy types</span></div><div class="w85-zone-actions">'+action+'</div></article>';
-      }).join("")+'</div>';
+        var zoneRoster = typeof window.wdEnemiesForZone === "function" ? window.wdEnemiesForZone(id) : [];
+        var zoneBoss = zoneRoster.filter(function(enemy){ return !!enemy.boss; })[0];
+        var zoneEnemies = zoneRoster.filter(function(enemy){ return !enemy.boss; }).slice(0,3).map(function(enemy){ return enemy.name; });
+        var zoneMounts = (zone.mountBias || []).map(prettyId);
+        var zoneLoot = (zone.lootBias || []).map(prettyId);
+        var action = active ? '<button class="w85-zone-btn" disabled>Active Fight zone</button>'
+          : unlocked ? '<button class="w85-zone-btn" data-zone-switch="'+esc(id)+'">Set as Fight zone</button>'
+          : '<button class="w85-zone-btn" data-zone-unlock="'+esc(id)+'"'+(!hasMap && shardCount < cost ? ' disabled title="Need '+cost+' World Shards"' : '')+'>'+(hasMap ? "Use map to unlock" : "Unlock · "+cost+" World Shards")+'</button>';
+        return '<article class="w85-zone-card'+(unlocked?"":" locked")+(active?" current":"")+'" style="--zone:'+esc(zone.tint || "#64748b")+'"><div class="w85-zone-head"><div class="w85-zone-title"><span class="w85-zone-dot" aria-hidden="true"></span><span class="w85-zone-name">'+esc(zone.label)+'</span></div><span class="w85-zone-state">'+(active?"Active":unlocked?"Unlocked":"Locked")+'</span></div><div class="w85-zone-lore">'+esc(zone.lore)+'</div><div class="w85-zone-intel"><div><b>Fight roster</b><span>'+esc(zoneEnemies.join(" · ") || "Regional encounters")+'</span></div><div><b>Regional boss</b><span>'+esc(zoneBoss && zoneBoss.name || "90-minute apex")+'</span></div><div><b>Mount families</b><span>'+esc(zoneMounts.join(" · ") || "Regional")+'</span></div><div><b>Loot signals</b><span>'+esc(zoneLoot.join(" · ") || "Mixed drops")+'</span></div></div><div class="w85-zone-meta"><span>'+(unlocked?"Ready for travel":hasMap?"Map owned":cost+" World Shards")+'</span><span>'+zoneRoster.length+' total encounters</span></div><div class="w85-zone-actions"><button type="button" class="w85-zone-preview" data-zone-preview="'+esc(id)+'">Briefing</button>'+action+'</div></article>';
+      }).join("")+'</div></div>';
     root.onclick = function(event){
       var unlock = event.target.closest("[data-zone-unlock]");
       var change = event.target.closest("[data-zone-switch]");
-      if (unlock){
+      var preview = event.target.closest("[data-zone-preview]");
+      if (preview){
+        worldPreviewZone = preview.dataset.zonePreview;
+        renderWorld();
+      } else if (unlock){
         var result = window.wdUnlockZone(s(), unlock.dataset.zoneUnlock);
-        if (result && result.ok){ save(); say("Zone unlocked"+(result.spent ? " · "+result.spent+" shards" : " with your map"), "good"); refresh(); }
-        else say(result && result.reason === "insufficient_shards" ? "Not enough Crystal Shards yet." : "That zone could not be unlocked.", "warn");
+        if (result && result.ok){ worldPreviewZone = unlock.dataset.zoneUnlock; save(); say("Zone unlocked"+(result.spent ? " · "+result.spent+" World Shards" : " with your map"), "good"); refresh(); }
+        else say(result && result.reason === "insufficient_shards" ? "Not enough World Shards yet." : "That zone could not be unlocked.", "warn");
       } else if (change){
         var moved = window.wdSwitchZone(s(), change.dataset.zoneSwitch);
-        if (moved && moved.ok){ save(); say("World zone changed.", "good"); refresh(); }
+        if (moved && moved.ok){ worldPreviewZone = change.dataset.zoneSwitch; save(); say("Fight zone changed.", "good"); refresh(); }
       }
     };
+  }
+
+  function prettyId(value){
+    return String(value || "").replace(/_/g, " ").replace(/\b\w/g, function(ch){ return ch.toUpperCase(); });
   }
 
   function questCard(q){
     var target = Math.max(1, q.target|0), progress = Math.max(0, Math.min(target, q.progress|0));
     var pct = Math.round(progress / target * 100);
-    return '<article class="q85-quest'+(q.completed?" completed":"")+(q.claimed?" claimed":"")+'"><div><div class="q85-q-label">'+esc(q.label)+'</div><div class="q85-q-progress"><div class="q85-q-bar" role="progressbar" aria-valuemin="0" aria-valuemax="'+target+'" aria-valuenow="'+progress+'"><div style="width:'+pct+'%"></div></div><span>'+progress+' / '+target+'</span></div><div class="q85-q-rewards">'+(q.xp|0)+' XP · '+(q.coins|0)+' coins · '+(q.shards|0)+' shards</div></div><button class="q85-q-claim" data-quest-claim="'+esc(q.id)+'" '+(!q.completed || q.claimed ? "disabled" : "")+'>'+(q.claimed?"Claimed":q.completed?"Claim":"In progress")+'</button></article>';
+    return '<article class="q85-quest'+(q.completed?" completed":"")+(q.claimed?" claimed":"")+'"><div><div class="q85-q-label">'+esc(q.label)+'</div><div class="q85-q-progress"><div class="q85-q-bar" role="progressbar" aria-valuemin="0" aria-valuemax="'+target+'" aria-valuenow="'+progress+'"><div style="width:'+pct+'%"></div></div><span>'+progress+' / '+target+'</span></div><div class="q85-q-rewards">'+(q.xp|0)+' XP · '+(q.coins|0)+' coins · '+(q.shards|0)+' World Shards</div></div><button class="q85-q-claim" data-quest-claim="'+esc(q.id)+'" '+(!q.completed || q.claimed ? "disabled" : "")+'>'+(q.claimed?"Claimed":q.completed?"Claim":"In progress")+'</button></article>';
   }
 
   function renderChallenges(){
@@ -172,7 +215,7 @@
       var result = window.wdClaimQuest(s(), btn.dataset.questClaim);
       if (result && result.ok){
         try { if (typeof window.wdCheckAchievements === "function") window.wdCheckAchievements(s()); } catch(_){}
-        save(); say("Challenge claimed · +"+result.xp+" XP · +"+result.coins+" coins · +"+result.shards+" shards", "good"); refresh();
+        save(); say("Challenge claimed · +"+result.xp+" XP · +"+result.coins+" coins · +"+result.shards+" World Shards", "good"); refresh();
       } else say("That challenge is not ready to claim.", "warn");
     };
   }

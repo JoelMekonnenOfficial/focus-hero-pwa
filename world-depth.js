@@ -40,7 +40,8 @@
  *  10. ENEMY EXPANSION - 45+ new enemies across biomes, taking the
  *      total bestiary past 60.
  *
- *  11. BOSS ENCOUNTERS - sessions >= 90 min Fight/Hunt spawn a boss
+ *  11. BOSS ENCOUNTERS - sessions >= 90 min on the explicit Fight action
+ *      spawn one boss
  *      as the final encounter, with elevated HP/damage and a
  *      guaranteed Epic+ drop + Crystal Shards reward.
  *
@@ -306,7 +307,7 @@
       label: "Voidwalker's Set",
       pieces: ["cosmic_fragment","void_skiff","key_of_worlds","star_mote","timekeeper_s_spark"],
       bonuses: {
-        3: { label:"+5% Crystal Shards from boss kills", shardBonusPct:5 },
+        3: { label:"+5% World Shards from boss kills", shardBonusPct:5 },
         5: { label:"+15% rare-drop chance", rareDropBonusPct:15 }
       },
       lore:"Three pieces tilt the void toward you; five and it leans."
@@ -352,7 +353,7 @@
       pieces: ["moonplate_vest","whetstone_blade","crown_of_flow","trail_boots","dualblade"],
       bonuses: {
         3: { label:"+15 phys resist, +5% energy save", resPhys:15, energySave:1 },
-        5: { label:"Boss kills grant +50% Crystal Shards", bossShardPct:50 }
+        5: { label:"Boss kills grant +50% World Shards", bossShardPct:50 }
       },
       lore:"Order before flourish. Plate before silk."
     },
@@ -586,7 +587,7 @@
     { id:"qd_hunt",          label:"Complete 1 Hunt action",             target:1,   kind:"action_hunt",   xp:50,  shards:2,  coins:40 },
     { id:"qd_craft",         label:"Complete 1 Craft session",           target:1,   kind:"action_craft",  xp:50,  shards:2,  coins:40 },
     { id:"qd_meditate",      label:"Meditate for 25+ minutes",           target:25,  kind:"meditate_min",  xp:60,  shards:3,  coins:40 },
-    { id:"qd_kill_enemy",    label:"Defeat 3 enemies",                   target:3,   kind:"enemy_kills",   xp:70,  shards:3,  coins:50 },
+    { id:"qd_kill_enemy",    label:"Complete 3 Fight sessions",          target:3,   kind:"enemy_kills",   xp:70,  shards:3,  coins:50 },
     { id:"qd_drop_rare",     label:"Find 1 rare-or-better drop",         target:1,   kind:"rare_drop",     xp:80,  shards:5,  coins:60 },
     { id:"qd_combo",         label:"Hit a 3+ session combo",             target:3,   kind:"combo",         xp:60,  shards:2,  coins:50 },
     { id:"qd_zone",          label:"Spend 30+ minutes in a non-starter zone", target:30, kind:"zone_min",  xp:100, shards:5,  coins:80 }
@@ -601,7 +602,7 @@
     { id:"qw_streak_7",  label:"Maintain a 7-day streak",                target:7,   kind:"streak",        xp:600, shards:40, coins:500 },
     { id:"qw_zones_2",   label:"Visit 2 different zones",                target:2,   kind:"zones_visited", xp:300, shards:20, coins:200 },
     { id:"qw_drop_epic", label:"Find 1 epic-or-better drop",             target:1,   kind:"epic_drop",     xp:400, shards:30, coins:300 },
-    { id:"qw_craft",     label:"Craft an upgrade",                       target:1,   kind:"craft_action",  xp:300, shards:25, coins:250 },
+    { id:"qw_craft",     label:"Complete 1 Craft focus session",         target:1,   kind:"craft_action",  xp:300, shards:25, coins:250 },
     { id:"qw_enchant",   label:"Enchant 2 items",                        target:2,   kind:"enchant_action",xp:300, shards:25, coins:250 }
   ];
 
@@ -613,6 +614,20 @@
     { id:"qs_set",          label:"Complete a full gear set",            target:1,    kind:"sets_complete", xp:2500, shards:200, coins:2500 },
     { id:"qs_artifact",     label:"Discover an artifact",                target:1,    kind:"artifacts_found",xp:5000,shards:500, coins:0   }
   ];
+
+  /* Only offer new quests whose progress has one canonical, reversible source.
+     Unsupported catalog entries remain defined for historical records, but are
+     excluded from future rolls instead of presenting an impossible objective. */
+  var WD_ROLLABLE_QUEST_KINDS = {
+    minutes:true, sessions:true,
+    action_fight:true, action_hunt:true, action_craft:true, craft_action:true,
+    meditate_min:true, enemy_kills:true, boss_kills:true,
+    rare_drop:true, epic_drop:true, combo:true, streak:true,
+    zones_visited:true, zones_unlocked:true
+  };
+  function wdQuestIsRollable(q){
+    return !!(q && WD_ROLLABLE_QUEST_KINDS[q.kind]);
+  }
 
   function wdTodayKey(){
     var d = new Date();
@@ -633,7 +648,7 @@
 
   function wdRollQuestSet(pool, count, rng){
     rng = rng || Math.random;
-    var shuffled = pool.slice();
+    var shuffled = pool.filter(wdQuestIsRollable);
     for (var i=shuffled.length-1; i>0; i--){
       var j = Math.floor(rng() * (i+1));
       var t = shuffled[i]; shuffled[i] = shuffled[j]; shuffled[j] = t;
@@ -732,8 +747,24 @@
       case "action_craft": return actionCount("craft");
       case "craft_action": return actionCount("craft");
       case "meditate_min": return sessions.reduce(function(n, rec){ return n + (action(rec) === "meditate" ? Math.max(0, rec.minutes|0) : 0); }, 0);
-      case "enemy_kills": return sessions.filter(function(rec){ return action(rec) === "fight" || action(rec) === "hunt"; }).length;
-      case "boss_kills": return sessions.filter(function(rec){ return (action(rec) === "fight" || action(rec) === "hunt") && (rec.minutes|0) >= 90; }).length;
+      case "enemy_kills": return sessions.filter(function(rec){ return action(rec) === "fight"; }).length;
+      case "boss_kills":
+        var bossReceipts = (s.world && s.world.bossSessionRewards) || {};
+        var receiptKeys = Object.keys(bossReceipts);
+        var receiptedSessionIds = {};
+        var receiptWins = receiptKeys.filter(function(key){
+          var receipt = bossReceipts[key];
+          if (receipt && receipt.sessionId) receiptedSessionIds[String(receipt.sessionId)] = true;
+          return receipt && receipt.defeated && wdInQuestPeriod(receipt.at, scope);
+        }).length;
+        /* Compatibility for sessions completed before boss receipts existed.
+           A receipted loss stays a loss; a historical Fight with no receipt
+           keeps its pre-receipt challenge credit. Hunt never counts. */
+        var legacyWins = sessions.filter(function(rec){
+          return action(rec) === "fight" && (rec.minutes|0) >= 90 &&
+            !(rec.id && receiptedSessionIds[String(rec.id)]);
+        }).length;
+        return receiptWins + legacyWins;
       case "rare_drop": return drops.filter(function(drop){ return ["rare","epic","legendary","mythic","cursed","artifact"].indexOf(String(drop.rarity||"").toLowerCase()) >= 0; }).length;
       case "epic_drop": return drops.filter(function(drop){ return ["epic","legendary","mythic","cursed","artifact"].indexOf(String(drop.rarity||"").toLowerCase()) >= 0; }).length;
       case "combo": return scope === "daily" && s.combo && s.combo.date === wdTodayKey() ? Math.max(0, s.combo.count|0) : 0;
@@ -826,8 +857,7 @@
   /* ---------- BOSS ENCOUNTERS ---------- */
 
   function wdShouldSpawnBoss(minutes, action){
-    if (action !== "Fight" && action !== "Hunt") return false;
-    return minutes >= 90;
+    return String(action || "").toLowerCase() === "fight" && Number(minutes) >= 90;
   }
 
   function wdPickBoss(heroLevel, currentZoneId, rng){
@@ -843,25 +873,82 @@
     return topN[Math.floor(rng() * topN.length)];
   }
 
+  function wdBossReceiptKey(sessionId){
+    sessionId = String(sessionId || "").trim();
+    return sessionId ? ("session:" + sessionId.slice(0, 200)) : "";
+  }
+
+  function wdBossReceiptForSession(s, sessionId){
+    s = s || (typeof window !== "undefined" ? window.state : null);
+    if (!s) return null;
+    var world = wdEnsureWorld(s);
+    var key = wdBossReceiptKey(sessionId);
+    if (!key || !Object.prototype.hasOwnProperty.call(world.bossSessionRewards, key)) return null;
+    return world.bossSessionRewards[key];
+  }
+
+  /* The session id is the currency idempotency key. A qualifying Fight can
+     resolve one boss outcome, and a repeated completion callback can only read
+     the prior receipt — it cannot increment kills or mint World Shards again. */
+  function wdRecordBossOutcome(s, opts){
+    s = s || (typeof window !== "undefined" ? window.state : null);
+    opts = opts || {};
+    if (!s) return { ok:false, reason:"no_state" };
+    if (!wdShouldSpawnBoss(opts.minutes, opts.action)) return { ok:false, reason:"not_eligible" };
+    var key = wdBossReceiptKey(opts.sessionId);
+    if (!key) return { ok:false, reason:"missing_session_id" };
+    var world = wdEnsureWorld(s);
+    if (Object.prototype.hasOwnProperty.call(world.bossSessionRewards, key)){
+      return { ok:true, duplicate:true, receipt:world.bossSessionRewards[key] };
+    }
+    var defeated = !!opts.defeated;
+    var tier = /^t[345]$/.test(String(opts.tier || "")) ? String(opts.tier) : "t5";
+    var shardsAwarded = defeated ? wdEarnShards(s, "boss_kill_" + tier) : 0;
+    if (defeated) world.bossesDefeated = Math.max(0, world.bossesDefeated|0) + 1;
+    var receipt = {
+      sessionId:String(opts.sessionId),
+      action:"Fight",
+      minutes:Math.max(90, Math.floor(Number(opts.minutes) || 0)),
+      zoneId:String(opts.zoneId || world.currentZone || "verdant_vale"),
+      bossId:String(opts.bossId || "unknown_boss"),
+      tier:tier,
+      defeated:defeated,
+      shardsAwarded:Math.max(0, shardsAwarded|0),
+      at:Math.max(1, Number(opts.at) || Date.now())
+    };
+    world.bossSessionRewards[key] = receipt;
+    return { ok:true, duplicate:false, receipt:receipt };
+  }
+
   /* ---------- CRAFTING ---------- */
 
   function wdCombineForUpgrade(s, iids){
     s = s || (typeof window !== "undefined" ? window.state : null);
     if (!s) return { ok:false, reason:"no_state" };
     if (!Array.isArray(iids) || iids.length !== 3) return { ok:false, reason:"need_3_instances" };
+    if (new Set(iids).size !== 3) return { ok:false, reason:"duplicate_instance" };
     if (!s.lootInstances) return { ok:false, reason:"no_instances" };
     var insts = iids.map(function(i){ return s.lootInstances[i]; });
     if (insts.some(function(x){ return !x; })) return { ok:false, reason:"unknown_instance" };
     if (insts.some(function(x){ return x.locked; })) return { ok:false, reason:"locked_instance" };
+    var equipped = s.hero && s.hero.equipped ? Object.keys(s.hero.equipped).some(function(slot){
+      var row = s.hero.equipped[slot];
+      return row && iids.indexOf(row.instanceId) >= 0;
+    }) : false;
+    if (equipped) return { ok:false, reason:"equipped_instance" };
     var t = insts[0].tier;
     if (!insts.every(function(x){ return x.tier === t; })) return { ok:false, reason:"mismatch_tier" };
     var order = ["common","uncommon","rare","epic","legendary","mythic"];
     var idx = order.indexOf(t);
     if (idx < 0 || idx >= order.length - 1) return { ok:false, reason:"max_tier" };
+    if (s.lootOwned !== undefined && (!s.lootOwned || typeof s.lootOwned !== "object" || Array.isArray(s.lootOwned))){
+      return { ok:false, reason:"invalid_ownership" };
+    }
     var nextTier = order[idx+1];
     // Pick a winning affix from the 3 to carry forward
     var picked = insts[Math.floor(Math.random() * insts.length)];
-    var newId = "iid_craft_" + Math.random().toString(36).slice(2,10) + "_" + Date.now();
+    var craftedAt = Date.now();
+    var newId = "iid_craft_" + Math.random().toString(36).slice(2,10) + "_" + craftedAt;
     var newInst = {
       iid: newId,
       lootId: picked.lootId,
@@ -870,12 +957,48 @@
       affixes: picked.affixes ? picked.affixes.slice() : [],
       sockets: [],
       dyeId: picked.dyeId || null,
-      createdAt: Date.now(),
+      createdAt: craftedAt,
+      updatedAt: craftedAt,
       source: { kind: "craft", from: iids.slice() },
       locked: false
     };
+    var nextLootOwned = Object.assign({}, s.lootOwned || {});
+    var consumedOwnership = {};
+    insts.forEach(function(source){
+      var sourceLootId = String(source && source.lootId || "");
+      if (sourceLootId) consumedOwnership[sourceLootId] = (consumedOwnership[sourceLootId] || 0) + 1;
+    });
+    Object.keys(consumedOwnership).forEach(function(lootId){
+      var currentCount = Number(nextLootOwned[lootId]);
+      if (!Number.isFinite(currentCount) || currentCount < 0) currentCount = 0;
+      var nextCount = Math.max(0, Math.floor(currentCount) - consumedOwnership[lootId]);
+      if (nextCount > 0) nextLootOwned[lootId] = nextCount;
+      else delete nextLootOwned[lootId];
+    });
+    var craftedLootId = String(newInst.lootId || "");
+    if (craftedLootId){
+      var craftedCount = Number(nextLootOwned[craftedLootId]);
+      if (!Number.isFinite(craftedCount) || craftedCount < 0) craftedCount = 0;
+      nextLootOwned[craftedLootId] = Math.floor(craftedCount) + 1;
+    }
     s.lootInstances[newId] = newInst;
-    iids.forEach(function(i){ delete s.lootInstances[i]; });
+    if (!s.loot || typeof s.loot !== "object") s.loot = {};
+    if (!s.loot.instanceTombstones || typeof s.loot.instanceTombstones !== "object" || Array.isArray(s.loot.instanceTombstones)){
+      s.loot.instanceTombstones = {};
+    }
+    iids.forEach(function(i, idx){
+      var source = insts[idx] || {};
+      s.loot.instanceTombstones[i] = Math.max(
+        Number(s.loot.instanceTombstones[i]) || 0,
+        Number(source.updatedAt) || 0,
+        Number(source.createdAt) || 0,
+        craftedAt
+      );
+      delete s.lootInstances[i];
+      if (s.loot.vault && s.loot.vault.instances) delete s.loot.vault.instances[i];
+      if (s.loot.vault && s.loot.vault.locations) delete s.loot.vault.locations[i];
+    });
+    s.lootOwned = nextLootOwned;
     if (!s.craftingDust) s.craftingDust = 0;
     s.craftingDust += 5;
     return { ok:true, newInstance: newInst };
@@ -1026,10 +1149,10 @@
     ["wd_set_all",        "Wardrobe Master",      "platinum", "Earn every set bonus",     "sets_complete", 8],
 
     // Crystal Shards
-    ["wd_shards_100",     "Shard Saver",          "bronze",   "Accumulate 100 Crystal Shards",     "shards_earned_total", 100],
-    ["wd_shards_1000",    "Shard Wealthy",        "silver",   "Accumulate 1,000 Crystal Shards",   "shards_earned_total", 1000],
-    ["wd_shards_10000",   "Shard Magnate",        "gold",     "Accumulate 10,000 Crystal Shards",  "shards_earned_total", 10000],
-    ["wd_shards_100000",  "Shard Sovereign",      "platinum", "Accumulate 100,000 Crystal Shards", "shards_earned_total", 100000],
+    ["wd_shards_100",     "Shard Saver",          "bronze",   "Accumulate 100 World Shards",     "shards_earned_total", 100],
+    ["wd_shards_1000",    "Shard Wealthy",        "silver",   "Accumulate 1,000 World Shards",   "shards_earned_total", 1000],
+    ["wd_shards_10000",   "Shard Magnate",        "gold",     "Accumulate 10,000 World Shards",  "shards_earned_total", 10000],
+    ["wd_shards_100000",  "Shard Sovereign",      "platinum", "Accumulate 100,000 World Shards", "shards_earned_total", 100000],
 
     // Loot kinds
     ["wd_relic_1",        "Relic Finder",         "bronze",   "Find your first relic",    "kind_count", "relic_1"],
@@ -1177,6 +1300,7 @@
         unlockedZones: { verdant_vale: true },
         zonesVisited: { verdant_vale: 1 },
         bossesDefeated: 0,
+        bossSessionRewards: {},
         mysteryBoxesOpened: 0,
         artifactsFound: {},
         questCounters: { craft_actions:0, enchant_actions:0, mount_pity_unlocks:0 }
@@ -1185,6 +1309,7 @@
     if (!s.world.unlockedZones) s.world.unlockedZones = { verdant_vale: true };
     if (!s.world.zonesVisited) s.world.zonesVisited = { verdant_vale: 1 };
     if (typeof s.world.bossesDefeated !== "number") s.world.bossesDefeated = 0;
+    if (!s.world.bossSessionRewards || typeof s.world.bossSessionRewards !== "object" || Array.isArray(s.world.bossSessionRewards)) s.world.bossSessionRewards = {};
     if (typeof s.world.mysteryBoxesOpened !== "number") s.world.mysteryBoxesOpened = 0;
     if (!s.world.artifactsFound) s.world.artifactsFound = {};
     if (!s.world.questCounters) s.world.questCounters = {};
@@ -1292,6 +1417,7 @@
     out.world.zonesVisited = maxNumberMap(lw.zonesVisited, rw.zonesVisited);
     if (!out.world.zonesVisited.verdant_vale) out.world.zonesVisited.verdant_vale = 1;
     out.world.bossesDefeated = Math.max(nn(lw.bossesDefeated), nn(rw.bossesDefeated));
+    out.world.bossSessionRewards = unionMap(lw.bossSessionRewards, rw.bossSessionRewards);
     out.world.mysteryBoxesOpened = Math.max(nn(lw.mysteryBoxesOpened), nn(rw.mysteryBoxesOpened));
     out.world.artifactsFound = unionMap(lw.artifactsFound, rw.artifactsFound);
     out.world.questCounters = maxNumberMap(lw.questCounters, rw.questCounters);
@@ -1419,12 +1545,15 @@
     wdEarnShards: wdEarnShards,
     wdSpendShards: wdSpendShards,
     wdEnsureQuestRolls: wdEnsureQuestRolls,
+    wdQuestIsRollable: wdQuestIsRollable,
     wdReconcileQuestProgress: wdReconcileQuestProgress,
     wdQuestDerivedValue: wdQuestDerivedValue,
     wdAdvanceQuests: wdAdvanceQuests,
     wdClaimQuest: wdClaimQuest,
     wdShouldSpawnBoss: wdShouldSpawnBoss,
     wdPickBoss: wdPickBoss,
+    wdBossReceiptForSession: wdBossReceiptForSession,
+    wdRecordBossOutcome: wdRecordBossOutcome,
     wdCombineForUpgrade: wdCombineForUpgrade,
     wdEnchantInstance: wdEnchantInstance,
     wdEnsureVault: wdEnsureVault,
@@ -1512,6 +1641,7 @@
     // Boss spawn
     add("boss spawn: 90m Fight triggers", wdShouldSpawnBoss(90, "Fight") === true);
     add("boss spawn: 89m Fight does not", wdShouldSpawnBoss(89, "Fight") === false);
+    add("boss spawn: 90m Hunt does not", wdShouldSpawnBoss(90, "Hunt") === false);
     add("boss spawn: 90m Travel does not", wdShouldSpawnBoss(90, "Travel") === false);
 
     // Crafting

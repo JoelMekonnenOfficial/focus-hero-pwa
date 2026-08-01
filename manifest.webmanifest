@@ -1,7 +1,7 @@
 {
   "name": "Focus Hero",
   "short_name": "Focus Hero",
-  "description": "A private Pomodoro RPG with a knight-first hero, visible character customization, pets, mounts, equippable gear, analytics, and encrypted cloud sync.",
+  "description": "A private offline-first productivity RPG with a pixel hero, visible customization, pets, mounts, equippable gear, analytics, and encrypted cloud sync.",
   "start_url": "./focus-hero.html",
   "scope": "./",
   "display": "standalone",
@@ -50,5 +50,5 @@
       "short_name": "Backup"
     }
   ],
-  "version": "10.7.0"
+  "version": "10.9.5"
 }

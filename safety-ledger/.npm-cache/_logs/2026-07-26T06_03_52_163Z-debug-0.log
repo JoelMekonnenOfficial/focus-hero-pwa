@@ -1,0 +1,32 @@
+0 verbose cli C:\Program Files\nodejs\node.exe C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js
+1 info using npm@11.12.1
+2 info using node@v24.15.0
+3 silly config load:file:C:\Program Files\nodejs\node_modules\npm\npmrc
+4 silly config load:file:C:\Users\joe4k\Documents\Codex\2026-07-16\listen-bitch-you-really-really-fucked\focus-hero-v10-9-2-ledger-integration-20260726\safety-ledger\.npmrc
+5 silly config load:file:C:\Users\joe4k\.npmrc
+6 silly config load:file:C:\Users\joe4k\AppData\Roaming\npm\etc\npmrc
+7 verbose title npm ci
+8 verbose argv "--cache" ".npm-cache" "ci" "--ignore-scripts" "--no-audit" "--no-fund"
+9 verbose logfile logs-max:10 dir:C:\Users\joe4k\Documents\Codex\2026-07-16\listen-bitch-you-really-really-fucked\focus-hero-v10-9-2-ledger-integration-20260726\safety-ledger\.npm-cache\_logs\2026-07-26T06_03_52_163Z-
+10 verbose logfile C:\Users\joe4k\Documents\Codex\2026-07-16\listen-bitch-you-really-really-fucked\focus-hero-v10-9-2-ledger-integration-20260726\safety-ledger\.npm-cache\_logs\2026-07-26T06_03_52_163Z-debug-0.log
+11 silly logfile done cleaning log files
+12 silly packumentCache heap:4496293888 maxSize:1124073472 maxEntrySize:562036736
+13 silly packumentCache heap:4496293888 maxSize:1124073472 maxEntrySize:562036736
+14 silly idealTree buildDeps
+15 silly reify moves {}
+16 http cache fake-indexeddb@https://registry.npmjs.org/fake-indexeddb/-/fake-indexeddb-6.2.5.tgz 1ms (cache hit)
+17 silly tarball no local data for fake-indexeddb@https://registry.npmjs.org/fake-indexeddb/-/fake-indexeddb-6.2.5.tgz. Extracting by manifest.
+18 http fetch GET 200 https://registry.npmjs.org/npm 154ms
+19 http fetch GET 200 https://registry.npmjs.org/fake-indexeddb/-/fake-indexeddb-6.2.5.tgz 406ms (cache miss)
+20 silly ADD node_modules/fake-indexeddb
+21 verbose cwd C:\Users\joe4k\Documents\Codex\2026-07-16\listen-bitch-you-really-really-fucked\focus-hero-v10-9-2-ledger-integration-20260726\safety-ledger
+22 verbose os Windows_NT 10.0.26200
+23 verbose node v24.15.0
+24 verbose npm  v11.12.1
+25 notice
+25 notice New major version of npm available! 11.12.1 -> 12.0.1
+25 notice Changelog: https://github.com/npm/cli/releases/tag/v12.0.1
+25 notice To update run: npm install -g npm@12.0.1
+25 notice  { force: true, Symbol(proc-log.meta): true }
+26 verbose exit 0
+27 info ok

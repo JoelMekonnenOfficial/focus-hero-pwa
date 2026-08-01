@@ -488,11 +488,10 @@
   }
 
   function eggRecordCompletedSession(record, pipelineResult){
-    try {
-      var s = window.state;
-      var verified = eggNormalizeCompletedRecord(s, record, pipelineResult);
-      if (verified) eggProcessVerifiedSession(s, verified, EGG_REWARD_PROOF);
-    } catch(e){ console.warn("egg verified session:", e); }
+    var s = window.state;
+    var verified = eggNormalizeCompletedRecord(s, record, pipelineResult);
+    if (verified) return eggProcessVerifiedSession(s, verified, EGG_REWARD_PROOF);
+    return null;
   }
 
   /* ---------- UI ---------- */

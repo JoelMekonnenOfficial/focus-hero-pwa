@@ -91,7 +91,20 @@ function successfulAssetResponse(request){
 }
 
 test("every precache entry exists in the release tree", () => {
-  assert.equal(PRECACHE.length, 19);
+  assert.equal(new Set(PRECACHE).size, PRECACHE.length, "precache entries must be unique");
+  assert.ok(PRECACHE.includes("./loot-purpose-actions.js"), "deterministic loot actions must work offline");
+  assert.ok(PRECACHE.includes("./gear-utility.js"), "gear utility must work offline");
+  assert.ok(PRECACHE.includes("./game-shells.js"), "presentation shells must work offline");
+  assert.equal(
+    PRECACHE.includes("./safety-ledger/domain-receipt-ledger.js"),
+    false,
+    "the incomplete receipt-ledger prototype must stay outside the runtime cache",
+  );
+  assert.equal(
+    PRECACHE.includes("./accounting-receipt-bridge.js"),
+    false,
+    "the incomplete receipt bridge must stay outside the runtime cache",
+  );
   for (const asset of PRECACHE){
     const relative = asset === "./" ? "index.html" : asset.replace(/^\.\//, "");
     assert.equal(fs.existsSync(path.join(ROOT, relative)), true, `missing ${asset}`);
@@ -110,7 +123,7 @@ test("install publishes a complete cache before activating", async () => {
   assert.equal(runtime.calls.skipWaiting, 1);
 });
 
-test("failed install deletes only the incomplete new cache and preserves the old complete build", async () => {
+test("failed install preserves the old complete build without deleting any cache", async () => {
   const runtime = makeRuntime(async request => {
     const url = typeof request === "string" ? request : request.url;
     if (url.endsWith("/progression-hub.js")) return new Response("missing", { status:503 });
@@ -118,19 +131,20 @@ test("failed install deletes only the incomplete new cache and preserves the old
   });
   runtime.caches.stores.set("focus-hero-old-complete", new Map([[`${SCOPE}focus-hero.html`, new Response("old")]]));
   await assert.rejects(runtime.dispatch("install"), /Precache failed/);
-  assert.equal(runtime.caches.stores.has(CACHE_NAME), false);
+  assert.equal(runtime.caches.stores.has(CACHE_NAME), true);
+  assert.equal(runtime.caches.stores.get(CACHE_NAME)?.size, 0);
   assert.equal(runtime.caches.stores.has("focus-hero-old-complete"), true);
   assert.equal(runtime.calls.skipWaiting, 0);
 });
 
-test("activation removes only superseded Focus Hero caches", async () => {
+test("activation retains prior Focus Hero caches as an owner-controlled rollback layer", async () => {
   const runtime = makeRuntime(async request => successfulAssetResponse(request));
   runtime.caches.stores.set(CACHE_NAME, new Map());
   runtime.caches.stores.set("focus-hero-old", new Map());
   runtime.caches.stores.set("another-app-cache", new Map());
   await runtime.dispatch("activate");
   assert.equal(runtime.caches.stores.has(CACHE_NAME), true);
-  assert.equal(runtime.caches.stores.has("focus-hero-old"), false);
+  assert.equal(runtime.caches.stores.has("focus-hero-old"), true);
   assert.equal(runtime.caches.stores.has("another-app-cache"), true);
   assert.equal(runtime.calls.claim, 1);
 });

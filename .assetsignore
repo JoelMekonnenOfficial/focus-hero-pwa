@@ -1,17 +1,76 @@
-.assetsignore
-.gitignore
+# Public runtime uses a deny-by-default allowlist.
+# .assetsignore follows .gitignore syntax: ignore everything, then unignore
+# only the reviewed browser assets listed in PACKAGE_CONTENTS.md.
+*
+
+# Defense-in-depth: keep prohibited categories visible during review. The
+# leading "*" already excludes them; these rules document the boundary.
 .git
 .git/**
 .github
 .github/**
 .wrangler
 .wrangler/**
-.nojekyll
-README.md
-wrangler.toml
-Thumbs.db
-.DS_Store
+.dev.vars*
+.env*
 node_modules
 node_modules/**
-package.json
-package-lock.json
+tests
+tests/**
+backups
+backups/**
+README.md
+CHANGES.md
+REVIEW_NOTES.md
+PACKAGE_CONTENTS.md
+wrangler.toml
+CNAME
+.nojekyll
+.gitignore
+.assetsignore
+prototype-v2.html
+sw-v5.js
+v7.6-migration-test.js
+__*
+*.patch
+*.ps1
+*.zip
+*.sha256
+*.bak
+*.tmp
+*.log
+*.sqlite*
+*.json
+*.jsonl
+focus-hero-backup-*
+focus-hero-raw-state-*
+*recovery*
+*snapshot*
+*fixture*
+Thumbs.db
+.DS_Store
+
+# Exact reviewed public runtime. Keep this in sync with PACKAGE_CONTENTS.md,
+# the HTML/manifest references, and sw.js PRECACHE.
+!index.html
+!focus-hero.html
+!recover.html
+!sw.js
+!manifest.webmanifest
+!focus-hero-logo.svg
+!icon-192.png
+!icon-512.png
+!pixel-avatar.js
+!data-guard.js
+!focus-economy.js
+!loot-purpose-actions.js
+!gear-utility.js
+!progression-hub.js
+!game-shells.js
+!loot-rework.js
+!character-rebuild.js
+!world-depth.js
+!shop-rework.js
+!character-v86-fix.js
+!eggs.js
+!v8.6.3-patch.js

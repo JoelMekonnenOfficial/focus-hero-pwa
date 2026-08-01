@@ -39,7 +39,9 @@ let remoteState;
 let remoteRev = 5;
 let pushedPayload;
 const traffic = [];
+let simulatedOffline = false;
 await context.route("https://api.jsonstorage.net/**", async route => {
+  if (simulatedOffline) return route.abort("internetdisconnected");
   const request = route.request();
   traffic.push(request.method());
   if (request.method() === "GET") {
@@ -102,6 +104,7 @@ try {
     return JSON.parse(JSON.stringify(fresh));
   }, cloudUrl);
 
+  simulatedOffline = true;
   await context.setOffline(true);
   const offlineActions = await page.evaluate(() => {
     const down = window.applySessionEdit("offline-session", 20);
@@ -141,6 +144,7 @@ try {
   assert.ok(afterColdOfflineBoot.pendingSince > 0);
 
   const firstReconnectRev = remoteRev + 1;
+  simulatedOffline = false;
   await context.setOffline(false);
   await page.waitForFunction(expectedRev => {
     const state = window.__FocusHero?.stateRef();
@@ -156,7 +160,7 @@ try {
   assert.equal(finalState.pendingSince, 0);
   assert.ok(finalState.cloudRev >= firstReconnectRev);
   const firstGet = traffic.indexOf("GET"), firstPut = traffic.indexOf("PUT");
-  assert.ok(firstGet >= 0 && firstPut > firstGet, "reconnect must pull before uploading");
+  assert.ok(firstGet >= 0 && firstPut > firstGet, `reconnect must pull before uploading; traffic=${traffic.join(",")}`);
   assert.equal(pushedPayload?.cloud_rev, remoteRev);
   assert.equal(pushedPayload?.data?.plain?.totalFocusMin, 145);
 

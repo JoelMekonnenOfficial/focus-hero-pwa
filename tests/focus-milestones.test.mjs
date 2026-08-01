@@ -80,7 +80,7 @@ try {
     assert.deepEqual(values, [0,1,1,2,3]);
   });
 
-  await test("v15 migration backfills rings silently without changing player accounting", async () => {
+  await test("v15 migration backfills artifacts silently without changing player accounting", async () => {
     const result = await page.evaluate(() => {
       const fh = window.__FocusHero;
       const raw = JSON.parse(JSON.stringify(fh.DEFAULTS));
@@ -132,7 +132,7 @@ try {
     assert.equal(room.announcedThrough, 1);
   });
 
-  await test("earned rings are permanent, idempotent, and advance once at the next threshold", async () => {
+  await test("earned artifacts are permanent, idempotent, and advance once at the next threshold", async () => {
     const result = await page.evaluate(() => {
       const fh = window.__FocusHero;
       const s = fh.migrate(JSON.parse(JSON.stringify(fh.DEFAULTS)));
@@ -194,9 +194,9 @@ try {
       };
     });
     assert.deepEqual(result.first, {
-      id:"focus-artifact-v1-1", name:"First Light Signet",
-      title:"Keeper of the First Thousand",
-      slogan:"A thousand hours, chosen one minute at a time.", form:"signet"
+      id:"focus-artifact-v1-1", name:"First Light Standard",
+      title:"Bearer of the First Thousand",
+      slogan:"A thousand hours, chosen one minute at a time.", form:"banner"
     });
     assert.equal(result.ids, 1000);
     assert.equal(result.names, 1000);
@@ -239,14 +239,16 @@ try {
     assert.equal(result.listLabel, "Earned focus milestone artifacts");
     assert.equal(result.listItems, 1);
     assert.ok(result.svgs >= 2);
-    assert.match(result.panelText, /First Light Signet/);
-    assert.match(result.panelText, /Keeper of the First Thousand/);
+    assert.match(result.panelText, /First Light Standard/);
+    assert.match(result.panelText, /Bearer of the First Thousand/);
+    assert.match(result.panelText, /Sun-thread, violet enamel, and engraved brass/);
+    assert.match(result.panelText, /Legacy Relic/);
     assert.match(result.panelText, /A thousand hours, chosen one minute at a time/);
     assert.match(result.panelText, /Artifact #1 · 1,000h/);
     assert.equal(result.pictographic, false);
   });
 
-  await test("Trophy Room reports the exact remaining minutes near a ring threshold", async () => {
+  await test("Trophy Room reports the exact remaining minutes near an artifact threshold", async () => {
     await resetFixture();
     const result = await page.evaluate(() => {
       const fh = window.__FocusHero;
@@ -258,8 +260,8 @@ try {
       document.querySelector('[data-tab="trophies"]')?.click();
       return document.getElementById("trophy-room")?.textContent || "";
     });
-    assert.match(result, /1m to First Light Signet/);
-    assert.doesNotMatch(result, /1h to First Light Signet/);
+    assert.match(result, /1m to First Light Standard/);
+    assert.doesNotMatch(result, /1h to First Light Standard/);
   });
 
   await test("simultaneous mythic and gold unlocks queue below phone chrome without warning red", async () => {
@@ -291,8 +293,8 @@ try {
     });
     assert.equal(result.first.count, 1);
     assert.match(result.first.text, /Beyond Measure/i);
-    assert.match(result.first.text, /First Light Signet/);
-    assert.match(result.first.text, /Keeper of the First Thousand/);
+    assert.match(result.first.text, /First Light Standard/);
+    assert.match(result.first.text, /Bearer of the First Thousand/);
     assert.ok(result.first.top >= 104);
     assert.doesNotMatch(result.first.background, /180,\s*83,\s*9/);
     assert.equal(result.second.count, 1);
@@ -422,7 +424,7 @@ try {
     });
     assert.deepEqual(result, {
       ok:true, total:60000, claimed:1, announced:1, achievement:true,
-      xpGain:2500, noFloorRewards:true, beyondBanners:1, ringBanners:0
+      xpGain:2550, noFloorRewards:true, beyondBanners:1, ringBanners:0
     });
   });
 
@@ -533,7 +535,7 @@ try {
       cards:document.querySelectorAll(".focus-artifact-card").length,
       names:[...document.querySelectorAll(".focus-artifact-name")].map(node=>node.textContent)
     }));
-    assert.deepEqual(result, { total:120000, ring:2, cards:2, names:["Twin-Flame Lantern","First Light Signet"] });
+    assert.deepEqual(result, { total:120000, ring:2, cards:2, names:["Twin-Flame Lantern","First Light Standard"] });
   });
 
   assert.deepEqual(pageErrors, [], pageErrors.join("\n"));

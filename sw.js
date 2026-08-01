@@ -14,6 +14,23 @@
  * deliberately invisible to users — the only place a version-looking string
  * lives is in the cache name in DevTools.
  *
+ * v10.9.5: adds compatibility-safe diverse avatar styles, exact tone swatches, distinct hair/face/build geometry, and retains earlier complete offline caches.
+ * v10.9.4: retires the legacy character renderer for a deterministic pixel hero, adds real distinct session-visual layouts, and retains earlier complete offline caches.
+ * v10.9.3: exact-total and relative editing across every time surface,
+ * session-backed reversals with pause/change detail, live-parity loot gates,
+ * idempotent manual sessions, read-only integrity checks, selectable clean
+ * session visuals, and conflict-safe cloud projection from session evidence.
+ * Source review only; no live player data was opened or changed.
+ * v10.9.2: atomic accounting rollback, deterministic policy-v3 reward and
+ * mount receipts, storage-indeterminate lockout, and isolated durable/domain
+ * ledger hardening. Source review only; deployment remains blocked.
+ * v10.9.1: due-diligence safety hardening, fail-closed recovery, deletion
+ * tombstones, noncombat target chests, and fail-closed character-renderer/Forge behavior.
+ * v10.9.0: complete presentation shells, authored equipment/mount coverage,
+ * deterministic loot-purpose actions, salvage tombstones, visible loadout
+ * utility, and a rebuilt World command interface.
+ * v10.8.0: shared Priority cancellation, milestone artifact gallery, explicit
+ * resource routes, selected-zone optional combat, and safe relative eyelid rig.
  * v10.7.0: resilient offline queue/recovery ring, exact edited-session loot,
  * organized progression views, and integrity-hardened Expedition farming.
  * v10.6.2: Trophy Room artifact grid exposes list/listitem semantics.
@@ -35,7 +52,7 @@
  * fallback (and skipped injection). Fetch by URL string instead, and inject
  * into cache-served HTML too.
  */
-const BUILD_ID    = "fh-2026-07-22-v10-7-0-resilient-adventure";
+const BUILD_ID    = "fh-2026-08-01-v10-9-5-1-storage-relief";
 const CACHE_NAME  = `focus-hero-${BUILD_ID}`;
 const PRECACHE = [
   "./",
@@ -43,7 +60,10 @@ const PRECACHE = [
   "./recover.html",
   "./data-guard.js",
   "./focus-economy.js",
+  "./loot-purpose-actions.js",
+  "./gear-utility.js",
   "./progression-hub.js",
+  "./game-shells.js",
   "./focus-hero-logo.svg",
   "./loot-rework.js",
   "./character-rebuild.js",
@@ -55,8 +75,7 @@ const PRECACHE = [
   "./manifest.webmanifest",
   "./icon-192.png",
   "./icon-512.png",
-  "./three.min.js",
-  "./fh3d.js"
+  "./pixel-avatar.js"
 ];
 
 function isAppDocPath(pathname){
@@ -124,7 +143,7 @@ self.addEventListener("install", event => {
       await Promise.all(fetched.map(([request, response]) => cache.put(request, response)));
       await self.skipWaiting();
     } catch (error) {
-      await caches.delete(CACHE_NAME);
+      // Keep any prior complete cache intact. A failed new install never clears recovery/offline assets.
       throw error;
     }
   })());
@@ -132,8 +151,8 @@ self.addEventListener("install", event => {
 
 self.addEventListener("activate", event => {
   event.waitUntil((async () => {
-    const keys = await caches.keys();
-    await Promise.all(keys.filter(k => k.startsWith("focus-hero-") && k !== CACHE_NAME).map(k => caches.delete(k)));
+    // Retain earlier complete Focus Hero cache namespaces as an offline rollback layer.
+    // Cache cleanup is owner-controlled and never performed by the app or service worker.
     await self.clients.claim();
     // Tell existing pages a new version is live; they decide whether to reload.
     const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
@@ -201,8 +220,8 @@ self.addEventListener("fetch", event => {
   // Cache-first for static assets (icons, manifest, etc.).
   event.respondWith((async () => {
     const cache = await caches.open(CACHE_NAME);
-    /* ignoreSearch: versioned URLs (fh3d.js?v=...) must still hit the
-       precached asset when offline - without this, 3D was network-only. */
+    /* ignoreSearch: versioned URLs (pixel renderer.js?v=...) must still hit the
+       precached asset when offline, preserving a complete offline shell. */
     const cached = await cache.match(req, { ignoreSearch:true });
     if (cached) return cached;
     try {

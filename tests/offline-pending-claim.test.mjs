@@ -40,7 +40,8 @@ page.on("pageerror", error => pageErrors.push(String(error)));
 
 async function waitForApp(){
   await page.waitForFunction(() => window.__FocusHero && typeof window.startTimer === "function");
-  await page.waitForFunction(() => window.commitFocusTimerSession?.__fhPriority && document.getElementById("priority-check-modal"));
+  await page.waitForFunction(() => window.commitFocusTimerSession?.__fhPriority && document.getElementById("priority-mode-badge"));
+  assert.equal(await page.locator("#priority-check-modal").count(), 0);
 }
 async function rewardSnapshot(){
   return page.evaluate(() => {
@@ -133,11 +134,8 @@ try {
   assert.equal(restored.range, "4");
   assert.equal((await rewardSnapshot()).total, 0);
 
-  // The first confirmation opens the separate Priority checkpoint. Nothing is
-  // awarded yet, and the durable claim remains intact through another reload.
-  await page.click("#btn-confirm-claim");
-  await page.waitForSelector("#priority-check-modal:not([hidden])");
-  assert.equal((await rewardSnapshot()).total, 0);
+  // A durable Priority claim survives another offline reload without needing a
+  // separate end-of-session yes/no checkpoint.
   assert.equal(await page.evaluate(() => !!window.__FocusHero.stateRef().pendingFocusClaim), true);
   await page.reload({ waitUntil:"domcontentloaded" });
   await waitForApp();
@@ -145,8 +143,6 @@ try {
   assert.equal(await page.locator("#claim-minutes").inputValue(), "4");
 
   await page.click("#btn-claim-full");
-  await page.waitForSelector("#priority-check-modal:not([hidden])");
-  await page.click("#btn-priority-keep");
   await page.waitForFunction(() => {
     const s = window.__FocusHero.stateRef();
     return s.totalFocusMin === 5 && !s.pendingFocusClaim;
@@ -190,13 +186,17 @@ try {
   await page.waitForFunction(() => !window.__FocusHero.stateRef().pendingFocusClaim);
   assert.deepEqual(await rewardSnapshot(), afterConfirm);
 
-  // Priority cancellation clears the durable claim only after the zero-credit
-  // reset is saved, and the canceled session cannot reappear after reload.
-  await expireFocus();
+  // Locked In and Priority share the one live zero-credit cancel control. It
+  // preserves every cumulative reward/accounting value and cannot reappear as
+  // a claim after reload.
+  await page.evaluate(() => {
+    window.setMode("focus");
+    window.startTimer();
+  });
+  await page.waitForFunction(() => window.isCancelableSession() && !document.getElementById("btn-cancel-session").hidden);
   const beforeCancel = await rewardSnapshot();
-  await page.click("#btn-claim-full");
-  await page.waitForSelector("#priority-check-modal:not([hidden])");
-  await page.click("#btn-priority-cancel");
+  page.once("dialog", dialog => dialog.accept());
+  await page.click("#btn-cancel-session");
   await page.waitForFunction(() => !window.__FocusHero.stateRef().pendingFocusClaim);
   const afterCancel = await rewardSnapshot();
   assert.deepEqual({
@@ -209,6 +209,7 @@ try {
     farm:beforeCancel.farm, grants:beforeCancel.grants, eggs:beforeCancel.eggs
   });
   assert.equal(afterCancel.canceled, beforeCancel.canceled + 1);
+  assert.equal(await page.locator("#priority-check-modal").count(), 0);
   await page.reload({ waitUntil:"domcontentloaded" });
   await waitForApp();
   assert.equal(await page.locator("#claim-modal").isHidden(), true);

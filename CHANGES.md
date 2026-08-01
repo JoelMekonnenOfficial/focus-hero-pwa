@@ -1,3 +1,112 @@
+# v10.9.5 — 2026-08-01 (diverse-avatar review candidate; source-only)
+
+- Added four genuinely different code-native pixel-avatar templates: Compact Cozy, Detailed MMO, Graphic Arcade, and Isometric Tactical. Presets change presentation geometry only and are never selected by race, skin tone, class, or player data.
+- Expanded Character Studio to 28 hairstyle choices (the original-preservation mode plus 27 directly selectable established and new styles), ten exact skin-tone swatches, five body silhouettes, seven face shapes, twelve hair colors, and eight eye colors.
+- Made every displayed concrete hairstyle geometrically distinct, including fades, 360 waves, afros, coils, twists, locs, cornrows, box braids, and Bantu knots. Compact and round builds no longer collapse to balanced.
+- Added compatibility-safe appearance override fields (visualStyle, hairStyle, skinTone, bodyStyle, and faceShape). Older/offline clients preserve unknown fields; existing legacy hair/body/tone choices remain authoritative until deliberately changed.
+- Corrected direct skin-tone rendering so the selected swatch hex is the rendered character color rather than a shifted species-palette index.
+- Routed avatar, Character Studio, and equipment preview reads through non-mutating appearance/equipment readers. Explicit customizer actions remain the only appearance write path.
+- Fixed the home-avatar CSS selector to match the active pixel-v1 renderer metadata.
+- Added three focused avatar regressions and expanded the renderer suite. Exact-tree verification passed 37/37 files and 168/168 tests with the preserved workspace-local Playwright runtime; no failures, skips, cancellations, or todo items.
+- No signed-in profile, browser storage, private cloud row, credentials, backup/recovery material, hosting, or deployment was accessed. No time, reward, accounting, sync, offline, cloud, recovery, or gameplay module was changed.
+
+# v10.9.4 — 2026-07-31 (pixel-hero review candidate; source-only)
+
+- Retired the legacy character-renderer runtime from both app entries, the service-worker shell, and the public package. No player state, storage, data schema, or sync behavior was changed.
+- Preserved the retired runtime and its focused tests in `C:\Users\joe4k\Documents\Codex\Focus Hero 3D Archive 2026-07-31` for a deliberate future reintroduction if requested.
+- Added a deterministic 64×64 code-native pixel hero with integer-grid geometry, reduced-motion support, race/class/build/hair/face variation, visible equipment, pets, mounts, and action-specific animation. The renderer is presentation-only and has no storage or network access.
+- Kept all four complete presentation shells already present in the current source: Modern Focus, Arcane Command, Frontier Craft, and Tactical Ops. They do not depend on AWS, a vault, or an experimental ledger.
+- Completed the selectable session-visual alternatives: Status Ribbon, Journey Strip, Text Pulse, and No permanent card now behave distinctly instead of silently falling back to one permanent battle card.
+- Stopped install/activation from programmatically deleting earlier complete Focus Hero offline caches; cache removal is now owner-controlled.
+- Saved four original pixel-art direction studies and a transparent Armored Vanguard concept under `C:\Users\joe4k\Documents\Codex\Focus Hero Pixel Prototypes 2026-07-31`.
+- No signed-in profile, private cloud row, browser storage, credential, recovery material, deployment configuration, or production environment was opened or changed.
+
+# v10.9.3 — 2026-07-31 (session-integrity review candidate; source-only)
+
+- Added exact-total and relative editing to live Focus/Stopwatch, task totals, completed sessions, the post-session editor, Session History, Analytics, and Battle Report.
+- Every positive manual time addition is now one idempotent session, including below-floor and time-only entries. Aggregate reductions route newest-session-first through those real session records.
+- Session-backed changes now reverse or restore recorded XP, coins, eggs, target progress, loot, auto-salvage derivatives, Orbs, farming materials, and session counts instead of applying a disconnected aggregate correction.
+- Recorded structured pause intervals and time-change events and exposed them in expandable Session History details.
+- Aligned edit-time loot with live rules: peaceful actions keep one 5-minute roll, while Fight uses the 5/25/50/90/120 encounter walls. Threshold rewards are stable across up/down/up edits.
+- Added operation IDs, duplicate-session/drop/operation audit checks, and an explicit 20 + 70 = 90 regression.
+- Removed the repeated session-path instruction. Replaced the permanent Hero-vs-target presentation with four selectable prototypes; No permanent card is the default.
+- Replaced maximum-only focus-minute cloud convergence with conflict-safe projection from merged session evidence. Concurrent unique sessions add together, edited/deleted sessions keep their newest proven value, and ambiguous baselines fail closed before state changes.
+- Kept the existing Supabase cloud and offline queue. No AWS runtime, backup dependency, production credential, live cloud row, browser profile, or player payload was accessed or added.
+- Verification remains synthetic and source-only. Production deployment was not performed.
+
+# v10.9.2 — 2026-07-26 (final isolated safety freeze; not deployable)
+
+- Wrapped live completion, stopwatch completion, relative task-time changes,
+  exact session-time replacement, and deletion in one persistence barrier with
+  whole-command rollback for XP, coins, loot, eggs, Targets, Orbs, farming,
+  milestones, and mounts.
+- Made primary persistence require exact read-back. Verified rollback remains
+  retryable; an unverifiable rollback enters a durable non-retryable storage
+  lock that blocks accounting, sync, peer merge, reload reconciliation, and
+  background work until explicit verified recovery.
+- Added deterministic policy-v3 session reward receipts with SHA-256 semantic
+  and effect commitments, seeded salvage/gems/mounts, exact gameplay-effect
+  coverage, fail-closed retry/merge/LKG checks, bounded details, and compact
+  idempotency proofs.
+- Hardened the isolated append-only IndexedDB and complete domain-receipt
+  prototypes for crash replay, branch conflicts, schema validation,
+  cross-session identity ownership, staged transactions, and safe-integer
+  overflow rollback. These prototypes remain synthetic and unbundled.
+- Removed the tentative observed-effect receipt journal from both app entry
+  files, the service-worker cache, and the public package after independent
+  review found unresolved repeated-command identity, debit direction, complete
+  effect coverage, cross-device convergence, and bounded-compaction defects.
+- Exact-candidate verification: 143/143 top-level app tests, 23/23 focused
+  accounting/offline/package checks, 87/87 isolated safety-ledger tests, 22/22
+  durable-adapter checks, and 70/70 protocol-v2 source checks passed.
+- **Release remains blocked:** the durable ledger and authenticated protocol-v2
+  cloud transaction are not wired into the app, compact proof capacity is
+  intentionally finite, and the independent immutable vault plus isolated
+  restore drill are unverified. No live profile, cloud row, credential, backup,
+  or deployment was accessed or changed.
+
+# v10.9.1 — 2026-07-24 (due-diligence review candidate; not deployable)
+
+- Retired automatic startup restoration and historical retroactive purge paths. Malformed live bytes now remain untouched behind a blocking recovery screen until the player explicitly selects a verified snapshot. Creating a new local profile preserves and byte-verifies the prior profile under a unique recovery key, leaves every existing recovery artifact intact, pauses sync, and invalidates delayed old-profile cloud work.
+- Expanded the independent Data Guard to cover earned/spent coins, milestone ordinal, World counters and unlocks, egg IDs, inventory/Vault instance IDs, and session/drop/instance tombstones. Separate profile lineages keep separate same-day snapshots, and the live-app guard routes recovery to the isolated recovery page instead of racing active cloud workers.
+- Added session, loot-drop, and loot-instance deletion tombstones. Edited session rows carry monotonic mutation timestamps, stale branches cannot resurrect removed rows/items/equipment references, and Forge combination tombstones all three consumed instances while rejecting duplicate, locked, or equipped inputs before mutation and reconciling legacy template counts.
+- Merged same-period Focus Target claims by logical OR and routed target chests through the noncombat Loot action, preventing hidden Fight inventory consumption, HP changes, encounters, boss receipts, or shard mutation. Local target grants are persistence-barrier transactions: a failed XP/loot step leaves the chest retryable and cannot leak partial MAIN/LKG/cloud bytes, while earlier successful tiers remain committed if a later tier fails.
+- Corrected egg-deletion event identity so separate session deletions cannot collide. Egg merge now deterministically preserves terminal lifecycle state and unions distinct incubation credit provenance; exact cross-device correction convergence remains blocked pending the accounting-ledger migration described below.
+- Forge rejects every mutation control for non-equippable collection items before validation, RNG, spending, timestamps, or state mutation. The inspector hides unsupported controls while retaining lock, salvage, and purpose guidance.
+- 3D rendering fails closed to the 2D fallback, remains retryable after rebuild/render/pose/mount/pet-frame failure, stops the failed animation loop and reduced-motion work, and no longer invents guessed geometry for unsupported gear or mounts.
+- Disabled stateful production browser smoke execution. `?test=1` now uses a synthetic in-memory state and returns before storage, Data Guard, sync, BroadcastChannel, IndexedDB, or the legacy stateful smoke body can run.
+- Frontier Craft and Tactical Ops keep their navigation visible and correctly positioned across tablet and desktop breakpoints.
+- Removed the service-role Supabase heartbeat, repository-writing status commit, and push-triggered deploy workflow from the candidate. The only packaged scheduled workflow is a public app/manifest/service-worker GET/HEAD watchdog with `contents: read`, no secrets, no repository writes, and no deploy authority.
+- The two HTML entry files are byte-identical at SHA-256 `99e3ccb9d2ea5bf24cd13e5fc395126476fc7cb6f3e517519deabcaf7debea49`. Manifest version is `10.9.1`; service-worker build is `fh-2026-07-24-v10-9-1-due-diligence`; the exact frozen tree passes all 29/29 synthetic test files.
+- **Release blocked:** cumulative minutes, per-day/task totals, XP/coins, material spends, target receipts, and all reversible session rewards still require an append-only event/PN ledger with tombstones and a tested mixed-client cutover. The current max-merge model can lose concurrent offline additions or undo reductions even though the visible session/item tombstones now converge. This review copy must not be deployed.
+- **Safety boundary:** no signed-in profile, browser storage, private cloud payload, sync identity, credential, backup, Claude download, or recovery artifact was opened or changed. No production deploy or writer task was activated.
+
+# v10.9.0 — 2026-07-24
+
+- Added four complete presentation shells over one shared game state: **Modern Focus**, **Arcane Command**, **Frontier Craft**, and **Tactical Ops**. They change the app-wide navigation architecture, panel treatment, typography, textures, color system, and responsive chrome without duplicating or migrating gameplay data. Modern Focus remains the default until the player explicitly chooses another shell in Settings.
+- Rebuilt World as an organized command surface. It now separates the active zone from the zone being previewed, shows the current-zone briefing, route steps, enemy/boss intelligence, mount families, and loot signals, and states plainly that only the optional **Fight** action starts combat.
+- Expanded the code-native 3D model catalog so mounts and equippable loot resolve through intentional deterministic visual profiles instead of unexplained generic fallbacks. The hero keeps adult heroic proportions, smaller eyes, a tapered face, and the relative-transform eyelid fix.
+- Gave ordinary equipped gear real bounded uses: weapons add Fight power, helmets and armor add protection, pets and selected mount families improve existing-roll loot quality, and mounts can improve explicit farming harvests. Existing XP, coin, and energy behavior remains governed by the established reward engine.
+- Removed the normal-loot dead ends. All 24 rollable non-active-slot templates now have a registered purpose: one deterministic key action or an explicit charm/relic utility-loadout effect. Ownership alone never activates a bonus.
+- Added deterministic key chests. Every supported key shows the exact next active-equippable reward before opening, uses a monotonic owned-minus-opened counter, and derives a stable reward receipt and instance ID from key plus ordinal. Keys are not decremented through the unsafe max-count merge path.
+- Turned each supported reagent into a one-time reusable Forge recipe. The player chooses an unlocked gear affix and sees the exact replacement before applying it; the result is deterministic, the reagent is not consumed, and Arcane Dust uses the existing rarity-based reroll cost.
+- Added one charm and two relic utility slots inside Forge. Selected utilities are hard-capped to optional Fight stats, quality bias on an already-earned loot roll, or explicit harvest yield. They cannot alter logged minutes, historical XP/coins, reward floors, or passive/idle income.
+- Suppressed incomplete World catalogs—runes, World tomes/gems/maps/trophies/artifacts—and cursed relics from acquisition until a complete safe consumer exists. The in-app purpose guide now distinguishes usable content from deliberately dormant content and no longer describes the broken World-enchant or trophy declarations as working backends.
+- Hardened mutable loot across offline merge. Every instance mutation now carries a full millisecond timestamp; salvage records a monotonic tombstone; stale inventory, Vault, and equipped references cannot resurrect a salvaged item; a genuinely newer recreated instance survives; loadout timestamps no longer truncate to 32 bits; surviving distinct instances conservatively raise, but never lower, template ownership counts.
+- Updated the offline app cache for the new runtime modules and kept the two entry HTML files byte-identical. Verification is synthetic and source-only; no signed-in profile, browser storage, cloud row, sync identity, credential, backup, Claude download, or recovery artifact was read or changed.
+
+# v10.8.0 — 2026-07-24
+
+- Removed the end-of-session Priority yes/no checkpoint. Priority now follows the same completion path as an ordinary credited session, while one shared **Cancel run · 0 credit** control applies to Lock-in, Priority, or both. A completed Priority run still earns its deterministic +1 Focus Orb; a canceled run earns nothing.
+- Reframed the 1,000-hour collection as permanent milestone artifacts instead of rings. Artifact #1 is now the **First Light Standard** / **Bearer of the First Thousand**, a heraldic focus banner with engraved `1,000H` seal, material story, chapter, class, title, and slogan. The Trophy Room now presents artifacts in a richer display-case gallery without changing milestone IDs or accounting.
+- Made the resource economy legible and internally consistent. Focus Orbs now have an explicit earn/use guide; Expedition exposes farming status and routes; the Store distinguishes **World Shards** from the Forge's **Arcane Dust** and **Forge Shards**; zero balances link directly to the activity that earns or spends them. Existing storage keys are preserved and no legacy balance is silently converted.
+- Connected optional combat to World without making combat mandatory. Only a **Fight** focus action creates encounters, using the selected World zone's enemy pool. Eligible 90+ minute Fight sessions receive exactly one final boss; boss defeat grants World Shards once through per-session receipts. Travel, Loot, Hunt, Craft, Meditate, and other actions remain noncombat.
+- Excluded unwired Challenge types from future random rolls and renamed the remaining Fight/Craft objectives to match their actual progress sources.
+- Fixed the delayed face-stretch defect in the 3D rig: eyelid animation now scales relative to its authored mesh dimensions, stays clamped, and restores the exact base transform instead of expanding a thin eyelid into a band across the face.
+- Closed an offline-reconnect race: debounced automatic saves now use the same pull-before-flush path as boot and the online event, so a delayed JSONStorage upload cannot jump ahead of the required remote merge.
+- Added focused regressions for Priority completion/cancellation, offline pending claims, Trophy Room uniqueness and presentation, resource routing, World-selected encounters, one-time boss rewards, noncombat actions, and eyelid transform safety. The complete synthetic test suite passes.
+- Data-safety boundary: this candidate changes source and synthetic tests only. It performs no player-data migration, cloud normalization, profile restore, browser-storage operation, or production write. No signed-in Focus Hero profile, private cloud payload, sync code, credential, recovery artifact, or backup was read or changed. Production deployment remains blocked until the independent immutable vault is confirmed live and a restore drill succeeds.
+
 # v10.7.0 — 2026-07-22
 
 - Made ordinary single-device offline use durable: local changes now persist an explicit unsynced marker before storage, survive a restart, and pull-then-flush automatically at boot, focus, visibility return, polling, or reconnection. While cloud sync is enabled, offline reductions and deletions are blocked because the existing monotonic merge cannot safely represent them; additions and completed sessions remain available offline.

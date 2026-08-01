@@ -10,14 +10,12 @@
     ore:    { name:"Ironroot",   required:120, yield:{ore:3},    note:"Builds farm and forge upgrades." }
   };
   var MATERIALS = ["seed","herb","timber","ore"];
-  var pendingPriority = null;
-  var priorityBypass = false;
   var idSequence = 0;
 
   function S(){ return window.state; }
   function n(v){ v=Number(v); return Number.isFinite(v)?v:0; }
   function int(v){ return Math.trunc(n(v)); }
-  function clone(v){ try{return JSON.parse(JSON.stringify(v));}catch(_){return v;} }
+  function clone(v){ return JSON.parse(JSON.stringify(v)); }
   function eventIdExists(candidate){
     var e=S()&&S().focusEconomy;if(!e)return false;
     if(e.grants&&Object.prototype.hasOwnProperty.call(e.grants,candidate))return true;
@@ -178,7 +176,7 @@
     return {orbs:Math.floor(m/25)+(priority?1:0),materials:mats,farmMinutes:m};
   }
   function recordTimeOnly(rec){
-    try{return !!(rec&&(rec.timeOnly||(typeof window.taskIsTimeOnly==="function"&&window.taskIsTimeOnly(rec.taskId))||(typeof window.taskIsTimeOnlyByName==="function"&&window.taskIsTimeOnlyByName(rec.taskName))));}catch(_){return false;}
+    return !!(rec&&(rec.timeOnly||(typeof window.taskIsTimeOnly==="function"&&window.taskIsTimeOnly(rec.taskId))||(typeof window.taskIsTimeOnlyByName==="function"&&window.taskIsTimeOnlyByName(rec.taskName))));
   }
   function grantForRecord(rec){
     var floor=Math.max(1,int(S().settings&&S().settings.minRewardMinutes)||5);
@@ -231,19 +229,21 @@
   }
   function liveRewardContext(minutes,taskId,taskName,forced){
     var s=S(), m=Math.max(0,int(minutes)), floor=Math.max(1,int(s.settings&&s.settings.minRewardMinutes)||5);
-    var timeOnly=false; try{timeOnly=(typeof window.taskIsTimeOnly==="function"&&window.taskIsTimeOnly(taskId))||(typeof window.taskIsTimeOnlyByName==="function"&&window.taskIsTimeOnlyByName(taskName));}catch(_){}
+    var timeOnly=(typeof window.taskIsTimeOnly==="function"&&window.taskIsTimeOnly(taskId))||(typeof window.taskIsTimeOnlyByName==="function"&&window.taskIsTimeOnlyByName(taskName));
     var combo=forced&&forced.combo!=null?int(forced.combo):(s.combo&&s.combo.date===today()?int(s.combo.count):0);
     var streak=forced&&forced.streak!=null?int(forced.streak):liveStreakPreview();
     var breakdown=window.computeXpBreakdown(m,{comboCount:combo,streakDays:streak,settings:s.settings});
     var eligible=!timeOnly&&m>=floor, raw=eligible?int(breakdown.total):0;
-    var xp=eligible&&typeof window.rewardXpTotal==="function"?int(window.rewardXpTotal(raw)):raw;
-    var coinBase=eligible&&typeof window.computeCoins==="function"?int(window.computeCoins(m,false)):0;
-    var coins=eligible&&typeof window.computeCoins==="function"?int(window.computeCoins(m,true)):0;
+    if(eligible&&typeof window.rewardXpTotal!=="function")throw new Error("XP multiplier engine is unavailable");
+    if(eligible&&typeof window.computeCoins!=="function")throw new Error("Coin reward engine is unavailable");
+    var xp=eligible?int(window.rewardXpTotal(raw)):0;
+    var coinBase=eligible?int(window.computeCoins(m,false)):0;
+    var coins=eligible?int(window.computeCoins(m,true)):0;
     return {eligible:eligible,timeOnly:timeOnly,combo:combo,streak:streak,breakdown:breakdown,xpRaw:raw,xp:xp,xpMultiplier:raw?xp/raw:1,coinBase:coinBase,coins:coins,coinMultiplier:coinBase?coins/coinBase:1};
   }
   function totalHeroXp(){var s=S();return typeof window.totalXpForLevel==="function"?window.totalXpForLevel(s.hero.level)+int(s.hero.xp):int(s.hero.xp);}
-  function addXp(amount){if(amount>0&&typeof window.addXpQuiet==="function")window.addXpQuiet(amount);}
-  function removeXp(amount){if(amount>0&&typeof window.removeXpQuiet==="function")window.removeXpQuiet(amount);}
+  function addXp(amount){if(amount<=0)return;if(typeof window.addXpQuiet!=="function")throw new Error("XP grant engine is unavailable");window.addXpQuiet(amount);}
+  function removeXp(amount){if(amount<=0)return;if(typeof window.removeXpQuiet!=="function")throw new Error("XP clawback engine is unavailable");window.removeXpQuiet(amount);}
   function applyCoinDelta(delta){
     var s=S(), d=int(delta); if(!d)return;
     if(d>0)s.coinsEarned=Math.max(0,int(s.coinsEarned)+d);else s.coinsSpent=Math.max(0,int(s.coinsSpent)-d);
@@ -258,7 +258,8 @@
   function sessionCoinBaseline(rec){
     if(!rec)return {coins:0,inferred:false};
     if(typeof rec.coins==="number"&&isFinite(rec.coins))return {coins:int(rec.coins),inferred:false};
-    if(!rec.rewarded||recordTimeOnly(rec)||typeof window.computeCoins!=="function")return {coins:0,inferred:true};
+    if(!rec.rewarded||recordTimeOnly(rec))return {coins:0,inferred:true};
+    if(typeof window.computeCoins!=="function")throw new Error("Coin reward engine is unavailable");
     var base=int(window.computeCoins(int(rec.minutes),false)),mult=n(rec.coinMultiplierApplied);
     /* Pre-v10.5 records did not persist their coin amount or gear multiplier.
        One times the historical base is the only conservative, reproducible
@@ -266,11 +267,12 @@
     return {coins:Math.round(base*(mult>0?mult:1)),inferred:true};
   }
   function newRecord(before){var log=S().sessionsLog||[];for(var i=log.length-1;i>=0;i--){if(log[i]&&log[i].id&&!before.has(log[i].id))return log[i];}return null;}
-  function saveRender(){try{window.saveState();}catch(_){}try{window.renderAll();}catch(_){}try{render();updatePriorityUi();}catch(_){}}
+  function saveRender(){window.saveState();try{window.renderAll();}catch(_){}try{render();updatePriorityUi();}catch(_){}}
   function latestEditId(){var log=S().editLog||[], edit=log[log.length-1];return edit&&edit.id?String(edit.id):"";}
   function applyEggMinuteCorrection(delta,eventId,timeOnly,source){
-    if(!delta||timeOnly||typeof window.eggApplyMinuteCorrection!=="function")return null;
-    try{return window.eggApplyMinuteCorrection(S(),int(delta),String(eventId||""),source||{});}catch(_){return null;}
+    if(!delta||timeOnly)return null;
+    if(typeof window.eggApplyMinuteCorrection!=="function")throw new Error("Egg minute-correction engine is unavailable");
+    return window.eggApplyMinuteCorrection(S(),int(delta),String(eventId||""),source||{});
   }
 
   function installRewardParity(){
@@ -284,7 +286,11 @@
         var s=S(), task=(s.tasks||[]).find(function(t){return t&&t.id===taskId;})||{}, before=new Set((s.sessionsLog||[]).map(function(r){return r&&r.id;}));
         var forced={combo:s.combo&&s.combo.date===today()?int(s.combo.count):0,streak:liveStreakPreview()};
         var result=ledger.apply(this,arguments); if(!result||!result.ok)return result;
-        var d=int(result.delta), ctx=liveRewardContext(Math.abs(d),taskId,task.name,forced);
+        var d=int(result.delta);
+        /* Session-backed task reductions already ran the canonical wrapped session editor
+           for each affected record, including XP, coins, eggs, loot, orbs and materials. */
+        if(result.sessionBacked){saveRender();return result;}
+        var ctx=liveRewardContext(Math.abs(d),taskId,task.name,forced);
         var base=ctx.timeOnly?0:(typeof window.ledgerXpForMinutes==="function"?int(window.ledgerXpForMinutes(d)):int(ctx.breakdown.base));
         var extra=Math.max(0,int(ctx.xp)-base); if(d>0)addXp(extra);else removeXp(extra);
         if(ctx.eligible)applyCoinDelta(d>0?ctx.coins:-ctx.coins);
@@ -316,42 +322,159 @@
     }
     var del=window.deleteSessionRecord;
     if(typeof del==="function"&&!del.__fh105){
-      var dw=function(sessionId){var rec=(S().sessionsLog||[]).find(function(r){return r&&r.id===sessionId;}),snapshot=rec?clone(rec):null,coins=rec?int(rec.coins):0;var r=del.apply(this,arguments);if(r&&r.ok){if(coins)applyCoinDelta(-coins);reverseGrant(sessionId);if(snapshot&&snapshot.rewarded)applyEggMinuteCorrection(-int(snapshot.minutes),"egg_session_delete_"+(latestEditId()||sessionId),false,{ownerId:sessionId,taskId:snapshot.taskId||"",kind:"session-delete"});saveRender();}return r;};dw.__fh105=true;window.deleteSessionRecord=dw;
+      var dw=function(sessionId){var rec=(S().sessionsLog||[]).find(function(r){return r&&r.id===sessionId;}),snapshot=rec?clone(rec):null,coins=rec?int(rec.coins):0;var r=del.apply(this,arguments);if(r&&r.ok){if(coins)applyCoinDelta(-coins);reverseGrant(sessionId);if(snapshot&&snapshot.rewarded)applyEggMinuteCorrection(-int(snapshot.minutes),"egg_session_delete_"+String(sessionId)+"_"+(latestEditId()||"noedit"),false,{ownerId:sessionId,taskId:snapshot.taskId||"",kind:"session-delete"});saveRender();}return r;};dw.__fh105=true;window.deleteSessionRecord=dw;
     }
   }
 
   function finishRecordedSession(original,args,priorityPassed){
-    var before=new Set((S().sessionsLog||[]).map(function(r){return r&&r.id;})), xpBefore=totalHeroXp();
-    priorityBypass=true; var result; try{result=original.apply(window,args);}finally{priorityBypass=false;}
+    var before=new Set((S().sessionsLog||[]).map(function(r){return r&&r.id;}));
+    var result=original.apply(window,args);
     var claim=args&&args[0], claimId=claim&&claim.sessionId;
     var rec=newRecord(before) || (result&&result.record) || (claimId?(S().sessionsLog||[]).find(function(r){return r&&r.id===claimId;}):null);
     if(rec){rec.priorityVerified=!!priorityPassed||!!rec.priorityVerified;var raw=int(rec.xpRaw!=null?rec.xpRaw:rec.xp),actual=rec.rewarded?int(window.rewardXpTotal(raw)):0;var ctx={xpRaw:raw,xp:actual,xpMultiplier:raw?actual/raw:1,coins:rec.rewarded?int(window.computeCoins(rec.minutes,true)):0,coinBase:rec.rewarded?int(window.computeCoins(rec.minutes,false)):0,combo:int(rec.comboPriorCount),streak:int(rec.streakForCalc)};ctx.coinMultiplier=ctx.coinBase?ctx.coins/ctx.coinBase:1;patchRecord(rec,ctx);upsertGrant(rec);}
     S().timer.priorityRun=false;saveRender();return result;
   }
-  function priorityEnabledForRun(){var s=S();return !!(s&&s.timer&&(s.timer.priorityRun||s.settings.priorityMode));}
-  function showPriority(kind,original,args){pendingPriority={kind:kind,original:original,args:Array.prototype.slice.call(args)};var m=document.getElementById("priority-check-modal");if(m)m.hidden=false;}
-  function cancelPriorityRun(){
-    var s=S(); if(!pendingPriority&&!s.pendingFocusClaim)return;
-    var wasSw=pendingPriority&&pendingPriority.kind==="stopwatch";pendingPriority=null;
-    if(wasSw){s.timer.swStartedAt=0;s.timer.swAccumulatedMs=0;s.timer.swSessionStartedAt=0;s.timer.swLaps=[];}else{s.timer.msLeft=(typeof window.modeMinutes==="function"?window.modeMinutes("focus"):int(s.settings.focusMin)||25)*60000;}
-    s.timer.running=false;s.timer.endAt=0;s.timer.pausedAt=0;s.timer.activeTaskId=null;s.timer.activeTaskNameAtStart=null;s.timer.priorityRun=false;s.canceledSessionCount=int(s.canceledSessionCount)+1;
-    var m=document.getElementById("priority-check-modal");if(m)m.hidden=true;try{window.stopKeepalive();window.releaseWakeLock();}catch(_){}try{window.logLine("Priority run canceled — no minutes, XP, loot, or materials counted.");}catch(_){}try{window.toast("Priority run canceled. Nothing counted.","warn");}catch(_){}try{if(typeof window.clearPendingFocusClaim==="function")window.clearPendingFocusClaim();}catch(_){}saveRender();
+  function prioritySucceededForRun(claim){
+    if(claim&&typeof claim==="object"&&Object.prototype.hasOwnProperty.call(claim,"priorityRun"))return !!claim.priorityRun;
+    var s=S();return !!(s&&s.timer&&s.timer.priorityRun);
   }
   function installPriorityWrappers(){
     var start=window.startTimer;if(typeof start==="function"&&!start.__fhPriority){var sw=function(){var s=S(),fresh=!s.timer.running&&((typeof window.isStopwatch==="function"&&window.isStopwatch())?int(s.timer.swAccumulatedMs)===0:int(s.timer.msLeft)>=(typeof window.focusPlannedMs==="function"?int(window.focusPlannedMs()):int(s.settings.focusMin)*60000));if(fresh)s.timer.priorityRun=!!s.settings.priorityMode;var r=start.apply(this,arguments);updatePriorityUi();return r;};sw.__fhPriority=true;window.startTimer=sw;}
-    var commit=window.commitFocusTimerSession;if(typeof commit==="function"&&!commit.__fhPriority){var cw=function(){var claim=arguments&&arguments[0];if(!priorityBypass&&claim&&claim.priorityVerified)return finishRecordedSession(commit,arguments,true);if(!priorityBypass&&priorityEnabledForRun()){showPriority("timer",commit,arguments);return{pendingPriority:true};}return finishRecordedSession(commit,arguments,false);};cw.__fhPriority=true;window.commitFocusTimerSession=cw;}
-    var stop=window.finalizeStopwatch;if(typeof stop==="function"&&!stop.__fhPriority){var fw=function(){var s=S();if(!priorityBypass&&priorityEnabledForRun()){
-      if(s.timer.running){s.timer.swAccumulatedMs=int(s.timer.swAccumulatedMs)+Math.max(0,Date.now()-n(s.timer.swStartedAt));s.timer.swStartedAt=0;s.timer.running=false;}
-      if(Math.floor(int(s.timer.swAccumulatedMs)/60000)>0){showPriority("stopwatch",stop,arguments);saveRender();return{pendingPriority:true};}
-    }return finishRecordedSession(stop,arguments,false);};fw.__fhPriority=true;window.finalizeStopwatch=fw;}
+    var commit=window.commitFocusTimerSession;if(typeof commit==="function"&&!commit.__fhPriority){var cw=function(){var claim=arguments&&arguments[0];return finishRecordedSession(commit,arguments,prioritySucceededForRun(claim));};cw.__fhPriority=true;window.commitFocusTimerSession=cw;}
+    var stop=window.finalizeStopwatch;if(typeof stop==="function"&&!stop.__fhPriority){var fw=function(){return finishRecordedSession(stop,arguments,prioritySucceededForRun(null));};fw.__fhPriority=true;window.finalizeStopwatch=fw;}
     ["resetTimer","cancelSession","gameModeResetSession"].forEach(function(name){var orig=window[name];if(typeof orig!=="function"||orig.__fhPriority)return;var w=function(){var r=orig.apply(this,arguments);if(r!==false){S().timer.priorityRun=false;updatePriorityUi();}return r;};w.__fhPriority=true;window[name]=w;});
+  }
+
+  /* Transitional accounting boundary.
+     This is deliberately not presented as the final append-only event ledger.
+     Its narrow job is to make each legacy accounting command appear as one
+     persistence unit while the existing core, target, egg, loot, and economy
+     effects run. Legacy helpers may still call saveState()/scheduleSave(), but
+     the core barrier holds those writes, broadcasts, and cloud scheduling until
+     the outermost fully wrapped command has completed. */
+  var accountingCommandActive=false;
+  var ACCOUNTING_COMMANDS=[
+    "commitFocusTimerSession",
+    "finalizeStopwatch",
+    "applyTaskTimeAdjustment",
+    "applySessionEdit",
+    "deleteSessionRecord"
+  ];
+  function accountingSnapshot(){
+    var serialized=JSON.stringify(S());
+    if(typeof serialized!=="string")throw new Error("state snapshot was not serializable");
+    return JSON.parse(serialized);
+  }
+  function renderAccountingSnapshotWithoutPersistence(snapshot){
+    var pristine=JSON.stringify(snapshot);
+    if(typeof window.beginStatePersistenceBarrier==="function")window.beginStatePersistenceBarrier();
+    try{window.renderAll();}catch(_){}
+    finally{
+      if(typeof pristine==="string")window.state=JSON.parse(pristine);
+      if(typeof window.endStatePersistenceBarrier==="function")window.endStatePersistenceBarrier();
+    }
+  }
+  function accountingStorageIsIndeterminate(){
+    return typeof window.isAccountingStorageIndeterminate==="function"&&window.isAccountingStorageIndeterminate();
+  }
+  function storageIndeterminateResult(error){
+    return {
+      ok:false,reason:"storage_indeterminate",retryable:false,
+      error:error&&error.message||"Primary storage could not be verified. Export raw state and use explicit verified recovery before any retry."
+    };
+  }
+  function installAtomicCommandBoundary(){
+    ACCOUNTING_COMMANDS.forEach(function(name){
+      var original=window[name];
+      if(typeof original!=="function"||original.__fhAccountingBoundary)return;
+      var wrapped=function(){
+        if(accountingStorageIsIndeterminate())return storageIndeterminateResult();
+        if(accountingCommandActive)return original.apply(this,arguments);
+        var snapshot;
+        try{snapshot=accountingSnapshot();}
+        catch(error){
+          try{window.toast("Accounting action paused safely. No data was changed.","warn");}catch(_){}
+          return {ok:false,reason:"snapshot_failed",error:error&&error.message||String(error)};
+        }
+        accountingCommandActive=true;
+        var deferAutoStart=name==="commitFocusTimerSession"&&!!(S()&&S().settings&&S().settings.autoStart);
+        if(deferAutoStart)S().settings.autoStart=false;
+        if(typeof window.beginStatePersistenceBarrier==="function")window.beginStatePersistenceBarrier();
+        var result, failure=null;
+        try{
+          result=original.apply(this,arguments);
+          if(result&&(result.ok===false||result.duplicate===true)){
+            window.state=snapshot;
+          }
+        }catch(error){
+          window.state=snapshot;
+          failure=error;
+        }finally{
+          if(typeof window.endStatePersistenceBarrier==="function")window.endStatePersistenceBarrier();
+          accountingCommandActive=false;
+        }
+        if(failure){
+          renderAccountingSnapshotWithoutPersistence(snapshot);
+          try{window.toast("Accounting action rolled back safely. Nothing was saved.","warn");}catch(_){}
+          console.warn("[Focus Hero] accounting command rolled back",name,failure);
+          return {ok:false,reason:"accounting_rolled_back",error:failure&&failure.message||String(failure)};
+        }
+        if(result&&(result.ok===false||result.duplicate===true)){
+          renderAccountingSnapshotWithoutPersistence(snapshot);
+          return result;
+        }
+        if(deferAutoStart&&S()&&S().settings)S().settings.autoStart=true;
+        var persistenceOk=false,persistenceError=null;
+        try{persistenceOk=window.saveState()===true;}
+        catch(error){
+          persistenceError=error;
+          console.warn("[Focus Hero] completed accounting command could not be saved",name,error);
+        }
+        if(!persistenceOk){
+          if(accountingStorageIsIndeterminate()){
+            try{window.toast("Accounting is locked because device storage could not be verified. Do not retry; export raw state and use Recovery.","warn");}catch(_){}
+            return storageIndeterminateResult(persistenceError);
+          }
+          window.state=snapshot;
+          renderAccountingSnapshotWithoutPersistence(snapshot);
+          try{window.toast("Accounting action was not saved and has been rolled back. Retry when device storage is available.","warn");}catch(_){}
+          return {
+            ok:false,reason:"persistence_failed",retryable:true,
+            error:persistenceError&&persistenceError.message||window.saveState?._lastPrimarySave?.error||"primary state save failed"
+          };
+        }
+        if(deferAutoStart)setTimeout(function(){try{window.startTimer();}catch(_){}},900);
+        return result;
+      };
+      wrapped.__fhAccountingBoundary=true;
+      wrapped.__fhAccountingCommand=name;
+      wrapped.__fhAccountingInner=original;
+      ["__fhPriority","__fh105","__fhtWrapped"].forEach(function(marker){
+        if(original[marker])wrapped[marker]=original[marker];
+      });
+      window[name]=wrapped;
+      if(window.__FocusHero)window.__FocusHero[name]=wrapped;
+    });
+    window.__fhAccountingBoundary={
+      version:2,
+      transitional:true,
+      receiptJournal:false,
+      commands:ACCOUNTING_COMMANDS.slice(),
+      active:function(){return accountingCommandActive;}
+    };
   }
 
   function plotProgress(plot,availableFarmMinutes){var spec=plot&&CROPS[plot.crop];if(!spec)return 0;var available=availableFarmMinutes==null?totals().farmMinutes:int(availableFarmMinutes);return Math.max(0,Math.min(spec.required,available-int(plot.plantedAt)));}
   function plant(plotId,cropId){var e=ensure(),p=e.plots.find(function(x){return x.id===plotId;}),spec=CROPS[cropId];if(!p||!spec||p.crop)return false;if(!spend("plant",{materials:{seed:1}},{crop:cropId})){window.toast("You need 1 seed.","warn");return false;}var plantedAt=totals().farmMinutes;e=ensure();p=e.plots.find(function(x){return x.id===plotId;});if(!p)return false;p.crop=cropId;p.plantedAt=plantedAt;p.updatedAt=Date.now();saveRender();return true;}
   function recordHarvest(e,p,at){
     var spec=p&&CROPS[p.crop];if(!e||!p||!spec)return null;
-    var h={id:id("harvest"),plotId:p.id,crop:p.crop,yield:clone(spec.yield),at:at,updatedAt:at};
+    var baseYield=clone(spec.yield),utility=null;
+    if(typeof window.fhGearUtilityHarvestYield==="function"){
+      try{utility=window.fhGearUtilityHarvestYield(baseYield,S(),{crop:p.crop,plotId:p.id});}catch(_){utility=null;}
+    }
+    var actualYield=utility&&plainObject(utility.yield)?clone(utility.yield):baseYield;
+    var h={id:id("harvest"),plotId:p.id,crop:p.crop,yield:actualYield,at:at,updatedAt:at};
+    if(utility&&utility.applied)h.gearUtility={version:1,harvestYieldPct:int(utility.harvestYieldPct),bonus:clone(utility.bonus||{}),sources:(utility.sources||[]).slice(0,5)};
     e.harvests.push(h);p.crop=null;p.plantedAt=0;p.updatedAt=at;return {event:h,name:spec.name};
   }
   function harvest(plotId){var e=ensure(),p=e.plots.find(function(x){return x.id===plotId;}),spec=p&&CROPS[p.crop];if(!p||!spec)return false;var available=totals().farmMinutes;e=ensure();p=e.plots.find(function(x){return x.id===plotId;});spec=p&&CROPS[p.crop];if(!p||!spec||plotProgress(p,available)<spec.required)return false;var result=recordHarvest(e,p,Date.now());window.toast(result.name+" harvested.","good");saveRender();return true;}
@@ -364,12 +487,14 @@
   function accelerate(){if(!spend("farm-boost",{orbs:1},{farmMinutes:25}))return void window.toast("You need 1 Focus Orb.","warn");window.toast("Farm advanced by 25 focus minutes.","good");saveRender();}
   function unlockPlot(){var e=ensure();if(e.unlockedPlots>=3)return false;if(!spend("unlock-plot",{orbs:3,materials:{timber:5,ore:4}},{unlockedPlot:3})){window.toast("Need 3 Orbs, 5 Timber, and 4 Ore.","warn");return false;}e=ensure();e.unlockedPlots=3;saveRender();return true;}
   function craftTonic(){if(!spend("focus-tonic",{orbs:1,materials:{herb:4}},{boost:"xp25"}))return void window.toast("Need 1 Orb and 4 Herbs.","warn");if(!S().store||typeof S().store!=="object")S().store={purchased:[],boosts:[],unlockedThemes:[]};if(!Array.isArray(S().store.boosts))S().store.boosts=[];S().store.boosts.push({uid:id("farm_tonic"),kind:"xp",mult:1.25,durationMs:45*60000,name:"Farm Focus Tonic",purchasedAt:Date.now(),activatedAt:null,used:false});window.toast("Focus Tonic crafted. Activate it in Store.","good");saveRender();}
-  function craftForgeKit(){if(!spend("forge-kit",{orbs:1,materials:{timber:3,ore:3}},{dust:8,shards:1}))return void window.toast("Need 1 Orb, 3 Timber, and 3 Ore.","warn");if(!S().loot||typeof S().loot!=="object")S().loot={};if(!S().loot.materials||typeof S().loot.materials!=="object")S().loot.materials={dust:0,shards:0,essence:0};S().loot.materials.dust=int(S().loot.materials.dust)+8;S().loot.materials.shards=int(S().loot.materials.shards)+1;window.toast("Forge Kit crafted: +8 Dust, +1 Shard.","good");saveRender();}
+  function craftForgeKit(){if(!spend("forge-kit",{orbs:1,materials:{timber:3,ore:3}},{dust:8,shards:1}))return void window.toast("Need 1 Orb, 3 Timber, and 3 Ore.","warn");if(!S().loot||typeof S().loot!=="object")S().loot={};if(!S().loot.materials||typeof S().loot.materials!=="object")S().loot.materials={dust:0,shards:0,essence:0};S().loot.materials.dust=int(S().loot.materials.dust)+8;S().loot.materials.shards=int(S().loot.materials.shards)+1;window.toast("Forge Kit crafted: +8 Arcane Dust, +1 Forge Shard.","good");saveRender();}
 
   function yieldText(values){var parts=[];MATERIALS.forEach(function(k){var amount=int(values&&values[k]);if(amount)parts.push("+"+amount+" "+(k==="seed"?"seed"+(amount===1?"":"s"):k));});return parts.join(", ")||"No materials";}
   function historyTime(value){var d=new Date(n(value));return Number.isFinite(d.getTime())?d.toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}):"Unknown time";}
   function render(){
-    var host=document.getElementById("focus-economy-panel");if(!host)return;var e=ensure(),t=totals(),hasSeed=t.materials.seed>=1;
+    var host=document.getElementById("focus-economy-panel");if(!host)return;var e=ensure(),t=totals(),hasSeed=t.materials.seed>=1,s=S();
+    var forgeMaterials=s&&s.loot&&s.loot.materials?s.loot.materials:{dust:0,shards:0,essence:0};
+    var worldShards=Math.max(0,int(s&&s.crystalShards));
     var readyCount=0;
     var plots=e.plots.slice(0,e.unlockedPlots).map(function(p){var spec=CROPS[p.crop],progress=plotProgress(p,t.farmMinutes),pct=spec?Math.min(100,Math.round(progress/spec.required*100)):0;
       if(!spec)return '<div class="fhe-plot"><div class="fhe-plot-title"><b>Empty plot</b><strong>Needs 1 seed</strong></div><span>Choose a crop. Only credited focus minutes grow it.</span><select aria-label="Crop for '+esc(p.id)+'" data-fhe-crop="'+esc(p.id)+'"><option value="herb">Moon herbs · 60m → 4 herbs</option><option value="timber">Sunwood · 90m → 4 timber</option><option value="ore">Ironroot · 120m → 3 ore</option></select><button type="button" data-fhe-plant="'+esc(p.id)+'" '+(hasSeed?'':'disabled')+'>Plant · 1 seed</button><small>'+(hasSeed?'Affordable now':'Earn a seed with 30 credited minutes')+'</small></div>';
@@ -377,16 +502,19 @@
       return '<div class="fhe-plot '+(ready?'ready':'')+'"><div class="fhe-plot-title"><b>'+esc(spec.name)+'</b><strong>'+(ready?'READY':remaining+'m left')+'</strong></div><span>Yield: '+esc(yieldText(spec.yield))+' · '+esc(spec.note)+'</span><div class="fhe-track" role="progressbar" aria-label="'+esc(spec.name)+' growth" aria-valuemin="0" aria-valuemax="'+spec.required+'" aria-valuenow="'+progress+'"><i style="width:'+pct+'%"></i></div><small>'+progress+' of '+spec.required+' credited growth minutes</small><button type="button" data-fhe-harvest="'+esc(p.id)+'" '+(ready?'':'disabled')+'>'+(ready?'Harvest '+esc(yieldText(spec.yield)):'Growing · '+remaining+'m remaining')+'</button></div>';
     }).join("");
     var recent=e.harvests.slice().sort(function(a,b){return n(b&&b.at)-n(a&&a.at);}).slice(0,5).map(function(h){var spec=CROPS[h&&h.crop];return '<li><div><b>'+esc(spec?spec.name:(h&&h.crop)||"Harvest")+'</b><span>'+esc(historyTime(h&&h.at))+'</span></div><strong>'+esc(yieldText(h&&h.yield))+'</strong></li>';}).join("");
+    var activeCount=e.plots.slice(0,e.unlockedPlots).filter(function(p){return !!CROPS[p&&p.crop];}).length;
     var boostAffordable=canAfford({orbs:1}),unlockAffordable=canAfford({orbs:3,materials:{timber:5,ore:4}}),tonicAffordable=canAfford({orbs:1,materials:{herb:4}}),forgeAffordable=canAfford({orbs:1,materials:{timber:3,ore:3}});
-    host.innerHTML='<div class="fhe-head"><div><h3>Expedition</h3><p>Earn resources from focus, grow crops, then spend them in the workshop.</p></div><button type="button" data-fhe-boost '+(boostAffordable?'':'disabled')+'>+25 growth · 1 Orb</button></div>'+
+    host.innerHTML='<div class="fhe-head"><div><div class="fhe-kicker">Resource command center</div><h3>Expedition &amp; Farm</h3><p>Every resource now shows where it comes from, what it does, and where to spend it.</p></div><button type="button" data-fhe-boost '+(boostAffordable?'':'disabled')+'>+25 growth · 1 Orb</button></div>'+
       '<div class="fhe-res" aria-label="Expedition resources"><div><b>'+t.orbs+'</b><span>Focus Orbs</span><small>Earn: 25m · Use: boosts &amp; crafting</small></div><div><b>'+t.materials.seed+'</b><span>Seeds</span><small>Earn: 30m · Use: planting</small></div><div><b>'+t.materials.herb+'</b><span>Herbs</span><small>Farm/Hunt · Use: tonics</small></div><div><b>'+t.materials.timber+'</b><span>Timber</span><small>Farm/Travel · Use: building</small></div><div><b>'+t.materials.ore+'</b><span>Ore</span><small>Farm/Fight · Use: forging</small></div></div>'+
-      '<div class="fhe-guide"><b>How it flows</b><span>Credited focus → Orbs, seeds, action materials, and '+t.farmMinutes+' total growth minutes</span><span>Planting &amp; crafting → spends those resources; session edits recalculate the original grants.</span></div>'+
-      '<p class="fhe-rule">Rates are unchanged: 1 Orb per 25 credited minutes, 1 action-based material per 15 minutes, and 1 seed per 30 minutes. A verified Priority run adds 1 Orb.</p>'+
-      '<div class="fhe-section-title"><h4>Focus farm</h4><button type="button" data-fhe-harvest-all '+(readyCount?'':'disabled')+'>Harvest all ready ('+readyCount+')</button></div><div class="fhe-plots">'+plots+'</div>'+(e.unlockedPlots<3?'<button type="button" data-fhe-unlock '+(unlockAffordable?'':'disabled')+'>Unlock third plot · 3 Orbs + 5 Timber + 4 Ore'+(unlockAffordable?'':' · Not affordable yet')+'</button>':'')+
-      '<h4>Workshop</h4><div class="fhe-work"><button type="button" data-fhe-tonic '+(tonicAffordable?'':'disabled')+'><b>Focus Tonic</b><span>1 Orb + 4 Herbs → +25% XP boost for 45m</span><small>'+(tonicAffordable?'Affordable now':'Keep gathering Herbs and Orbs')+'</small></button><button type="button" data-fhe-forge '+(forgeAffordable?'':'disabled')+'><b>Forge Kit</b><span>1 Orb + 3 Timber + 3 Ore → 8 Dust + 1 Shard</span><small>'+(forgeAffordable?'Affordable now':'Keep gathering Timber, Ore, and Orbs')+'</small></button></div>'+
+      '<div class="fhe-guide"><b>Exact earning rules</b><span>Credited focus → 1 Orb per 25m, 1 seed per 30m, 1 action material per 15m, and '+t.farmMinutes+' total farm-clock minutes.</span><span>A completed Priority run adds 1 Orb. Session edits recalculate that session’s grant; canceled runs grant nothing. Historical time from before this system is not converted retroactively.</span></div>'+
+      '<div class="fhe-resource-map" aria-label="Resource destinations"><article><b>Forge materials</b><strong>'+int(forgeMaterials.dust)+' Dust · '+int(forgeMaterials.shards)+' Forge Shards</strong><span>Salvage gear or craft a Forge Kit. Dust rerolls; Forge Shards upgrade.</span><button type="button" data-fhe-open="forge">Open Forge</button></article><article><b>World currency</b><strong>'+worldShards+' World Shards</strong><span>Claim Challenges, then unlock zones or buy special Store stock. This is separate from Forge Shards.</span><button type="button" data-fhe-open="challenges">Open Challenges</button></article></div>'+
+      '<div class="fhe-route-choice"><div><b>Peaceful route</b><span>Travel, Rest, Loot, Craft, Meditate, and Hunt never start combat.</span></div><div><b>Optional combat route</b><span>Only choosing Fight starts encounters in your selected World zone. A 90m+ Fight can reach that zone’s boss.</span></div></div>'+
+      '<div class="fhe-section-title"><div><h4>Focus farm</h4><span class="fhe-section-note">'+activeCount+' planted · '+readyCount+' ready · '+e.unlockedPlots+' plots unlocked</span></div><button type="button" data-fhe-harvest-all '+(readyCount?'':'disabled')+'>Harvest all ready ('+readyCount+')</button></div><div class="fhe-plots">'+plots+'</div>'+(e.unlockedPlots<3?'<button type="button" data-fhe-unlock '+(unlockAffordable?'':'disabled')+'>Unlock third plot · 3 Orbs + 5 Timber + 4 Ore'+(unlockAffordable?'':' · Not affordable yet')+'</button>':'')+
+      '<h4>Workshop</h4><div class="fhe-work"><button type="button" data-fhe-tonic '+(tonicAffordable?'':'disabled')+'><b>Focus Tonic</b><span>1 Orb + 4 Herbs → +25% XP boost for 45m</span><small>'+(tonicAffordable?'Affordable now':'Keep gathering Herbs and Orbs')+'</small></button><button type="button" data-fhe-forge '+(forgeAffordable?'':'disabled')+'><b>Forge Kit</b><span>1 Orb + 3 Timber + 3 Ore → 8 Arcane Dust + 1 Forge Shard</span><small>'+(forgeAffordable?'Affordable now':'Keep gathering Timber, Ore, and Orbs')+'</small></button></div>'+
       '<h4>Recent harvests</h4><ul class="fhe-history">'+(recent||'<li class="empty">No harvests yet. Your last five harvests will appear here.</li>')+'</ul>';
     host.querySelectorAll("[data-fhe-plant]").forEach(function(b){b.onclick=function(){var sel=host.querySelector('[data-fhe-crop="'+CSS.escape(b.dataset.fhePlant)+'"]');plant(b.dataset.fhePlant,sel&&sel.value);};});
     host.querySelectorAll("[data-fhe-harvest]").forEach(function(b){b.onclick=function(){harvest(b.dataset.fheHarvest);};});
+    host.querySelectorAll("[data-fhe-open]").forEach(function(link){link.onclick=function(){var tab=link.dataset.fheOpen;if(typeof window.openProgressPanel==="function")window.openProgressPanel(tab);else{var fallback=document.querySelector('[data-tab="'+tab+'"]');if(fallback)fallback.click();}};});
     var b=host.querySelector("[data-fhe-boost]");if(b)b.onclick=accelerate;b=host.querySelector("[data-fhe-harvest-all]");if(b)b.onclick=harvestAllReady;b=host.querySelector("[data-fhe-unlock]");if(b)b.onclick=unlockPlot;b=host.querySelector("[data-fhe-tonic]");if(b)b.onclick=craftTonic;b=host.querySelector("[data-fhe-forge]");if(b)b.onclick=craftForgeKit;
   }
   window.fhRenderFocusEconomy=render;
@@ -395,33 +523,30 @@
   function updateToggle(){var el=document.getElementById("tog-prioritymode"),on=!!(S()&&S().settings&&S().settings.priorityMode);if(!el)return;el.setAttribute("aria-checked",on?"true":"false");el.classList.toggle("on",on);}
   function updatePriorityUi(){
     var s=S();if(!s)return;ensure();var badge=document.getElementById("priority-mode-badge"),armed=!!s.timer.priorityRun&&(s.timer.running||int(s.timer.swAccumulatedMs)>0||int(s.timer.msLeft)===0),on=!!s.settings.priorityMode;
-    if(badge){badge.textContent=armed?"Priority run · verify at finish":(on?"Priority mode · ON":"Priority mode · OFF");badge.classList.toggle("armed",armed);badge.setAttribute("aria-pressed",on?"true":"false");}
+    if(badge){badge.textContent=armed?"Priority run · Cancel run = 0 credit":(on?"Priority mode · ON":"Priority mode · OFF");badge.classList.toggle("armed",armed);badge.setAttribute("aria-pressed",on?"true":"false");}
     updateToggle();
   }
-  function togglePriority(){ensure();S().settings.priorityMode=!S().settings.priorityMode;window.saveState();updatePriorityUi();window.toast(S().settings.priorityMode?"Priority mode on for new focus runs.":"Priority mode off for new focus runs.","info");}
+  function togglePriority(){ensure();S().settings.priorityMode=!S().settings.priorityMode;window.saveState();updatePriorityUi();window.toast(S().settings.priorityMode?"Priority mode on — use the shared Cancel run button for zero credit if needed.":"Priority mode off for new focus runs.","info");}
   function installDom(){
     if(!document.getElementById("fhe-style")){
       var st=document.createElement("style");st.id="fhe-style";st.textContent=[
-        ".fhe-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.fhe-head h3{margin:0}.fhe-head p,.fhe-rule{margin:4px 0 10px;color:var(--ink-dim);font-size:.76rem;line-height:1.45}",
+        ".fhe-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.fhe-head h3{margin:0}.fhe-kicker{margin-bottom:2px;color:var(--accent-2);font-size:.62rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase}.fhe-head p,.fhe-rule{margin:4px 0 10px;color:var(--ink-dim);font-size:.76rem;line-height:1.45}",
         ".fhe-head>button,.fhe-section-title button{white-space:nowrap}.fhe-res{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px;margin:10px 0}",
         ".fhe-res div,.fhe-plot,.fhe-work button,.fhe-guide,.fhe-history{border:1px solid var(--border);background:rgba(255,255,255,.035);border-radius:12px;padding:9px}.fhe-res b{display:block;font-size:1.05rem}.fhe-res span,.fhe-plot span,.fhe-work span,.fhe-guide span{display:block;color:var(--ink-dim);font-size:.69rem;margin-top:2px;line-height:1.35}.fhe-res small,.fhe-plot small,.fhe-work small{display:block;color:var(--ink-dim);font-size:.62rem;line-height:1.35;margin-top:5px}",
-        ".fhe-guide{display:grid;gap:2px;margin-bottom:8px}.fhe-guide b{font-size:.78rem}.fhe-section-title,.fhe-plot-title{display:flex;align-items:center;justify-content:space-between;gap:8px}.fhe-section-title h4{margin:10px 0 7px}.fhe-plot-title strong{font-size:.65rem;color:var(--ink-dim)}.fhe-plot.ready{border-color:rgba(74,222,128,.55);box-shadow:inset 0 0 0 1px rgba(74,222,128,.12)}.fhe-plot.ready .fhe-plot-title strong{color:#86efac}",
+        ".fhe-guide{display:grid;gap:2px;margin-bottom:8px}.fhe-guide b{font-size:.78rem}.fhe-resource-map,.fhe-route-choice{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:8px 0}.fhe-resource-map article,.fhe-route-choice>div{display:grid;gap:3px;padding:10px;border:1px solid var(--border);border-radius:12px;background:rgba(255,255,255,.035)}.fhe-resource-map b,.fhe-route-choice b{font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--accent-2)}.fhe-resource-map strong{font-size:.9rem}.fhe-resource-map span,.fhe-route-choice span{color:var(--ink-dim);font-size:.68rem;line-height:1.4}.fhe-resource-map button{justify-self:start;margin-top:4px;font-size:.68rem}.fhe-route-choice>div:last-child{border-color:rgba(248,113,113,.34)}.fhe-section-title,.fhe-plot-title{display:flex;align-items:center;justify-content:space-between;gap:8px}.fhe-section-title h4{margin:10px 0 2px}.fhe-section-note{display:block;color:var(--ink-dim);font-size:.65rem}.fhe-plot-title strong{font-size:.65rem;color:var(--ink-dim)}.fhe-plot.ready{border-color:rgba(74,222,128,.55);box-shadow:inset 0 0 0 1px rgba(74,222,128,.12)}.fhe-plot.ready .fhe-plot-title strong{color:#86efac}",
         ".fhe-plots{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:7px 0 10px}.fhe-plot select{width:100%;margin:8px 0}.fhe-plot button{width:100%;margin-top:8px}.fhe-track{height:9px;background:rgba(0,0,0,.28);border-radius:8px;margin:8px 0 4px;overflow:hidden}.fhe-track i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2));border-radius:inherit}.fhe-work{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.fhe-work button{text-align:left}",
         ".fhe-history{list-style:none;margin:7px 0 0;display:grid;gap:7px}.fhe-history li{display:flex;justify-content:space-between;gap:10px;align-items:center;padding-bottom:7px;border-bottom:1px solid var(--border)}.fhe-history li:last-child{padding-bottom:0;border-bottom:0}.fhe-history li div span{display:block;color:var(--ink-dim);font-size:.66rem;margin-top:2px}.fhe-history li strong{font-size:.72rem;color:#86efac;text-align:right}.fhe-history .empty{color:var(--ink-dim);font-size:.72rem}",
-        ".priority-mode-badge{display:block;width:fit-content;max-width:92%;margin:6px auto 0;padding:5px 13px;border-radius:999px;font-size:.74rem;font-weight:700;background:rgba(148,163,184,.12);color:#cbd5e1;border:1px solid rgba(148,163,184,.3)}.priority-mode-badge.armed{background:rgba(96,165,250,.18);color:#bfdbfe;border-color:rgba(96,165,250,.55)}.priority-check-copy{color:var(--ink-dim);line-height:1.5}.priority-check-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}",
-        "@media(max-width:680px){.fhe-head{align-items:stretch;flex-direction:column}.fhe-head>button{width:100%}.fhe-res{grid-template-columns:repeat(2,1fr)}.fhe-plots,.fhe-work{grid-template-columns:1fr}.fhe-section-title{align-items:flex-start;flex-direction:column}.fhe-section-title button{width:100%}}"
+        ".priority-mode-badge{display:block;width:fit-content;max-width:92%;margin:6px auto 0;padding:5px 13px;border-radius:999px;font-size:.74rem;font-weight:700;background:rgba(148,163,184,.12);color:#cbd5e1;border:1px solid rgba(148,163,184,.3)}.priority-mode-badge.armed{background:rgba(96,165,250,.18);color:#bfdbfe;border-color:rgba(96,165,250,.55)}",
+        "@media(max-width:680px){.fhe-head{align-items:stretch;flex-direction:column}.fhe-head>button{width:100%}.fhe-res{grid-template-columns:repeat(2,1fr)}.fhe-plots,.fhe-work,.fhe-resource-map,.fhe-route-choice{grid-template-columns:1fr}.fhe-section-title{align-items:flex-start;flex-direction:column}.fhe-section-title button{width:100%}}"
       ].join("");(document.head||document.documentElement).appendChild(st);
     }
     if(!document.getElementById("priority-mode-badge")){var anchor=document.getElementById("game-mode-badge");if(anchor){anchor.insertAdjacentHTML("afterend",'<button type="button" id="priority-mode-badge" class="priority-mode-badge" aria-pressed="false">Priority mode · OFF</button>');}}
-    if(!document.getElementById("priority-check-modal")){document.body.insertAdjacentHTML("beforeend",'<div class="modal-backdrop" id="priority-check-modal" hidden data-locked="true"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="priority-check-title"><h3 id="priority-check-title">Priority check</h3><p class="priority-check-copy">Did you work in the right priority order for this run? This is your manual honor-system checkpoint.</p><div class="priority-check-actions"><button type="button" id="btn-priority-cancel">Cancel entire run · 0 credit</button><button type="button" class="primary" id="btn-priority-keep">Yes · keep full session</button></div></div></div>');}
     var tog=document.getElementById("tog-prioritymode");if(tog&&!tog.dataset.bound){tog.dataset.bound="1";tog.onclick=togglePriority;}
     var badge=document.getElementById("priority-mode-badge");if(badge&&!badge.dataset.bound){badge.dataset.bound="1";badge.onclick=togglePriority;}
-    var keep=document.getElementById("btn-priority-keep");if(keep&&!keep.dataset.bound){keep.dataset.bound="1";keep.onclick=function(){var p=pendingPriority;if(!p)return;pendingPriority=null;document.getElementById("priority-check-modal").hidden=true;if(p.args&&p.args[0])p.args[0].priorityVerified=true;try{if(typeof window.markPendingFocusClaimPriorityVerified==="function")window.markPendingFocusClaimPriorityVerified();}catch(_){}finishRecordedSession(p.original,p.args,true);try{if(typeof window.clearPendingFocusClaim==="function")window.clearPendingFocusClaim(p.args&&p.args[0]&&p.args[0].sessionId);}catch(_){}};}
-    var cancel=document.getElementById("btn-priority-cancel");if(cancel&&!cancel.dataset.bound){cancel.dataset.bound="1";cancel.onclick=cancelPriorityRun;}
   }
   function wrapRender(){var r=window.renderAll;if(typeof r==="function"&&!r.__fhEconomy){var w=function(){var x=r.apply(this,arguments);try{render();updatePriorityUi();}catch(_){}return x;};w.__fhEconomy=true;window.renderAll=w;}}
 
-  function boot(){var before="";try{before=JSON.stringify({focusEconomy:S()&&S().focusEconomy,priorityMode:S()&&S().settings&&S().settings.priorityMode,priorityRun:S()&&S().timer&&S().timer.priorityRun});}catch(_){}ensure();installDom();installRewardParity();installPriorityWrappers();wrapRender();render();updatePriorityUi();var after="";try{after=JSON.stringify({focusEconomy:S()&&S().focusEconomy,priorityMode:S()&&S().settings&&S().settings.priorityMode,priorityRun:S()&&S().timer&&S().timer.priorityRun});}catch(_){}if(before!==after){try{window.saveState();}catch(_){}}
+  function boot(){var before="";try{before=JSON.stringify({focusEconomy:S()&&S().focusEconomy,priorityMode:S()&&S().settings&&S().settings.priorityMode,priorityRun:S()&&S().timer&&S().timer.priorityRun});}catch(_){}ensure();installDom();installRewardParity();installPriorityWrappers();installAtomicCommandBoundary();wrapRender();render();updatePriorityUi();var after="";try{after=JSON.stringify({focusEconomy:S()&&S().focusEconomy,priorityMode:S()&&S().settings&&S().settings.priorityMode,priorityRun:S()&&S().timer&&S().timer.priorityRun});}catch(_){}if(before!==after){try{window.saveState();}catch(_){}}
     window.__fhEconomyTest={ensure:ensure,totals:totals,rewardGrant:rewardGrant,liveRewardContext:liveRewardContext,upsertGrant:upsertGrant,grantForRecord:grantForRecord,plant:plant,harvest:harvest,harvestAllReady:harvestAllReady,accelerate:accelerate,render:render,merge:window.fhMergeFocusEconomy,validate:validateEconomy,duplicateEventIds:duplicateEventIds};
   }
   if(document.readyState==="loading")window.addEventListener("DOMContentLoaded",function(){setTimeout(boot,0);});else setTimeout(boot,0);

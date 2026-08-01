@@ -441,9 +441,14 @@ try {
       peer.on("pageerror", error => peerErrors.push(String(error)));
       await peer.goto(`http://127.0.0.1:${port}/`, { waitUntil:"domcontentloaded" });
       await peer.waitForFunction(() => window.__FocusHero?.stageRecovery && typeof window.cloudPull === "function");
+      /* Seed both live tabs before testing the delayed-pull race. Seeding only
+         one tab lets the other tab's still-default whole-state listener race
+         the fixture itself, which tests the known BroadcastChannel blocker
+         instead of the recovery-generation invariant this scenario owns. */
+      await fixture(peer, { enabled:true });
       await fixture(page, { enabled:true });
-      await page.waitForFunction(() => window.__FocusHero.stateRef().sync.enabled === true);
-      await peer.waitForFunction(() => window.__FocusHero.stateRef().sync.playerId === "old-player");
+      await page.waitForFunction(() => window.__FocusHero.stateRef().sync.enabled === true, null, { timeout:60_000 });
+      await peer.waitForFunction(() => window.__FocusHero.stateRef().sync.playerId === "old-player", null, { timeout:60_000 });
       remoteRows = await page.evaluate(() => {
         const remote = JSON.parse(JSON.stringify(window.__FocusHero.DEFAULTS));
         remote.totalFocusMin = 999;
@@ -877,6 +882,55 @@ try {
     });
   });
 
+  await test("session evidence merges concurrent additions, preserves reductions, and fails closed on ambiguous baselines", async () => {
+    await scenario(async route => route.abort(), async page => {
+    const result = await page.evaluate(() => {
+      const fh = window.__FocusHero, day = "2026-07-31", taskId = "task-cloud-ledger";
+      const clone = value => JSON.parse(JSON.stringify(value));
+      const fresh = () => {
+        const state = fh.migrate(clone(fh.DEFAULTS));
+        Object.assign(state, { totalFocusMin:100, completedFocusSessions:0, history:{[day]:100}, sessionHistory:{[day]:0}, sessionsLog:[], sessionTombstones:{}, activeTaskId:taskId });
+        state.tasks=[{ id:taskId, name:"Cloud parity", emoji:"C", totalFocusMin:100, sessions:0, dailyMin:{[day]:100}, createdAt:1, lastUsedAt:1, pinned:false }];
+        state.adventure.actionMin={Travel:100,Rest:0,Hunt:0,Loot:0,Fight:0,Craft:0,Meditate:0};
+        state.sync.enabled=false;
+        return state;
+      };
+      const record = (id,minutes,updatedAt) => { const at=Date.now()-10_000; return { id, type:"focus", source:"timer", taskId, taskName:"Cloud parity", dayKey:day, minutes, originalMinutes:Math.max(20,minutes), sessionCountApplied:1, at, completedAt:at, updatedAt:at+updatedAt, action:"Travel", rewarded:false, xp:0, coins:0 }; };
+      const credit = (state,rec) => {
+        state.sessionsLog.push(rec); state.totalFocusMin+=rec.minutes; state.completedFocusSessions+=1;
+        state.history[day]+=rec.minutes; state.sessionHistory[day]+=1;
+        state.tasks[0].totalFocusMin+=rec.minutes; state.tasks[0].sessions+=1; state.tasks[0].dailyMin[day]+=rec.minutes;
+        state.adventure.actionMin.Travel+=rec.minutes;
+      };
+      const local=fresh(), remote=fresh();
+      credit(local,record("cloud-local-add",20,200));
+      credit(remote,record("cloud-remote-add",70,300));
+      const concurrent=fh.mergeRemoteState(local,remote);
+
+      const beforeEdit=fresh(); credit(beforeEdit,record("cloud-shared-edit",20,200));
+      const afterEdit=clone(beforeEdit);
+      const edited=afterEdit.sessionsLog[0]; edited.minutes=10; edited.updatedAt=Date.now(); edited.editedAt=edited.updatedAt;
+      afterEdit.totalFocusMin-=10; afterEdit.history[day]-=10; afterEdit.tasks[0].totalFocusMin-=10; afterEdit.tasks[0].dailyMin[day]-=10; afterEdit.adventure.actionMin.Travel-=10;
+      const reduced=fh.mergeRemoteState(beforeEdit,afterEdit);
+
+      const ambiguousLeft=fresh(), ambiguousRight=fresh();
+      credit(ambiguousLeft,record("cloud-ambiguous-left",20,200));
+      credit(ambiguousRight,record("cloud-ambiguous-right",70,300));
+      ambiguousRight.totalFocusMin+=10;
+      let refused=false, message="";
+      try { fh.mergeRemoteState(ambiguousLeft,ambiguousRight); } catch (error) { refused=true; message=String(error?.message||error); }
+      return {
+        concurrent:{ total:concurrent.totalFocusMin, history:concurrent.history[day], completed:concurrent.completedFocusSessions, task:concurrent.tasks.find(item=>item.id===taskId)?.totalFocusMin, taskSessions:concurrent.tasks.find(item=>item.id===taskId)?.sessions, action:concurrent.adventure.actionMin.Travel, ids:concurrent.sessionsLog.map(row=>row.id).sort() },
+        reduced:{ total:reduced.totalFocusMin, history:reduced.history[day], completed:reduced.completedFocusSessions, task:reduced.tasks.find(item=>item.id===taskId)?.totalFocusMin, taskSessions:reduced.tasks.find(item=>item.id===taskId)?.sessions, action:reduced.adventure.actionMin.Travel, minutes:reduced.sessionsLog.find(row=>row.id==="cloud-shared-edit")?.minutes },
+        refused, message
+      };
+    });
+    assert.deepEqual(result.concurrent, { total:190, history:190, completed:2, task:190, taskSessions:2, action:190, ids:["cloud-local-add","cloud-remote-add"] });
+    assert.deepEqual(result.reduced, { total:110, history:110, completed:1, task:110, taskSessions:1, action:110, minutes:10 });
+    assert.equal(result.refused, true);
+    assert.match(result.message, /Cloud accounting conflict/);
+    });
+  });
   console.log(`sync hardening suite: ${passed}/${passed} passing`);
 } finally {
   await browser.close();

@@ -184,6 +184,58 @@ try {
     await context.close();
   });
 
+  await test("monotonic progression loss cannot replace same-day or mirror snapshots", async () => {
+    const context = await browser.newContext({ serviceWorkers:"block" });
+    const page = await context.newPage();
+    await page.goto(`${base}/guard-harness.html`, { waitUntil:"domcontentloaded" });
+    const result = await page.evaluate(async () => {
+      const MAIN="focusHero.v4.state", MIRROR=MAIN+".guard", date=new Date().toISOString().slice(0,10);
+      const protectedState={
+        totalFocusMin:1000,hero:{level:9},history:{"2026-07-21":1000},sessionsLog:[],tasks:[],
+        coinsEarned:5000,coinsSpent:1200,focusMilestones:{version:1,claimedThrough:2,announcedThrough:2},
+        crystalShardsEarned:20,crystalShardsSpent:5,craftingDust:10,
+        world:{unlockedZones:{verdant_vale:true,ember_reach:true},zonesVisited:{verdant_vale:4,ember_reach:2},
+          bossesDefeated:3,bossSessionRewards:{"boss-session":{reward:"chest"}},mysteryBoxesOpened:2,
+          artifactsFound:{"artifact-1":{foundAt:100}},questCounters:{travel:6}},
+        questSystem:{dailyClaimedCount:3,weeklyClaimedCount:1,seasonalClaimedCount:1},
+        achievementsV85:{"achievement-1":true},
+        eggs:{owned:[{id:"egg-1"}],incubating:[],hatched:[],quarantined:[]},
+        lootInstances:{"iid-1":{id:"iid-1",createdAt:100,updatedAt:200}},
+        loot:{vault:{instances:{}},instanceTombstones:{}},
+        focusEconomy:{grants:{},spends:[],harvests:[],plots:[],unlockedPlots:2}
+      };
+      const current=JSON.parse(JSON.stringify(protectedState));
+      current.totalFocusMin=1010;
+      current.coinsEarned=4999;
+      current.focusMilestones.claimedThrough=1;
+      delete current.world.unlockedZones.ember_reach;
+      current.world.zonesVisited.ember_reach=1;
+      current.eggs.owned=[];
+      delete current.lootInstances["iid-1"];
+      const db=await window.__fhGuardTest.openDb();
+      await new Promise((resolve,reject)=>{
+        const tx=db.transaction("snaps","readwrite");
+        tx.objectStore("snaps").put({date,savedAt:"2026-07-21T12:00:00.000Z",minutes:1000,state:protectedState});
+        tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);
+      });
+      db.close();
+      const mirrorRaw=JSON.stringify({savedAt:"2026-07-21T12:00:00.000Z",state:protectedState});
+      localStorage.setItem(MIRROR,mirrorRaw);
+      localStorage.setItem(MAIN,JSON.stringify(current));
+      await window.__fhGuardTest.takeSnapshot("monotonic-regression-test");
+      const checkDb=await window.__fhGuardTest.openDb();
+      const rows=await window.__fhGuardTest.idbAll(checkDb);
+      checkDb.close();
+      return {
+        idbUnchanged:JSON.stringify(rows[0].state)===JSON.stringify(protectedState),
+        mirrorUnchanged:localStorage.getItem(MIRROR)===mirrorRaw,
+        overlayShown:!!document.getElementById("fh-guard-overlay")
+      };
+    });
+    assert.deepEqual(result,{idbUnchanged:true,mirrorUnchanged:true,overlayShown:true});
+    await context.close();
+  });
+
   await test("a moderate regression cannot overwrite a stronger mirror when IndexedDB is empty", async () => {
     const context = await browser.newContext({ serviceWorkers:"block" });
     const page = await context.newPage();
@@ -278,7 +330,7 @@ try {
     await context.close();
   });
 
-  await test("malformed live JSON is backed up exactly before the newest valid LKG is staged", async () => {
+  await test("malformed live JSON stays byte-identical until an explicit recovery choice", async () => {
     const context = await browser.newContext({ serviceWorkers:"block" });
     const brokenRaw='{ definitely-not-valid-focus-hero-json';
     await context.addInitScript(({brokenRaw}) => {
@@ -298,25 +350,31 @@ try {
     const page=await context.newPage();
     await page.route("**/supabase.co/**",route=>route.abort());
     await page.goto(`${base}/focus-hero.html`,{waitUntil:"domcontentloaded"});
+    await page.waitForSelector("#__fh_safe");
     await page.waitForFunction(() => window.__FocusHero?.stateRef);
     const first=await page.evaluate(() => {
-      const MAIN="focusHero.v4.state",raw=localStorage.getItem(MAIN),state=JSON.parse(raw);
-      const backupKey=Object.keys(localStorage).find(key=>key.startsWith(MAIN+".pre-startup-recovery-"));
-      return {state,backupKey,backup:backupKey&&localStorage.getItem(backupKey),bootError:!!document.getElementById("__fh_safe")};
+      const MAIN="focusHero.v4.state";
+      const startupBackups=Object.keys(localStorage).filter(key=>key.startsWith(MAIN+".pre-startup-recovery-"));
+      const state=window.__FocusHero.stateRef();
+      return {
+        raw:localStorage.getItem(MAIN),
+        state:{totalFocusMin:state.totalFocusMin,coins:state.coins,sync:state.sync},
+        startupBackups,
+        bootError:!!document.getElementById("__fh_safe"),
+        message:document.getElementById("__fh_safe")?.textContent||""
+      };
     });
-    assert.equal(first.backup,brokenRaw);
-    assert.match(first.backupKey,/\.pre-startup-recovery-/);
+    assert.equal(first.raw,brokenRaw);
+    assert.deepEqual(first.startupBackups,[]);
     assert.equal(first.state.totalFocusMin,275);
     assert.equal(first.state.coins,73);
     assert.equal(first.state.sync.playerId,"lkg-player");
     assert.equal(first.state.sync.cloudRev,14);
-    assert.equal(first.state.sync.enabled,false);
-    assert.equal(first.state.sync.pendingSync,false);
-    assert.match(first.state.sync.lastSyncError,/startup recovery staged.*verify/i);
-    assert.equal(first.bootError,false);
+    assert.equal(first.bootError,true);
+    assert.match(first.message,/malformed.*verified recovery snapshot.*explicit.*restore/i);
     await page.reload({waitUntil:"domcontentloaded"});
-    await page.waitForFunction(() => window.__FocusHero?.stateRef);
-    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem("focusHero.v4.state")).totalFocusMin),275);
+    await page.waitForSelector("#__fh_safe");
+    assert.equal(await page.evaluate(() => localStorage.getItem("focusHero.v4.state")),brokenRaw);
     await context.close();
   });
 
@@ -336,6 +394,128 @@ try {
     assert.equal(result.main,brokenRaw);
     assert.deepEqual(result.startupBackups,[]);
     assert.match(result.message,/malformed.*no valid recovery snapshot/i);
+    await context.close();
+  });
+
+  await test("new local profile preserves every recovery key and byte-verifies the prior live profile", async () => {
+    const context = await browser.newContext({ serviceWorkers:"block" });
+    const page = await context.newPage();
+    await page.goto(`${base}/focus-hero.html`,{waitUntil:"domcontentloaded"});
+    await page.waitForFunction(() => window.__FocusHero?.stateRef && document.getElementById("btn-reset")?.onclick);
+    const result = await page.evaluate(() => {
+      const MAIN="focusHero.v4.state";
+      const current=window.__FocusHero.migrate({
+        dataVersion:window.__FocusHero.DATA_VERSION,totalFocusMin:777,coins:321,
+        hero:{name:"Preserved Hero",level:9,xp:45},tasks:[],history:{"2026-07-24":77},sessionsLog:[],
+        sync:{enabled:true,playerId:"preserved-player",cloudRev:22,syncCode:"PRESERVE1",syncSecret:"private-fixture"}
+      });
+      window.state=current;
+      const priorRaw=JSON.stringify(current);
+      localStorage.setItem(MAIN,priorRaw);
+      const protectedEntries={
+        [MAIN+".lkg"]:"lkg-bytes",
+        [MAIN+".pre-v16"]:"migration-bytes",
+        [MAIN+".guard-mirror-fixture"]:"guard-bytes",
+        [MAIN+".pre-in-app-recovery-fixture"]:"recovery-bytes"
+      };
+      Object.entries(protectedEntries).forEach(([key,value])=>localStorage.setItem(key,value));
+      let confirmations=0;
+      window.confirm=()=>{confirmations+=1;return true;};
+      document.getElementById("btn-reset").click();
+      const mainAfter=JSON.parse(localStorage.getItem(MAIN));
+      const backupKey=Object.keys(localStorage).find(key=>key.startsWith(MAIN+".pre-new-profile-"));
+      return {
+        confirmations,
+        priorRaw,
+        backupKey,
+        backup:backupKey&&localStorage.getItem(backupKey),
+        protectedAfter:Object.fromEntries(Object.keys(protectedEntries).map(key=>[key,localStorage.getItem(key)])),
+        protectedEntries,
+        mainAfter
+      };
+    });
+    assert.equal(result.confirmations,2);
+    assert.equal(result.backup,result.priorRaw);
+    assert.match(result.backupKey,/\.pre-new-profile-/);
+    assert.deepEqual(result.protectedAfter,result.protectedEntries);
+    assert.equal(result.mainAfter.totalFocusMin,0);
+    assert.equal(result.mainAfter.sync.enabled,false);
+    assert.equal(result.mainAfter.profileEpoch.preservedBackupKey,result.backupKey);
+    await context.close();
+  });
+
+  await test("new local profile invalidates a delayed pull before it can restore the old cloud profile", async () => {
+    const context = await browser.newContext({ serviceWorkers:"block" });
+    const page = await context.newPage();
+    await page.goto(`${base}/focus-hero.html`,{waitUntil:"domcontentloaded"});
+    await page.waitForFunction(() =>
+      window.__FocusHero?.stateRef &&
+      typeof window.cloudPull === "function" &&
+      document.getElementById("btn-reset")?.onclick
+    );
+    const result = await page.evaluate(async () => {
+      const MAIN="focusHero.v4.state";
+      const current=window.__FocusHero.migrate({
+        dataVersion:window.__FocusHero.DATA_VERSION,totalFocusMin:888,coins:44,
+        hero:{name:"Pre-reset Hero",level:10,xp:8},tasks:[],history:{"2026-07-24":888},sessionsLog:[],
+        sync:{
+          enabled:true,backend:"jsonstorage",jsonstorageUrl:"https://example.invalid/delayed-reset-row",
+          playerId:"pre-reset-player",cloudRev:12,syncCode:"RESETOLD1",syncSecret:"fixture-secret",
+          pendingSync:false,pendingSince:0
+        }
+      });
+      const remote=window.__FocusHero.migrate({
+        dataVersion:window.__FocusHero.DATA_VERSION,totalFocusMin:9_999,coins:999,
+        hero:{name:"Delayed old cloud",level:50,xp:99},tasks:[],history:{"2026-07-24":9_999},sessionsLog:[],
+        sync:{
+          enabled:true,backend:"jsonstorage",jsonstorageUrl:"https://example.invalid/delayed-reset-row",
+          playerId:"pre-reset-player",cloudRev:13,syncCode:"RESETOLD1",syncSecret:"fixture-secret"
+        }
+      });
+      remote.settings.e2eEncryption=false;
+      window.state=current;
+      const priorRaw=JSON.stringify(current);
+      localStorage.setItem(MAIN,priorRaw);
+      let releaseFetch;
+      window.fetch=()=>new Promise(resolve=>{
+        releaseFetch=()=>resolve(new Response(JSON.stringify({
+          id:"pre-reset-player",data:{plain:remote},cloud_rev:13
+        }),{status:200,headers:{"Content-Type":"application/json"}}));
+      });
+      const delayedPull=window.cloudPull().then(
+        value=>({value}),
+        error=>({error:error?.code||error?.message||String(error)})
+      );
+      for(let i=0;i<20&&!releaseFetch;i++) await new Promise(resolve=>setTimeout(resolve,0));
+      if(!releaseFetch) throw new Error("delayed pull did not reach fetch");
+      let confirmations=0;
+      window.confirm=()=>{confirmations+=1;return true;};
+      document.getElementById("btn-reset").click();
+      const immediately=JSON.parse(localStorage.getItem(MAIN));
+      releaseFetch();
+      const pullResult=await delayedPull;
+      await new Promise(resolve=>setTimeout(resolve,0));
+      const finalMain=JSON.parse(localStorage.getItem(MAIN));
+      const memory=window.__FocusHero.stateRef();
+      const backupKey=Object.keys(localStorage).find(key=>key.startsWith(MAIN+".pre-new-profile-"));
+      return {
+        confirmations,priorRaw,backupKey,backup:backupKey&&localStorage.getItem(backupKey),
+        immediately:{minutes:immediately.totalFocusMin,sync:immediately.sync},
+        finalMain:{minutes:finalMain.totalFocusMin,hero:finalMain.hero?.name,sync:finalMain.sync},
+        memory:{minutes:memory.totalFocusMin,hero:memory.hero?.name,sync:memory.sync},
+        pullResult
+      };
+    });
+    assert.equal(result.confirmations,2);
+    assert.equal(result.backup,result.priorRaw);
+    assert.equal(result.immediately.minutes,0);
+    assert.equal(result.finalMain.minutes,0);
+    assert.equal(result.memory.minutes,0);
+    assert.notEqual(result.finalMain.hero,"Delayed old cloud");
+    assert.notEqual(result.memory.hero,"Delayed old cloud");
+    assert.equal(result.finalMain.sync.enabled,false);
+    assert.equal(result.memory.sync.enabled,false);
+    assert.match(String(result.pullResult.error),/FH_SYNC_SUPERSEDED|sync identity changed/i);
     await context.close();
   });
 

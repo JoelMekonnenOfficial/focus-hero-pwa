@@ -644,24 +644,26 @@
 
   /* RNG layer: probability of a surprise-drop of crNextTierAbove(progress)
      this session. Returns the tier to grant, or null. */
-  function crRollMountRng(s, sessionMinutes){
+  function crRollMountRng(s, sessionMinutes, rng){
     s = crEnsureMountState(s);
     if (!s || !s.loot) return null;
+    rng = typeof rng === "function" ? rng : Math.random;
     if (sessionMinutes < CR_RNG_QUALIFYING_MIN) return null;
     var hoursOver = (sessionMinutes - CR_RNG_QUALIFYING_MIN) / 60;
     var p = CR_RNG_BASE_RATE + CR_RNG_PER_HOUR_BONUS * hoursOver;
-    if (Math.random() < p) return crNextTierAbove(s.loot.mountProgress|0);
+    if (rng() < p) return crNextTierAbove(s.loot.mountProgress|0);
     return null;
   }
 
   /* Pick a mount from the v8.4 roster by rarity. */
-  function crPickMountByRarity(rarity){
+  function crPickMountByRarity(rarity, rng){
+    rng = typeof rng === "function" ? rng : Math.random;
     var pool = CR_MOUNTS_BY_TIER[rarity] || [];
     if (!pool.length){
       var TT = window.LOOT_TABLE || [];
       var legacy = TT.filter(function(it){ return it[2] === rarity && it[4] === "mount"; });
       if (legacy.length){
-        var l = legacy[Math.floor(Math.random() * legacy.length)];
+        var l = legacy[Math.floor(rng() * legacy.length)];
         return {
           id: window.lootId ? window.lootId(l) : String(l[1]).toLowerCase(),
           name: l[1], sym: l[0], family: "legacy", tier: l[2],
@@ -670,16 +672,29 @@
       }
       return null;
     }
-    return pool[Math.floor(Math.random() * pool.length)];
+    return pool[Math.floor(rng() * pool.length)];
   }
 
   /* Grant a guaranteed mount (instance + lootOwned + drops log entry). */
-  function crGrantMount(s, rarity, sessionId, reason){
+  function crGrantMount(s, rarity, sessionId, reason, opts){
     s = crEnsureMountState(s);
     if (!s) return null;
-    var m = crPickMountByRarity(rarity);
+    opts = opts || {};
+    var rng = typeof opts.rng === "function" ? opts.rng : Math.random;
+    var m = crPickMountByRarity(rarity, rng);
     if (!m) return null;
-    var iid = (window.uid ? window.uid() : Math.random().toString(36).slice(2,10));
+    var ordinal = Math.max(0, opts.ordinal|0);
+    var stableBase = String(sessionId || "") + "|mount|" + String(reason || "pity") + "|" + ordinal + "|" + m.id;
+    var iid = opts.instanceId || (
+      sessionId && typeof window.lrStableId === "function"
+        ? window.lrStableId("iid", stableBase + "|instance")
+        : (window.uid ? window.uid() : Math.random().toString(36).slice(2,10))
+    );
+    var dropId = opts.dropId || (
+      sessionId && typeof window.lrStableId === "function"
+        ? window.lrStableId("drop", stableBase + "|drop")
+        : (window.uid ? window.uid() : Math.random().toString(36).slice(2,10))
+    );
     var aff = null;
     if (m.effect){
       var k = Object.keys(m.effect)[0];
@@ -691,7 +706,7 @@
       iid: iid, lootId: m.id, tier: m.tier, level: 0,
       affixes: aff ? [aff] : [], sockets: [], dyeId: null,
       createdAt: window.now ? window.now() : Date.now(),
-      source: { kind:"mount_grant", reason: reason || "pity", rarity:rarity },
+      source: { kind:"mount_grant", reason: reason || "pity", rarity:rarity, sessionId:String(sessionId || "") },
       locked: false
     };
     if (!s.lootInstances) s.lootInstances = {};
@@ -704,8 +719,8 @@
     s.loot.mountFamilies[fam].collected[m.id] = 1;
     // Drop log
     if (!s.loot.drops) s.loot.drops = [];
-    s.loot.drops.push({
-      id: window.uid ? window.uid() : Math.random().toString(36).slice(2,10),
+    var entry = {
+      id: dropId,
       at: window.now ? window.now() : Date.now(),
       sessionId: sessionId || null,
       iid: iid, templateId: m.id, rarity: m.tier,
@@ -714,9 +729,33 @@
       odds: { rolled: 1, total: 1, ratio: 1 },
       pity: { tier: m.tier, sinceLast: 0, bumped: true },
       fromMonsterTable: false, mountGrant: true, mountReason: reason || "pity"
-    });
+    };
+    s.loot.drops.push(entry);
     if (s.loot.drops.length > 200) s.loot.drops.shift();
-    return { instance: instance, mount: m };
+    return { instance: instance, mount: m, entry:entry };
+  }
+
+  function crApplySessionMountRewards(s, opts){
+    s = crEnsureMountState(s);
+    opts = opts || {};
+    if (!s || !s.loot) throw new Error("Mount reward state is unavailable");
+    var sessionId = String(opts.sessionId || "");
+    if (!sessionId) throw new Error("Mount rewards require a stable session id");
+    var rng = opts.rng;
+    if (typeof rng !== "function") throw new Error("Mount rewards require the session seeded RNG");
+    var minutes = Math.max(0, opts.minutes|0);
+    var grants = [];
+    var pityTier = crAdvanceMountProgress(s, minutes);
+    if (pityTier){
+      var pityGrant = crGrantMount(s, pityTier, sessionId, "pity", { rng:rng, ordinal:grants.length });
+      if (pityGrant) grants.push(pityGrant);
+    }
+    var rngTier = crRollMountRng(s, minutes, rng);
+    if (rngTier){
+      var randomGrant = crGrantMount(s, rngTier, sessionId, "rng", { rng:rng, ordinal:grants.length });
+      if (randomGrant) grants.push(randomGrant);
+    }
+    return { progress:s.loot.mountProgress|0, grants:grants };
   }
 
   /* ---------- STABLE (FAMILY BESTIARY) UI ---------- */
@@ -899,35 +938,9 @@
     var original = window.lrSessionEndLootPipeline;
     window.lrSessionEndLootPipeline = function(action, minutes, sessionId){
       var result = original.apply(this, arguments);
-      try {
-        var s = window.state;
-        if (s && s.loot){
-          // Advance pity
-          var tier = crAdvanceMountProgress(s, minutes);
-          if (tier){
-            var grant = crGrantMount(s, tier, sessionId, "pity");
-            if (grant && result && Array.isArray(result.drops)){
-              // Append the mount grant to the result drops so the post-session
-              // breakdown UI surfaces it.
-              var lastEntry = s.loot.drops[s.loot.drops.length - 1];
-              if (lastEntry) result.drops.push(lastEntry);
-              if (typeof window.toast === "function") window.toast(grant.mount.sym + " Mount unlocked: " + grant.mount.name + " (" + tier + ")", "good");
-            }
-          }
-          // RNG roll
-          var rngTier = crRollMountRng(s, minutes);
-          if (rngTier){
-            var rg = crGrantMount(s, rngTier, sessionId, "rng");
-            if (rg){
-              var le = s.loot.drops[s.loot.drops.length - 1];
-              if (le && result && Array.isArray(result.drops)) result.drops.push(le);
-              if (typeof window.toast === "function") window.toast("✨ RARE FIND: " + rg.mount.sym + " " + rg.mount.name + " (" + rngTier + ")", "good");
-            }
-          }
-          if (typeof window.saveState === "function") window.saveState();
-          crRenderMountProgressBar();
-        }
-      } catch(e){ console.warn("mount hook:", e); }
+      /* Gameplay mount effects are now part of the original pipeline's
+         committed receipt. A duplicate/proof-only retry returns here without
+         any mount mutation. */
       return result;
     };
     window.lrSessionEndLootPipeline._crHooked = true;
@@ -1052,7 +1065,7 @@
     crExtendAppearanceOptions();
     crInstallPortraitOverride();
     crInstallSessionHook();
-    crWireDeltaEdit();
+    /* v10.9.3: the base editor now intentionally exposes BOTH exact-total and relative edits. */
     setTimeout(crRenderMountProgressBar, 250);
     setInterval(crRenderMountProgressBar, 4000);
     // Stable tab refresh
@@ -1072,6 +1085,7 @@
   window.crRollMountRng = crRollMountRng;
   window.crPickMountByRarity = crPickMountByRarity;
   window.crGrantMount = crGrantMount;
+  window.crApplySessionMountRewards = crApplySessionMountRewards;
   window.crEnsureMountState = crEnsureMountState;
   window.crRenderMountProgressBar = crRenderMountProgressBar;
   window.crRenderStable = crRenderStable;

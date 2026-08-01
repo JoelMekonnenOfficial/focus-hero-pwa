@@ -1,108 +1,72 @@
-# Focus Hero v4
+# Focus Hero v10.9.5 diverse-avatar and session-integrity candidate
 
-A single-file Pomodoro RPG — tasks, tiered XP, background-safe timer, encrypted cloud sync. Open `focus-hero.html` in a browser or install as a PWA.
+This isolated candidate updates Focus Hero without opening or modifying a signed-in player profile, browser storage, production cloud row, credentials, backups, or recovery material.
 
-## Quick start
+DO NOT DEPLOY OR USE THIS CANDIDATE WITH A CURRENT PLAYER PROFILE.
 
-- **Local only.** Double-click `focus-hero.html`. State lives in `localStorage`. The service worker isn't active over `file://`, so PWA install + offline cache need a host.
-- **Host it.** Any static host works — Netlify Drop, GitHub Pages, `npx serve`, VS Code Live Server.
-- **Sync across devices.** See below.
+This candidate is for source inspection and synthetic testing only.
+Do not connect it to production cloud data during review.
 
-## Cloud sync — two backends
+## Outcome
 
-### Option A — jsonstorage.net fallback (no setup)
-Leave `SUPABASE_URL` / `SUPABASE_ANON_KEY` blank in `focus-hero.html`. Sync → Enable cloud sync uses `jsonstorage.net`, a public KV. With **End-to-end encryption** on (default), only your device holds the key — server sees ciphertext + IV + salt + `sync_secret_hash`.
+- The current Supabase cloud remains the application cloud. No AWS runtime or AWS backup dependency was added.
+- This candidate no longer loads the legacy character-renderer runtime. Its two runtime files and focused tests remain preserved in a separate local archive outside this candidate.
+- A deterministic 64×64 code-native pixel hero now reflects class, species, build, hair, face shape, eye shape, exact skin tone, helmet preference, equipped weapon/armor/helmet, pet, mount, and the current session action without reading storage or the network.
+- Four genuinely different avatar templates are selectable: Compact Cozy, Detailed MMO, Graphic Arcade, and Isometric Tactical. No style is tied to race, skin tone, facial structure, body type, or hairstyle.
+- Character Studio provides independent diverse controls, including ten direct skin-tone swatches, seven face shapes, six body builds, the fourteen established hairstyles, and thirteen additional textured/fade/braid/loc options.
+- New appearance choices use additive compatibility fields. Older and offline clients retain the fields they do not understand; established choices such as wavy hair or dreadlocks are not normalized back to short.
+- Avatar, Character Studio, and equipment preview reads are non-mutating. Appearance changes still save only through the existing explicit customizer action.
+- Four complete display shells already remain available: Modern Focus, Arcane Command, Frontier Craft, and Tactical Ops. These are presentation-only and independent of any vault or ledger design.
+- Time edits share one accounting path across live sessions, task totals, Session History, Analytics, the post-session editor, and Battle Report.
+- Both exact-total replacement and relative plus/minus correction are available on every time-edit surface.
+- Manual added time counts as a session. Retried operation IDs cannot count the same addition twice.
+- Reductions edit the newest matching session records and reverse their real XP, coins, eggs, loot, Orbs, farming materials, and session counts.
+- Session History retains pause duration and time-change details.
+- Fight edit rewards use the same encounter walls as live Fight sessions. Peaceful edits do not invent extra loot rolls.
+- Concurrent cloud additions are additive when session evidence proves them. Reductions and deletions follow the newest proven session revision. Ambiguous accounting baselines stop sync before changing local state.
+- The repeated session-path message is gone. The permanent Hero-vs-target card defaults to hidden; Status Ribbon, Journey Strip, and Text Pulse now each have genuinely distinct compact behavior.
+- A read-only Session History integrity check reports duplicate session, manual-operation, reward-drop, farming, and spending identifiers; it never repairs or deletes data.
 
-### Option B — Supabase (60-second setup, free tier)
+## Safety boundary
 
-1. Sign up at https://supabase.com, create a project.
-2. In the SQL editor, run:
+This is a source candidate, not a recovery point and not player-data truth. Do not import a historical profile, clear browser data, force-sync, restore, normalize, or roll back a current profile.
 
-   ```sql
-   create extension if not exists pgcrypto;
-   create table public.players (
-     id               text primary key,
-     user_id          uuid,
-     data             jsonb not null,
-     cloud_rev        integer not null default 0,
-     sync_secret_hash text,
-     updated_at       timestamptz not null default now()
-   );
-   alter table public.players enable row level security;
+The existing local Data Guard, exact primary-storage read-back, last-known-good state, session/drop/instance tombstones, encrypted cloud payload, offline queue, cloud revision checks, and fail-closed accounting boundary remain intact. The service worker no longer programmatically deletes earlier complete Focus Hero caches during install or activation.
 
-   create policy "own row by uid"
-     on public.players for all
-     using (auth.uid() is not null and user_id = auth.uid())
-     with check (auth.uid() is not null and user_id = auth.uid());
+No AWS work is required by this application change. The durable release policy still requires an independent, implementation-neutral recovery copy and a successful isolated restore drill before an automated writer or production deployment is authorized. That recovery copy does not need to be AWS.
 
-   create policy "claim by secret"
-     on public.players for select
-     using (sync_secret_hash is not null);
-   ```
+## Verification
 
-3. In **Authentication → Providers**, enable **Anonymous sign-ins**.
-4. **Project settings → API**: copy `Project URL` and `anon public` key.
-5. Open `focus-hero.html` and edit these lines near the top of the `<script>`:
+Run every tests/*.test.mjs file with Node. Browser-backed tests require Playwright and a local Chrome installation. When Playwright is not resolved automatically, set FOCUS_HERO_PLAYWRIGHT to its installed package path.
 
-   ```js
-   const SUPABASE_URL = "https://YOUR-PROJECT.supabase.co";
-   const SUPABASE_ANON_KEY = "eyJhbGciOi..."; // anon key
-   ```
+Manual review must use an isolated synthetic browser profile served only from 127.0.0.1, with production sync disabled and external requests blocked or mocked.
 
-6. Reload. Sync panel now says "Encrypted cloud sync active."
+Required checks include:
 
-### Supabase metadata heartbeat
+1. both HTML entry files are byte-identical;
+2. inline and external JavaScript parse;
+3. every exact/relative editor surface remains present at runtime;
+4. 20 + 70 equals exactly 90 and operation retries are idempotent;
+5. task reductions reverse session-linked rewards;
+6. peaceful and Fight reward thresholds match their live paths;
+7. concurrent additions, reductions, offline queueing, and conflict refusal pass;
+8. the pixel hero is deterministic, integer-grid-only, appearance-aware, equipment-aware, offline-safe, and free of legacy renderer hooks; every visual style and hairstyle has distinct geometry, direct tone swatches render exactly, and legacy appearance choices survive normalization;
+9. every selectable encounter presentation has distinct tested behavior;
+10. service-worker, manifest, and runtime-package references agree;
+11. the complete synthetic suite passes on the exact packaged files.
 
-The daily GitHub Action performs a privacy-safe, read-only health check and writes only aggregate metadata to `backups/backup-status.json` (row count, newest update time, and status). It never exports player rows or Focus Hero payloads. Add `SUPABASE_SERVICE_ROLE_KEY` as a repository secret so the heartbeat can verify aggregate row visibility through RLS. This heartbeat is monitoring evidence, not a restorable player-data backup; recovery still depends on encrypted cloud state plus the device-local snapshot ring and user exports.
+Final exact-tree result: **37/37 test files and 168/168 top-level tests passed**, with zero failures, skips, cancellations, or todo items. The focused avatar subset passed 22/22.
 
-## Pairing devices
+Passing synthetic tests proves only this source tree. It does not prove the current signed-in cloud row is synchronized, because private player data is deliberately outside routine source verification.
 
-Device A: Sync → Generate sync code. You see `CODE-SECRET` (e.g. `ABCDEFGH-IJKLMNOPQRSTUVWX`) plus a QR. The secret never leaves your devices; only its SHA-256 hash goes to the server.
+## Runtime package
 
-Device B: Sync → Enter code from other device → paste the full `CODE-SECRET` → Claim.
+PACKAGE_CONTENTS.md is the deny-by-default public runtime allowlist. Tests, review notes, old service workers, prototypes, credentials, browser files, recovery material, and prior archives are not runtime assets.
 
-## End-to-end encryption
+## Version markers
 
-- Algorithm: **AES-GCM-256**, key derived via **PBKDF2-SHA256, 100,000 iterations**, salt randomly generated on code creation.
-- Toggle: Sync panel → "End-to-end encryption". On by default.
-- Server sees: `{ iv, salt, ct, cloud_rev, sync_secret_hash }`. Never plaintext.
+- Candidate: 10.9.5
+- Data schema: 16
+- Service-worker build: fh-2026-08-01-v10-9-5-diverse-avatars
 
-## Keyboard shortcuts
-
-`Space` start/pause · `R` reset · `N` skip · `1/2/3/4` focus/short/long/stopwatch · `Shift+S` stopwatch · `Shift+L` stop & log stopwatch · `A` new task · `Q` new quest · `Shift+B` backup now · `T` theme · `Y` sync panel · `,` settings · `?` help.
-
-## Data export / import / backup
-
-Settings → **Back up all data** (or `Shift+B`) downloads a dated JSON. Monthly auto-backup fires once per calendar month on first load. Import re-hydrates any v1/v2/v3/v4 export through the migration layer.
-
-## PWA install
-
-Host the folder (Netlify / GitHub Pages / local server) and use your browser's install button. Manifest + SW already wired. iOS Safari: **Share → Add to Home Screen**.
-
-## Smoke tests
-
-Two ways to run them:
-
-- **In the browser:** append `?test=1` to the URL. A banner at the top reports the v4 in-app checks (XP math, task CRUD, mid-session rename, app-open tracking, AES-GCM round-trip, v3→v4 migration, degraded read, cumulative-max merge).
-- **Headlessly:** `node verify.js` runs **42 assertions** by extracting the inline `<script>` from the sibling `focus-hero.html` and evaluating its pure functions inside a Node `vm` with browser shims (uses Node's WebCrypto for the real AES-GCM round-trip). Use this in CI before any release. Exit code is non-zero if any assertion fails.
-
-## File layout
-
-| file | role |
-| - | - |
-| `focus-hero.html` | the entire app, single file |
-| `sw.js`           | service worker (v4 cache, notification click handler) |
-| `manifest.webmanifest` | PWA manifest (v4) |
-| `icon-192.png`, `icon-512.png` | icons |
-| `verify.js`       | headless test runner (`node verify.js`) — 42 assertions |
-| `stopwatch-tests.js` | pure-function stopwatch suite (`node stopwatch-tests.js`) — 16 assertions |
-| `CHANGES.md`      | detailed changelog |
-| `README.md`       | this file |
-
-## Troubleshooting
-
-- **Service worker isn't registering.** SWs only work over `http(s)://` — not `file://`. Host it anywhere.
-- **Sync stuck on "never."** Open DevTools → Network. 401 → wrong anon key. 403 → RLS policies missing; re-run the SQL.
-- **"Remote secret hash mismatch."** Another device pushed with a different sync code. Generate a new code on one device and claim it on the other.
-- **Background timer drifts on iOS.** Enable **Audio keepalive** (on by default) and optionally **Keep screen awake** in settings.
-- **Lost data after reset.** Reset wipes `localStorage`. Import the last auto-backup JSON.
+These markers identify source code only. They never identify a player-data recovery point.
