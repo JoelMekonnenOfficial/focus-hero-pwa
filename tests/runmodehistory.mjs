@@ -162,3 +162,5 @@ try {
 } finally {
   await browser.close();
 }
+
+R.finish();

@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs';
  * are NOT window properties (§11). Read them out of the source rather than
  * asking the page for them - a test that reads `undefined` here would loop zero
  * times and report a pass. */
-const SRC = readFileSync('/home/claude/starmax/index.html', 'utf8');
+const SRC = readFileSync(new URL('../starmax/index.html', import.meta.url), 'utf8');
 const listOf = name => {
   const m = new RegExp('const ' + name + '\\s*=\\s*\\[([^\\]]*)\\]').exec(SRC);
   if (!m) throw new Error('could not read ' + name + ' from source');

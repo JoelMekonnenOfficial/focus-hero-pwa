@@ -8,7 +8,7 @@ import { launch, openApp, makeReporter } from './harness.mjs';
 import { readFileSync } from 'node:fs';
 
 const PORT = process.argv[2] || 8976;
-const SRC = readFileSync('/home/claude/starmax/index.html','utf8');
+const SRC = readFileSync(new URL('../starmax/index.html', import.meta.url),'utf8');
 const listOf = n => {
   const m = new RegExp('const '+n+'\\s*=\\s*\\[([^\\]]*)\\]').exec(SRC);
   return m ? m[1].split(',').map(x=>x.trim().replace(/^["']|["']$/g,'')).filter(Boolean) : [];

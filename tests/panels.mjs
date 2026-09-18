@@ -19,7 +19,7 @@ import { launch, openApp, makeReporter } from './harness.mjs';
 import { readFileSync } from 'node:fs';
 
 const PORT = process.argv[2] || 8969;
-const SRC = readFileSync('/home/claude/starmax/index.html', 'utf8');
+const SRC = readFileSync(new URL('../starmax/index.html', import.meta.url), 'utf8');
 const MODALS = [...SRC.matchAll(/class="modal-backdrop" id="([a-z-]+)"/g)].map(m => m[1]);
 
 const R = makeReporter('panels.mjs');

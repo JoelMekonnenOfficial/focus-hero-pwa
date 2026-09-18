@@ -10,7 +10,7 @@ import { launch, openApp, makeReporter } from './harness.mjs';
 import { readFileSync } from 'node:fs';
 
 const PORT = process.argv[2] || 8993;
-const SRC = readFileSync('/home/claude/starmax/index.html','utf8');
+const SRC = readFileSync(new URL('../starmax/index.html', import.meta.url),'utf8');
 const MODALS = [...SRC.matchAll(/class="modal-backdrop" id="([a-z-]+)"/g)].map(m=>m[1]);
 const SIZES = [
   { name:'iPhone portrait', w:390, h:844, touch:true },

@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+const read = name => readFileSync(new URL('../starmax/' + name, import.meta.url));
+const html = read('index.html');
+assert.ok(html.equals(read('focus-hero.html')), 'HTML entry points must remain byte-identical');
+const text = html.toString('utf8');
+const manifest = JSON.parse(read('manifest.webmanifest'));
+const version = /data-app-version="([^"]+)"/.exec(text)?.[1];
+const build = /data-build-id="([^"]+)"/.exec(text)?.[1];
+const workerBuild = /const BUILD_ID\s*=\s*["']([^"']+)/.exec(read('sw.js').toString('utf8'))?.[1];
+assert.ok(version && build && workerBuild, 'App and worker identify their builds');
+assert.equal(build, workerBuild, 'Page and service worker identify the same release');
+assert.equal(manifest.version, version, 'Manifest cannot silently drift from the app version');
+assert.equal(manifest.start_url, './');
+for (const shortcut of manifest.shortcuts) assert.ok(shortcut.url.startsWith('./?'), 'Shortcuts must use the current root entry point');
+console.log('PASS mirror, page/worker/manifest release identifiers, and shortcut URLs');
