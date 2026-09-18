@@ -1,0 +1,944 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Life XP — Data Recovery</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    font: 16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background: #0b0d1a; color: #e8eaf6;
+    margin: 0; padding: max(72px,calc(env(safe-area-inset-top, 0px) + 64px)) 16px 16px;
+    max-width: 720px; margin-left: auto; margin-right: auto;
+    padding-bottom: 80px;
+  }
+  h1 { margin: 8px 0 4px; font-size: 22px; }
+  .sub { opacity: .75; margin-bottom: 18px; font-size: 13.5px; line-height: 1.45; }
+  .banner {
+    border-radius: 10px; padding: 10px 14px; margin: 10px 0; font-size: 14px;
+    background: #1a2046; border: 1px solid #33407f;
+  }
+  .banner.ok  { background: #0e2b1c; border-color: #1d6f43; color: #8affc0; }
+  .banner.bad { background: #33101a; border-color: #8a2438; color: #ffb3c0; }
+  .snap {
+    border: 1px solid #232850; border-radius: 12px; background: #121631;
+    padding: 14px; margin: 12px 0;
+  }
+  .snap.best { border-color: #f5b942; box-shadow: 0 0 0 1px #f5b94255; }
+  .snap h3 { margin: 0 0 2px; font-size: 15px; word-break: break-all; }
+  .tag { display:inline-block; font-size: 11px; padding: 1px 8px; border-radius: 99px;
+         background:#2a2f55; margin-left: 6px; vertical-align: middle; }
+  .tag.gold { background:#5c4508; color:#ffd97a; }
+  .tag.grey { background:#22263f; color:#9aa3c7; }
+  .tag.idb { background:#173a4a; color:#9ee9ff; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fill,minmax(130px,1fr));
+           gap: 4px 12px; margin: 10px 0; font-size: 13.5px; }
+  .stats b { font-size: 15px; }
+  .stats span { color: #8a93b3; display: block; font-size: 11px; text-transform: uppercase; letter-spacing:.04em; }
+  .row-dates { font-size: 12.5px; color: #9aa3c7; margin-bottom: 8px; }
+  .btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+  button, .btn {
+    font: inherit; font-size: 14px; border: 0; border-radius: 9px;
+    padding: 10px 16px; cursor: pointer; color: #fff; background: #2a2f55;
+  }
+  .restore { background: #2456d9; font-weight: 600; }
+  .restore:disabled { opacity:.45 }
+  .dl { background: #22263f; }
+  .danger-note { font-size: 12px; color:#8a93b3; margin-top: 8px; }
+  .empty { color: #ff9daa; }
+  pre { background:#0a0c1c; border:1px solid #232850; border-radius:8px; padding:10px;
+        font-size:12px; overflow:auto; }
+  .footer { margin-top: 26px; font-size: 12px; color: #707899; }
+  a { color: #8a99ff; }
+  .recovery-exit {
+    position: fixed;
+    z-index: 10000;
+    top: max(10px,env(safe-area-inset-top, 0px));
+    right: max(12px,env(safe-area-inset-right, 0px));
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 46px;
+    padding: 10px 14px;
+    border: 1px solid #7183ff;
+    border-radius: 12px;
+    background: #242d63;
+    color: #fff;
+    font-weight: 700;
+    line-height: 1.1;
+    text-decoration: none;
+    box-shadow: 0 6px 22px #0009;
+  }
+  .recovery-exit:focus-visible { outline: 3px solid #b8c0ff; outline-offset: 3px; }
+  @media (max-width: 380px) {
+    .recovery-exit { left: 12px; right: 12px; }
+  }
+</style>
+</head>
+<body>
+<a class="recovery-exit" data-recovery-exit href="./focus-hero.html" aria-label="Exit Recovery Center">← Exit Recovery Center</a>
+<h1>Life XP — Data Recovery</h1>
+<div class="sub">
+  This page only <b>reads</b> your device storage and lists every Life XP snapshot it finds in
+  the verified IndexedDB primary slots, frozen legacy localStorage, the separate IndexedDB guard ring, and the IndexedDB cold-storage archive,
+  with its real numbers. Nothing is changed unless you press <b>Restore</b>.
+  Restoring first saves the current state to a new backup key, preserves the current sync identity,
+  and keeps cloud sync off until you verify the recovered profile.
+</div>
+<div id="status"></div>
+<div id="list"></div>
+
+<div class="footer">
+  Sources scanned: IndexedDB <code>fh-primary-state-v1/stateSlots</code>, localStorage keys starting with <code>focusHero.</code>,
+  IndexedDB <code>fh-guard/snaps</code>, and <code>fh-coldstore/snaps</code> ·
+  <a href="./focus-hero.html">Open Life XP</a>
+</div>
+
+<script>
+/* Load only the pure receipt/economy validators from the reviewed runtime
+   modules. Their UI boot callbacks are deliberately held forever on this
+   standalone page, so inspection remains read-only until the user explicitly
+   chooses a Recovery action. */
+window.FH_onPrimaryReady = function(){ return function(){}; };
+</script>
+<script src="./loot-rework-v1012.js"></script>
+<script src="./focus-economy.js"></script>
+<script src="./fh-primary-store-v13.js"></script>
+<script>
+"use strict";
+/* ============================================================
+ * Life XP standalone recovery page.
+ * - READ-ONLY on load: enumerates focusHero.* localStorage keys and
+ *   the IndexedDB fh-guard/snaps and fh-coldstore/snaps stores, then
+ *   shows their real state.
+ * - Restore: preserves the verified current IndexedDB head in the independent
+ *   cold archive, stages a current-schema candidate with cloud sync disabled,
+ *   then performs an exact fenced IndexedDB primary commit and read-back.
+ *   Frozen localStorage recovery bytes are never rewritten or deleted.
+ * - No network calls. No app code. No automatic writes.
+ * ============================================================ */
+var MAIN_KEY = "focusHero.v4.state";
+var ACCOUNTING_STORAGE_GUARD_KEY = MAIN_KEY + ".accounting-storage-indeterminate.v1";
+var PRIMARY_DB = "fh-primary-state-v1";
+var PRIMARY_ACTIVATION_KEY = "focusHero.primary.v1.activation";
+var GUARD_DB = "fh-guard", GUARD_STORE = "snaps";
+var COLD_DB = "fh-coldstore", COLD_STORE = "snaps";
+var lastEntries = [], lastWarnings = [], renderSequence = 0, primaryRecoveryReader = null, primaryChainDegraded = false, primaryRecoveryReport = null;
+
+function plainObject(value){ return !!value && typeof value === "object" && !Array.isArray(value); }
+function count(value){
+  var n = Number(value);
+  return Number.isFinite(n) && n > 0 ? Math.min(Number.MAX_SAFE_INTEGER, Math.floor(n)) : 0;
+}
+
+function fmtMin(m){
+  m = count(m);
+  var h = Math.floor(m/60), r = m%60;
+  return h > 0 ? (h + "h " + r + "m") : (r + "m");
+}
+function fmtBytes(n){
+  if (n > 1048576) return (n/1048576).toFixed(1)+" MB";
+  if (n > 1024) return (n/1024).toFixed(1)+" KB";
+  return n + " B";
+}
+function esc(s){
+  return String(s).replace(/[&<>"']/g, function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+  });
+}
+
+/* Accepts a parsed JSON value that may be either a raw state object or a
+   wrapper like {savedAt, state} (LKG format) or {exportedAt, state} (backups).
+   Returns {state, savedAt} or null. */
+function unwrapState(parsed){
+  if (!plainObject(parsed)) return null;
+  if (plainObject(parsed.state)){
+    return { state: parsed.state, savedAt: parsed.savedAt || parsed.exportedAt || null };
+  }
+  // Heuristic: a real state has at least one of these fields.
+  if ("totalFocusMin" in parsed || "hero" in parsed || "dataVersion" in parsed){
+    return { state: parsed, savedAt: null };
+  }
+  return null;
+}
+
+function summarize(state){
+  state = plainObject(state) ? state : {};
+  var hist = plainObject(state.history) ? state.history : {};
+  var days = Object.keys(hist).filter(function(k){ return /^\d{4}-\d{2}-\d{2}$/.test(k); }).sort();
+  var histSum = 0;
+  for (var i=0;i<days.length;i++){ histSum += count(hist[days[i]]); }
+  var economy = plainObject(state.focusEconomy) ? state.focusEconomy : {};
+  var grants = plainObject(economy.grants) ? economy.grants : {};
+  var spends = Array.isArray(economy.spends) ? economy.spends : [];
+  var harvests = Array.isArray(economy.harvests) ? economy.harvests : [];
+  var plots = Array.isArray(economy.plots) ? economy.plots : [];
+  var seen = Object.create(null), duplicate = Object.create(null);
+  function addEventId(item){
+    var id = item && typeof item.id === "string" ? item.id.trim() : "";
+    if (!id) return;
+    if (seen[id]) duplicate[id] = true; else seen[id] = true;
+  }
+  Object.keys(grants).forEach(function(key){ addEventId(grants[key]); });
+  spends.forEach(addEventId); harvests.forEach(addEventId);
+  var unlocked = Number(economy.unlockedPlots);
+  unlocked = Number.isFinite(unlocked) && Math.floor(unlocked) === unlocked && unlocked >= 2 && unlocked <= 3 ? unlocked : 0;
+  return {
+    totalFocusMin: count(state.totalFocusMin),
+    level: count(state.hero && state.hero.level),
+    xp: count(state.hero && state.hero.xp),
+    sessions: Array.isArray(state.sessionsLog) ? state.sessionsLog.length : 0,
+    tasks: Array.isArray(state.tasks) ? state.tasks.length : 0,
+    coins: count(state.coins),
+    streak: count(state.streak),
+    histDays: days.length,
+    histSum: histSum,
+    firstDay: days[0] || null,
+    lastDay: days[days.length-1] || null,
+    dataVersion: state.dataVersion || null,
+    economyGrants: Object.keys(grants).length,
+    economySpends: spends.length,
+    economyHarvests: harvests.length,
+    economyEvents: Object.keys(grants).length + spends.length + harvests.length,
+    economyPlots: plots.length,
+    unlockedPlots: unlocked,
+    duplicateEventIds: Object.keys(duplicate).length
+  };
+}
+
+function entryFromRaw(options){
+  var raw = options.raw;
+  var entry = {
+    id: options.id, key: options.key, source: options.source, sourceLabel: options.sourceLabel,
+    sourceDetail: options.sourceDetail || "", reason: options.reason || "", size: raw.length,
+    coldId: options.coldId || null,
+    parsed: null, savedAt: options.savedAt || null, sum: null, raw: raw
+  };
+  try {
+    var parsed = JSON.parse(raw);
+    var unwrapped = unwrapState(parsed);
+    if (unwrapped){
+      entry.parsed = unwrapped.state;
+      entry.savedAt = options.savedAt || unwrapped.savedAt || null;
+      entry.sum = summarize(unwrapped.state);
+    }
+  } catch(_){ /* malformed entries remain visible but are never restorable/exportable */ }
+  return entry;
+}
+
+function scanLocalStorage(){
+  var out = [];
+  for (var i = 0; i < localStorage.length; i++){
+    var k = localStorage.key(i);
+    if (!k || k.indexOf("focusHero.") !== 0) continue;
+    var raw = null;
+    try { raw = localStorage.getItem(k); } catch(e){ continue; }
+    if (raw == null) continue;
+    out.push(entryFromRaw({ id:"local:" + k, key:k, source:"localStorage", sourceLabel:"localStorage",
+      sourceDetail:k, raw:raw }));
+  }
+  return out;
+}
+
+async function dbExistsHint(name){
+  if (!window.indexedDB || typeof indexedDB.databases !== "function") return null;
+  try {
+    var databases = await indexedDB.databases();
+    return databases.some(function(info){ return info && info.name === name; });
+  } catch(_){ return null; }
+}
+async function probeDatabaseWithoutCreating(name){
+  return new Promise(function(resolve,reject){
+    var created=false,settled=false,request;
+    function finish(error,value){if(settled)return;settled=true;if(error)reject(error);else resolve(!!value);}
+    try{request=indexedDB.open(name);}catch(error){finish(error);return;}
+    request.onupgradeneeded=function(){created=true;try{request.transaction.abort();}catch(_){}};
+    request.onsuccess=function(){try{request.result.close();}catch(_){}finish(null,true);};
+    request.onerror=function(){
+      if(created&&request.error&&request.error.name==="AbortError")finish(null,false);
+      else finish(request.error||new Error("IndexedDB existence probe failed."));
+    };
+    request.onblocked=function(){finish(new Error("IndexedDB existence probe was blocked by another page."));};
+  });
+}
+
+function recoveryStateSane(state){
+  if(!plainObject(state)||state.dataVersion!==16)return {ok:false,reason:"Recovery can directly stage only a current v16 profile. Download older snapshots and use the app's reviewed Import migration."};
+  if(!Number.isSafeInteger(state.totalFocusMin)||state.totalFocusMin<0)return {ok:false,reason:"totalFocusMin is invalid"};
+  if(!Number.isFinite(Number(state.totalAppOpenMs))||Number(state.totalAppOpenMs)<0)return {ok:false,reason:"totalAppOpenMs is invalid"};
+  if(!plainObject(state.hero)||!Number.isFinite(Number(state.hero.level))||Number(state.hero.level)<1)return {ok:false,reason:"hero progression is invalid"};
+  if(!Array.isArray(state.tasks)||!Array.isArray(state.sessionsLog)||!plainObject(state.history)||!plainObject(state.settings)||!plainObject(state.sync))return {ok:false,reason:"required profile collections are missing"};
+  if(!plainObject(state.loot)||!plainObject(state.loot.sessionRewardReceipts)||!plainObject(state.loot.sessionRewardReceiptTombstones))return {ok:false,reason:"loot reward-receipt evidence is missing"};
+  if(typeof window.lrValidateSessionRewardReceiptState!=="function")return {ok:false,reason:"reward-receipt validator is unavailable"};
+  var rewardCheck=window.lrValidateSessionRewardReceiptState(state.loot);
+  if(!rewardCheck||!rewardCheck.ok)return {ok:false,reason:"reward-receipt evidence failed validation: "+(rewardCheck&&rewardCheck.reason||"unknown")};
+  if(!plainObject(state.focusMilestones)||!Number.isSafeInteger(state.focusMilestones.claimedThrough)||state.focusMilestones.claimedThrough<0||
+      !Number.isSafeInteger(state.focusMilestones.announcedThrough)||state.focusMilestones.announcedThrough<0||state.focusMilestones.announcedThrough>state.focusMilestones.claimedThrough){
+    return {ok:false,reason:"focus milestone receipts are invalid"};
+  }
+  if(state.focusEconomy!==undefined){
+    if(typeof window.fhValidateFocusEconomy!=="function")return {ok:false,reason:"focus-economy validator is unavailable"};
+    var economyCheck=window.fhValidateFocusEconomy(state.focusEconomy);
+    if(!economyCheck||!economyCheck.ok)return {ok:false,reason:"focus-economy receipts failed validation"};
+  }
+  return {ok:true};
+}
+
+async function scanPrimarySnapshots(){
+  if (!window.FH_PRIMARY_STORE || typeof window.FH_PRIMARY_STORE.create !== "function") return [];
+  var exists = await dbExistsHint(PRIMARY_DB);
+  if (exists === false) return [];
+  if (exists === null){
+    /* Safari versions without indexedDB.databases() need marker-loss repair
+       too. Probe the exact named database while aborting onupgradeneeded, so
+       an absent DB is never created merely by opening Recovery. */
+    exists=await probeDatabaseWithoutCreating(PRIMARY_DB);
+    if(!exists)return [];
+  }
+  if (!primaryRecoveryReader) primaryRecoveryReader = window.FH_PRIMARY_STORE.create({ dbName:PRIMARY_DB });
+  var report = await primaryRecoveryReader.inspectRecoverySlots();
+  primaryRecoveryReport = report;
+  var activationMarker = readActivationMarker();
+  var out = [];
+  [report.head, report.previous].forEach(function(slot){
+    if (!slot || !slot.exists) return;
+    if (!slot.valid){
+      lastWarnings.push("IndexedDB primary " + slot.slot + " failed verification: " + (slot.error && slot.error.message || "unknown error"));
+      return;
+    }
+    var entry = entryFromRaw({
+      id:"primary:" + slot.slot + ":" + slot.head.commitId,
+      key:"fh-primary-state-v1/" + slot.slot,
+      source:"primary", sourceLabel:"Verified IndexedDB primary",
+      sourceDetail:"stateSlots/" + slot.slot + " · commit " + slot.head.commitId,
+      savedAt:new Date(slot.head.savedAt).toISOString(), raw:slot.raw
+    });
+    entry.primarySlot = slot.slot;
+    entry.primaryCommitId = slot.head.commitId;
+    entry.primaryLineageId = slot.head.lineageId;
+    entry.primaryChainComplete = !!(report.chain && report.chain.complete);
+    entry.degradedPreviousRepairEligible = slot.slot === "previous" && !!report.previous.valid &&
+      (!report.head.exists || !report.head.valid) && !!report.bootstrapSource && !!report.bootstrapSource.valid &&
+      report.previous.head.lineageId === report.bootstrapSource.lineageId &&
+      (report.previous.head.sequence !== 1 ||
+        (report.bootstrapSource.candidateSha256 === report.previous.head.stateSha256 &&
+          report.bootstrapSource.initialCommitId === report.previous.head.commitId));
+    entry.activationRepairNeeded = slot.slot === "head" && entry.primaryChainComplete &&
+      (!activationMarker || activationMarker.invalid || activationMarker.phase !== "active" ||
+        activationMarker.lineageId !== slot.head.lineageId || activationMarker.sourceKey !== report.bootstrapSource.sourceKey ||
+        activationMarker.sourceSha256 !== report.bootstrapSource.sourceSha256 ||
+        activationMarker.candidateSha256 !== report.bootstrapSource.candidateSha256);
+    out.push(entry);
+  });
+  if(report.bootstrapSource&&report.bootstrapSource.exists){
+    if(report.bootstrapSource.valid){
+      var sourceEntry=entryFromRaw({id:"primary:bootstrap-source",key:report.bootstrapSource.sourceKey,
+        source:"bootstrapSource",sourceLabel:"Immutable original bootstrap source",
+        sourceDetail:"fh-primary-state-v1/bootstrapSource · download-only evidence",
+        savedAt:new Date(report.bootstrapSource.savedAt).toISOString(),raw:report.bootstrapSource.raw});
+      sourceEntry.restoreBlocked=true;sourceEntry.bootstrapEvidence=true;out.push(sourceEntry);
+    }else lastWarnings.push("Immutable primary bootstrap-source evidence failed verification: "+(report.bootstrapSource.error&&report.bootstrapSource.error.message||"unknown error"));
+  }
+  primaryChainDegraded = !!(report.chain && !report.chain.complete);
+  if (primaryChainDegraded) lastWarnings.push((report.chain.reason || "IndexedDB primary chain is degraded.") +
+    (out.some(function(entry){return entry.degradedPreviousRepairEligible;}) ?
+      " The independently verified previous slot can be repaired only after the exact physical evidence is preserved in cold storage." :
+      " Automatic restore is export-only until the degraded chain is independently preserved and repaired."));
+  return out;
+}
+
+async function scanGuardSnapshots(){
+  if (!window.indexedDB) return [];
+  var exists = await dbExistsHint(GUARD_DB);
+  if (exists === false) return [];
+  return new Promise(function(resolve, reject){
+    var settled = false, db = null, createdByRead = false;
+    function finish(error, value){
+      if (settled) return; settled = true;
+      try { if (db) db.close(); } catch(_){}
+      if (error) reject(error); else resolve(value || []);
+    }
+    var request;
+    try { request = indexedDB.open(GUARD_DB); }
+    catch(error){ finish(error); return; }
+    request.onupgradeneeded = function(){
+      /* Opening an absent DB would create it. Abort so recovery remains truly
+         read-only when there is no guard ring yet. */
+      createdByRead = true;
+      try { request.transaction.abort(); } catch(_){}
+    };
+    request.onerror = function(){
+      if (createdByRead && request.error && request.error.name === "AbortError") finish(null, []);
+      else finish(request.error || new Error("IndexedDB open failed"));
+    };
+    request.onblocked = function(){ finish(new Error("IndexedDB guard database is blocked by another page")); };
+    request.onsuccess = function(){
+      if (settled) { try { request.result.close(); } catch(_){} return; }
+      db = request.result;
+      db.onversionchange = function(){ try { db.close(); } catch(_){} };
+      if (!db.objectStoreNames.contains(GUARD_STORE)){ finish(null, []); return; }
+      var records = [], transaction;
+      try {
+        transaction = db.transaction(GUARD_STORE, "readonly");
+        var cursor = transaction.objectStore(GUARD_STORE).openCursor();
+        cursor.onsuccess = function(){
+          var item = cursor.result;
+          if (!item) return;
+          records.push(item.value); item.continue();
+        };
+        cursor.onerror = function(){ finish(cursor.error || new Error("IndexedDB cursor failed")); };
+      } catch(error){ finish(error); return; }
+      transaction.oncomplete = function(){
+        var entries = [];
+        records.forEach(function(record, index){
+          var raw;
+          try { raw = JSON.stringify(record); } catch(_) { raw = ""; }
+          if (typeof raw !== "string") raw = "";
+          var date = plainObject(record) ? String(record.date || "unknown") : "unknown";
+          entries.push(entryFromRaw({
+            id:"idb:" + date + ":" + index,
+            key:"fh-guard/snaps · " + date,
+            source:"indexedDB", sourceLabel:"IndexedDB guard ring",
+            sourceDetail:"fh-guard/snaps" + (plainObject(record) && record.reason ? " · " + record.reason : ""),
+            reason:plainObject(record) ? String(record.reason || "") : "",
+            savedAt:plainObject(record) ? (record.savedAt || record.date || null) : null,
+            raw:raw
+          }));
+        });
+        finish(null, entries);
+      };
+      transaction.onerror = function(){ finish(transaction.error || new Error("IndexedDB read failed")); };
+      transaction.onabort = function(){ finish(transaction.error || new Error("IndexedDB read aborted")); };
+    };
+  });
+}
+
+async function scanColdSnapshots(){
+  if (!window.indexedDB) return [];
+  var exists = await dbExistsHint(COLD_DB);
+  if (exists === false) return [];
+  return new Promise(function(resolve, reject){
+    var settled = false, db = null, createdByRead = false;
+    function finish(error, value){
+      if (settled) return; settled = true;
+      try { if (db) db.close(); } catch(_){}
+      if (error) reject(error); else resolve(value || []);
+    }
+    var request;
+    try { request = indexedDB.open(COLD_DB); }
+    catch(error){ finish(error); return; }
+    request.onupgradeneeded = function(){
+      /* Do not create cold storage merely by opening Recovery Center. */
+      createdByRead = true;
+      try { request.transaction.abort(); } catch(_){}
+    };
+    request.onerror = function(){
+      if (createdByRead && request.error && request.error.name === "AbortError") finish(null, []);
+      else finish(request.error || new Error("IndexedDB cold-storage open failed"));
+    };
+    request.onblocked = function(){ finish(new Error("IndexedDB cold storage is blocked by another page")); };
+    request.onsuccess = function(){
+      if (settled) { try { request.result.close(); } catch(_){} return; }
+      db = request.result;
+      db.onversionchange = function(){ try { db.close(); } catch(_){} };
+      if (!db.objectStoreNames.contains(COLD_STORE)){ finish(null, []); return; }
+      var records = [], transaction;
+      try {
+        transaction = db.transaction(COLD_STORE, "readonly");
+        var cursor = transaction.objectStore(COLD_STORE).openCursor();
+        cursor.onsuccess = function(){
+          var item = cursor.result;
+          if (!item) return;
+          records.push(item.value); item.continue();
+        };
+        cursor.onerror = function(){ finish(cursor.error || new Error("IndexedDB cold-storage cursor failed")); };
+      } catch(error){ finish(error); return; }
+      transaction.oncomplete = function(){
+        var entries = [];
+        records.forEach(function(record, index){
+          var coldId = plainObject(record) ? String(record.k || "record-" + index) : "record-" + index;
+          var sourceKey = plainObject(record) ? String(record.sourceKey || record.k || coldId) : coldId;
+          var raw = plainObject(record) && typeof record.v === "string" ? record.v : "";
+          var savedAt = null;
+          if (plainObject(record) && Number.isFinite(Number(record.at)) && Number(record.at) > 0){
+            try { savedAt = new Date(Number(record.at)).toISOString(); } catch(_){}
+          }
+          entries.push(entryFromRaw({
+            id:"cold:" + coldId + ":" + index,
+            key:sourceKey,
+            coldId:coldId,
+            source:"coldStorage", sourceLabel:"IndexedDB cold-storage archive",
+            sourceDetail:"fh-coldstore/snaps · immutable record " + coldId,
+            reason:"relocated local snapshot",
+            savedAt:savedAt,
+            raw:raw
+          }));
+        });
+        finish(null, entries);
+      };
+      transaction.onerror = function(){ finish(transaction.error || new Error("IndexedDB cold-storage read failed")); };
+      transaction.onabort = function(){ finish(transaction.error || new Error("IndexedDB cold-storage read aborted")); };
+    };
+  });
+}
+
+async function scan(){
+  lastWarnings = [];
+  primaryChainDegraded = false;
+  primaryRecoveryReport = null;
+  var out = [];
+  try { out = await scanPrimarySnapshots(); }
+  catch(error){ lastWarnings.push("IndexedDB primary slots could not be inspected: " + (error && error.message ? error.message : error)); }
+  try { out = out.concat(scanLocalStorage()); }
+  catch(error){ lastWarnings.push("localStorage snapshots could not be read: " + (error && error.message ? error.message : error)); }
+  try { out = out.concat(await scanGuardSnapshots()); }
+  catch(error){ lastWarnings.push("IndexedDB guard ring could not be read: " + (error && error.message ? error.message : error)); }
+  try { out = out.concat(await scanColdSnapshots()); }
+  catch(error){ lastWarnings.push("IndexedDB cold-storage archive could not be read: " + (error && error.message ? error.message : error)); }
+  if(primaryChainDegraded)out.forEach(function(entry){if(!entry.degradedPreviousRepairEligible)entry.restoreBlocked=true;});
+  out.sort(function(a,b){
+    var am = a.sum ? a.sum.totalFocusMin : -1, bm = b.sum ? b.sum.totalFocusMin : -1;
+    if (am !== bm) return bm - am;
+    return String(b.savedAt || "").localeCompare(String(a.savedAt || ""));
+  });
+  return out;
+}
+
+function labelFor(key){
+  if (key === MAIN_KEY) return {t:"CURRENT LIVE STATE", cls:"grey"};
+  if (key === MAIN_KEY + ".lkg") return {t:"LAST KNOWN GOOD", cls:"gold"};
+  if (key.indexOf(MAIN_KEY + ".pre-recovery") === 0) return {t:"PRE-RECOVERY BACKUP", cls:"grey"};
+  if (key.indexOf(MAIN_KEY + ".pre") === 0) return {t:"PRE-MIGRATION SNAPSHOT", cls:"grey"};
+  if (/focusHero\.v[123]\.state/.test(key)) return {t:"LEGACY", cls:"grey"};
+  return {t:"SNAPSHOT", cls:"grey"};
+}
+
+function labelForEntry(entry){
+  if (entry.source === "bootstrapSource") return {t:"ORIGINAL SOURCE · DOWNLOAD ONLY", cls:"gold"};
+  if (entry.source === "primary") return {t:entry.primarySlot === "head" ? "CURRENT PRIMARY" : "PREVIOUS PRIMARY", cls:"idb"};
+  if (entry.source === "coldStorage") return {t:"COLD ARCHIVE", cls:"idb"};
+  if (entry.source === "indexedDB") return {t:"GUARD RING", cls:"idb"};
+  return labelFor(entry.key);
+}
+
+function sanitizeRecoveryDownload(value){
+  var clone = JSON.parse(JSON.stringify(value));
+  var blocked = {userToken:true,refreshToken:true,tokenExpiresAt:true,accessToken:true,access_token:true,refresh_token:true};
+  function scrub(node){
+    if (Array.isArray(node)){ node.forEach(scrub); return; }
+    if (!plainObject(node)) return;
+    Object.keys(node).forEach(function(key){
+      if (blocked[key]) delete node[key];
+      else scrub(node[key]);
+    });
+  }
+  scrub(clone);
+  return clone;
+}
+
+function safeDownloadText(entry){
+  if (!entry || !entry.parsed) throw new Error("This record cannot be safely exported because its contents could not be validated.");
+  var parsed = JSON.parse(entry.raw);
+  return JSON.stringify(sanitizeRecoveryDownload(parsed), null, 2);
+}
+
+function download(entry){
+  try {
+    var safeText = safeDownloadText(entry);
+    var blob = new Blob([safeText], {type:"application/json"});
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    var mins = entry.sum ? (entry.sum.totalFocusMin || 0) : 0;
+    a.download = "focus-hero-" + entry.source + "-" + entry.key.replace(/[^a-z0-9.]/gi,"_") + "-" + mins + "min-sanitized-" +
+      new Date().toISOString().slice(0,10) + ".json";
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+  } catch(e){ alert("Download failed: " + (e.message||e)); }
+}
+
+async function sha256Text(value){
+  if (!window.crypto || !window.crypto.subtle || typeof TextEncoder !== "function") throw new Error("SHA-256 is unavailable.");
+  var digest = await window.crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(value)));
+  return Array.prototype.map.call(new Uint8Array(digest), function(byte){ return byte.toString(16).padStart(2,"0"); }).join("");
+}
+
+function readActivationMarker(){
+  var raw = localStorage.getItem(PRIMARY_ACTIVATION_KEY);
+  if (raw === null) return null;
+  var marker;
+  try{marker=JSON.parse(raw);}catch(_){return {invalid:true,raw:raw};}
+  if (!plainObject(marker) || marker.version !== 1 || marker.dbName !== PRIMARY_DB ||
+      ["bootstrap-required","active"].indexOf(marker.phase) < 0) return {invalid:true,raw:raw};
+  return marker;
+}
+function writeActivationMarker(marker){
+  var raw = JSON.stringify(marker);
+  if (!raw || raw.length > 1200) throw new Error("Primary activation receipt is invalid.");
+  localStorage.setItem(PRIMARY_ACTIVATION_KEY, raw);
+  if (localStorage.getItem(PRIMARY_ACTIVATION_KEY) !== raw) throw new Error("Primary activation receipt did not read back exactly.");
+}
+function activeMarkerFromEvidence(evidence,lineageId,extra){
+  if(!evidence||!evidence.valid)throw new Error("Verified immutable bootstrap evidence is unavailable.");
+  return Object.assign({version:1,phase:"active",dbName:PRIMARY_DB,lineageId:lineageId,
+    sourceKey:evidence.sourceKey,sourceSha256:evidence.sourceSha256,candidateSha256:evidence.candidateSha256,
+    bytes:new TextEncoder().encode(evidence.raw).byteLength,createdAt:evidence.savedAt,activatedAt:Date.now()},extra||{});
+}
+function clearAccountingLatchAfterVerifiedRecovery(commitId){
+  var cleared=true;
+  [localStorage,sessionStorage].forEach(function(storage){
+    try{storage.removeItem(ACCOUNTING_STORAGE_GUARD_KEY);if(storage.getItem(ACCOUNTING_STORAGE_GUARD_KEY)!==null)cleared=false;}
+    catch(_){cleared=false;}
+  });
+  if(!cleared){
+    var error=new Error("The durable state and activation receipt verified, but the accounting storage lock could not be cleared. Do not repeat the state repair; close other Life XP tabs and use Recovery diagnostics for commit "+commitId+".");
+    error.primaryCommitVerified=true;error.commitId=commitId;throw error;
+  }
+  return true;
+}
+
+async function verifyAndActivatePrimary(entry){
+  if(!entry||entry.source!=="primary"||entry.primarySlot!=="head")throw new Error("Only the exact verified primary head can repair activation.");
+  if(!window.FH_PRIMARY_STORE||typeof window.FH_PRIMARY_STORE.create!=="function")throw new Error("Durable primary storage is unavailable.");
+  var engine=primaryRecoveryReader||window.FH_PRIMARY_STORE.create({dbName:PRIMARY_DB});
+  var report=await engine.inspectRecoverySlots();
+  if(!report.chain||!report.chain.complete||!report.bootstrapSource||!report.bootstrapSource.valid)throw new Error("The primary chain and immutable bootstrap evidence are not complete; activation was not changed.");
+  var current=await engine.readHead();
+  if(!current||current.head.commitId!==entry.primaryCommitId||current.head.lineageId!==entry.primaryLineageId||current.raw!==entry.raw){
+    throw new Error("The primary head changed after this list was rendered. Activation was not changed; refresh Recovery and inspect again.");
+  }
+  var parsedCurrent;
+  try{parsedCurrent=JSON.parse(current.raw);}catch(_){throw new Error("The verified primary head is not valid JSON; activation was not changed.");}
+  var sane=recoveryStateSane(parsedCurrent);
+  if(!sane.ok)throw new Error("The verified primary head failed current-schema application validation ("+sane.reason+"); activation was not changed.");
+  var marker=activeMarkerFromEvidence(report.bootstrapSource,current.head.lineageId,{repairedBy:"recovery-center-marker-only"});
+  writeActivationMarker(marker);
+  var back=readActivationMarker();
+  if(!back||back.invalid||back.phase!=="active"||back.lineageId!==current.head.lineageId)throw new Error("Activation receipt did not verify after its marker-only repair. Primary bytes were not changed.");
+  return {commitId:current.head.commitId,lineageId:current.head.lineageId};
+}
+
+async function activatePrimary(entry){
+  if(!confirm("Verify and activate this exact IndexedDB primary head?\n\nThis changes only the small activation receipt. It does not rewrite player state, cloud data, frozen legacy snapshots, or recovery archives."))return false;
+  var status=document.getElementById("status");
+  try{
+    var result=await verifyAndActivatePrimary(entry);
+    status.innerHTML='<div class="banner ok"><b>Primary activation repaired.</b> Exact head <code>'+esc(result.commitId)+'</code> and its immutable bootstrap evidence verified. No player-state bytes were rewritten and cloud sync was not contacted.</div>';
+    await render();return true;
+  }catch(error){
+    status.innerHTML='<div class="banner bad"><b>Activation repair stopped safely:</b> '+esc(error&&error.message||error)+'</div>';
+    return false;
+  }
+}
+
+async function preserveColdSnapshot(sourceKey, raw){
+  if (typeof raw !== "string") throw new Error("Pre-restore bytes are unavailable.");
+  var db = await new Promise(function(resolve,reject){
+    var request = indexedDB.open(COLD_DB, 1);
+    request.onupgradeneeded = function(){ if (!request.result.objectStoreNames.contains(COLD_STORE)) request.result.createObjectStore(COLD_STORE,{keyPath:"k"}); };
+    request.onsuccess = function(){ resolve(request.result); };
+    request.onerror = function(){ reject(request.error || new Error("Cold recovery storage could not be opened.")); };
+    request.onblocked = function(){ reject(new Error("Cold recovery storage is blocked by another page.")); };
+  });
+  var id = sourceKey + "::cold::" + Date.now().toString(36) + "-" + crypto.getRandomValues(new Uint32Array(2)).join("-");
+  var record = { k:id, sourceKey:sourceKey, v:raw, at:Date.now(), bytes:new TextEncoder().encode(raw).byteLength,
+    sha256:await sha256Text(raw), format:3, retention:"preserve" };
+  try {
+    await new Promise(function(resolve,reject){
+      var tx;
+      try { tx = db.transaction(COLD_STORE,"readwrite",{durability:"strict"}); }
+      catch(_){ tx = db.transaction(COLD_STORE,"readwrite"); }
+      tx.objectStore(COLD_STORE).add(record);
+      tx.oncomplete = resolve;
+      tx.onerror = function(){ reject(tx.error || new Error("Cold pre-restore copy failed.")); };
+      tx.onabort = function(){ reject(tx.error || new Error("Cold pre-restore copy was aborted.")); };
+    });
+    var back = await new Promise(function(resolve,reject){
+      var tx = db.transaction(COLD_STORE,"readonly"), request = tx.objectStore(COLD_STORE).get(id), value = null;
+      request.onsuccess = function(){ value=request.result||null; };
+      request.onerror = function(){ reject(request.error || new Error("Cold pre-restore read-back failed.")); };
+      tx.oncomplete = function(){ resolve(value); };
+      tx.onerror = function(){ reject(tx.error || new Error("Cold pre-restore read-back failed.")); };
+    });
+    if (!back || back.v !== raw || back.sourceKey !== sourceKey || back.bytes !== record.bytes || back.sha256 !== record.sha256 || await sha256Text(back.v) !== record.sha256){
+      throw new Error("Cold pre-restore bytes did not verify exactly.");
+    }
+    return { coldId:id, sourceKey:sourceKey, bytes:record.bytes, sha256:record.sha256 };
+  } finally { try { db.close(); } catch(_){} }
+}
+
+function stageRecoveryState(state, previousRaw){
+  var staged = JSON.parse(JSON.stringify(state));
+  var previousState = null;
+  try {
+    previousState = previousRaw == null ? null : JSON.parse(previousRaw);
+    if (plainObject(previousState) && plainObject(previousState.state)) previousState = previousState.state;
+  } catch(_){ previousState = null; }
+  var syncSource = plainObject(previousState && previousState.sync) ? previousState.sync :
+    (plainObject(staged.sync) ? staged.sync : {});
+  staged.sync = JSON.parse(JSON.stringify(syncSource));
+  staged.sync.enabled = false;
+  staged.sync.pendingSync = false;
+  staged.sync.pendingSince = 0;
+  staged.sync.retryCount = 0;
+  staged.sync.retryAfter = 0;
+  staged.sync.lastSyncError = "Recovery staged locally; verify it before re-enabling cloud sync.";
+  return staged;
+}
+
+/* Read the exact physical envelopes only for the explicit degraded-chain
+   preservation path. Invalid envelope contents are never rendered or offered
+   as a state candidate; the whole byte-for-byte bundle goes directly into the
+   independent cold archive before the engine is allowed to replace a corrupt
+   or missing head. The primary engine recomputes this same bundle inside its
+   repair transaction and rejects any mismatch. */
+async function readPhysicalPrimaryForensicBundle(){
+  var db=await new Promise(function(resolve,reject){
+    var request=indexedDB.open(PRIMARY_DB,1),created=false;
+    request.onupgradeneeded=function(){created=true;try{request.transaction.abort();}catch(_){}};
+    request.onsuccess=function(){if(created){try{request.result.close();}catch(_){}reject(new Error("Primary database disappeared before forensic preservation."));}else resolve(request.result);};
+    request.onerror=function(){if(created)reject(new Error("Primary database disappeared before forensic preservation."));else reject(request.error||new Error("Primary forensic read could not open the database."));};
+    request.onblocked=function(){reject(new Error("Primary forensic read is blocked by another page."));};
+  });
+  try{
+    var slots=await new Promise(function(resolve,reject){
+      var tx=db.transaction("stateSlots","readonly"),store=tx.objectStore("stateSlots"),values={},failed=null;
+      [["head","head"],["previous","previous"],["bootstrapSource","bootstrapSource"]].forEach(function(pair){
+        var request=store.get(pair[1]);
+        request.onsuccess=function(){values[pair[0]]=request.result||null;};
+        request.onerror=function(){failed=request.error||new Error("Primary forensic slot read failed.");};
+      });
+      tx.oncomplete=function(){failed?reject(failed):resolve(values);};
+      tx.onerror=function(){reject(tx.error||failed||new Error("Primary forensic read failed."));};
+      tx.onabort=function(){reject(tx.error||failed||new Error("Primary forensic read was aborted."));};
+    });
+    return JSON.stringify({format:"focus-hero-primary-forensic-v1",dbName:PRIMARY_DB,store:"stateSlots",
+      head:slots.head||null,previous:slots.previous||null,bootstrapSource:slots.bootstrapSource||null});
+  }finally{try{db.close();}catch(_){}}
+}
+
+async function verifiedRepairFromPrevious(entry){
+  if(!entry||entry.source!=="primary"||entry.primarySlot!=="previous"||!entry.degradedPreviousRepairEligible){
+    throw new Error("This entry is not an independently verified previous-slot repair candidate.");
+  }
+  if(!window.FH_PRIMARY_STORE||typeof window.FH_PRIMARY_STORE.create!=="function")throw new Error("Durable primary storage is unavailable.");
+  var engine=primaryRecoveryReader||window.FH_PRIMARY_STORE.create({dbName:PRIMARY_DB});
+  var report=await engine.inspectRecoverySlots();
+  var eligible=report.previous&&report.previous.valid&&(!report.head.exists||!report.head.valid)&&
+    report.bootstrapSource&&report.bootstrapSource.valid&&report.previous.head.lineageId===report.bootstrapSource.lineageId&&
+    (report.previous.head.sequence!==1||(report.bootstrapSource.candidateSha256===report.previous.head.stateSha256&&
+      report.bootstrapSource.initialCommitId===report.previous.head.commitId));
+  if(!eligible||report.previous.head.commitId!==entry.primaryCommitId||report.previous.raw!==entry.raw){
+    throw new Error("The degraded primary slots changed after this list was rendered. Nothing was repaired; refresh Recovery and inspect again.");
+  }
+  var staged=stageRecoveryState(entry.parsed,entry.raw),sane=recoveryStateSane(staged);
+  if(!sane.ok)throw new Error("The verified previous state failed current-schema recovery validation ("+sane.reason+"); nothing was repaired.");
+  var serialized=JSON.stringify(staged);
+  var forensicRaw=await readPhysicalPrimaryForensicBundle();
+  var backup=await preserveColdSnapshot(MAIN_KEY+".primary-forensic-pre-repair-"+new Date().toISOString().replace(/[:.]/g,"-"),forensicRaw);
+  var committed=await engine.repairFromVerifiedPrevious({raw:serialized,expectedPreviousCommitId:entry.primaryCommitId,
+    forensicRaw:forensicRaw,preservationReceipt:backup,source:"recovery-center-previous-repair"});
+  var readBack=await engine.readHead(),finalReport=await engine.inspectRecoverySlots();
+  if(!readBack||readBack.raw!==serialized||readBack.head.commitId!==committed.head.commitId||
+      !finalReport.chain||!finalReport.chain.complete||!finalReport.bootstrapSource||!finalReport.bootstrapSource.valid){
+    var indeterminate=new Error("Previous-slot repair committed but the exact joined read-back did not verify. Do not retry automatically.");
+    indeterminate.primaryCommitVerified=true;indeterminate.commitId=committed.head.commitId;throw indeterminate;
+  }
+  try{writeActivationMarker(activeMarkerFromEvidence(finalReport.bootstrapSource,readBack.head.lineageId,{repairedBy:"recovery-center-previous-slot"}));}
+  catch(markerError){markerError.primaryCommitVerified=true;markerError.commitId=readBack.head.commitId;
+    markerError.message="The repaired state committed and read back exactly, but activation remains locked. Use marker-only activation for commit "+readBack.head.commitId+". "+(markerError.message||markerError);throw markerError;}
+  clearAccountingLatchAfterVerifiedRecovery(readBack.head.commitId);
+  return{backupKey:backup.coldId,commitId:committed.head.commitId,syncPaused:true};
+}
+
+async function repairPrevious(entry){
+  if(!confirm("Preserve the exact degraded primary database and repair from this independently verified previous state?\n\nThe current physical slots will first be copied byte-for-byte into the independent cold archive. Cloud sync stays off."))return false;
+  var status=document.getElementById("status");
+  try{
+    var result=await verifiedRepairFromPrevious(entry);
+    status.innerHTML='<div class="banner ok"><b>Previous state repaired and verified.</b> The degraded physical slots were first preserved as <code>'+esc(result.backupKey)+'</code>. The new fenced primary head read back exactly. <b>Cloud sync is paused.</b> Open Life XP and verify the profile before enabling sync.</div>';
+    window.scrollTo(0,0);await render();return true;
+  }catch(error){
+    status.innerHTML='<div class="banner bad"><b>'+(error&&error.primaryCommitVerified?"State repaired; activation still locked:":"Repair stopped safely:")+'</b> '+esc(error&&error.message||error)+'</div>';
+    return false;
+  }
+}
+
+async function verifiedRestore(entry){
+  var state = entry && entry.parsed;
+  var hasStateMarker = plainObject(state && state.hero) || Array.isArray(state && state.tasks) ||
+    (state && typeof state.dataVersion === "number" && Number.isFinite(state.dataVersion));
+  if (!plainObject(state) || !Number.isSafeInteger(state.totalFocusMin) || state.totalFocusMin < 0 || !hasStateMarker ||
+      !Number.isFinite(Number(state.dataVersion)) || Number(state.dataVersion) < 1 || Number(state.dataVersion) > 16){
+    throw new Error("Snapshot is not a valid Life XP state; live state was not changed.");
+  }
+  if (!window.FH_PRIMARY_STORE || typeof window.FH_PRIMARY_STORE.create !== "function") throw new Error("Durable primary storage is unavailable.");
+  var engine = window.FH_PRIMARY_STORE.create({ dbName:PRIMARY_DB });
+  var current = null, marker = readActivationMarker();
+  try { current = await engine.readHead(); }
+  catch(error){ throw new Error("The current primary chain is degraded. It was not overwritten. Review the warnings and preserve its forensic copy before a repair. " + (error.message || error)); }
+  var previous = current ? current.raw : localStorage.getItem(MAIN_KEY);
+  var staged = stageRecoveryState(entry.parsed, previous);
+  var sane=recoveryStateSane(staged);
+  if(!sane.ok)throw new Error("Snapshot failed current-schema recovery validation ("+sane.reason+"); primary state and activation were not changed.");
+  var serialized = JSON.stringify(staged);
+  if (typeof serialized !== "string" || !plainObject(JSON.parse(serialized))){
+    throw new Error("Snapshot serialization failed; live state was not changed.");
+  }
+  var backup = null;
+  if (previous !== null){
+    backup = await preserveColdSnapshot(MAIN_KEY + ".pre-recovery-" + new Date().toISOString().replace(/[:.]/g,"-"), previous);
+  }
+  var committed;
+  if (current){
+    committed = await engine.commit({ raw:serialized, expectedCommitId:current.head.commitId,
+      expectedFenceToken:current.head.fenceToken, rotateFence:true, source:"recovery-center" });
+  } else {
+    var sourceSha = await sha256Text(entry.raw), candidateSha = await sha256Text(serialized);
+    writeActivationMarker({version:1,phase:"bootstrap-required",dbName:PRIMARY_DB,sourceKey:entry.key,
+      sourceSha256:sourceSha,candidateSha256:candidateSha,bytes:new TextEncoder().encode(serialized).byteLength,createdAt:Date.now(),
+      activationReserve:"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"});
+    committed = await engine.initializeFromLegacy({raw:serialized,legacySourceRaw:entry.raw,legacySourceKey:entry.key,source:"recovery-center-bootstrap"});
+  }
+  var readBack = await engine.readHead();
+  if (!readBack || readBack.raw !== serialized || readBack.head.commitId !== committed.head.commitId) throw new Error("Primary restore completed but exact read-back could not be verified. Do not retry automatically.");
+  var finalReport=await engine.inspectRecoverySlots();
+  if(!finalReport.chain||!finalReport.chain.complete||!finalReport.bootstrapSource||!finalReport.bootstrapSource.valid)throw new Error("Restored head read back, but its immutable bootstrap evidence did not form a complete chain. Activation was not changed.");
+  try{writeActivationMarker(activeMarkerFromEvidence(finalReport.bootstrapSource,readBack.head.lineageId,{repairedBy:"recovery-center-restore"}));}
+  catch(markerError){
+    markerError.primaryCommitVerified=true;
+    markerError.commitId=readBack.head.commitId;
+    markerError.message="The selected state was committed and read back exactly, but its small activation receipt could not be written. Do not retry the restore; use the marker-only activation repair for commit "+readBack.head.commitId+". "+(markerError.message||markerError);
+    throw markerError;
+  }
+  clearAccountingLatchAfterVerifiedRecovery(readBack.head.commitId);
+  return { backupKey:backup && backup.coldId || null, serialized:serialized, syncPaused:true, commitId:committed.head.commitId };
+}
+
+async function restore(entry){
+  if (!entry.parsed){ alert("This snapshot could not be parsed and cannot be restored automatically."); return false; }
+  var s = entry.sum;
+  var msg = "Restore this snapshot?\n\n" +
+    "Focus time: " + fmtMin(s.totalFocusMin) + "\n" +
+    "Level " + s.level + " · " + s.sessions + " sessions · " + s.histDays + " days of history\n" +
+    (s.firstDay ? ("From " + s.firstDay + " to " + s.lastDay + "\n") : "") +
+    "\nThe restore proceeds only after the current state backup is written and verified. Cloud sync will stay off until you verify the recovered profile.";
+  if (!confirm(msg)) return false;
+  var status = document.getElementById("status");
+  try {
+    var result = await verifiedRestore(entry);
+    status.innerHTML = '<div class="banner ok"><b>✅ Restored & verified.</b> ' +
+      esc(fmtMin(s.totalFocusMin)) + " across " + s.histDays + " days is now the live state " +
+      "(full byte-for-byte IndexedDB read-back check passed). " + (result.backupKey ? "Your previous state was preserved in the cold archive as <code>" + esc(result.backupKey) + "</code>." : "There was no previous live state to back up.") + "<br>" +
+      (result.syncPaused ? "<b>Cloud sync is paused.</b> The current sync identity was preserved, but no recovered state will upload until you verify it and turn sync back on.<br><br>" : "<br>") +
+      '<b>Next:</b> <a href="./focus-hero.html">open Life XP</a>, confirm your stats look right, ' +
+      "then IMMEDIATELY do Settings → Back up all data to save a copy off-device.</div>";
+    window.scrollTo(0,0);
+    void render(); // re-scan so the list reflects the new reality
+    return true;
+  } catch(e){
+    status.innerHTML = '<div class="banner bad"><b>'+ (e&&e.primaryCommitVerified ? "⚠️ State committed; activation still locked:" : "❌ Restore failed:") +'</b> ' + esc(e.message||e) +
+      (e&&e.primaryCommitVerified ? "<br>The durable state must not be restored again. Refresh this page and use the exact head's marker-only activation action." : "<br>The selected source snapshot was not modified. Keep this message with any named backup key.") + "</div>";
+    return false;
+  }
+}
+
+async function render(){
+  var sequence = ++renderSequence;
+  var list = document.getElementById("list");
+  list.innerHTML = '<div class="banner">Reading verified primary slots, frozen legacy snapshots, the IndexedDB guard ring, and the cold-storage archive…</div>';
+  var entries = await scan();
+  if (sequence !== renderSequence) return;
+  lastEntries = entries;
+  var warningHtml = lastWarnings.map(function(w){ return '<div class="banner bad">' + esc(w) + "</div>"; }).join("");
+  if (!entries.length){
+    list.innerHTML = warningHtml + '<div class="banner bad">No Life XP primary, legacy, guard-ring, or cold-storage snapshots were found in this browser context.<br><br>' +
+      "<b>Important:</b> the installed home-screen app and the plain browser have SEPARATE storage. " +
+      "Open this page from INSIDE the app (Settings → 🚑 Recovery) — not in a separate browser tab.</div>";
+    return;
+  }
+  var best = null;
+  for (var i=0;i<entries.length;i++){
+    var e = entries[i];
+    if (e.sum && (best===null || (e.sum.totalFocusMin > best))) best = e.sum.totalFocusMin;
+  }
+  var html = "";
+  entries.forEach(function(e, idx){
+    var lab = labelForEntry(e);
+    var isBest = e.sum && e.sum.totalFocusMin === best && best > 0;
+    html += '<div class="snap' + (isBest ? " best" : "") + '" data-source="' + esc(e.source) + '" data-entry-index="' + idx + '">';
+    html += "<h3>" + esc(e.key) +
+      ' <span class="tag ' + lab.cls + '">' + lab.t + "</span>" +
+      (isBest ? ' <span class="tag gold">MOST DATA</span>' : "") + "</h3>";
+    html += '<div class="row-dates"><b>Source:</b> ' + esc(e.sourceLabel) + " · " + esc(e.sourceDetail) + "</div>";
+    if (e.savedAt) html += '<div class="row-dates"><b>Snapshot timestamp:</b> ' + esc(e.savedAt) + "</div>";
+    if (e.sum){
+      var s = e.sum;
+      html += '<div class="stats">' +
+        "<div><span>Total focus</span><b>" + esc(fmtMin(s.totalFocusMin)) + "</b></div>" +
+        "<div><span>Level / XP</span><b>" + s.level + " / " + s.xp + "</b></div>" +
+        "<div><span>Sessions</span><b>" + s.sessions + "</b></div>" +
+        "<div><span>History days</span><b>" + s.histDays + "</b></div>" +
+        "<div><span>Tasks</span><b>" + s.tasks + "</b></div>" +
+        "<div><span>Coins</span><b>" + s.coins + "</b></div>" +
+        "<div><span>Economy events</span><b>" + s.economyEvents + "</b></div>" +
+        "<div><span>Grants / spends / harvests</span><b>" + s.economyGrants + " / " + s.economySpends + " / " + s.economyHarvests + "</b></div>" +
+        "<div><span>Unlocked plots</span><b>" + (s.unlockedPlots || "—") + "</b></div>" +
+        "<div><span>Duplicate event IDs</span><b>" + s.duplicateEventIds + "</b></div>" +
+        "</div>";
+      if (s.firstDay) html += '<div class="row-dates">History: ' + esc(s.firstDay) + " → " + esc(s.lastDay) +
+        " · logged sum " + esc(fmtMin(s.histSum)) + " · v" + esc(String(s.dataVersion)) + "</div>";
+      if (s.totalFocusMin === 0 && s.sessions === 0)
+        html += '<div class="row-dates empty">Empty / blank state</div>';
+    } else {
+      html += '<div class="row-dates empty">Could not parse (' + fmtBytes(e.size) + ") — raw download is disabled because device credentials cannot be safely removed.</div>";
+    }
+    html += '<div class="btns">';
+    if(e.activationRepairNeeded&&!e.restoreBlocked){
+      html += '<button class="restore activate-primary" data-activate="' + idx + '">Verify &amp; activate this exact primary</button>';
+    }
+    if(e.degradedPreviousRepairEligible&&!e.restoreBlocked){
+      html += '<button class="restore repair-previous" data-repair-previous="' + idx + '">Preserve evidence &amp; repair from previous</button>';
+    }else if (!(e.source === "primary" && e.primarySlot === "head") && e.parsed && !e.restoreBlocked){
+      html += '<button class="restore" data-idx="' + idx + '">⟲ Restore this</button>';
+    }
+    if(e.restoreBlocked)html += '<span class="danger-note">Export-only while the primary chain is degraded.</span>';
+    if (e.parsed) html += '<button class="dl" data-dl="' + idx + '">Download safe copy</button>';
+    html += "</div>";
+    html += '<div class="danger-note">' + fmtBytes(e.size) + "</div>";
+    html += "</div>";
+  });
+  list.innerHTML = warningHtml + html;
+  list.querySelectorAll("button.restore").forEach(function(b){
+    if(b.classList.contains("activate-primary")||b.classList.contains("repair-previous"))return;
+    b.addEventListener("click", function(){ void restore(entries[b.dataset.idx|0]); });
+  });
+  list.querySelectorAll("button.activate-primary").forEach(function(b){b.addEventListener("click",function(){void activatePrimary(entries[b.dataset.activate|0]);});});
+  list.querySelectorAll("button.repair-previous").forEach(function(b){b.addEventListener("click",function(){void repairPrevious(entries[b.dataset.repairPrevious|0]);});});
+  list.querySelectorAll("button.dl").forEach(function(b){
+    b.addEventListener("click", function(){ download(entries[b.dataset.dl|0]); });
+  });
+}
+
+window.__fhRecoveryTest = {
+  unwrapState:unwrapState, summarize:summarize, scanLocalStorage:scanLocalStorage, scanPrimarySnapshots:scanPrimarySnapshots,
+  dbExistsHint:dbExistsHint,probeDatabaseWithoutCreating:probeDatabaseWithoutCreating,
+  scanGuardSnapshots:scanGuardSnapshots, scanColdSnapshots:scanColdSnapshots, scan:scan, render:render,
+  sanitizeRecoveryDownload:sanitizeRecoveryDownload, safeDownloadText:safeDownloadText,
+  stageRecoveryState:stageRecoveryState, recoveryStateSane:recoveryStateSane, verifiedRestore:verifiedRestore, restore:restore, download:download,
+  readPhysicalPrimaryForensicBundle:readPhysicalPrimaryForensicBundle,verifiedRepairFromPrevious:verifiedRepairFromPrevious,repairPrevious:repairPrevious,
+  verifyAndActivatePrimary:verifyAndActivatePrimary,activatePrimary:activatePrimary,readActivationMarker:readActivationMarker,
+  clearAccountingLatchAfterVerifiedRecovery:clearAccountingLatchAfterVerifiedRecovery,
+  entries:function(){ return lastEntries.slice(); }, warnings:function(){ return lastWarnings.slice(); }
+};
+
+render().catch(function(e){
+  document.getElementById("status").innerHTML =
+    '<div class="banner bad">Recovery page error: ' + esc(e.message||e) + "</div>";
+});
+</script>
+</body>
+</html>
