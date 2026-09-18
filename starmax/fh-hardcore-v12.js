@@ -1180,7 +1180,10 @@
 
   function archiveRun(data, run, reason, missedDay, endedAt) {
     var archived = clone(run);
-    archived.endedAt = finiteInt(endedAt, Date.now(), 0, Number.MAX_SAFE_INTEGER);
+    /* An end supersedes the reinstatement it observed, including a future
+       peer timestamp. Equality is enough: merge lets the archive win ties. */
+    archived.endedAt = Math.max(finiteInt(endedAt, Date.now(), 0, Number.MAX_SAFE_INTEGER),
+      finiteInt(run.reinstatedAt, 0, 0, Number.MAX_SAFE_INTEGER));
     archived.endReason = cleanText(reason, "ended", 120);
     archived.missedDay = validDay(missedDay) ? String(missedDay) : null;
     data.history.unshift(archived);
@@ -1350,6 +1353,11 @@
     delete restored.endReason;
     delete restored.missedDay;
     restored.revivedAt = deterministicEvaluationStamp(today);
+    /* A peer may still hold the ended copy. Reviving must be newer than that
+       end under the same ordering used by mergeHardcoreState. */
+    var endedAt = finiteInt(row.endedAt, 0, 0, Number.MAX_SAFE_INTEGER);
+    if (endedAt >= Number.MAX_SAFE_INTEGER) return { ok:false, reason:"That run's end timestamp cannot be superseded safely; nothing changed." };
+    restored.reinstatedAt = Math.max(Date.now(), endedAt + 1);
     restored.revivedCount = Math.max(0, Math.trunc(Number(row.revivedCount) || 0)) + 1;
     restored.lastCheckedDay = today;
     var audit = auditRun(restored, today);
@@ -1424,12 +1432,11 @@
         finiteInt(candidate.lastCheckedAt, 0, 0, Number.MAX_SAFE_INTEGER),
         deterministicEvaluationStamp(today)
       );
-      /* A miss is only ever declared for a COMPLETED day, so the archived
-         endedAt always falls strictly before today's stamp. That makes this
-         reinstatement unambiguously the newer decision about the run, and it
-         is derived from the calendar rather than the clock, so both devices
-         compute the same value. */
-      candidate.reinstatedAt = deterministicEvaluationStamp(today);
+      /* Keep the decision deterministic and strictly newer even when a peer
+         with a later clock contributed the archived end. */
+      var endedAt = finiteInt(row.endedAt, 0, 0, Number.MAX_SAFE_INTEGER);
+      if (endedAt >= Number.MAX_SAFE_INTEGER) continue;
+      candidate.reinstatedAt = Math.max(deterministicEvaluationStamp(today), endedAt + 1);
       next = withRuns(next, runsOf(next).concat([candidate]));
       return { row: row, next: next, days: recheck.daysSurvived };
     }
@@ -1654,7 +1661,11 @@
      deliberately not persisted, so a reload always gets a fresh look. */
   var lastReviveScan = "";
   function reviveScanKey(data, today) {
-    return today + ":" + runsOf(data).length + ":" + ((data && data.history) || []).length;
+    /* A sync or edit can change the evidence without changing the run counts.
+       Cache only while all inputs to the archive's re-audit are unchanged. */
+    var state = S() || {};
+    return JSON.stringify([today, data, state.history || {}, state.sessionHistory || {},
+      state.sessionsLog || [], state.lateStarts || {}]);
   }
   function mayHaveRevivableRun(data, today) {
     if (!data || !Array.isArray(data.history) || !data.history.length) return false;
@@ -1723,6 +1734,8 @@
       if (saved === false) throw new Error("Verified durable saving refused this Hardcore change.");
       return { ok:true };
     } catch (error) {
+      /* The same evidence must be retryable if its restoration did not save. */
+      lastReviveScan = "";
       /* A peer-primary adoption may replace window.state while the awaited
          commit is in flight. Restore only the exact object installed here;
          never overwrite a newer peer state. */
@@ -1810,7 +1823,7 @@
        Ask the day itself when it ends. Midnight remains the answer for an
        ordinary day, so nothing changes for one. */
     var deadline = null;
-    try { deadline = windowEndMs(dayKey(current)); } catch (_) { deadline = null; }
+    try { deadline = windowEndMs(hcActiveDay(current.getTime())); } catch (_) { deadline = null; }
     var next = (deadline != null && deadline > current.getTime())
       ? new Date(deadline + 2000)
       : new Date(current.getFullYear(), current.getMonth(), current.getDate() + 1, 0, 0, 2, 0);

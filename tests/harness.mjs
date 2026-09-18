@@ -8,9 +8,9 @@
  *    routed explicitly. A test that "reproduces" a cloud failure by letting a
  *    real request fail is reproducing the sandbox, not the bug.
  */
-import { chromium } from 'playwright';
+const { chromium } = await import(process.env.LIFEXP_PLAYWRIGHT_MODULE || 'playwright');
 
-export const CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+export const CHROME = process.env.LIFEXP_CHROME_PATH || chromium.executablePath();
 
 /* Console noise that is expected in this harness and is not a defect.
    Anything not matched here fails the run. */
@@ -34,7 +34,14 @@ export async function launch(){
 /* Returns { ctx, page, problems, consoleAll }.
    `problems` collects pageerrors and any non-allowlisted error/warning. */
 export async function openApp(browser, port, opts = {}){
-  const ctx = await browser.newContext({ serviceWorkers: 'block' });
+  const ctx = await browser.newContext({ serviceWorkers: 'block', timezoneId: 'America/Toronto' });
+  // All tests use disposable profiles. Only this local source server is real;
+  // individual suites may override external routes with synthetic responses.
+  await ctx.route('**/*', route => {
+    const url = new URL(route.request().url());
+    return url.hostname === '127.0.0.1' && url.port === String(port)
+      ? route.continue() : route.abort('blockedbyclient');
+  });
   const problems = [];
   const consoleAll = [];
 

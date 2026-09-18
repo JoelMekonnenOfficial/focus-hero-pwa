@@ -208,7 +208,27 @@
         " skill(s) the cloud has not received yet: " + C.diff.onlyLocal.join(", ") +
         ". Press Sync now to upload them."];
     }
-    return ["ok", "IN STEP with the cloud at revision " + C.rev + "."];
+    /* A matching revision is not evidence that queued work reached the cloud.
+       Keep this verdict limited to the content this probe actually checked. */
+    if (C.state !== "found" || C.blobError || !C.diff ||
+        !Number.isFinite(C.minutes) || !Number.isFinite(C.historyDays)){
+      return ["warn", "CLOUD CONTENT NOT VERIFIED. The revision alone cannot confirm that your progress has synced."];
+    }
+    if (C.minutes !== L.minutes){
+      return ["warn", "FOCUS TOTALS DIFFER: this device has " + L.minutes +
+        " minutes; the cloud has " + C.minutes + ". Your progress is not yet confirmed in sync."];
+    }
+    if (C.historyDays !== L.historyDays){
+      return ["warn", "FOCUS HISTORY DIFFERS: this device has " + L.historyDays +
+        " days; the cloud has " + C.historyDays + ". Your progress is not yet confirmed in sync."];
+    }
+    if (L.pending){
+      return ["warn", "CHANGES ARE STILL QUEUED on this device. A matching cloud revision does not confirm that they have uploaded."];
+    }
+    if (String(L.lastError || "").trim()){
+      return ["warn", "A SYNC ERROR IS STILL RECORDED. Review Last sync error below; this check cannot confirm that sync has recovered."];
+    }
+    return ["ok", "The checked focus total, history-day count and skill list match the cloud at revision " + C.rev + "."];
   }
 
   async function run(){
