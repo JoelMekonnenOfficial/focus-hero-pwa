@@ -4,13 +4,17 @@ This repository contains source and synthetic tests. It contains no production p
 
 ## Reproduce checks
 
-Use Node 20 or later (the workflow uses Node 22):
+Use Node 20 or later (the workflow uses Node 22). Keep the test browser inside this checkout and disable browser-cache garbage collection. In PowerShell:
 
-```
+```powershell
+$env:PLAYWRIGHT_BROWSERS_PATH = Join-Path (Get-Location).Path '.playwright-browsers'
+$env:PLAYWRIGHT_SKIP_BROWSER_GC = '1'
 npm ci --ignore-scripts
 npx playwright install chromium
 npm test
 ```
+
+On Linux/macOS, set `PLAYWRIGHT_BROWSERS_PATH="$PWD/.playwright-browsers"` and `PLAYWRIGHT_SKIP_BROWSER_GC=1` with `export`, then run the same three commands. Linux CI uses Playwright's `--with-deps` option during installation.
 
 The runner serves this checkout on a random loopback port, creates disposable browser contexts, blocks service workers, and denies external requests unless a suite supplies a synthetic response. No existing browser profile is opened. Results are written to `test-results/`. A failed assertion fails the run, including in older suites that previously forgot to finalize their reporter. `npm test -- boot sync` selects named suites. Set `LIFEXP_TEST_WORKERS=1` for sequential execution.
 
