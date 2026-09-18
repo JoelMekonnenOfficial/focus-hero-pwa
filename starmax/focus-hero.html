@@ -14648,11 +14648,19 @@ async function clearSyncCreateAuthorizationDurably(source,opts={}){
 async function supabaseRequest(path, init){
   init = init||{};
   const sync = init.syncContext || state.sync;
+  const authReadOnly = init.authReadOnly === true;
   const persistAuth = init.persistAuth !== false && sync === state.sync;
   const operationGeneration = init.operationGeneration ?? syncIdentityGeneration;
   assertSyncOperationCurrent(operationGeneration);
   const url = `${SUPABASE_URL}/rest/v1/${path}`;
-  await supabaseSignInAnon({ syncContext:sync, persist:persistAuth, operationGeneration });
+  if(authReadOnly){
+    if(String(init.method||"GET").toUpperCase()!=="GET")throw syncControlError("FH_SYNC_READ_ONLY",
+      "A diagnostic request may only read cloud data.");
+    if(!supabaseTokenIsFresh(sync))throw syncControlError("FH_SYNC_AUTH_REQUIRED",
+      "Diagnostic needs an existing unexpired sign-in. No authentication was changed.");
+  } else {
+    await supabaseSignInAnon({ syncContext:sync, persist:persistAuth, operationGeneration });
+  }
   assertSyncOperationCurrent(operationGeneration);
   const requestOnce = ()=>{
     const headers = Object.assign({
@@ -14668,14 +14676,23 @@ async function supabaseRequest(path, init){
     delete fetchInit.prefer;
     delete fetchInit.syncContext;
     delete fetchInit.persistAuth;
+    delete fetchInit.authReadOnly;
     delete fetchInit.operationGeneration;
-    return fetch(url, fetchInit);
+    /* Count at the request boundary, including a 401 replay. An upload may
+       coalesce callers or retry CAS; neither is one-to-one with API entry. */
+    const method=String(fetchInit.method||"GET").toUpperCase();
+    const select=new URL(url).searchParams.get("select");
+    const kind=method==="GET"||method==="HEAD"
+      ? (method==="HEAD"||(select&&select.split(",").every(field=>
+          ["cloud_rev","updated_at","sync_secret_hash","id"].includes(field.trim()))) ? "peek" : "pull")
+      : "push";
+    return fhCloudTransferFetch(url, fetchInit, kind, {reportOnly:authReadOnly});
   };
   let response = await requestOnce();
   assertSyncOperationCurrent(operationGeneration);
   /* A cached JWT can be rejected even when the device clock says it is still
      usable. Renew once on 401, then replay this exact read/write request. */
-  if (response.status === 401){
+  if (response.status === 401 && !authReadOnly){
     await supabaseSignInAnon({ syncContext:sync, persist:persistAuth, forceRefresh:true, operationGeneration });
     assertSyncOperationCurrent(operationGeneration);
     response = await requestOnce();
@@ -15504,12 +15521,11 @@ async function readVerifiedPrimaryUploadBase(expected=null){
    traffic costing roughly a thousandth of what it was billed for, and the
    owner got a "cloud sync has been failing" notice for it - daily, forever.
 
-   So peeks are counted separately and generously, full transfers keep the
-   ceiling that actually maps to the quota, and the charge is made AFTER the
-   request, when its real cost is known. A background check that turns into a
-   full reconcile can overshoot the peek gate by one; that is the honest price
-   of not knowing the cost until the answer arrives, and it is bounded by the
-   reconcile interval. */
+   Peeks and full transfers have separate ceilings. Each actual request is
+   gated and counted immediately before fetch. A peek that discovers a newer
+   revision must pass the full-transfer gate before downloading the payload.
+   Failed attempts count too; rejected/no-op callers and coalesced callers do
+   not. This also counts every replay and optimistic-concurrency retry. */
 var FH_CLOUD_BUDGET = { perHour: 90, perDay: 250,
                         peekPerHour: 300, peekPerDay: 3000,
                         key: "fh.cloudBudget.v1" };
@@ -15519,31 +15535,9 @@ function fhBudgetRead(){
   try {
     const v = JSON.parse(localStorage.getItem(FH_CLOUD_BUDGET.key) || "null");
     if (v && Array.isArray(v.t)){
-      /* ===== v10.63.3: A COUNT TAKEN WITH A BROKEN INSTRUMENT IS NOT EVIDENCE.
-
-         Fixing the accounting did not release the devices the old accounting
-         had already stopped. A pause writes blockedUntil = oldest transfer +
-         24h into localStorage, so a device that hit the ceiling under the old
-         rule stays paused for a further day no matter which build it is now
-         running - and its ledger still holds 250-odd timestamps that were
-         charged as full profile downloads when they were 200-byte revision
-         checks, so the moment the block expires it is immediately re-earned.
-
-         Observed: a browser on 10.63.2, carrying 168 minutes of work nobody
-         else had, sitting behind a pause created hours earlier by the very bug
-         that build fixes.
-
-         The absence of the peek array is the marker for a ledger written
-         before the split. Those numbers cannot be corrected - they were never
-         measured - so they are discarded once, along with the block they
-         produced. The new ledger starts empty and counts honestly from here. */
-      if (!Array.isArray(v.p)){
-        const cleared = { t: [], p: [], blockedUntil: 0, note: "" };
-        try { localStorage.setItem(FH_CLOUD_BUDGET.key, JSON.stringify(cleared)); } catch(_){}
-        try { console.info("[fh-budget] discarded a pre-split transfer ledger (" +
-          v.t.length + " entries) and the pause it created"); } catch(_){}
-        return cleared;
-      }
+      /* Older ledgers did not distinguish peeks. Preserve their timestamps
+         and holds; do not rewrite historical usage or clear a safety hold. */
+      if (!Array.isArray(v.p)) v.p=[];
       return v;
     }
   } catch(_){}
@@ -15651,17 +15645,31 @@ function fhCloudBudgetCount(kind){
 }
 /* Shared by push and pull. Marks the profile pending and schedules a retry for
    when the window reopens, so the work is delayed rather than dropped. */
-function fhBudgetHalt(reason){
+function fhBudgetHalt(reason,kind){
   try {
     state.sync.pendingSync = true;
     if (!(state.sync.pendingSince > 0)) state.sync.pendingSince = Date.now();
     state.sync.lastSyncError = reason;
     const u = fhCloudUsage();
-    state.sync.retryAfter = Math.max(Date.now() + 60000, u.blockedUntil || 0);
+    const until=fhBudgetIsPeek(kind)?u.peekBlockedUntil:u.blockedUntil;
+    state.sync.retryAfter = Math.max(Date.now() + 60000, until || 0);
     renderSyncStatus();
+    scheduleCloudRetry();
   } catch(_){}
 }
 window.fhCloudUsage = fhCloudUsage;
+
+function fhCloudTransferFetch(url,init,kind,opts){
+  const blocked=fhCloudBudgetBlock(kind);
+  if(blocked){
+    if(!opts||opts.reportOnly!==true)fhBudgetHalt(blocked,kind);
+    throw syncControlError("FH_CLOUD_BUDGET",blocked);
+  }
+  /* No await between the gate and charge: concurrent callers in this tab
+     cannot reserve the same remaining slot. Never refund uncertain failures. */
+  fhCloudBudgetCount(kind);
+  return fetch(url,init);
+}
 
 async function cloudPush(opts){
   opts = opts||{};
@@ -15672,11 +15680,6 @@ async function cloudPush(opts){
   const operationGeneration = opts.operationGeneration ?? syncIdentityGeneration;
   assertSyncOperationCurrent(operationGeneration);
   if (!state.sync.enabled && !opts.force) return;
-  /* The hard ceiling. Deliberately the first thing checked after the identity
-     guards, so no clever path upstream can talk its way past it. */
-  const __budget = fhCloudBudgetBlock("push");
-  if (__budget){ fhBudgetHalt(__budget); throw syncControlError("FH_CLOUD_BUDGET", __budget); }
-  fhCloudBudgetCount("push");
   /* No payload may be prepared from memory ahead of durable storage. Flush
      prior queued saves, then durably capture any remaining mutation before
      the first network request is allowed. */
@@ -15763,6 +15766,7 @@ async function cloudPush(opts){
     if(!await markCloudSynced(opts,stableReceipt)){record.replayRequested=true;throw syncControlError("FH_SYNC_WATERMARK_ADVANCED","Local state advanced before the cloud-clean receipt; it remains queued for replay");}
     return stablePush;
   })().catch(async err=>{
+    if (err&&err.code==="FH_CLOUD_BUDGET")throw err;
     if (!isSyncControlError(err) && operationGeneration === syncIdentityGeneration){
       await markCloudPending(err,opts);
     }
@@ -16096,6 +16100,7 @@ async function cloudPushOnce(opts){
     if(!syncCreateAuthorizationAllowsCreate(state.sync)||!liveGrant){
       throw new Error("Cloud row creation blocked. Generate a new sync code explicitly first.");
     }
+    const grantBeforeAttempt=deepClone(liveGrant);
     liveGrant.attemptCount=Math.max(0,Math.trunc(Number(liveGrant.attemptCount)||0))+1;
     liveGrant.lastAttemptAt=Date.now();
     state.sync.pendingSync=true;
@@ -16103,16 +16108,30 @@ async function cloudPushOnce(opts){
     await saveStateDurable({fromPull:true,identityOperation:opts.identityOperation===true,
       suppressMilestoneAnnouncement:true,source:"jsonstorage-create-attempt"});
     assertSyncOperationCurrent(operationGeneration);
-    const resp = await fetch(`${key}?name=fh_${durablePayloadState.sync.syncSecretHash?.slice(0,16)||"anon"}`, {
-      method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(payload)
-    });
+    let resp;
+    try {
+      resp = await fhCloudTransferFetch(`${key}?name=fh_${durablePayloadState.sync.syncSecretHash?.slice(0,16)||"anon"}`, {
+        method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(payload)
+      },"push");
+    } catch(error){
+      /* A local budget refusal proves no request was sent. Keep the existing
+         create grant retryable; network failures retain the uncertain-attempt
+         guard because they cannot establish whether the server received it. */
+      if(error&&error.code==="FH_CLOUD_BUDGET"){
+        assertSyncOperationCurrent(operationGeneration);
+        state.sync.createAuthorization=grantBeforeAttempt;
+        await saveStateDurable({fromPull:true,identityOperation:opts.identityOperation===true,
+          suppressMilestoneAnnouncement:true,source:"jsonstorage-create-budget-deferred"});
+      }
+      throw error;
+    }
     assertSyncOperationCurrent(operationGeneration);
     if (!resp.ok){ const t = await resp.text().catch(()=>resp.statusText); throw new Error(`jsonstorage create ${resp.status}: ${t.slice(0,120)}`); }
     const d = await resp.json();
     assertSyncOperationCurrent(operationGeneration);
     state.sync.jsonstorageUrl = d.uri || d.url || null;
   } else {
-    const resp = await fetch(durablePayloadState.sync.jsonstorageUrl, { method:"PUT", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(payload) });
+    const resp = await fhCloudTransferFetch(durablePayloadState.sync.jsonstorageUrl, { method:"PUT", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(payload) },"push");
     assertSyncOperationCurrent(operationGeneration);
     if (!resp.ok){ const t = await resp.text().catch(()=>resp.statusText); throw new Error(`jsonstorage put ${resp.status}: ${t.slice(0,120)}`); }
   }
@@ -16202,7 +16221,7 @@ async function fetchCloudRemote(opts){
     remotePayload=rows[0];
   } else {
     if (!sync.jsonstorageUrl) return null;
-    const resp = await fetch(sync.jsonstorageUrl, { method:"GET" });
+    const resp = await fhCloudTransferFetch(sync.jsonstorageUrl, { method:"GET" },"pull",{reportOnly:opts.authReadOnly===true});
     assertSyncOperationCurrent(operationGeneration);
     if (!resp.ok){
       if (opts.requireRemote) throw new Error(`cloud pull ${resp.status}`);
@@ -16242,23 +16261,18 @@ async function cloudPull(opts){
      initiated operations. */
   if (syncOperationsPaused && !opts.identityOperation) return false;
   if (!state.sync.enabled && !opts.force) return false;
-  /* Downloads count too: a 5 GB bill was mostly egress, from re-downloading
-     the whole profile on every app open. */
-  /* A background check is a peek until it proves otherwise. Gate it on the
-     peek pool, then charge whichever pool the request actually used. */
-  const __background = !(opts.force === true || opts.requireRemote === true || opts.full === true);
-  const __pullBudget = fhCloudBudgetBlock(__background ? "peek" : "pull");
-  if (__pullBudget){ fhBudgetHalt(__pullBudget); return false; }
   const operationGeneration = opts.operationGeneration ?? syncIdentityGeneration;
   assertSyncOperationCurrent(operationGeneration);
   let pulled;
   try {
     pulled = await fetchCloudRemote(Object.assign({}, opts, { operationGeneration }));
   } catch (error){
-    fhCloudBudgetCount(__background ? "peek" : "pull");
+    /* Background peek refusal still permits a pending upload from its own
+       pool. Forced/CAS pulls must preserve the budget error and retry time. */
+    if(error&&error.code==="FH_CLOUD_BUDGET"&&
+       !(opts.force===true||opts.requireRemote===true||opts.full===true))return false;
     throw error;
   }
-  fhCloudBudgetCount((pulled && pulled.metadataOnly) || !pulled ? "peek" : "pull");
   assertSyncOperationCurrent(operationGeneration);
   if (!pulled) return false;
   if(pulled.metadataOnly){

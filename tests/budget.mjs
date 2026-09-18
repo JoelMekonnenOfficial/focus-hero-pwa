@@ -116,8 +116,9 @@ try {
   R.check('the counter never enters synced state', containment.inState === false);
   R.check('it lives on the device', containment.inLocalStorage === true);
 
-  R.check('no page errors or unexpected console errors', problems.filter(p=>!/budget/i.test(p)).length === 0,
-    problems.filter(p=>!/budget/i.test(p)).slice(0,5).join(' | ') || 'clean');
+  const unexpected=problems.filter(p=>!/\[fh-budget\] cloud transfers paused|sync queued Error: Catching up:/.test(p));
+  R.check('no page errors or unexpected console errors', unexpected.length === 0,
+    unexpected.slice(0,5).join(' | ') || 'clean');
   await ctx.close();
 } finally { await browser.close(); }
 R.finish();

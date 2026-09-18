@@ -101,7 +101,7 @@ try {
     worded.panelState !== 'stale', worded.panelState);
 
 
-  /* ---- 4. fixing the accounting must release what it already stopped ----- */
+  /* ---- 4. fixing accounting preserves existing usage and holds ----------- */
   const migrated = await page.evaluate(() => {
     const key = window.FH_CLOUD_BUDGET.key;
     /* A ledger in the OLD shape: no peek array, full of entries that were
@@ -116,10 +116,10 @@ try {
     return { day: usage.day, blockedUntil: usage.blockedUntil, allowed,
              hasPeekArray: Array.isArray(stored && stored.p) };
   });
-  R.eq('a pre-split ledger is discarded, not carried forward', migrated.day, 0);
-  R.eq('and the pause it created goes with it', migrated.blockedUntil, 0);
-  R.check('so the device can sync again immediately', migrated.allowed === null, String(migrated.allowed));
-  R.check('and the ledger is rewritten in the new shape', migrated.hasPeekArray);
+  R.eq('a pre-split ledger keeps its full history', migrated.day, 250);
+  R.check('and its existing hold is preserved', migrated.blockedUntil > Date.now());
+  R.check('so ordinary traffic still respects the hold', typeof migrated.allowed === 'string', String(migrated.allowed));
+  R.check('read-only usage inspection does not rewrite the stored ledger', !migrated.hasPeekArray);
 
   /* A ledger already in the new shape must be left completely alone. */
   const preserved = await page.evaluate(() => {
@@ -222,3 +222,4 @@ try {
 } finally {
   await browser.close();
 }
+R.finish();
