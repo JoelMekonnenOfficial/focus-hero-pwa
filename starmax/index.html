@@ -15450,6 +15450,7 @@ async function markCloudSynced(opts={},watermark=null){
   if (accountingStorageIndeterminate) return;
   await primarySaveTail;
   if(watermark&&(primaryHead?.commitId!==watermark.commitId||primaryLastDurableRaw!==watermark.raw||JSON.stringify(state)!==watermark.raw))return false;
+  const receiptState=state,receiptSync=state.sync;
   const recovered = !!state.sync.pendingSync;
   const beforeSync=deepClone(state.sync);
   state.sync.pendingSync = false;
@@ -15458,11 +15459,14 @@ async function markCloudSynced(opts={},watermark=null){
   state.sync.retryAfter = 0;
   state.sync.lastSyncError = null;
   state.sync.lastSuccessfulSyncAt = Date.now();
+  const receiptRaw=JSON.stringify(receiptSync);
   try{
     await saveStateDurable({fromPull:true,identityOperation:opts.identityOperation===true,source:"cloud-synced-receipt"});
   }catch(error){
-    state.sync=beforeSync;
-    try{renderSyncStatus();scheduleCloudRetry();}catch(_){}
+    if(state===receiptState&&state.sync===receiptSync&&JSON.stringify(receiptSync)===receiptRaw){
+      state.sync=beforeSync;
+      try{renderSyncStatus();scheduleCloudRetry();}catch(_){}
+    }
     throw error;
   }
   clearCloudRetryTimer();
@@ -15542,18 +15546,29 @@ var FH_CLOUD_BUDGET = { perHour: 90, perDay: 250,
                         peekPerHour: 300, peekPerDay: 3000,
                         key: "fh.cloudBudget.v1" };
 function fhBudgetIsPeek(kind){ return String(kind||"") === "peek"; }
+function fhBudgetStorageError(){
+  return syncControlError("FH_CLOUD_BUDGET_STORAGE",
+    "Cloud sync paused because this device could not verify its cloud-usage record. No transfer was sent.");
+}
 
 function fhBudgetRead(){
   try {
-    const v = JSON.parse(localStorage.getItem(FH_CLOUD_BUDGET.key) || "null");
-    if (v && Array.isArray(v.t)){
-      /* Older ledgers did not distinguish peeks. Preserve their timestamps
-         and holds; do not rewrite historical usage or clear a safety hold. */
-      if (!Array.isArray(v.p)) v.p=[];
-      return v;
+    const raw=localStorage.getItem(FH_CLOUD_BUDGET.key);
+    if(raw===null)return {t:[],p:[],blockedUntil:0,note:""};
+    const v=JSON.parse(raw);
+    const validTimes=rows=>Array.isArray(rows)&&rows.every(ts=>Number.isSafeInteger(ts)&&ts>=0);
+    if(!v||typeof v!=="object"||Array.isArray(v)||!validTimes(v.t)||
+       (Object.prototype.hasOwnProperty.call(v,"p")&&!validTimes(v.p))){
+      throw fhBudgetStorageError();
     }
-  } catch(_){}
-  return { t: [], p: [], blockedUntil: 0, note: "" };
+    for(const key of ["blockedUntil","peekBlockedUntil","graceUntil"]){
+      if(v[key]!=null&&(!Number.isSafeInteger(v[key])||v[key]<0))throw fhBudgetStorageError();
+    }
+    /* Absence alone initializes storage. Unreadable or malformed history is
+       never silently replaced by a new empty ledger. */
+    if(!Object.prototype.hasOwnProperty.call(v,"p"))v.p=[];
+    return v;
+  } catch(_){throw fhBudgetStorageError();}
 }
 /* Let the owner end a pause themselves. A self-imposed throttle that can only
    be waited out is how a device ends up holding work nobody else can see for
@@ -15577,7 +15592,11 @@ function fhBudgetResumeNow(){
 }
 try { window.fhBudgetResumeNow = fhBudgetResumeNow; } catch(_){}
 function fhBudgetWrite(v){
-  try { localStorage.setItem(FH_CLOUD_BUDGET.key, JSON.stringify(v)); } catch(_){}
+  try {
+    const raw=JSON.stringify(v);
+    localStorage.setItem(FH_CLOUD_BUDGET.key,raw);
+    if(localStorage.getItem(FH_CLOUD_BUDGET.key)!==raw)throw fhBudgetStorageError();
+  } catch(_){throw fhBudgetStorageError();}
 }
 function fhBudgetPrune(v, now){
   const dayAgo = now - 86400000;
@@ -15661,9 +15680,12 @@ function fhBudgetHalt(reason,kind){
   try {
     state.sync.pendingSync = true;
     if (!(state.sync.pendingSince > 0)) state.sync.pendingSince = Date.now();
-    state.sync.lastSyncError = reason;
-    const u = fhCloudUsage();
-    const until=fhBudgetIsPeek(kind)?u.peekBlockedUntil:u.blockedUntil;
+    const previousError=String(state.sync.lastSyncError||"").trim();
+    if(!previousError||/^Catching up: |^Paused: |^Cloud sync paused because this device could not verify its cloud-usage record\./.test(previousError)){
+      state.sync.lastSyncError = reason;
+    }
+    let until=0;
+    try{const u=fhCloudUsage();until=fhBudgetIsPeek(kind)?u.peekBlockedUntil:u.blockedUntil;}catch(_){}
     state.sync.retryAfter = Math.max(Date.now() + 60000, until || 0);
     renderSyncStatus();
     scheduleCloudRetry();
@@ -15672,14 +15694,16 @@ function fhBudgetHalt(reason,kind){
 window.fhCloudUsage = fhCloudUsage;
 
 function fhCloudTransferFetch(url,init,kind,opts){
-  const blocked=fhCloudBudgetBlock(kind);
-  if(blocked){
-    if(!opts||opts.reportOnly!==true)fhBudgetHalt(blocked,kind);
-    throw syncControlError("FH_CLOUD_BUDGET",blocked);
+  try {
+    const blocked=fhCloudBudgetBlock(kind);
+    if(blocked)throw syncControlError("FH_CLOUD_BUDGET",blocked);
+    /* No await between the gate and verified charge. If storage refuses or
+       loses the reservation, stop before sending an unmetered request. */
+    fhCloudBudgetCount(kind);
+  } catch(error){
+    if(!opts||opts.reportOnly!==true)fhBudgetHalt(error.message,kind);
+    throw error;
   }
-  /* No await between the gate and charge: concurrent callers in this tab
-     cannot reserve the same remaining slot. Never refund uncertain failures. */
-  fhCloudBudgetCount(kind);
   return fetch(url,init);
 }
 
@@ -15778,7 +15802,7 @@ async function cloudPush(opts){
     if(!await markCloudSynced(opts,stableReceipt)){record.replayRequested=true;throw syncControlError("FH_SYNC_WATERMARK_ADVANCED","Local state advanced before the cloud-clean receipt; it remains queued for replay");}
     return stablePush;
   })().catch(async err=>{
-    if (err&&err.code==="FH_CLOUD_BUDGET")throw err;
+    if (err&&/^FH_CLOUD_BUDGET(?:_STORAGE)?$/.test(err.code||""))throw err;
     if (!isSyncControlError(err) && operationGeneration === syncIdentityGeneration){
       await markCloudPending(err,opts);
     }
@@ -16074,11 +16098,15 @@ async function cloudPushOnce(opts){
       const msg = await patchResp.text().catch(()=>patchResp.statusText);
       throw new Error(`supabase push ${patchResp.status}: ${msg.slice(0,160)}`);
     }
-    let patchedRows = [];
-    try { patchedRows = await patchResp.json(); } catch(_){ patchedRows = []; }
+    const unconfirmed=()=>syncControlError("FH_SYNC_UNCONFIRMED_RECEIPT",
+      "Cloud update receipt could not be verified. Its status is unconfirmed; local progress remains queued.");
+    let patchedRows;
+    try { patchedRows = await patchResp.json(); } catch(_){ throw unconfirmed(); }
     assertSyncOperationCurrent(operationGeneration);
-    if(Array.isArray(patchedRows)&&patchedRows.length>0&&Number(patchedRows[0]?.cloud_rev)!==payload.cloud_rev){
-      throw new Error("Cloud update returned an unexpected revision; local progress remains queued");
+    if(!Array.isArray(patchedRows)||patchedRows.length>1||
+       (patchedRows.length===1&&(!patchedRows[0]||!Number.isSafeInteger(patchedRows[0].cloud_rev)||
+        patchedRows[0].cloud_rev!==payload.cloud_rev))){
+      throw unconfirmed();
     }
     if (Array.isArray(patchedRows) && patchedRows.length > 0){
       return persistPushReceipt(payload.cloud_rev,"cloud-push-receipt");
@@ -16129,7 +16157,7 @@ async function cloudPushOnce(opts){
       /* A local budget refusal proves no request was sent. Keep the existing
          create grant retryable; network failures retain the uncertain-attempt
          guard because they cannot establish whether the server received it. */
-      if(error&&error.code==="FH_CLOUD_BUDGET"){
+      if(error&&/^FH_CLOUD_BUDGET(?:_STORAGE)?$/.test(error.code||"")){
         assertSyncOperationCurrent(operationGeneration);
         state.sync.createAuthorization=grantBeforeAttempt;
         await saveStateDurable({fromPull:true,identityOperation:opts.identityOperation===true,
@@ -16332,10 +16360,11 @@ async function cloudPull(opts){
     state.sync.pendingSync=true;
     if(!(state.sync.pendingSince>0))state.sync.pendingSince=Date.now();
   }
+  const installedRaw=JSON.stringify(merged);
   try{await saveStateDurable({fromPull:true,suppressMilestoneAnnouncement:true,identityOperation:opts.identityOperation===true,source:"cloud-pull-merge"});
       try{ flushHardcoreMergeNotices(); }catch(_){}}
   catch(error){
-    state=previousState;
+    if(state===merged&&JSON.stringify(merged)===installedRaw)state=previousState;
     throw syncControlError("FH_SYNC_LOCAL_SAVE_FAILED","Pulled cloud profile could not be saved on this computer");
   }
   try { renderAll(); renderSyncStatus(); } catch(e){ console.warn("cloud pull render", e); }
