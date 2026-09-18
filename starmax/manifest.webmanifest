@@ -48,19 +48,19 @@
   "shortcuts": [
     {
       "name": "Start focus",
-      "url": "./focus-hero.html?start=focus",
+      "url": "./?start=focus",
       "short_name": "Focus"
     },
     {
       "name": "Open settings",
-      "url": "./focus-hero.html?open=settings",
+      "url": "./?open=settings",
       "short_name": "Settings"
     },
     {
       "name": "Back up all data",
-      "url": "./focus-hero.html?action=backup",
+      "url": "./?action=backup",
       "short_name": "Backup"
     }
   ],
-  "version": "10.62.5"
+  "version": "10.63.5"
 }
