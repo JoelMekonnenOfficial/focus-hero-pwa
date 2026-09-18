@@ -9,8 +9,8 @@
    skill - if they are pushing to two different cloud rows. Nothing in the app
    showed that, so nothing could catch it.
 
-   This is read-only. It writes nothing, uploads nothing, and changes no sync
-   state. It answers three questions on the device you are actually holding:
+   This uploads no profile and changes no progress, settings, or identity.
+   The cloud transfer budget records its download. It answers three questions:
 
      1. WHO does this device think it is?   (the cloud identity fingerprint)
      2. WHAT does the cloud hold for that identity, right now?
@@ -22,8 +22,8 @@
    not previously see, and it is invisible from the outside because both
    devices are working perfectly - just past each other.
 
-   Nothing secret is shown. The sync secret is never read, and the identity is
-   printed as its last six characters only, which is enough to compare two
+   No sync credentials are included in the report. The identity is printed
+   as its last six characters only, which is enough to compare two
    devices and useless to anybody else.
    ========================================================================== */
 (function(){
@@ -129,19 +129,25 @@
   /* Reading only the revision answers "are we in step" and nothing else - and
      "in step but missing a skill" is precisely the failure that has been
      hunted for a week. So the probe reads the profile blob too and decrypts
-     it HERE, on the device, with the key this device already holds. Nothing
-     is uploaded, nothing is written, and the decrypted copy never leaves the
+     it HERE, on the device, with the key this device already holds. No profile
+     is uploaded or changed, and the decrypted copy never leaves the
      function. What it buys is the only answer that actually settles the
      question: the list of skills the cloud is holding, by name. */
   async function probeCloud(){
     var s = window.state || {};
-    var sy = s.sync || {};
+    /* Auth/decryption helpers receive a detached context. The request uses
+       existing auth only; diagnosing must never renew or create an identity. */
+    var sy = Object.assign({}, s.sync || {});
     if (!sy.playerId) return { state:"no-identity" };
     if (typeof window.supabaseRequest !== "function") return { state:"unavailable" };
+    if (typeof window.supabaseTokenIsFresh !== "function") return { state:"unavailable" };
+    if (!window.supabaseTokenIsFresh(sy)) return { state:"auth-required" };
     try {
       var resp = await window.supabaseRequest(
         "players?id=eq." + encodeURIComponent(sy.playerId) + "&select=data,cloud_rev,updated_at",
-        { method:"GET", prefer:"return=representation" });
+        { method:"GET", prefer:"return=representation", syncContext:sy,
+          persistAuth:false, authReadOnly:true });
+      if (sy.playerId !== ((window.state && window.state.sync) || {}).playerId) return { state:"identity-changed" };
       if (!resp || !resp.ok) return { state:"http", status: resp ? resp.status : 0 };
       var rows = await resp.json();
       if (!Array.isArray(rows) || !rows.length) return { state:"missing" };
@@ -164,8 +170,10 @@
       } catch (e) {
         res.blobError = String((e && e.message) || e).slice(0, 160);
       }
+      if (sy.playerId !== ((window.state && window.state.sync) || {}).playerId) return { state:"identity-changed" };
       return res;
     } catch (e) {
+      if (e && e.code === "FH_SYNC_AUTH_REQUIRED") return { state:"auth-required" };
       return { state:"error", message: String((e && e.message) || e).slice(0, 200) };
     }
   }
@@ -191,8 +199,10 @@
     if (!L.hasCode) return ["bad", "NOT CONNECTED — this device has no sync code, so it has no cloud to talk to. Nothing it does will ever reach your other device."];
     if (!L.enabled) return ["warn", "Sync is switched OFF on this device. It has a code, but it is not using it."];
     if (C.state === "no-identity") return ["bad", "NO IDENTITY — this device has a code but never completed a handshake. It cannot push or pull."];
+    if (C.state === "auth-required") return ["warn", "CLOUD AUTHENTICATION EXPIRED OR UNAVAILABLE. Diagnose Sync did not renew credentials or create an identity. The cloud profile was not read."];
+    if (C.state === "identity-changed") return ["warn", "The sync identity changed during this check. Run Diagnose Sync again to compare the current identity."];
     if (C.state === "missing") return ["bad", "NO CLOUD ROW for this device's identity. Either it was never created, or this device is looking at an identity nothing was ever saved under."];
-    if (C.state === "http") return ["bad", "The cloud refused the request (HTTP " + C.status + "). If this is 401/403 the secret on this device does not match the row."];
+    if (C.state === "http") return ["bad", "The cloud refused the request (HTTP " + C.status + "). Authentication or row access may be unavailable; Diagnose Sync did not change credentials."];
     if (C.state === "error") return ["bad", "Could not reach the cloud: " + C.message];
     if (C.state === "unavailable") return ["warn", "This build cannot probe the cloud directly."];
     if (C.state === "timeout") return ["bad", "THE CLOUD DID NOT ANSWER within " + Math.round(PROBE_TIMEOUT_MS/1000) + "s. This device cannot reach it, so nothing it does is syncing right now."];
@@ -235,8 +245,10 @@
     ensureCss();
     var out = document.getElementById("fh-doctor-out");
     if (out) out.innerHTML = "Checking…";
-    var L = localFacts();
     var C = await withTimeout(probeCloud());
+    /* Work or a background pull may finish while the GET is in flight. Use
+       one fresh local view for both displayed counts and the verdict. */
+    var L = localFacts();
     C.diff = skillDiff((window.state && window.state.tasks) || [], C.skills);
     var v = verdict(L, C);
     var lines = [];
@@ -316,7 +328,7 @@
     row.append(btn, copy);
     var out = document.createElement("div");
     out.id = "fh-doctor-out";
-    out.textContent = "Press Diagnose sync. Nothing is uploaded or changed.";
+    out.textContent = "Press Diagnose sync. No progress, settings, or identity changes. The download counts toward the cloud transfer budget.";
     wrap.append(row, out);
     host.appendChild(wrap);
     return true;

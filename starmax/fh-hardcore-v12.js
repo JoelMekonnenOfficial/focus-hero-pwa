@@ -1289,9 +1289,9 @@
 
      Two defences, both pure and deterministic so every device agrees:
 
-       1. Never finalise a miss while this device still has unsynced work
-          queued. If the cloud has bytes we have not merged, our view of
-          the day is not authoritative yet. Defer, do not end.
+       1. Never finalise a miss from a potentially incomplete cloud view.
+          An empty outbound queue does not prove incoming work was pulled.
+          Require a recent full pull after this day's window closed.
 
        2. Heal a miss that the evidence later contradicts. An archived
           automatic failure is re-audited against current history; if
@@ -1302,13 +1302,20 @@
 
      Runs you ended yourself carry missedDay === null and are never
      reinstated. */
-  function cloudViewMayBeStale() {
+  function cloudViewMayBeStale(missedDay) {
     try {
       var st = S();
       var sync = st && st.sync;
       if (!sync || !sync.enabled) return false;
-      return !!sync.pendingSync;
-    } catch (_) { return false; }
+      if (sync.pendingSync || String(sync.lastSyncError || "").trim()) return true;
+      /* lastPulledAt belongs to this device and is set by a completed full
+         merge. A metadata peek, push, or diagnostic GET cannot satisfy it. */
+      var pulledAt = Number(sync.lastPulledAt) || 0;
+      var closesAt = windowEndMs(missedDay);
+      var nowMs = Date.now();
+      return !pulledAt || closesAt == null || pulledAt < closesAt ||
+        pulledAt > nowMs || nowMs - pulledAt > 6 * 60 * 60 * 1000;
+    } catch (_) { return true; }
   }
 
   /* How long a miss may be held open waiting for a sync that may never come. */
@@ -1458,8 +1465,8 @@
     if (!audit.ok) return audit;
     var next = clone(data);
     var stamp = deterministicEvaluationStamp(today);
-    if (audit.ended && cloudViewMayBeStale() && !deferralExpired(audit.missedDay, today)) {
-      /* Unsynced work is queued: our day totals may be incomplete. Hold the
+    if (audit.ended && cloudViewMayBeStale(audit.missedDay) && !deferralExpired(audit.missedDay, today)) {
+      /* Cloud work may be missing: our day totals may be incomplete. Hold the
          run open rather than ending it on a view we know is partial.
 
          v10.27: this hold is now BOUNDED. It used to be indefinite, and that
@@ -1477,14 +1484,14 @@
          turn up later, the existing reinstatement path puts the run back. */
       try {
         console.warn("[fh-hardcore] deferring the " + audit.missedDay
-          + " miss: this device still has unsynced changes queued, so its daily totals may be"
+          + " miss: this device has not confirmed a fresh, complete cloud view, so its daily totals may be"
           + " incomplete. This hold expires after " + DEFER_GRACE_DAYS + " days.");
       } catch (_) {}
       return { ok:true, changed:false, active:true, deferred:true, next:data };
     }
     if (audit.ended) {
       next.run.daysSurvived = audit.daysSurvived;
-      var lapsed = cloudViewMayBeStale();
+      var lapsed = cloudViewMayBeStale(audit.missedDay);
       var archived = archiveRun(
         next, next.run,
         "missed " + audit.missedDay + (lapsed ? " (held for sync, never arrived)" : ""),

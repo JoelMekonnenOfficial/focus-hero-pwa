@@ -48,7 +48,7 @@ function run(id, minutes) {
 }
 function profile(runs, minutes) {
   return { tasks: [], lateStarts: {}, history: { '2026-09-17': minutes }, sessionsLog: [],
-    sync: { enabled: true, pendingSync: false },
+    sync: { enabled: false, pendingSync: false },
     fh12Hardcore: { version: 2, runs, history: [], active: runs.length > 0, run: runs[0] || null } };
 }
 async function archiveAndScan(c) {
@@ -197,6 +197,78 @@ test('failed durable restoration retries automatically with unchanged evidence',
   assert.equal(retried.ok, true);
   assert.equal(c.state.fh12Hardcore.runs.length, 2, 'identical evidence is retried');
   assert.equal(c.state.fh12Hardcore.history.length, 0);
+});
+
+test('an empty upload queue does not let a stale incoming view end earned runs', async () => {
+  const initial = profile([run('four', 240), run('eight', 480)], 120);
+  initial.sync = { enabled:true, pendingSync:false, lastPulledAt:NOW - 2 * 60000,
+    lastSuccessfulSyncAt:NOW, lastPushedAt:NOW };
+  const c = sandbox(initial);
+  await c.FH_HARDCORE.evaluateAutomatically();
+  assert.equal(c.state.fh12Hardcore.runs.length, 2);
+  assert.equal(c.state.fh12Hardcore.history.length, 0);
+  assert.equal(c.state.history['2026-09-17'], 120, 'hold adds no minutes');
+  assert.ok(c.FH_HARDCORE.state().runs.every(r => r.daysSurvived === 0), 'hold adds no earned days');
+  c.state.history['2026-09-17'] = 500; // Incoming completed work, not a revive/excuse.
+  c.state.sync.lastPulledAt = NOW;
+  await c.FH_HARDCORE.evaluateAutomatically();
+  assert.equal(c.state.fh12Hardcore.runs.length, 2);
+  assert.ok(c.FH_HARDCORE.state().runs.every(r => r.daysSurvived === 1));
+});
+
+test('a completed full pull after the deadline allows a real miss to end', async () => {
+  const initial = profile([run('four', 240)], 120);
+  initial.sync = { enabled:true, pendingSync:false, lastPulledAt:NOW };
+  const c = sandbox(initial);
+  await c.FH_HARDCORE.evaluateAutomatically();
+  assert.equal(c.state.fh12Hardcore.runs.length, 0);
+  assert.equal(c.state.fh12Hardcore.history[0].missedDay, '2026-09-17');
+});
+
+test('disabled sync judges local evidence immediately', async () => {
+  const c = sandbox(profile([run('four', 240)], 120));
+  await c.FH_HARDCORE.evaluateAutomatically();
+  assert.equal(c.state.fh12Hardcore.runs.length, 0);
+});
+
+test('missing or unusable pull evidence remains bounded by the two-day grace', async () => {
+  for (const sync of [
+    { enabled:true, pendingSync:false },
+    { enabled:true, pendingSync:true, lastPulledAt:NOW },
+    { enabled:true, pendingSync:false, lastPulledAt:NOW, lastSyncError:'Synthetic offline error' },
+    { enabled:true, pendingSync:false, lastPulledAt:NOW + 86400000 }
+  ]) {
+    const initial = profile([run('four', 240)], 120);
+    initial.sync = sync;
+    const withinGrace = sandbox(initial);
+    await withinGrace.FH_HARDCORE.evaluateAutomatically();
+    assert.equal(withinGrace.state.fh12Hardcore.runs.length, 1);
+    const expired = sandbox(initial, at('2026-09-20T00:01:00-04:00'));
+    await expired.FH_HARDCORE.evaluateAutomatically();
+    assert.equal(expired.state.fh12Hardcore.runs.length, 0, 'no indefinite hold');
+    assert.equal(expired.state.fh12Hardcore.history[0].missedDay, '2026-09-17');
+  }
+});
+
+test('a late-start miss requires a full pull after its actual noon deadline', async () => {
+  const afterNoon = at('2026-09-18T12:01:00-04:00');
+  const initial = profile([run('four', 240)], 120);
+  initial.lateStarts['2026-09-17'] = { startMin:720, declaredAt:at('2026-09-17T12:00:00-04:00') };
+  initial.sync = { enabled:true, pendingSync:false, lastPulledAt:at('2026-09-18T11:59:00-04:00') };
+  const c = sandbox(initial, afterNoon);
+  await c.FH_HARDCORE.evaluateAutomatically();
+  assert.equal(c.state.fh12Hardcore.runs.length, 1);
+  c.state.sync.lastPulledAt = afterNoon;
+  await c.FH_HARDCORE.evaluateAutomatically();
+  assert.equal(c.state.fh12Hardcore.runs.length, 0);
+});
+
+test('a post-deadline pull older than the reconcile interval is not fresh evidence', async () => {
+  const initial = profile([run('four', 240)], 120);
+  initial.sync = { enabled:true, pendingSync:false, lastPulledAt:NOW };
+  const c = sandbox(initial, at('2026-09-18T14:00:00-04:00'));
+  await c.FH_HARDCORE.evaluateAutomatically();
+  assert.equal(c.state.fh12Hardcore.runs.length, 1);
 });
 
 (async () => {
