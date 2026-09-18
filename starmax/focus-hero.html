@@ -18343,30 +18343,12 @@ function describeSyncFailure(raw){
   return text.slice(0, 160);
 }
 
-/* ===== v10.63.0: A WAY OUT OF AN ACCOUNTING STOP ==========================
-
-   mergeRemoteState throws FH_SYNC_ACCOUNTING_CONFLICT when the two sides'
-   bases disagree, and that is the right call - guessing which total is true
-   would silently invent or destroy hours. What was missing is what happens
-   next, and the answer was nothing. The throw happens before any assignment,
-   so the pull changes nothing; the push retry calls the same pull, so it
-   throws too. The device is severed from the cloud permanently, on every
-   attempt, with no control anywhere that can end it.
-
-   Observed on a real profile: a browser sat a full day behind while reporting,
-   on every refresh, that it would settle on its own.
-
-   THE RULE HERE: a resolution that can silently drop a session is not a
-   resolution. So this never runs blind. It reads the cloud row first and lists
-   every session THIS device holds that the cloud has never seen, by name, date
-   and minutes. If any of them cannot be carried across, it refuses outright
-   rather than proceeding with a caveat. Only when everything is accounted for
-   does it write a verified backup, adopt the cloud copy, and re-add the
-   carried sessions through the normal add-time path so their minutes and XP
-   are recomputed on the new base instead of pasted onto it.
-
-   The identity never changes: same device, same row, same credentials. This is
-   not the join-another-profile flow and it never touches a sync code. */
+/* ===== ACCOUNTING CONFLICT REVIEW ======================================
+   Different accounting bases must not be guessed or reconciled by silently
+   recreating sessions. The comparison below preserves exact record evidence
+   and rejects stale views. It does not adopt a profile or change accounting.
+   Recovery requires the owner's separately verified immutable-copy and
+   isolated-restore process; fhResolveAccountingConflict refuses execution. */
 /* v10.63.1: is the hold deliberate? A budget pause is Life XP choosing to
    wait, not the cloud refusing us, and it must never be announced as an
    outage - the owner reads "sync has been failing" and reasonably concludes
