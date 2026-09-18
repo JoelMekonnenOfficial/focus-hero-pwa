@@ -16,7 +16,8 @@ const browserSuites = [
   'boot', 'core', 'sync', 'themes', 'audio', 'stability', 'panels', 'audit',
   'scenes', 'scroll', 'hardcore', 'devices', 'budget', 'skillremoval',
   'hourremoval', 'mergereduce', 'guardreduce', 'runmode', 'animpause', 'heroxp',
-  'latestart', 'runmodehistory', 'conflictresolve', 'quietalarms', 'forceupdate'
+  'latestart', 'runmodehistory', 'conflictresolve', 'quietalarms', 'forceupdate',
+  'adoption-presentation'
 ];
 const mime = { '.html':'text/html', '.js':'application/javascript', '.json':'application/json',
   '.webmanifest':'application/manifest+json', '.svg':'image/svg+xml', '.png':'image/png' };
@@ -42,7 +43,7 @@ const port = String(server.address().port);
 const results = [];
 try {
   const available = await readdir(resolve(root, 'tests'));
-  const standalone = available.filter(name => /(?:regressions|verdict|safety|accounting|integrity)\.(?:cjs|mjs)$/.test(name)
+  const standalone = available.filter(name => /(?:regressions|verdict|readonly|safety|accounting|integrity)\.(?:cjs|mjs)$/.test(name)
     && !browserSuites.includes(name.replace(/\.(?:cjs|mjs)$/, ''))).sort();
   const all = browserSuites.map(name => ({ name:name + '.mjs', args:[port] }))
     .concat(standalone.map(name => ({ name, args:[] })));
@@ -75,7 +76,8 @@ try {
       await writeFile(resolve(logs, 'summary.json'), JSON.stringify(results, null, 2) + '\n');
     }
   }
-  await Promise.all([worker(), worker()]);
+  const concurrency = Math.max(1, Math.min(2, Number(process.env.LIFEXP_TEST_WORKERS) || 2));
+  await Promise.all(Array.from({ length:concurrency }, () => worker()));
   const failures = results.filter(result => !result.passed);
   console.log(`${results.length - failures.length}/${results.length} suites passed. Logs: test-results/`);
   process.exitCode = failures.length ? 1 : 0;
