@@ -4681,8 +4681,8 @@ svg{shape-rendering:geometricPrecision}
         <div style="font-weight:700;margin-bottom:3px">This device is out of step and cannot fix itself</div>
         <div class="muted" style="font-size:.79rem" id="sync-conflict-why"></div>
         <div class="row" style="gap:8px;margin-top:9px;flex-wrap:wrap">
-          <button type="button" id="btn-conflict-check">See what is only on this device</button>
-          <button type="button" class="primary" id="btn-conflict-resolve" hidden>Take the cloud copy</button>
+          <button type="button" id="btn-conflict-check">Review the differences</button>
+          <button type="button" id="btn-conflict-recheck" hidden>Check review is current</button>
         </div>
         <div id="sync-conflict-report" class="muted" style="font-size:.78rem;margin-top:8px;white-space:pre-wrap"></div>
       </div>
@@ -15081,13 +15081,25 @@ async function createVerifiedCloudAdoptionBackup(label="cloud-adopt",expected=nu
   if(JSON.stringify(state)!==selected.raw)throw syncControlError("FH_SYNC_LOCAL_CHANGED","Newer local activity appeared while the Recovery copy was being verified.");
   return {backupKey:result.coldId||result.id||sourceKey,previousRaw:selected.raw,commitId:selected.commitId};
 }
-function buildAuthoritativeCloudState(remoteState,candidateSync,remotePayload,sourceEncrypted,localTimer,localClocks){
+const DEVICE_PRESENTATION_SETTINGS = Object.freeze([
+  "theme","layout","gameShell","colorPreset","customAccent","customAccent2",
+  "timerFont","timerWeight","timerColor","customTimerColor","clockStyle",
+  "wallpaperOn","wallpaperIntensity","wallpaperMotion","bgStyle","scene"
+]);
+function buildAuthoritativeCloudState(remoteState,candidateSync,remotePayload,sourceEncrypted,localTimer,localClocks,localSettings){
   let adopted;
   fhBeginMigrateReadOnly();
   try{adopted=migrate(deepClone(remoteState));}finally{fhEndMigrateReadOnly();}
   if(!isRecognizableRecoveryState(adopted))throw new Error("The verified cloud profile did not pass the final state check.");
   adopted.timer=deepClone(localTimer||DEFAULTS.timer);
   adopted.fh11Clocks=deepClone(localClocks&&typeof localClocks==="object"?localClocks:{slots:[]});
+  /* Presentation belongs to this device; account, reward and security settings
+     still come from the verified profile. Never copy an entire settings object. */
+  for(const key of DEVICE_PRESENTATION_SETTINGS){
+    if(localSettings&&Object.prototype.hasOwnProperty.call(localSettings,key)&&localSettings[key]!==undefined){
+      adopted.settings[key]=deepClone(localSettings[key]);
+    }
+  }
   adopted.sync=deepClone(candidateSync);
   /* Stay disconnected after the local switch. This guarantees the adoption
      transaction itself ends after two authenticated GETs and a verified local
@@ -15149,7 +15161,7 @@ async function adoptVerifiedCloudProfile(){
     }
     const recovery=await createVerifiedCloudAdoptionBackup();
     const adopted=buildAuthoritativeCloudState(pulled.remoteState,pending.candidateSync,pulled.remotePayload,pulled.sourceEncrypted,
-      previousMemoryState.timer,previousMemoryState.fh11Clocks);
+      previousMemoryState.timer,previousMemoryState.fh11Clocks,previousMemoryState.settings);
     assertSyncOperationCurrent(identityOperation.generation);
     state=adopted;
     try{await saveStateDurable({fromPull:true,suppressMilestoneAnnouncement:true,identityOperation:true,rotateFence:true,source:"cloud-profile-adopt"});}
@@ -16154,8 +16166,8 @@ async function fetchCloudRemote(opts){
   opts = opts||{};
   const operationGeneration = opts.operationGeneration ?? syncIdentityGeneration;
   assertSyncOperationCurrent(operationGeneration);
-  const sync = opts.syncContext || state.sync;
-  const persistAuth = opts.persistAuth !== false && sync === state.sync;
+  const sync = opts.authReadOnly ? deepClone(opts.syncContext || state.sync) : (opts.syncContext || state.sync);
+  const persistAuth = !opts.authReadOnly && opts.persistAuth !== false && sync === state.sync;
   const backend = sync.backend || (hasSupabase() ? "supabase" : "jsonstorage");
   sync.backend = backend;
   let remotePayload = null;
@@ -16172,7 +16184,7 @@ async function fetchCloudRemote(opts){
     const readRows=async(select,required)=>{
       const resp=await supabaseRequest(
         `players?id=eq.${encodeURIComponent(id)}&select=${select}`,
-        {method:"GET",syncContext:sync,persistAuth,operationGeneration}
+        {method:"GET",syncContext:sync,persistAuth,operationGeneration,authReadOnly:opts.authReadOnly===true}
       );
       if(!resp.ok){
         if(required){
@@ -16210,14 +16222,14 @@ async function fetchCloudRemote(opts){
       const metadata=metadataRows[0],remoteRev=assertCloudMetadataAuthorized(metadata,sync);
       const knownRev=Math.max(0,Math.trunc(Number(sync.cloudRev)||0));
       if(remoteRev<=knownRev){
-        if(remoteRev===knownRev)noteSuccessfulCloudMetadataContact(sync);
+        if(remoteRev===knownRev&&!opts.authReadOnly)noteSuccessfulCloudMetadataContact(sync);
         return{remotePayload:metadata,remoteState:null,sourceEncrypted:false,metadataOnly:true,
           unchanged:remoteRev===knownRev,remoteBehind:remoteRev<knownRev};
       }
     }
     const rows=await readRows("data,cloud_rev,updated_at,sync_secret_hash",opts.requireRemote===true);
     if(!rows||!rows.length)return null;
-    noteCloudReconcile();
+    if(!opts.authReadOnly)noteCloudReconcile();
     remotePayload=rows[0];
   } else {
     if (!sync.jsonstorageUrl) return null;
@@ -18351,145 +18363,116 @@ function fhSyncConflictStuck(){
              rev: Math.max(0, sy.cloudRev | 0) };
   } catch (_) { return null; }
 }
+/* Accounting conflicts are review-only. An app-local backup cannot establish
+   independent immutable recovery protection or authorize a production restore. */
 let fhConflictPreflight = null;
 const FH_CONFLICT_PREFLIGHT_TTL_MS = 10 * 60 * 1000;
-async function fhConflictResolvePreflight(){
-  const pulled = await fetchCloudRemote({ force:true, requireRemote:true, persistAuth:false });
-  if (!pulled || !pulled.remoteState) throw new Error("The cloud copy could not be read, so nothing was compared.");
-  const remote = pulled.remoteState;
-  const cloudIds = new Set();
-  for (const r of (Array.isArray(remote.sessionsLog) ? remote.sessionsLog : [])){
-    if (r && r.id) cloudIds.add(String(r.id));
-  }
-  const cloudTomb = (remote.sessionTombstones && typeof remote.sessionTombstones === "object") ? remote.sessionTombstones : {};
-  const cloudTasks = new Set((Array.isArray(remote.tasks) ? remote.tasks : []).filter(Boolean).map(t => String(t.id)));
-  const localOnly = [];
-  for (const r of (Array.isArray(state.sessionsLog) ? state.sessionsLog : [])){
-    if (!r || !r.id) continue;
-    const id = String(r.id);
-    if (cloudIds.has(id)) continue;
-    /* Deleted deliberately on another device. Bringing it back would undo a
-       removal the owner asked for, which is the opposite of preserving data. */
-    if (Object.prototype.hasOwnProperty.call(cloudTomb, id)) continue;
-    const minutes = Math.max(0, Math.trunc(Number(r.minutes) || 0));
-    const taskId = r.taskId ? String(r.taskId) : null;
-    localOnly.push({ id, at: Number(r.at) || 0, minutes, type: String(r.type || ""),
-      taskId, taskName: String(r.taskName || r.action || "Focus"),
-      carryable: !!(r.type === "focus" && minutes > 0 && taskId && cloudTasks.has(taskId)) });
-  }
-  localOnly.sort((a, b) => a.at - b.at);
-  const onlyLocalSkills = (Array.isArray(state.tasks) ? state.tasks : [])
-    .filter(t => t && t.id != null && !cloudTasks.has(String(t.id)))
-    .map(t => String(t.name || "(unnamed)"));
-  fhConflictPreflight = {
-    at: Date.now(),
-    rev: Math.max(0, pulled.remotePayload && pulled.remotePayload.cloud_rev | 0),
-    cloudMinutes: Math.max(0, Math.trunc(Number(remote.totalFocusMin) || 0)),
-    localMinutes: Math.max(0, Math.trunc(Number(state.totalFocusMin) || 0)),
-    cloudSessions: cloudIds.size,
-    localSessions: (Array.isArray(state.sessionsLog) ? state.sessionsLog : []).length,
-    localOnly, onlyLocalSkills,
-    blocked: localOnly.filter(x => !x.carryable),
-    minutesAtRisk: localOnly.reduce((a, x) => a + x.minutes, 0)
+function fhBuildConflictProposal(local,remote,rev){
+  const left=deepClone(local),right=deepClone(remote);
+  const issues=[],localOnly=[],excluded=[],shared=[];
+  const index=(rows,side)=>{
+    const out=new Map();
+    if(!Array.isArray(rows)){issues.push(side+" session history is unavailable.");return out;}
+    for(const record of rows){
+      if(!record||typeof record.id!=="string"||!record.id){issues.push(side+" contains a session without a stable ID.");continue;}
+      if(out.has(record.id)){issues.push(side+" contains duplicate session ID "+record.id+".");continue;}
+      out.set(record.id,record);
+    }
+    return out;
   };
-  return fhConflictPreflight;
+  const localRows=index(left.sessionsLog,"This device"),cloudRows=index(right.sessionsLog,"The cloud");
+  const cloudTasks=new Set((Array.isArray(right.tasks)?right.tasks:[]).filter(Boolean).map(t=>String(t.id)));
+  const tombstones=right.sessionTombstones&&typeof right.sessionTombstones==="object"?right.sessionTombstones:{};
+  for(const [id,record] of localRows){
+    if(Object.prototype.hasOwnProperty.call(tombstones,id)){excluded.push(deepClone(record));continue;}
+    if(cloudRows.has(id)){
+      if(JSON.stringify(record)!==JSON.stringify(cloudRows.get(id)))issues.push("Session "+id+" has different contents on the two copies.");
+      else shared.push(id);
+      continue;
+    }
+    const taskId=record.taskId==null?null:String(record.taskId);
+    const row={id,at:Number(record.at)||0,minutes:Number(record.minutes)||0,
+      type:String(record.type||""),taskId,taskName:String(record.taskName||record.action||"Session"),
+      record:deepClone(record)};
+    row.reviewable=record.type==="focus"&&Number.isSafeInteger(record.minutes)&&record.minutes>0&&!!taskId&&cloudTasks.has(taskId);
+    if(!row.reviewable)issues.push("Session "+id+" needs individual accounting review.");
+    localOnly.push(row);
+  }
+  const onlyLocalSkills=(Array.isArray(left.tasks)?left.tasks:[])
+    .filter(t=>t&&t.id!=null&&!cloudTasks.has(String(t.id))).map(t=>String(t.name||"(unnamed)"));
+  if(onlyLocalSkills.length)issues.push("Some skills exist only on this device.");
+  if(hasUnfinishedDeviceRun(left)||hasUnfinishedDeviceRun(right))issues.push("One copy has an unfinished session or saved clock.");
+  localOnly.sort((a,b)=>a.at-b.at);
+  return {mode:"review-only",canApply:false,rev,cloudMinutes:Number(right.totalFocusMin)||0,
+    localMinutes:Number(left.totalFocusMin)||0,cloudSessions:cloudRows.size,localSessions:localRows.size,
+    localOnly,onlyLocalSkills,excluded,shared,issues,blocked:localOnly.filter(row=>!row.reviewable),
+    minutesAtRisk:localOnly.reduce((sum,row)=>sum+Math.max(0,row.minutes),0),
+    // These are evidence records, never an importable profile or adjusted totals.
+    exactSessionEvidence:localOnly.map(row=>deepClone(row.record)),
+    accountingVerified:false};
 }
-async function fhResolveAccountingConflict(opts){
-  opts = opts || {};
-  if (!fhSyncConflictStuck() && !opts.force){
-    return { ok:false, reason:"This device is not stopped on an accounting conflict." };
+async function fhReadConflictReview(){
+  if(!fhSyncConflictStuck())throw new Error("This device is not stopped on an accounting conflict.");
+  const localRaw=JSON.stringify(state),local=JSON.parse(localRaw),generation=syncIdentityGeneration;
+  const pulled=await fetchCloudRemote({force:true,requireRemote:true,persistAuth:false,
+    authReadOnly:true,syncContext:deepClone(local.sync),operationGeneration:generation});
+  assertSyncOperationCurrent(generation);
+  if(JSON.stringify(state)!==localRaw)throw new Error("Newer local activity appeared during the comparison. Run the review again.");
+  if(!pulled||!pulled.remoteState)throw new Error("The cloud copy could not be read, so nothing was compared.");
+  const rev=Number(pulled.remotePayload&&pulled.remotePayload.cloud_rev);
+  if(!Number.isSafeInteger(rev)||rev<=0)throw new Error("The cloud revision could not be verified.");
+  const localFingerprint=await cloudStateFingerprint(local);
+  const cloudFingerprint=await cloudStateFingerprint(pulled.remoteState);
+  assertSyncOperationCurrent(generation);
+  if(JSON.stringify(state)!==localRaw)throw new Error("Newer local activity appeared during the comparison. Run the review again.");
+  return Object.assign(fhBuildConflictProposal(local,pulled.remoteState,rev),{
+    at:Date.now(),localFingerprint,cloudFingerprint,generation});
+}
+async function fhConflictResolvePreflight(){
+  fhConflictPreflight=null;
+  const review=await fhReadConflictReview();
+  fhConflictPreflight=deepClone(review);
+  return deepClone(review);
+}
+async function fhRecheckConflictProposal(){
+  const prior=fhConflictPreflight;
+  fhConflictPreflight=null;
+  if(!prior)return {ok:false,reason:"Review the differences first."};
+  if(Date.now()-prior.at>FH_CONFLICT_PREFLIGHT_TTL_MS||Date.now()<prior.at){
+    return {ok:false,reason:"That review expired. Review the differences again."};
   }
-  const pre = fhConflictPreflight;
-  if (!pre) return { ok:false, reason:"Check what is only on this device first." };
-  if (Date.now() - pre.at > FH_CONFLICT_PREFLIGHT_TTL_MS){
-    return { ok:false, reason:"That check is stale. Run it again so the comparison is current." };
-  }
-  if (pre.blocked.length){
-    return { ok:false, reason:"There are " + pre.blocked.length + " session(s) here that cannot be carried across, so nothing was changed." };
-  }
-  if (hasSavedDeviceClocks(state)) return { ok:false, reason:"Finish, log or discard the saved clock on this device first." };
-  if (hasUnfinishedDeviceRun(state)) return { ok:false, reason:"Finish or cancel the session running on this device first." };
-
-  /* Verified, read back, before a single byte of live state moves. */
-  const backup = await createVerifiedCloudAdoptionBackup("accounting-conflict");
-
-  const pulled = await fetchCloudRemote({ force:true, requireRemote:true, persistAuth:false });
-  if (!pulled || !pulled.remoteState) return { ok:false, reason:"The cloud copy could not be re-read, so nothing was changed." };
-  const rev = Math.max(0, pulled.remotePayload && pulled.remotePayload.cloud_rev | 0);
-  if (rev <= 0) return { ok:false, reason:"The cloud revision was not confirmed, so nothing was changed." };
-  if (rev < pre.rev) return { ok:false, reason:"The cloud revision moved backwards since the check; nothing was changed." };
-  if (hasSavedDeviceClocks(pulled.remoteState) || hasUnfinishedDeviceRun(pulled.remoteState)){
-    return { ok:false, reason:"The cloud copy has a session or clock still running on another device. Finish it there, then try again." };
-  }
-
-  const adopted = buildAuthoritativeCloudState(pulled.remoteState, deepClone(state.sync),
-    pulled.remotePayload, pulled.sourceEncrypted, state.timer, state.fh11Clocks);
-  /* The join-a-profile flow deliberately lands disconnected, because there the
-     identity is new and unproven. Here it is this device's own row, so staying
-     connected is both safe and the entire point. */
-  adopted.sync.enabled = true;
-  adopted.sync.lastSyncError = null;
-  adopted.sync.pendingSync = false;
-  adopted.sync.pendingSince = 0;
-
-  const carry = pre.localOnly.slice();
-  const previousState = state;
-  state = adopted;
-  try {
-    await saveStateDurable({ fromPull:true, suppressMilestoneAnnouncement:true,
-                             source:"conflict-resolve-adopt" });
-  } catch (error){
-    state = previousState;
-    return { ok:false, reason:"The cloud copy could not be saved on this device, so nothing was changed.",
-             backupKey: backup.backupKey };
-  }
-
-  /* Re-add anything this device alone was holding, through the same audited
-     path a manual time correction uses - so the new base stays consistent
-     instead of acquiring the very disagreement we just resolved. */
-  let carried = 0, carriedMinutes = 0;
-  const failed = [];
-  for (const row of carry){
-    try {
-      const res = await window.applyTaskTimeAdjustment(row.taskId, row.minutes, { surface:"conflict-resolve" });
-      if (res && res.ok){ carried++; carriedMinutes += row.minutes; } else failed.push(row);
-    } catch (_){ failed.push(row); }
-  }
-  try { await saveStateDurable({ suppressMilestoneAnnouncement:true, source:"conflict-resolve-carry" }); } catch(_){}
-
-  fhConflictPreflight = null;
-  stuckSyncNoticeShown = false;
-  try { await cloudPush({ reason:"conflict-resolved", force:true }); } catch(_){}
-  try { renderAll(); renderSyncStatus(); renderSecurityPanel(); } catch(_){}
-  return { ok:true, rev, carried, carriedMinutes, failed, backupKey: backup.backupKey,
-           cloudMinutes: pre.cloudMinutes, localMinutesBefore: pre.localMinutes };
+  try{
+    const current=await fhReadConflictReview();
+    if(current.generation!==prior.generation||current.localFingerprint!==prior.localFingerprint||
+       current.rev!==prior.rev||current.cloudFingerprint!==prior.cloudFingerprint){
+      return {ok:false,reason:"A copy changed after that review. Review the differences again; nothing was applied."};
+    }
+    fhConflictPreflight=deepClone(current);
+    return {ok:true,mode:"review-only",canApply:false,review:deepClone(current)};
+  }catch(error){return {ok:false,reason:String(error&&error.message||error)};}
+}
+async function fhResolveAccountingConflict(){
+  // Keep stale callers fail-closed, including callers that pass force:true.
+  return {ok:false,code:"FH_RECOVERY_REVIEW_ONLY",canApply:false,
+    reason:"Automatic adoption is disabled for accounting conflicts. Recovery requires a verified independent immutable copy, an isolated restore drill, and your choice of a verified recovery point. Nothing was changed."};
 }
 function fhDescribeConflictPreflight(pre){
-  if (!pre) return "";
-  const lines = [];
-  lines.push("Cloud copy: revision " + pre.rev + " · " + formatHours(pre.cloudMinutes) + " · " + pre.cloudSessions + " sessions.");
-  lines.push("This device: " + formatHours(pre.localMinutes) + " · " + pre.localSessions + " sessions.");
-  if (!pre.localOnly.length){
-    lines.push("");
-    lines.push("Nothing here is missing from the cloud. Taking the cloud copy loses no sessions.");
-  } else {
-    lines.push("");
-    lines.push("Only on this device — " + pre.localOnly.length + " session(s), " + formatHours(pre.minutesAtRisk) + ":");
-    for (const row of pre.localOnly.slice(0, 25)){
-      lines.push("  · " + (row.at ? new Date(row.at).toLocaleString() : "unknown time")
-        + " — " + row.taskName + " — " + row.minutes + "m"
-        + (row.carryable ? "" : "  ← CANNOT be carried"));
-    }
-    if (pre.localOnly.length > 25) lines.push("  · …and " + (pre.localOnly.length - 25) + " more.");
-    lines.push("");
-    lines.push(pre.blocked.length
-      ? "Resolving is blocked: " + pre.blocked.length + " of these has no matching skill in the cloud copy. Nothing will be changed."
-      : "All of these will be re-added on top of the cloud copy as time corrections. Their minutes and XP are kept; their original entries are replaced by the new ones.");
+  if(!pre)return "";
+  const lines=["Review only — nothing has been changed or uploaded.",
+    "Cloud copy: revision "+pre.rev+" · "+formatHours(pre.cloudMinutes)+" · "+pre.cloudSessions+" sessions.",
+    "This device: "+formatHours(pre.localMinutes)+" · "+pre.localSessions+" sessions.",""];
+  if(!pre.localOnly.length)lines.push("No additional session IDs were found here. This does not prove that totals, XP, or other progress agree.");
+  else{
+    lines.push("Only on this device — "+pre.localOnly.length+" session(s), "+formatHours(pre.minutesAtRisk)+":");
+    for(const row of pre.localOnly.slice(0,25))lines.push("  · "+(row.at?new Date(row.at).toLocaleString():"unknown time")+
+      " — "+row.taskName+" — "+row.minutes+"m"+(row.reviewable?"":" — needs individual review"));
+    if(pre.localOnly.length>25)lines.push("  · …and "+(pre.localOnly.length-25)+" more.");
+    lines.push("The review retains the original entries, dates, XP and session details. No replacement sessions were created.");
   }
-  if (pre.onlyLocalSkills.length){
-    lines.push("");
-    lines.push("Skills only on this device: " + pre.onlyLocalSkills.join(", ") + ".");
-  }
+  if(pre.excluded.length)lines.push(pre.excluded.length+" local session(s) have cloud deletion records and are excluded from the proposed evidence set.");
+  if(pre.issues.length)lines.push("",...pre.issues);
+  if(pre.onlyLocalSkills.length)lines.push("Skills only on this device: "+pre.onlyLocalSkills.join(", ")+".");
+  lines.push("","This comparison cannot choose the correct accounting totals. Automatic adoption is disabled. Recovery needs a verified independent immutable copy, an isolated restore drill, and your choice of a verified recovery point.");
   return lines.join("\n");
 }
 function renderSyncConflictPanel(){
@@ -19105,43 +19088,26 @@ function bindSync(){
   $("#btn-cancel-use-cloud").onclick = ()=>{ if(pendingCloudAdoption)renderPendingCloudAdoption(); };
   $("#btn-confirm-use-cloud").onclick = ()=>{ adoptVerifiedCloudProfile().catch(error=>{setSyncClaimBusy(false);if($("#claim-error"))$("#claim-error").textContent=safeClaimErrorMessage(error);}); };
   $("#btn-conflict-check").onclick = async ()=>{
-    const out = $("#sync-conflict-report"), go = $("#btn-conflict-resolve"), btn = $("#btn-conflict-check");
-    if (go) go.hidden = true;
-    if (btn) btn.disabled = true;
-    if (out) out.textContent = "Reading the cloud copy and comparing. Nothing is being changed…";
-    try {
-      const pre = await fhConflictResolvePreflight();
-      if (out) out.textContent = fhDescribeConflictPreflight(pre);
-      if (go) go.hidden = !!pre.blocked.length;
-    } catch (error){
-      if (out) out.textContent = "Could not compare: " + String((error && error.message) || error).slice(0, 200);
-    } finally { if (btn) btn.disabled = false; }
+    const out=$("#sync-conflict-report"),recheck=$("#btn-conflict-recheck"),btn=$("#btn-conflict-check");
+    if(recheck)recheck.hidden=true;
+    if(btn)btn.disabled=true;
+    if(out)out.textContent="Comparing the two copies for review. Nothing is being changed…";
+    try{
+      const pre=await fhConflictResolvePreflight();
+      if(out)out.textContent=fhDescribeConflictPreflight(pre);
+      if(recheck)recheck.hidden=false;
+    }catch(error){
+      if(out)out.textContent="Could not compare: "+String(error&&error.message||error).slice(0,220);
+    }finally{if(btn)btn.disabled=false;}
   };
-  $("#btn-conflict-resolve").onclick = async ()=>{
-    const pre = fhConflictPreflight;
-    const n = pre ? pre.localOnly.length : 0;
-    if (!confirm("Take the cloud copy on this device?\n\n"
-      + (n ? n + " session(s) held only here will be re-added on top of it.\n"
-           : "Nothing here is missing from the cloud.\n")
-      + "\nA verified backup of this device's current profile is saved first.")) return;
-    const out = $("#sync-conflict-report"), go = $("#btn-conflict-resolve");
-    if (go) go.disabled = true;
-    if (out) out.textContent = "Saving a backup, then taking the cloud copy…";
-    try {
-      const res = await fhResolveAccountingConflict({});
-      if (!res.ok){
-        if (out) out.textContent = "Not resolved: " + res.reason;
-        toast("Nothing was changed: " + res.reason, "warn");
-      } else {
-        if (out) out.textContent = "Done. Now at cloud revision " + res.rev + "."
-          + (res.carried ? " Re-added " + res.carried + " session(s), " + formatHours(res.carriedMinutes) + "." : "")
-          + (res.failed && res.failed.length ? " " + res.failed.length + " could not be re-added — the backup still has them." : "")
-          + " Backup: " + res.backupKey;
-        toast("This device is back in step with your others.", "good");
-      }
-    } catch (error){
-      if (out) out.textContent = "Not resolved: " + String((error && error.message) || error).slice(0, 220);
-    } finally { if (go) go.disabled = false; try { renderSyncConflictPanel(); } catch(_){} }
+  $("#btn-conflict-recheck").onclick = async ()=>{
+    const out=$("#sync-conflict-report"),btn=$("#btn-conflict-recheck");
+    if(btn)btn.disabled=true;
+    try{
+      const result=await fhRecheckConflictProposal();
+      if(out)out.textContent=result.ok?fhDescribeConflictPreflight(result.review):result.reason;
+      if(btn)btn.hidden=!result.ok;
+    }finally{if(btn)btn.disabled=false;}
   };
   $("#btn-sync-now").onclick = async ()=>{
     /* v10.63.3: pressing Sync now is the owner overriding our own throttle.

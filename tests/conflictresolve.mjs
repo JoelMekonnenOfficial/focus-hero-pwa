@@ -1,253 +1,111 @@
-/* conflictresolve.mjs — the way out of an accounting stop.
- *
- * RULE 4: every number here is synthetic. None of it is Joel's data.
- *
- * Background: mergeRemoteState throws FH_SYNC_ACCOUNTING_CONFLICT rather than
- * guess which of two disagreeing totals is true. Correct — but the throw
- * happens before any assignment, and the push retry calls the same pull, so a
- * device in that state is severed from the cloud on every attempt with no
- * control anywhere that can end it.
- *
- * The thing being tested is not "does it adopt" — it is "can it ever lose a
- * session". Every guard below exists because the answer has to be no.
- */
+/* Synthetic accounting-conflict review. No profile adoption, writes or network. */
 import { launch, openApp, makeReporter } from './harness.mjs';
-
-const PORT = process.argv[2] || 8998;
-const R = makeReporter('conflictresolve.mjs');
-const browser = await launch();
-try {
-  const { ctx, page, problems } = await openApp(browser, PORT, { settleMs: 5000 });
-
-  const api = await page.evaluate(() => ({
-    stuck: typeof window.fhSyncConflictStuck,
-    pre: typeof window.fhConflictResolvePreflight,
-    resolve: typeof window.fhResolveAccountingConflict,
-    describe: typeof window.fhDescribeConflictPreflight,
-    render: typeof window.renderSyncConflictPanel,
-    panel: !!document.querySelector('#sync-conflict'),
-    check: !!document.querySelector('#btn-conflict-check'),
-    go: !!document.querySelector('#btn-conflict-resolve')
-  }));
-  R.eq('the detector exists', api.stuck, 'function');
-  R.eq('the preflight exists', api.pre, 'function');
-  R.eq('the resolver exists', api.resolve, 'function');
-  R.eq('the report renderer exists', api.describe, 'function');
-  R.check('the panel and both controls are in the markup', api.panel && api.check && api.go);
-
-  /* ---- 1. it must fire for THIS failure and no other ------------------- */
-  const detect = await page.evaluate(() => {
-    const s = window.state;
-    const set = (err, enabled) => { s.sync.enabled = enabled !== false; s.sync.lastSyncError = err;
-                                    s.sync.pendingSince = Date.now() - 7200000;
-                                    return !!window.fhSyncConflictStuck(); };
-    return {
-      accounting: set('Cloud accounting conflict in all-time focus minutes. Sync stopped before changing any data.'),
-      race:       set('supabase push 409: {"code":"409"}'),
-      offline:    set('Failed to fetch'),
-      size:       set('supabase push 400: {"code":"23514","players_data_size_chk"}'),
-      clean:      set(null),
-      syncOff:    set('Cloud accounting conflict in hero XP. Sync stopped before changing any data.', false)
-    };
-  });
-  R.eq('it fires on an accounting conflict', detect.accounting, true);
-  R.eq('it does NOT fire on a genuine save race', detect.race, false);
-  R.eq('nor when the device is simply offline', detect.offline, false);
-  R.eq('nor on the row-size failure', detect.size, false);
-  R.eq('nor when there is no error at all', detect.clean, false);
-  R.eq('nor when sync is switched off entirely', detect.syncOff, false);
-
-  /* ---- 2. the panel appears only in that state ------------------------- */
-  const panel = await page.evaluate(() => {
-    const s = window.state, box = document.querySelector('#sync-conflict');
-    s.sync.enabled = true;
-    s.sync.lastSyncError = 'supabase push 409: {"code":"409"}';
-    window.renderSyncConflictPanel();
-    const hiddenOnRace = box.hidden;
-    s.sync.lastSyncError = 'Cloud accounting conflict in all-time focus minutes. Sync stopped before changing any data.';
-    s.sync.pendingSince = Date.now() - 7200000;
-    window.renderSyncConflictPanel();
-    return { hiddenOnRace, shownOnConflict: !box.hidden,
-             why: document.querySelector('#sync-conflict-why').textContent };
-  });
-  R.eq('hidden during an ordinary save race', panel.hiddenOnRace, true);
-  R.eq('shown when the device is actually stopped', panel.shownOnConflict, true);
-  R.check('and it says plainly that this will not clear by itself',
-    /will not clear by itself/i.test(panel.why), panel.why);
-  R.check('while confirming nothing has been changed on either side',
-    /nothing has been changed on either side/i.test(panel.why), panel.why);
-
-  /* ---- 3. the preflight names what is only here ------------------------ */
-  const pre = await page.evaluate(async () => {
-    const s = window.state;
-    s.tasks = [
-      { id:'t_keep', name:'Kept Skill', totalFocusMin:0, sessions:0, dailyMin:{} },
-      { id:'t_gone', name:'Local Only Skill', totalFocusMin:0, sessions:0, dailyMin:{} }
-    ];
-    s.totalFocusMin = 1000;
-    s.sessionsLog = [
-      { id:'s_shared',  type:'focus', at: 1000, minutes: 60,  taskId:'t_keep', taskName:'Kept Skill' },
-      { id:'s_localA',  type:'focus', at: 2000, minutes: 45,  taskId:'t_keep', taskName:'Kept Skill' },
-      { id:'s_localB',  type:'focus', at: 3000, minutes: 30,  taskId:'t_gone', taskName:'Local Only Skill' },
-      { id:'s_deleted', type:'focus', at: 4000, minutes: 90,  taskId:'t_keep', taskName:'Kept Skill' }
-    ];
-    /* The cloud: has the shared one, deliberately deleted another, and has
-       never seen the two local ones. One of those has no skill over there. */
-    window.fetchCloudRemote = async () => ({
-      remotePayload: { cloud_rev: 4242 },
-      sourceEncrypted: true,
-      remoteState: {
-        totalFocusMin: 5000,
-        tasks: [{ id:'t_keep', name:'Kept Skill' }],
-        sessionsLog: [{ id:'s_shared', type:'focus', at:1000, minutes:60, taskId:'t_keep' }],
-        sessionTombstones: { s_deleted: { at: 4500 } }
-      }
-    });
-    const p = await window.fhConflictResolvePreflight();
-    return { rev:p.rev, cloudMinutes:p.cloudMinutes, localMinutes:p.localMinutes,
-             localOnly: p.localOnly.map(x=>({id:x.id, min:x.minutes, carry:x.carryable})),
-             blocked: p.blocked.map(x=>x.id), minutesAtRisk: p.minutesAtRisk,
-             onlyLocalSkills: p.onlyLocalSkills,
-             text: window.fhDescribeConflictPreflight(p) };
-  });
-  R.eq('it reads the cloud revision', pre.rev, 4242);
-  R.eq('and both sides’ totals', `${pre.localMinutes}/${pre.cloudMinutes}`, '1000/5000');
-  R.eq('it finds exactly the two sessions the cloud has never seen', pre.localOnly.length, 2);
-  R.check('the shared session is not listed', !pre.localOnly.some(x=>x.id==='s_shared'));
-  R.check('a session DELETED on the other device is not resurrected',
-    !pre.localOnly.some(x=>x.id==='s_deleted'),
-    'listed: ' + pre.localOnly.map(x=>x.id).join(','));
-  R.eq('minutes at risk are counted', pre.minutesAtRisk, 75);
-  R.check('the one with a matching skill can be carried',
-    pre.localOnly.find(x=>x.id==='s_localA')?.carry === true);
-  R.check('the one whose skill is missing over there CANNOT',
-    pre.localOnly.find(x=>x.id==='s_localB')?.carry === false);
-  R.eq('and it is flagged as blocking', pre.blocked.join(','), 's_localB');
-  R.eq('the local-only skill is named', pre.onlyLocalSkills.join(','), 'Local Only Skill');
-  R.check('the report spells out that resolving is blocked',
-    /Resolving is blocked/i.test(pre.text), pre.text.slice(0,200));
-  R.check('and marks the session that cannot be carried',
-    /CANNOT be carried/.test(pre.text), pre.text.slice(0,400));
-
-  /* ---- 4. it refuses, in every way it should --------------------------- */
-  const refusals = await page.evaluate(async () => {
-    const s = window.state;
-    const out = {};
-    out.blocked = await window.fhResolveAccountingConflict({});
-    /* Clear the blocker, then age the check out. */
-    s.sessionsLog = s.sessionsLog.filter(r => r.id !== 's_localB');
-    const fresh = await window.fhConflictResolvePreflight();
-    out.blockedCleared = fresh.blocked.length;
-    window.__fhAgeCheck = true;
+const PORT=process.argv[2]||9002;
+const R=makeReporter('conflictresolve.mjs');
+const browser=await launch();
+try{
+  const {ctx,page,problems}=await openApp(browser,PORT,{settleMs:2000});
+  const detection=await page.evaluate(()=>{
+    const set=(error,enabled=true)=>{window.state.sync.enabled=enabled;window.state.sync.lastSyncError=error;return !!window.fhSyncConflictStuck();};
+    const out={accounting:set('Cloud accounting conflict in all-time focus minutes'),
+      race:!set('supabase push 409'),offline:!set('Failed to fetch'),clean:!set(null),
+      syncOff:!set('FH_SYNC_ACCOUNTING_CONFLICT',false)};
+    set('FH_SYNC_ACCOUNTING_CONFLICT');window.renderSyncConflictPanel();
+    out.panelShown=!document.querySelector('#sync-conflict').hidden;
+    set('supabase push 409');window.renderSyncConflictPanel();
+    out.panelHiddenForRace=document.querySelector('#sync-conflict').hidden;
     return out;
   });
-  R.check('it refuses while a session cannot be carried',
-    refusals.blocked && refusals.blocked.ok === false && /cannot be carried/i.test(refusals.blocked.reason),
-    JSON.stringify(refusals.blocked));
-  R.eq('and the blocker clears once that session is gone', refusals.blockedCleared, 0);
-
-  const notStuck = await page.evaluate(async () => {
-    window.state.sync.lastSyncError = 'supabase push 409: {"code":"409"}';
-    return await window.fhResolveAccountingConflict({});
+  for(const [label,pass]of Object.entries(detection))R.check(label,pass);
+  const result=await page.evaluate(async()=>{
+    const clone=x=>JSON.parse(JSON.stringify(x));
+    const original={id:'synthetic_prior',type:'focus',at:Date.parse('2026-08-01T15:00:00Z'),
+      localDay:'2026-08-01',dayKey:'2026-08-01',minutes:45,taskId:'synthetic_skill',taskName:'Skill',
+      xp:142,lockedInRun:true,priorityRun:true,sessionCountApplied:1,
+      sessionDetails:{startedAt:Date.parse('2026-08-01T14:15:00Z'),completedAt:Date.parse('2026-08-01T15:00:00Z'),customFlag:'retain'},
+      xpComponents:{base:114,bonus:28},unknownFutureField:{must:'survive'}};
+    const shared={...clone(original),id:'synthetic_shared',minutes:10};
+    const removed={...clone(original),id:'synthetic_removed'};
+    const local={tasks:[{id:'synthetic_skill',name:'Skill'}],sessionsLog:[original,shared,removed],
+      totalFocusMin:1000,history:{'2026-08-01':1000},hero:{xp:222},timer:{running:false}};
+    const remote={tasks:[{id:'synthetic_skill',name:'Skill'}],sessionsLog:[shared],
+      sessionTombstones:{synthetic_removed:{at:1}},totalFocusMin:5000,history:{'2026-08-01':5000},hero:{xp:999},timer:{running:false}};
+    const localBefore=JSON.stringify(local),remoteBefore=JSON.stringify(remote);
+    const plan=window.fhBuildConflictProposal(local,remote,4242);
+    const proof={inputUnchanged:JSON.stringify(local)===localBefore&&JSON.stringify(remote)===remoteBefore,
+      exact:JSON.stringify(plan.exactSessionEvidence[0])===JSON.stringify(original),count:plan.exactSessionEvidence.length,
+      noApply:plan.canApply===false&&!plan.accountingVerified,noCandidate:!('candidate' in plan),
+      excluded:plan.excluded.map(r=>r.id),shared:plan.shared,mode:plan.mode,
+      totalsUnchanged:plan.cloudMinutes===5000&&plan.localMinutes===1000,
+      text:window.fhDescribeConflictPreflight(plan)};
+    plan.exactSessionEvidence[0].xp=0;
+    proof.detached=local.sessionsLog[0].xp===142;
+    const different=clone(remote);different.sessionsLog[0].xp++;
+    proof.sameIdConflict=window.fhBuildConflictProposal(local,different,4242).issues.some(x=>/different contents/.test(x));
+    const duplicate=clone(local);duplicate.sessionsLog.push(clone(original));
+    const dup=window.fhBuildConflictProposal(duplicate,remote,4242);
+    proof.duplicateBlocked=dup.issues.some(x=>/duplicate session ID/.test(x));
+    proof.noDuplicateEvidence=dup.exactSessionEvidence.length===1;
+    const noSkill=clone(remote);noSkill.tasks=[];
+    proof.missingSkill=window.fhBuildConflictProposal(local,noSkill,4242).blocked.length===1;
+    const malformed=clone(local);malformed.sessionsLog.push({minutes:4});
+    proof.missingId=window.fhBuildConflictProposal(malformed,remote,4242).issues.some(x=>/stable ID/.test(x));
+    proof.emptyWarning=/does not prove/.test(window.fhDescribeConflictPreflight(window.fhBuildConflictProposal(remote,remote,4242)));
+    const s=window.state;
+    Object.assign(s,clone(local));
+    s.sync.enabled=true;s.sync.pendingSync=true;s.sync.lastSyncError='Cloud accounting conflict in totals';
+    s.sync.pendingSince=Date.now()-7200000;
+    let cloud=clone(remote),rev=4242,reads=0,options=[],mutations=[];
+    window.fetchCloudRemote=async opts=>{reads++;options.push(opts);return {remotePayload:{cloud_rev:rev},remoteState:clone(cloud),sourceEncrypted:false};};
+    window.saveStateDurable=async()=>{mutations.push('save');throw Error('write forbidden');};
+    window.applyTaskTimeAdjustment=async()=>{mutations.push('adjust');throw Error('write forbidden');};
+    window.cloudPush=async()=>{mutations.push('push');throw Error('write forbidden');};
+    window.createVerifiedCloudAdoptionBackup=async()=>{mutations.push('backup');throw Error('write forbidden');};
+    const snap=JSON.stringify(s);
+    const pre=await window.fhConflictResolvePreflight();
+    proof.preflightExact=JSON.stringify(pre.exactSessionEvidence[0])===JSON.stringify(original);
+    pre.localFingerprint='caller tampering';
+    proof.recheckSame=(await window.fhRecheckConflictProposal()).ok;
+    const deny=await window.fhResolveAccountingConflict({force:true});
+    proof.resolverDenied=deny.ok===false&&deny.code==='FH_RECOVERY_REVIEW_ONLY';
+    proof.resolverReadCount=reads===2;
+    proof.noWrites=mutations.length===0;
+    proof.liveUnchanged=JSON.stringify(window.state)===snap;
+    proof.readOnlyOptions=options.every(o=>o.authReadOnly===true&&o.persistAuth===false&&o.syncContext!==s.sync);
+    await window.fhConflictResolvePreflight();
+    cloud.sessionsLog.push(clone(original));rev++;
+    proof.newCloudRejected=!(await window.fhRecheckConflictProposal()).ok;
+    proof.secondRecheckRejected=!(await window.fhRecheckConflictProposal()).ok;
+    const fresh=await window.fhConflictResolvePreflight();
+    proof.newCloudNoDuplicate=fresh.exactSessionEvidence.length===0;
+    cloud.hero.xp++;
+    proof.sameRevisionChangeRejected=!(await window.fhRecheckConflictProposal()).ok;
+    await window.fhConflictResolvePreflight();s.history['2026-08-01']++;
+    proof.newLocalRejected=!(await window.fhRecheckConflictProposal()).ok;
+    await window.fhConflictResolvePreflight();
+    const realNow=Date.now;
+    try{Date.now=()=>realNow()+11*60000;proof.expiredRejected=!(await window.fhRecheckConflictProposal()).ok;}
+    finally{Date.now=realNow;}
+    window.fetchCloudRemote=async()=>{s.totalFocusMin++;return {remotePayload:{cloud_rev:rev},remoteState:clone(cloud)};};
+    try{await window.fhConflictResolvePreflight();proof.duringReadRejected=false;}
+    catch(e){proof.duringReadRejected=/Newer local activity/.test(e.message);}
+    proof.staleCacheCleared=!(await window.fhRecheckConflictProposal()).ok;
+    proof.finalNoWrites=mutations.length===0;
+    proof.noAdoptControl=!document.querySelector('#btn-conflict-resolve');
+    proof.reviewControls=!!document.querySelector('#btn-conflict-check')&&!!document.querySelector('#btn-conflict-recheck');
+    s.sync.enabled=false;
+    return proof;
   });
-  R.check('it refuses outright when the device is not actually stopped',
-    notStuck && notStuck.ok === false && /not stopped on an accounting conflict/i.test(notStuck.reason),
-    JSON.stringify(notStuck));
-
-  /* The last line of defence, and the one that actually fired in testing: the
-     resolver takes a VERIFIED backup before it touches anything, and that
-     backup refuses to be made while live state differs from the last durable
-     commit. A resolve can therefore never run over uncommitted work. */
-  const guarded = await page.evaluate(async () => {
-    window.state.sync.lastSyncError = 'Cloud accounting conflict in all-time focus minutes. Sync stopped before changing any data.';
-    window.state.sync.pendingSince = Date.now() - 7200000;
-    const snapshotBefore = JSON.stringify(window.state);
-    let threw = null;
-    try { await window.fhResolveAccountingConflict({}); }
-    catch (e){ threw = String((e && e.message) || e); }
-    return { threw, unchanged: JSON.stringify(window.state) === snapshotBefore };
-  });
-  R.check('it stops rather than resolve over work that is not durably saved',
-    !!guarded.threw && /Recovery copy|durable/i.test(guarded.threw), String(guarded.threw));
-  R.eq('and live state was not touched when it stopped', guarded.unchanged, true);
-
-  /* ---- 4b. THE HAPPY PATH, end to end, with a stubbed cloud -----------
-     The point of this one is the carry. An adopt that quietly dropped the
-     session this device alone was holding would pass every check above. */
-  const happy = await page.evaluate(async () => {
-    const s = window.state;
-    s.tasks = [{ id:'t_keep', name:'Kept Skill', totalFocusMin:0, sessions:0, dailyMin:{}, lastUsedAt: Date.now() }];
-    s.activeTaskId = 't_keep';
-    s.sessionsLog = [];
-    s.history = {}; s.totalFocusMin = 0; s.completedFocusSessions = 0;
-    s.sync.enabled = true;
-    s.sync.lastSyncError = 'Cloud accounting conflict in all-time focus minutes. Sync stopped before changing any data.';
-    s.sync.pendingSince = Date.now() - 7200000;
-    /* One real session, made through the app's own path so it is internally
-       consistent, then hidden from the stubbed cloud. */
-    await window.applyTaskTimeAdjustment('t_keep', 45, { surface:'test' });
-    const mine = s.sessionsLog.filter(r=>r&&r.type==='focus')[0];
-    const cloud = JSON.parse(JSON.stringify(s));
-    cloud.sessionsLog = [];
-    cloud.history = {};
-    cloud.totalFocusMin = 5000;
-    cloud.completedFocusSessions = 0;
-    cloud.tasks = [{ ...cloud.tasks[0], totalFocusMin: 5000, sessions: 0, dailyMin:{} }];
-    delete cloud.sync;
-    window.fetchCloudRemote = async () => ({
-      remotePayload: { cloud_rev: 9001 }, sourceEncrypted: false, remoteState: cloud
-    });
-    await window.saveStateDurable({ source:'test-settle' });
-    const before = { minutes: s.totalFocusMin|0, sessionId: mine.id };
-    const pre = await window.fhConflictResolvePreflight();
-    const res = await window.fhResolveAccountingConflict({});
-    const after = window.state;
-    return { before, preCount: pre.localOnly.length, res,
-             minutesAfter: after.totalFocusMin|0,
-             sessionCount: (after.sessionsLog||[]).filter(r=>r&&r.type==='focus').length,
-             taskMinutes: (after.tasks.find(t=>t.id==='t_keep')||{}).totalFocusMin|0,
-             syncErr: after.sync.lastSyncError, rev: after.sync.cloudRev };
-  });
-  R.eq('the preflight sees the one session the cloud lacks', happy.preCount, 1);
-  R.check('the resolve succeeds', !!(happy.res && happy.res.ok), JSON.stringify(happy.res).slice(0,220));
-  R.eq('it lands on the cloud revision', happy.rev, 9001);
-  R.eq('it reports carrying exactly one session', happy.res && happy.res.carried, 1);
-  R.eq('worth exactly its minutes', happy.res && happy.res.carriedMinutes, 45);
-  R.eq('the session survives the adopt', happy.sessionCount, 1);
-  R.eq('and its minutes are ON TOP of the cloud total, not instead of it',
-    happy.minutesAfter, 5045);
-  R.eq('the skill keeps the cloud total plus the carried time', happy.taskMinutes, 5045);
-  R.check('the stop is cleared so sync can resume', !happy.syncErr || !/accounting conflict/i.test(happy.syncErr),
-    String(happy.syncErr));
-  R.check('and a backup key was recorded', !!(happy.res && happy.res.backupKey),
-    String(happy.res && happy.res.backupKey));
-
-  /* ---- 5. an empty diff must read as safe, not as silence ------------- */
-  const clean = await page.evaluate(async () => {
-    const s = window.state;
-    s.sessionsLog = [{ id:'s_shared', type:'focus', at:1000, minutes:60, taskId:'t_keep', taskName:'Kept Skill' }];
-    s.tasks = [{ id:'t_keep', name:'Kept Skill', totalFocusMin:0, sessions:0, dailyMin:{} }];
-    window.fetchCloudRemote = async () => ({
-      remotePayload: { cloud_rev: 4242 }, sourceEncrypted: true,
-      remoteState: { totalFocusMin: 5000, tasks: [{ id:'t_keep', name:'Kept Skill' }],
-                     sessionsLog: [{ id:'s_shared', type:'focus', at:1000, minutes:60, taskId:'t_keep' }],
-                     sessionTombstones: {} }
-    });
-    const p = await window.fhConflictResolvePreflight();
-    return { n: p.localOnly.length, blocked: p.blocked.length, text: window.fhDescribeConflictPreflight(p) };
-  });
-  R.eq('with nothing unique here the list is empty', clean.n, 0);
-  R.eq('and nothing blocks', clean.blocked, 0);
-  R.check('the report says so in words rather than showing an empty space',
-    /loses no sessions/i.test(clean.text), clean.text);
-
-  /* The happy path calls the real cloudPush at the end. This sandbox has no
-     outbound network, so that one failure is the harness, not the app - and it
-     is named rather than filtered silently. */
-  const real = problems.filter(t => !/ERR_FAILED|Failed to load resource|no cloud request was sent/i.test(t));
-  R.check('no console errors beyond the sandbox\u2019s missing network',
-    real.length === 0, real.slice(0,3).join(' | '));
+  for(const [key,value] of Object.entries(result)){
+    if(typeof value==='boolean')R.check(key,value);
+  }
+  R.eq('exactly one local session retained as evidence',result.count,1);
+  R.eq('review-only mode',result.mode,'review-only');
+  R.check('cloud deletion respected',JSON.stringify(result.excluded)==='["synthetic_removed"]');
+  R.check('shared session not duplicated',JSON.stringify(result.shared)==='["synthetic_shared"]');
+  R.check('report distinguishes recovery prerequisites',/independent immutable copy.*isolated restore drill.*choice/.test(result.text));
+  R.check('report never promises restored accounting',/cannot choose the correct accounting totals/.test(result.text));
+  R.check('no unexpected browser errors',problems.length===0,problems.join(' | '));
   await ctx.close();
-} finally {
-  await browser.close();
-}
+}finally{await browser.close();}
+R.finish();
