@@ -35,6 +35,34 @@ try{
   await page.goto(`http://127.0.0.1:${port}/index.html`,{waitUntil:'load',timeout:60000});await ready();
   check('WebKit hydrates a clean durable profile',await page.evaluate(()=>window.__FH_PRIMARY_READY__&&state.totalFocusMin===0));
   check('all release scripts passed the asset gate',await page.evaluate(()=>window.__FH_ASSET_FAILURES__||[]),[]);
+  const calendar=await page.evaluate(()=>{
+    const c=window.FH_CALENDAR;
+    return {
+      spring:(c.clockAt('2026-03-09',0,'America/Toronto')-c.clockAt('2026-03-08',0,'America/Toronto'))/3600000,
+      autumn:(c.clockAt('2026-11-02',0,'America/Toronto')-c.clockAt('2026-11-01',0,'America/Toronto'))/3600000,
+      toronto:c.clockAt('2026-09-27',0,'America/Toronto'),
+      losAngeles:c.clockAt('2026-09-27',0,'America/Los_Angeles'),
+      utc:c.clockAt('2026-09-27',0,'UTC')
+    };
+  });
+  check('WebKit resolves shared-zone spring and autumn day lengths',[calendar.spring,calendar.autumn],[23,25]);
+  check('WebKit uses the selected zone instead of the device zone',
+    [calendar.toronto,calendar.losAngeles,calendar.utc],
+    ['2026-09-27T04:00:00Z','2026-09-27T07:00:00Z','2026-09-27T00:00:00Z'].map(Date.parse));
+  const encrypted=await page.evaluate(async()=>{
+    const plain=JSON.parse(JSON.stringify(state));
+    plain.sync={syncCode:'SYNTHETIC-WEBKIT',syncSecret:'synthetic-webkit-secret',playerId:'synthetic-webkit-profile',
+      cloudRev:40,saltB64:b64(new Uint8Array(SALT_BYTES))};
+    plain.settings.e2eEncryption=true;
+    const blob=await encryptStateBlob(plain);
+    const round=await decryptStateBlob(blob,plain.sync,{requireEncrypted:true,cloudRev:41});
+    let plaintextError='',revisionError='';
+    try{await decryptStateBlob({plain},plain.sync,{requireEncrypted:true});}catch(e){plaintextError=e.code;}
+    try{await decryptStateBlob(blob,plain.sync,{requireEncrypted:true,cloudRev:42});}catch(e){revisionError=e.code;}
+    return {version:blob.e2e.v,minutes:round.totalFocusMin,plaintextError,revisionError};
+  });
+  check('WebKit authenticates protocol 2 and rejects plaintext or row mismatch',encrypted,
+    {version:2,minutes:0,plaintextError:'FH_SYNC_ENCRYPTION_REQUIRED',revisionError:'FH_SYNC_INVALID_ENVELOPE'});
   await page.evaluate(async()=>{
     state.tasks=['A','B'].map(name=>({id:'webkit_'+name,name:'Synthetic WebKit '+name,totalFocusMin:0,sessions:0,dailyMin:{},createdAt:Date.now(),lastUsedAt:Date.now()}));
     await saveStateDurable({fromPull:true,source:'synthetic-webkit-tasks'});
