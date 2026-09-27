@@ -1,6 +1,14 @@
-# Life XP 10.64.0 review candidate
+# Life XP 10.64.1 audit candidate
 
-Build: `fh-2026-09-27-v10-64-0-clock-world-rank`. This is source prepared for independent review, not a published release. It includes the earlier 10.63.5 sync and save-safety fixes.
+Build: `fh-2026-09-27-v10-64-1-audited`. This is source prepared for independent review, not a published release. It includes the earlier 10.63.5 sync/save fixes and 10.64.0 gameplay work. See `AUDIT.md` for findings, coverage, and remaining release blockers. Passing the synthetic tests is not deployment approval.
+
+## Due-diligence corrections
+
+This audit adds complete-release integrity checks, content-derived offline cache namespaces, and update refusal when files are missing or incompatible. An incomplete page stops before profile databases open. Update controls preserve existing caches and registrations and wait for pending saves; paused or parked clocks and uncertain storage prevent refresh.
+
+Async accounting commands now retain newer work instead of rolling back to stale snapshots, reverse the exact deleted record's rewards, and stop when command ownership changes. Old completion callbacks cannot start a replacement clock or clear its Priority choice. A storage warning no longer changes the state being rolled back after a failed pull.
+
+Hardcore merges retain pause, excuse and revival evidence; unsafe identity decisions stay quarantined. Calendar-window ownership prevents duplicate credit, and impossible windows refuse judgment rather than inventing a failure. Crop harvest identity prevents two offline devices claiming the same planting twice. Task emoji markup is displayed as text rather than executable HTML.
 
 ## Clocks
 

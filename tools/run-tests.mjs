@@ -18,7 +18,7 @@ const browserSuites = [
   'hourremoval', 'mergereduce', 'guardreduce', 'runmode', 'animpause', 'heroxp',
   'latestart', 'runmodehistory', 'conflictresolve', 'quietalarms', 'forceupdate',
   'adoption-presentation', 'contrast-themes', 'gearworld',
-  'clock-session-controls', 'clock-save-races', 'persistence-clock-audit'
+  'clock-session-controls', 'clock-save-races', 'persistence-clock-audit', 'mobile-webkit'
 ];
 const mime = { '.html':'text/html', '.js':'application/javascript', '.json':'application/json',
   '.webmanifest':'application/manifest+json', '.svg':'image/svg+xml', '.png':'image/png' };

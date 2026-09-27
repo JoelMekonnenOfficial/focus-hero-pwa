@@ -116,8 +116,8 @@
  * fallback (and skipped injection). Fetch by URL string instead, and inject
  * into cache-served HTML too.
  */
-const BUILD_ID    = "fh-2026-09-27-v10-64-0-clock-world-rank";
-const BUNDLE_HASH = "259fe42ce0aead3ecdb00022b722cdec642676d31fb029d65fc6a16199f4bbf4";
+const BUILD_ID    = "fh-2026-09-27-v10-64-1-audited";
+const BUNDLE_HASH = "564590d14bb3f834bcdac0acaeb9d5a505c1d83401c744f36ca7ae9115b904f1";
 const CACHE_NAME  = `focus-hero-${BUILD_ID}-${BUNDLE_HASH}`;
 /* BEGIN MODULE INTEGRITY */
 const MODULE_INTEGRITY = {

@@ -3,6 +3,12 @@ import {readFileSync,writeFileSync,readdirSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 const folder=new URL('../starmax/',import.meta.url);
 const read=name=>readFileSync(new URL(name,folder),'utf8');
+// Match the repository's eol=lf checkout policy before hashing exact bytes.
+// Otherwise an editor's CRLF can create receipts that fail on Linux CI.
+for(const name of readdirSync(folder).filter(name=>/\.(?:html|js|svg|webmanifest|json|css|txt)$/.test(name))){
+  const value=read(name),normalized=value.replace(/\r\n/g,'\n');
+  if(normalized!==value)writeFileSync(new URL(name,folder),normalized);
+}
 const files=readdirSync(folder).filter(name=>name.endsWith('.js')&&name!=='sw.js').sort();
 const hashes=Object.fromEntries(files.map(name=>[name,'sha384-'+createHash('sha384').update(readFileSync(new URL(name,folder))).digest('base64')]));
 let html=read('index.html');

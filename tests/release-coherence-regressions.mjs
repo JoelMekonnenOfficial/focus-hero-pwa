@@ -98,6 +98,14 @@ try{
 
   evidence.checks.push({name:'missing executable install',previousWorkerRetained:true});
   failPath='';
+  release={...next,'gear-utility.js':previous['gear-utility.js']};
+  assert.equal(await update(),'redundant','Wrong executable bytes must reject installation');
+  assert.equal(await installedBuild(),oldBuild);
+  release={...next,'index.html':previous['index.html'],'focus-hero.html':previous['focus-hero.html']};
+  assert.equal(await update(),'redundant','Wrong document build must reject installation');
+  assert.equal(await installedBuild(),oldBuild);
+  evidence.checks.push({name:'wrong module and HTML build',previousWorkerRetained:true});
+  release=next;
   // The next attempt has all assets and must complete without clearing anything.
   assert.equal(await update(),'activated');
   await updatePage.waitForFunction(async build=>{
