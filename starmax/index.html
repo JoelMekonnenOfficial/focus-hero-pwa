@@ -15143,7 +15143,7 @@ async function adoptVerifiedCloudProfile(){
   const identityOperation=pending.identityOperation;
   if(!identityOperation||syncIdentityOperation!==identityOperation){if($("#claim-error"))$("#claim-error").textContent="The safe cloud check expired. Check the cloud profile again.";return false;}
   identityOperation.kind="adopt-verified-cloud";
-  const previousMemoryState=state;
+  let previousMemoryState=null,installedState=null,installedRaw=null;
   let committed=false;
   setSyncClaimBusy(true,"Re-checking the encrypted cloud profile. Nothing is being uploaded…");
   try{
@@ -15168,13 +15168,20 @@ async function adoptVerifiedCloudProfile(){
       return false;
     }
     const recovery=await createVerifiedCloudAdoptionBackup();
+    previousMemoryState=state;
+    if(JSON.stringify(previousMemoryState)!==recovery.previousRaw)throw syncControlError("FH_SYNC_LOCAL_CHANGED","Newer local activity appeared after the preserved copy was verified. The switch stopped.");
     const adopted=buildAuthoritativeCloudState(pulled.remoteState,pending.candidateSync,pulled.remotePayload,pulled.sourceEncrypted,
       previousMemoryState.timer,previousMemoryState.fh11Clocks,previousMemoryState.settings);
     assertSyncOperationCurrent(identityOperation.generation);
     state=adopted;
-    try{await saveStateDurable({fromPull:true,suppressMilestoneAnnouncement:true,identityOperation:true,rotateFence:true,source:"cloud-profile-adopt"});}
+    installedState=adopted;installedRaw=JSON.stringify(adopted);
+    try{
+      const saved=await saveStateDurable({fromPull:true,suppressMilestoneAnnouncement:true,identityOperation:true,rotateFence:true,source:"cloud-profile-adopt",
+        onPrepared:receipt=>{if(receipt.state===adopted)installedRaw=receipt.raw;}});
+      if(saved===false)throw new Error("The verified cloud profile was not saved.");
+    }
     catch(error){
-      state=previousMemoryState;
+      if(state===installedState&&JSON.stringify(state)===installedRaw)state=previousMemoryState;
       throw syncControlError("FH_SYNC_LOCAL_SAVE_FAILED","Verified cloud profile could not be saved on this computer");
     }
     committed=true;
@@ -15186,7 +15193,7 @@ async function adoptVerifiedCloudProfile(){
     toast("Cloud profile saved on this computer. Cloud sync is still off.","good");
     return true;
   }catch(error){
-    if(!committed&&state!==previousMemoryState)state=previousMemoryState;
+    if(!committed&&installedState&&state===installedState&&JSON.stringify(state)===installedRaw)state=previousMemoryState;
     if($("#claim-error"))$("#claim-error").textContent=accountingStorageIndeterminate
       ? "The switch stopped because this computer's storage could not be verified. Sync remains paused; open Recovery Center."
       : safeClaimErrorMessage(error);
@@ -15324,10 +15331,13 @@ async function claimSyncCode(full){
     }
     const previousState=state;
     state = merged;
-    try{await saveStateDurable({fromPull:true,suppressMilestoneAnnouncement:true,identityOperation:true,rotateFence:true,source:"sync-identity-claim"});
+    let installedRaw=JSON.stringify(merged);
+    try{const saved=await saveStateDurable({fromPull:true,suppressMilestoneAnnouncement:true,identityOperation:true,rotateFence:true,source:"sync-identity-claim",
+          onPrepared:receipt=>{if(receipt.state===merged)installedRaw=receipt.raw;}});
+        if(saved===false)throw new Error("The claimed cloud profile was not saved.");
         try{ flushHardcoreMergeNotices(); }catch(_){}}
     catch(error){
-      state=previousState;
+      if(state===merged&&JSON.stringify(state)===installedRaw)state=previousState;
       throw syncControlError("FH_SYNC_LOCAL_SAVE_FAILED","Claimed cloud profile could not be saved on this computer");
     }
     claimCommitted=true;
