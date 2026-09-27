@@ -4502,7 +4502,7 @@ svg{shape-rendering:geometricPrecision}
 <script src="./focus-hero-ui-v11.js" integrity="sha384-6UL9zvj89GRdJLi/aNLl0hbKynoEKvvioGz2ywHPYiPQ0zGBZfTOOD+AID3jpcnM" crossorigin="anonymous"></script>
 <script src="./focus-hero-immersive-v1.js" integrity="sha384-lNLnx/16nDrzfoY2PPlSiYQF1GkyZPCQmb66AQ/YvlRiEgHWrOcSecrriqiI3z9F" crossorigin="anonymous"></script>
 <script src="./fh-identity-v13.js" integrity="sha384-MAYX6ulFH+mHWhf8ukbtrUQeUw3k0ZXH/z46YwvhvU+7XQT37C6kj7QP1f/HCxng" crossorigin="anonymous"></script>
-<script src="./fh-hardcore-v12.js" integrity="sha384-yokMQpWdbSPXuXimd9b9nkJUIuPURIcCg4uAO3TGPktPpv+kWLRFNBK32itZi2ut" crossorigin="anonymous"></script>
+<script src="./fh-hardcore-v12.js" integrity="sha384-brzSDNShiruh3LE/jDtOiazaK+VGLzKUrDZLbmQNFk+768LzRejRb4a3opXmHYN6" crossorigin="anonymous"></script>
 <script src="./fh-rank-v1.js" integrity="sha384-kxq1jL5hD+Jnd8w5J2mstb4KFf2udyyelvtmqDQeQZ1QdZoqjc2GivcUzz8e7CGP" crossorigin="anonymous"></script>
 <script src="./fh-navigator-v1.js" integrity="sha384-REu9WwBw4h1sZhOauBBL/ZZ73QlELwiTYp0l4f715d1+tpQukrfLere+SqS1Vedy" crossorigin="anonymous"></script>
 <script src="./fh-theater-v1.js" integrity="sha384-sINesCJ+dsaF14OkysPDv+Faume1YDsAlvCrliO6jZK5r1hMw5wiXLC8Ioi5i3BI" crossorigin="anonymous"></script>
@@ -23701,14 +23701,14 @@ function showBootError(err){
               + "the older local copy has, so this can be resolved without losing anything: the diverged copies are archived and the "
               + "original bytes restored. Nothing is deleted."
               + (tripwireDetail ? " (" + tripwireDetail + ")" : ""))
-        : "Your saved data is preserved. Reload usually fixes it. If not, restore from the most recent automatic backup.";
+        : "Startup stopped. Keep this device's saved data in place. If retrying does not help, review preserved copies before choosing a recovery point; an older backup may omit newer progress.";
     safe.innerHTML =
       '<h2 style="margin:0 0 8px;font-size:18px">' + heading + '</h2>'
       + '<p style="margin:0 0 12px;color:#9aa3cf">' + guidance + '</p>'
       + '<pre style="margin:0 0 16px;padding:10px;background:#171a30;border:1px solid rgba(255,255,255,.08);border-radius:8px;font:12px ui-monospace,Menlo,monospace;color:#ff7a8a;white-space:pre-wrap;max-height:30vh;overflow:auto;">' + msg.replace(/[&<>]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])) + '</pre>'
       + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
       +   '<button id="__fh_reload" style="background:#8b9cff;color:#0b0d1a;border:0;padding:10px 14px;border-radius:8px;font-weight:600;cursor:pointer">Reload</button>'
-      +   '<button id="__fh_restore" style="background:#1f2340;color:#e8ecff;border:1px solid rgba(255,255,255,.16);padding:10px 14px;border-radius:8px;cursor:pointer">Restore from backup</button>'
+      +   '<button id="__fh_restore" style="background:#1f2340;color:#e8ecff;border:1px solid rgba(255,255,255,.16);padding:10px 14px;border-radius:8px;cursor:pointer">Review recovery options</button>'
       +   '<button id="__fh_export" style="background:#1f2340;color:#e8ecff;border:1px solid rgba(255,255,255,.16);padding:10px 14px;border-radius:8px;cursor:pointer">Export raw state</button>'
       +   (sourceAdvanced && !tripwireAhead
             ? '<button id="__fh_repair" style="background:#8b9cff;color:#0b0d1a;border:0;padding:10px 14px;border-radius:8px;font-weight:600;cursor:pointer">Resolve safely and reopen</button>'
@@ -25319,7 +25319,7 @@ else boot();
   else window.addEventListener("load", function(){ setTimeout(boot,300); });
 })();
 </script>
-<script src="./focus-economy.js" integrity="sha384-JGll7MKH0be63Urw2sNDlrfO6FNNl0ziAEX5N1j0aNt7JgcNM7bhAhRuGYJfZxbM" crossorigin="anonymous"></script>
+<script src="./focus-economy.js" integrity="sha384-sKgSmfIs+5Ho9hUAWh6ms/2Evr7Ls9dqooCTlK1uCOThcLC9g4QrFP/qKMszK7O8" crossorigin="anonymous"></script>
 <script src="./loot-purpose-actions.js" integrity="sha384-RwF7kfAdNgvSfHQOgI/g9j7/TJeRH3iUQigqcomhxLom/d2ef7gBxcWSre1bRFrp" crossorigin="anonymous"></script>
 <script src="./gear-utility.js" integrity="sha384-5wr5Japtyg1xcF4ZoUlvXC+DCBYBEQAFJYtc3k4L86MoVPSm/JCC7C/OFaX1EHib" crossorigin="anonymous"></script>
 <script src="./progression-hub.js" integrity="sha384-GnCSkKkChKfdIdG/2WTUkdprDzRa4rODZU4XPNeeXylDOvQFEGNfar81FhMj1wQv" crossorigin="anonymous"></script>
