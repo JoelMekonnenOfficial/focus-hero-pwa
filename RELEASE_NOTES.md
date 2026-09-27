@@ -1,6 +1,20 @@
-# Life XP 10.64.1 audit candidate
+# Life XP 10.64.2 review candidate
 
-Build: `fh-2026-09-27-v10-64-1-audited`. This is source prepared for independent review, not a published release. It includes the earlier 10.63.5 sync/save fixes and 10.64.0 gameplay work. See `AUDIT.md` for findings, coverage, and remaining release blockers. Passing the synthetic tests is not deployment approval.
+Build: `fh-2026-09-27-v10-64-2-compatible`. Source prepared for independent review, not a published release. It includes the earlier sync/save fixes, gameplay changes and due-diligence corrections. See `AUDIT.md` for findings, coverage and the release boundary.
+
+## Sync and safe updates
+
+Encrypted sync now checks that the format, profile and cloud revision belong together. Existing encrypted saves remain readable. Older applications cannot read or overwrite the newer Supabase copy; their separate offline work stays local until an ordinary in-place update enables a compatible merge. Every device needs the complete new build. Clearing storage, importing old saves and force-syncing are not part of updating.
+
+Devices requiring encryption refuse plaintext. Turning encryption off is an explicit choice with an explanation. Providers without revision-protected writes pause publishing and retain queued local work instead of risking an older device overwriting the cloud. The app never switches provider or identity automatically for this change.
+
+A downloaded update waits for open windows to be ready. An old window that cannot prove its saves are finished keeps the update waiting until it closes normally. Fixed windows drain saves and protect active, paused and parked clocks. Existing caches and registrations remain intact.
+
+## Shared Hardcore day boundaries
+
+Choose a shared timezone on one device and let normal sync share it. Existing profiles begin using the chosen calendar on the next full day; original run starts, earned history and rank events remain. New profiles can initialize the displayed device timezone when starting their first run. Future day boundaries and session receipts are shared, so another device's timezone does not change the result.
+
+The app does not guess the original timezone for older late-start or pause records. Affected judgments wait for an explicit historical timezone confirmation. Conflicting calendar choices preserve both copies for review. This can pause judging or sync until the ambiguity is resolved; it never silently selects a losing copy.
 
 ## Due-diligence corrections
 
@@ -32,7 +46,7 @@ Only the strongest completed Hardcore commitment on a date earns the daily bonus
 
 Existing event amounts are preserved. Ongoing runs start earning the new daily bonus on the next active day after their first evaluation with this build. Open, paused-only and excused-only days do not earn it. Completed-day evidence, milestone dates and revival reversals are retained across merges so duplicate runs and stale peers cannot award or charge the same event repeatedly.
 
-All devices need the new build for consistent new failure prices. Older clients cannot distinguish a newly generated old-rule penalty from a previously recorded one. If such a legacy penalty arrives for the same failure, its recorded amount takes precedence and the new-rule duplicate is suppressed. This preserves historical amounts and prevents charging both; it can retain the old price while an older client is still in use.
+Already-recorded legacy penalties retain their recorded amounts. If an older offline device brings such a penalty after updating, the existing amount takes precedence and the new-rule duplicate is suppressed. This prevents charging both without rewriting historical prices. Older builds cannot continue publishing into a newer protocol-protected Supabase row.
 
 ## Appearance
 
