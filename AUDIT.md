@@ -35,6 +35,8 @@ No signed-in Focus Hero profile, private cloud row, sync identity, browser stora
 
 See `DOMAIN-AUDIT.md`, `tests/MULTIDEVICE-AUDIT.md`, `SECURITY-AUDIT.md`, and the named regression suites for exact boundaries and before/after reproductions.
 
+Conflict resolution also refuses when the two copies contain more than five distinct active run IDs. That preserves both copies without choosing an incomplete result; support for resolving that over-cap case remains outside this patch.
+
 ## Verification coverage
 
 The final delivered evidence archive contains the complete combined-suite result and individual logs, plus actual-worker and WebKit measurements. Tests cover:
