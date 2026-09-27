@@ -306,6 +306,27 @@ try{
     evidence.push({detail:'durable-protocol-pin',requests:c.requests});
   });
 
+  await scenario('integration shared calendar and protocol commit together',async()=>{
+    const {c,devices,taskId}=await setup([false,false]);const[a,b]=devices;
+    assert.equal(await a.page.evaluate(async()=>(await FH_CALENDAR.choose('America/Toronto')).ok),true);
+    assert.equal((await edit(a,taskId,11,'integrated-calendar-session')).ok,true);
+    assert.equal((await invoke(a,'cloudPush')).ok,true);
+    assert.equal((await invoke(b,'cloudPull')).ok,true);
+    const detail=await b.page.evaluate(()=>({calendar:state.fhCalendar,protocol:state.sync.cloudProtocolVersion,rev:state.sync.cloudRev,total:state.totalFocusMin}));
+    assert.equal(detail.protocol,2);assert.equal(detail.rev,c.row.cloud_rev);assert.equal(detail.total,11);
+    assert.equal(Object.values(detail.calendar.entries).reduce((n,r)=>n+r.minutes,0),11);
+    await b.page.reload({waitUntil:'load'});await b.page.waitForFunction(()=>window.__FH_PRIMARY_READY__===true);
+    assert.deepEqual(await b.page.evaluate(()=>({calendar:state.fhCalendar,protocol:state.sync.cloudProtocolVersion,rev:state.sync.cloudRev,total:state.totalFocusMin})),detail);
+  });
+  await scenario('integration conflicting calendar refuses before changing protocol or state',async()=>{
+    const {c,devices}=await setup([false,false]);const[a,b]=devices;
+    for(const [i,d]of devices.entries())assert.equal(await d.page.evaluate(async zone=>(await FH_CALENDAR.choose(zone)).ok,i?'America/Los_Angeles':'America/Toronto'),true);
+    assert.equal((await invoke(b,'cloudPush')).ok,true);
+    const get=()=>a.page.evaluate(()=>JSON.stringify({cal:state.fhCalendar,total:state.totalFocusMin,rev:state.sync.cloudRev,protocol:state.sync.cloudProtocolVersion}));
+    const before=await get(),cloud=JSON.stringify(c.row),requestCount=c.requests.length;
+    const result=await invoke(a,'cloudPull');assert.equal(result.ok,false);assert.equal(result.code,'FH_CALENDAR_REVIEW');
+    assert.equal(await get(),before);assert.equal(JSON.stringify(c.row),cloud);assert(c.requests.slice(requestCount).every(x=>x.method==='GET'));
+  });
 }finally{
   await Promise.all(contexts.map(c=>c.close()));await browser.close();await new Promise(r=>server.close(r));
   await mkdir(path.join(root,'test-results'),{recursive:true});
