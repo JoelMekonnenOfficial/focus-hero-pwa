@@ -69,6 +69,7 @@ try{
   await ctx.close();
   release=previous;worker=previous;failPath='';
   const updateCtx=await browser.newContext({serviceWorkers:'allow'});
+  await updateCtx.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort('blockedbyclient'));
   const updatePage=await updateCtx.newPage();
   await updatePage.goto(origin+'/__audit_harness');
   await updatePage.evaluate(async()=>{await navigator.serviceWorker.register('/sw.js');await navigator.serviceWorker.ready;});

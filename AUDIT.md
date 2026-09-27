@@ -47,6 +47,7 @@ The final delivered evidence archive contains the complete combined-suite result
 - Hardcore/rank/day-window algebra, pause/excuse/revival retention, route and combat rewards, previously unlocked worlds, and requested appearance choices.
 - Real service-worker install/activation/cache/offline behavior, module byte integrity, save-safe refresh, and byte-identical HTML entry points.
 - WebKit startup, durable session/reload, per-clock controls and320/390px layouts. This is a Safari-engine supplement, not physical iPhone/PWA certification.
+- The pinned test-dependency audit reported zero known advisories at review time. This is a registry advisory check, not a guarantee against unknown vulnerabilities.
 
 Tests intentionally assert some known incompatibilities as safe refusals. Those passing assertions do not mean the incompatibility is resolved. No finite audit can guarantee that all future combinations are defect-free.
 
