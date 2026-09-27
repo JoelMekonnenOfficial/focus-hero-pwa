@@ -6109,6 +6109,13 @@ function fhMidnightOf(day, offsetDays){
   if (offsetDays) d.setDate(d.getDate() + offsetDays);
   return d.getTime();
 }
+/* A selected wall-clock time is not elapsed minutes since midnight on a
+   daylight-saving transition date. Date arithmetic applies that date's offset. */
+function fhClockTimeOf(day, minuteOfDay){
+  const p = String(day).split("-");
+  const d = new Date(+p[0], +p[1]-1, +p[2], Math.floor(minuteOfDay / 60), minuteOfDay % 60, 0, 0);
+  return Number.isFinite(d.getTime()) ? d.getTime() : null;
+}
 /* THE ONE FUNCTION THAT DEFINES A DAY'S CLOCK WINDOW. */
 function dayWindowFor(day){
   const key = String(day);
@@ -6136,13 +6143,13 @@ function dayWindowFor(day){
   const nextMidnight = fhMidnightOf(key, 1);
   const closeAt = (naturalEnd) => {
     if (!nextLate || nextMidnight == null) return naturalEnd;
-    const nextOpens = nextMidnight + nextLate.startMin * 60000;
+    const nextOpens = fhClockTimeOf(nextKey, nextLate.startMin);
     return Math.max(naturalEnd, nextOpens);
   };
 
   if (own){
     /* Declared: a full 24 hours from that time. */
-    const fromMs = midnight + own.startMin * 60000;
+    const fromMs = fhClockTimeOf(key, own.startMin);
     const toMs = closeAt(fromMs + 86400000);
     return { fromMs: fromMs, toMs: toMs, late: true, carried: false,
              startMin: own.startMin, hours: Math.max(0, (toMs - fromMs) / 3600000) };
@@ -6150,7 +6157,7 @@ function dayWindowFor(day){
   if (prev){
     /* The day after a late start: begins where that window ended, runs to
        midnight. Shorter, but a real day that is judged and counts. */
-    const fromMs = midnight + prev.startMin * 60000;
+    const fromMs = fhClockTimeOf(prevKey, prev.startMin) + 86400000;
     const toMs = closeAt(nextMidnight);
     return { fromMs: fromMs, toMs: toMs, late: false, carried: true,
              startMin: prev.startMin, hours: Math.max(0, (toMs - fromMs) / 3600000) };
@@ -6163,8 +6170,10 @@ function dayWindowFor(day){
 function lateStartInfoFor(day){
   const rec = validLateStartRecord(lateStartMap()[String(day)]);
   if (!rec) return null;
+  const end = new Date(dayWindowFor(String(day)).toMs);
   return { startMin: rec.startMin, declaredAt: rec.declaredAt,
-           label: fmtClock12(rec.startMin), endsDay: fhDayShift(String(day), 1) };
+           label: fmtClock12(rec.startMin), endLabel: fmtClock12(end.getHours()*60+end.getMinutes()),
+           endsDay: todayKey(end) };
 }
 /* What the NEXT date will look like because of today's declaration - shown so
    the consequence is visible before you commit, not discovered tomorrow. */
@@ -6173,7 +6182,8 @@ function lateStartNextDayPreview(day){
   if (!next) return null;
   const w = dayWindowFor(next);
   if (!w || !w.carried) return null;
-  return { day: next, from: fmtClock12(w.startMin), hours: Math.round(w.hours * 10) / 10 };
+  const from = new Date(w.fromMs);
+  return { day: next, from: fmtClock12(from.getHours()*60+from.getMinutes()), hours: Math.round(w.hours * 10) / 10 };
 }
 /* Only rule: it is about today. Any time of day is allowed - you decide when
    your day began. */
@@ -6195,8 +6205,9 @@ function declareLateStart(startMin, opts){
   map[check.day] = { startMin: check.startMin, declaredAt: Math.round(nowMs) };
   saveState();
   const h = fmtClock12(check.startMin);
-  logLine("Late start set for " + check.day + " — day runs " + h + " to " + h + " tomorrow");
-  if (!opts.silent) toast("Today runs " + h + " to " + h + " tomorrow — a full 24 hours.", "good");
+  const end = lateStartInfoFor(check.day).endLabel;
+  logLine("Late start set for " + check.day + " — day runs " + h + " to " + end + " tomorrow");
+  if (!opts.silent) toast("Today runs " + h + " to " + end + " tomorrow — a full 24 hours.", "good");
   try { if (window.FH_HARDCORE && window.FH_HARDCORE.render) window.FH_HARDCORE.render(); } catch(_){}
   try { renderTimer(); } catch(_){}
   return Object.assign({ ok:true }, check);

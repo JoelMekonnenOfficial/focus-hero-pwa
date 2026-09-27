@@ -164,7 +164,9 @@
   function normalizePauses(raw) {
     if (!Array.isArray(raw)) return [];
     var out = [];
-    for (var i = 0; i < raw.length && out.length < 200; i++) {
+    /* Existing evidence can exceed the per-device addition cap after a merge.
+       Keep it all; dropping an old pause can turn a protected day into a miss. */
+    for (var i = 0; i < raw.length; i++) {
       var row = raw[i];
       if (!row || typeof row !== "object") continue;
       var from = finiteInt(row.from, 0, 0, Number.MAX_SAFE_INTEGER);
@@ -215,9 +217,11 @@
   function withExcusedDay(run, day) {
     var copy = clone(run);
     var list = excusedDays(copy).slice();
-    if (validDay(day) && list.indexOf(day) === -1) list.push(day);
-    /* Bounded: a run cannot accumulate unlimited excuses. */
-    if (list.length > 400) list = list.slice(list.length - 400);
+    if (validDay(day) && list.indexOf(day) === -1) {
+      /* Refuse a new override at capacity; never erase an earlier override. */
+      if (list.length >= 400) return null;
+      list.push(day);
+    }
     copy.excusedDays = list;
     return copy;
   }
@@ -245,7 +249,7 @@
   function normalizeExcusedDays(raw) {
     if (!Array.isArray(raw)) return [];
     var out = [];
-    for (var i = 0; i < raw.length && out.length < 400; i++) {
+    for (var i = 0; i < raw.length; i++) {
       if (validDay(raw[i]) && out.indexOf(String(raw[i])) === -1) out.push(String(raw[i]));
     }
     out.sort();
@@ -483,7 +487,7 @@
     merged.lastCheckedAt = Math.max(left.lastCheckedAt, right.lastCheckedAt);
     merged.lastCheckedDay = (leftDay == null ? -1 : leftDay) >= (rightDay == null ? -1 : rightDay)
       ? left.lastCheckedDay : right.lastCheckedDay;
-    return mergeRankReceipts(merged, left, right);
+    return mergeRunEvidence(merged, left, right);
   }
 
   function sortHistory(rows) {
@@ -589,13 +593,16 @@
       finiteInt(left.reinstatedAt, 0, 0, Number.MAX_SAFE_INTEGER),
       finiteInt(right.reinstatedAt, 0, 0, Number.MAX_SAFE_INTEGER)
     );
+    return mergeRunEvidence(merged, left, right);
+  }
+
+  function mergeRunEvidence(merged, left, right) {
+    /* An end chooses the lifecycle outcome, never which owner decisions
+       survive. Keep pause, excuse and rank-reversal evidence in every shape. */
     merged.pauses = mergePauseLists(left.pauses, right.pauses);
-  /* An excuse is a decision the owner made on one device. Union it, the same
-     way pauses are unioned - a device that has not seen the revive yet must
-     not quietly un-excuse the day and end the run again on the next audit. */
-  merged.excusedDays = normalizeExcusedDays((left.excusedDays || []).concat(right.excusedDays || []));
-  merged.revivedAt = Math.max(left.revivedAt || 0, right.revivedAt || 0);
-  merged.revivedCount = Math.max(left.revivedCount || 0, right.revivedCount || 0);
+    merged.excusedDays = normalizeExcusedDays((left.excusedDays || []).concat(right.excusedDays || []));
+    merged.revivedAt = Math.max(left.revivedAt || 0, right.revivedAt || 0);
+    merged.revivedCount = Math.max(left.revivedCount || 0, right.revivedCount || 0);
     return mergeRankReceipts(merged, left, right);
   }
 
@@ -673,7 +680,11 @@
           assertStableRunIdentity(run, ended, "FH_HARDCORE_ACTIVE_RUN_CONFLICT");
           var reinstatedAt = finiteInt(run.reinstatedAt, 0, 0, Number.MAX_SAFE_INTEGER);
           var endedAt = finiteInt(ended.endedAt, 0, 0, Number.MAX_SAFE_INTEGER);
-          if (!(reinstatedAt > endedAt)) return;
+          if (!(reinstatedAt > endedAt)) {
+            mergeRunEvidence(ended, ended, run);
+            return;
+          }
+          run = mergeRunEvidence(clone(run), run, ended);
           unarchived[run.id] = true;
         }
         if (!byId[run.id]) {
@@ -861,7 +872,8 @@
       var sawTimestamped = false, part = 0;
       for (var i = 0; i < log.length; i++) {
         var rec = log[i];
-        if (!recordSessionCredit(rec)) continue;
+        /* Credited minutes can exist without a completed-session award. */
+        if (!rec || rec.type !== "focus" || !(Number(rec.minutes) > 0)) continue;
         var at = Number(rec.at || rec.completedAt || rec.startedAt);
         if (!Number.isFinite(at) || at < dayStart || at >= dayEnd) continue;
         sawTimestamped = true;
@@ -937,7 +949,7 @@
         var at = Number(rec.at || rec.completedAt || rec.startedAt);
         if (!Number.isFinite(at) || at < dayStart || at >= dayEnd) continue;
         sawTimestamped = true;
-        if (at >= w.fromMs && at < w.toMs) part++;
+        if (at >= w.fromMs && at < w.toMs && !belongsToLaterWindow(dayKeyOfWindow(w), at)) part++;
       }
       /* v10.35.2: THE NO-TIMESTAMP FALLBACK IS ONLY FOR THIS WINDOW'S OWN DATE.
 
@@ -1126,6 +1138,8 @@
     var nowMs = Date.now();
     for (var ordinal = start; ordinal < end; ordinal++) {
       var day = dayFromOrdinal(ordinal);
+      var dayError = invalidDayWindow(day);
+      if (dayError) return { ok:false, reason:dayError };
       if (progressOn(day, run.requirement).qualifies) {
         survived++;
         if (dayIsSettled(day, nowMs)) earnedDays.push(day);
@@ -1140,6 +1154,8 @@
       return { ok: true, active: false, ended: true, missedDay: day,
                daysSurvived: survived, earnedDays:earnedDays, missedWhilePaused: missedWhilePaused };
     }
+    var todayError = invalidDayWindow(today);
+    if (todayError) return { ok:false, reason:todayError };
     var todayProgress = progressOn(today, run.requirement);
     var pausedToday = dateIsPaused(run, today, today);
     if (pausedToday) todayProgress = Object.assign({}, todayProgress, { paused: true });
@@ -1157,6 +1173,14 @@
       pending: pending,
       today: todayProgress
     };
+  }
+
+  function invalidDayWindow(day) {
+    var w = lateWindow(day);
+    if (w && (!Number.isFinite(w.fromMs) || !Number.isFinite(w.toMs) || !(w.toMs > w.fromMs))) {
+      return "The day window for " + day + " has no usable duration. Its late-start calendar needs review; no Hardcore result was recorded.";
+    }
+    return null;
   }
 
   function streakInfo() {
@@ -1298,6 +1322,7 @@
     var target = findRun(live, runId);
     if (!target) return { ok: false, reason: "Say which run to pause - more than one is going." };
     if (isPausedNow(target)) return { ok: false, reason: "That run is already paused." };
+    if (target.pauses.length >= 200) return { ok: false, reason: "This run has reached its 200-pause limit. Its existing pause history is preserved; no new pause was added." };
     var next = clone(read.data);
     var rows = runsOf(next).map(function (r) {
       if (r.id !== target.id) return r;
@@ -1421,6 +1446,7 @@
       if (String(live[j].id) === String(row.id)) return { ok: false, reason: "that run is already going" };
     }
     var restored = withExcusedDay(row, row.missedDay);
+    if (!restored) return { ok:false, reason:"This run has reached its 400-excused-day limit. Its existing history is preserved; the run was not restored." };
     recordRankReversal(restored, row);
     delete restored.endedAt;
     delete restored.endReason;
@@ -1440,6 +1466,7 @@
          the owner's decision actually takes effect instead of dying again on
          a different date. */
       restored = withExcusedDay(restored, audit.missedDay);
+      if (!restored) return { ok:false, reason:"This run has reached its 400-excused-day limit. Its existing history is preserved; the run was not restored." };
       audit = auditRun(restored, today);
       if (!audit.ok || audit.ended) return { ok: false, reason: "that run has more than one missed day behind it" };
     }
@@ -1784,11 +1811,15 @@
     return { due: due };
   }
 
-  async function persistReplacementDurable(next, source) {
+  async function persistReplacementDurable(next, source, options) {
     var state = S();
     if (!state) return { ok:false, reason:"Life XP state is not ready." };
     if (typeof window.saveStateDurable !== "function") {
       return { ok:false, reason:"Verified durable saving is unavailable; nothing changed." };
+    }
+    var clearConflict = options && options.conflict;
+    if (clearConflict && state.fh12HardcoreConflict !== clearConflict) {
+      return { ok:false, reason:"The Hardcore conflict changed before it could be saved; review the current copies." };
     }
     var hadField = Object.prototype.hasOwnProperty.call(state, FIELD);
     var priorField = state[FIELD];
@@ -1798,6 +1829,7 @@
     var installedRankJSON = JSON.stringify(priorRank);
     var installedHardcoreJSON = JSON.stringify(next);
     state[FIELD] = next;
+    if (clearConflict) state.fh12HardcoreConflict = null;
     try {
       if (window.FH_RANK && typeof window.FH_RANK.materialize === "function") {
         window.FH_RANK.materialize(state);
@@ -1816,7 +1848,11 @@
       /* A peer-primary adoption may replace window.state while the awaited
          commit is in flight. Restore only the exact object installed here;
          never overwrite a newer peer state. */
-      if (S() === state && state[FIELD] === next && JSON.stringify(next) === installedHardcoreJSON) restoreField(state, hadField, priorField);
+      if (S() === state && state[FIELD] === next && JSON.stringify(next) === installedHardcoreJSON) {
+        restoreField(state, hadField, priorField);
+      }
+      /* A newer in-place run edit does not confirm our quarantine clear. */
+      if (S() === state && clearConflict && state.fh12HardcoreConflict === null) state.fh12HardcoreConflict = clearConflict;
       if (S() === state && state.fhRank === installedRank && JSON.stringify(installedRank) === installedRankJSON) {
         if (hadRank) state.fhRank = priorRank;
         else delete state.fhRank;
@@ -2058,7 +2094,7 @@
 
     if (info) {
       return '<div class="fh12-category-card"><h4>Late start · today runs ' + esc(info.label) +
-        ' to ' + esc(info.label) + ' tomorrow</h4>' +
+        ' to ' + esc(info.endLabel || info.label) + ' tomorrow</h4>' +
         '<p>A full 24 hours from when you woke, requirement unchanged.</p>' +
         (nextPrev ? '<p class="fh12-latenote">Tomorrow then runs ' + esc(nextPrev.from) +
           ' to midnight — about ' + nextPrev.hours + ' hours. It still counts as its own day. ' +
@@ -2289,9 +2325,8 @@
       var check = null;
       try { check = window.canDeclareLateStart(mins); } catch (_) {}
       if (check && !check.ok) { toast(check.message, "warn"); return; }
-      if (!window.confirm("Count today as starting " + raw + "?\n\nToday runs " + raw + " to " + raw +
-                          " tomorrow — a full 24 hours, same requirement.\n\nTomorrow then runs " + raw +
-                          " to midnight and still counts as its own day.")) return;
+      if (!window.confirm("Count today as starting " + raw + "?\n\nToday runs for a full 24 elapsed hours from " + raw +
+                          ", with the same requirement. The ending clock time may differ when daylight saving changes.\n\nTomorrow begins when that window closes and runs to midnight; it still counts as its own day.")) return;
       button.disabled = true;
       try { window.declareLateStart(mins); } finally { button.disabled = false; }
     } else if (action === "latestart-clear") {
@@ -2305,7 +2340,7 @@
         : "Continue this device's hardcore run?\n\nThe other device's run is archived as a run summary, not deleted.")) return;
       button.disabled = true;
       try {
-        var resolved = resolveMergeConflict(keepPeer ? "peer" : "local");
+        var resolved = await resolveMergeConflict(keepPeer ? "peer" : "local");
         if (!resolved.ok) toast(resolved.reason, "bad");
       } finally { button.disabled = false; }
     }
@@ -2385,16 +2420,14 @@
         streak.current + "d · best " + streak.longest + "d" + (best ? " · Hardcore best " + best + "d" : "") +
         '</span></div><span class="fh12-badge">Hardcore off</span><button type="button" data-fh12="open">Open</button></div>';
     }
-    /* v10.17.1: a quarantined merge is stated plainly and resolved by hand.
-       Both buttons are lossless: whichever run you do not keep is archived as a
-       run summary, never deleted, and the other device converges on your
-       choice at the next sync. */
+    /* Distinct unchosen runs can be archived. Contradictory versions of one
+       immutable run identity remain quarantined for review. */
     var conflict = state.fh12HardcoreConflict;
     if (conflict && typeof conflict === "object") {
       html += '<div class="fh12-error fh12-conflict">' +
         "<b>This device and your other device disagree about the hardcore run.</b> " +
         "Everything else — your hours, sessions and loot — is syncing normally. " +
-        "Nothing has been deleted; pick which run continues and the other becomes a run summary." +
+        "Nothing has been deleted. Distinct runs can be kept or archived; conflicting versions of the same run stay protected for review." +
         '<div class="fh12-actions"><button type="button" data-fh12="conflict-keep-local">Keep this device\u2019s run</button>' +
         '<button type="button" data-fh12="conflict-keep-peer">Keep the other device\u2019s run</button></div></div>';
     }
@@ -2406,60 +2439,81 @@
   /* Resolve a quarantined hardcore merge. Whichever side is not chosen has its
      active run archived into the shared history rather than dropped, so the run
      you did not keep still shows up as a completed summary. */
-  function resolveMergeConflict(keep) {
+  async function resolveMergeConflict(keep) {
     var state = S();
     if (!state) return { ok: false, reason: "no state" };
     var conflict = state.fh12HardcoreConflict;
     if (!conflict || typeof conflict !== "object") return { ok: false, reason: "nothing to resolve" };
 
-    var mine = normalizeHardcoreForMerge(state[FIELD]);
-    var theirs = normalizeHardcoreForMerge(conflict.peer);
+    var mine, theirs;
+    try {
+      mine = normalizeHardcoreForMerge(state[FIELD]);
+      theirs = normalizeHardcoreForMerge(conflict.peer);
+    } catch (error) { return { ok:false, reason:cleanText(error && error.message, "Those run copies could not be read safely.", 180) }; }
     var chosen = keep === "peer" ? theirs : mine;
     var other = keep === "peer" ? mine : theirs;
     if (!chosen) return { ok: false, reason: "that copy could not be read" };
 
-    var next = clone(chosen.value);
+    if (other) {
+      var chosenById = Object.create(null);
+      chosen.value.runs.concat(chosen.value.history).forEach(function (row) { chosenById[row.id] = row; });
+      try {
+        other.value.runs.concat(other.value.history).forEach(function (row) {
+          if (chosenById[row.id]) assertStableRunIdentity(chosenById[row.id], row, "FH_HARDCORE_IDENTITY_REVIEW");
+        });
+      } catch (_) {
+        return { ok:false, reason:"These copies give the same run different locked details. Both copies remain protected for review; choosing one cannot safely resolve this conflict." };
+      }
+    }
+
+    var next = withRuns(chosen.value, chosen.value.runs.map(function (run) {
+      var copy = clone(run);
+      copy.daysSurvived = verifiedRunDays(chosen.rawById[run.id], run);
+      return copy;
+    }));
     var history = next.history.slice();
-    var archivedId = null;
+    var archivedIds = [];
     if (other) {
       /* Fold in every run summary the other copy knows about... */
       var seen = Object.create(null);
       history.forEach(function (row) { seen[row.id] = true; });
-      /* The run we are keeping is never also archived. When both copies describe
-         the SAME run id with divergent identity there is nothing to archive at
-         all - it is one run written down two ways, not two runs. */
-      if (next.active && next.run) seen[next.run.id] = true;
+      /* A matching identity is one run, not a second archive entry. */
+      runsOf(next).forEach(function (run) { seen[run.id] = true; });
       other.value.history.forEach(function (row) { if (!seen[row.id]) { seen[row.id] = true; history.push(clone(row)); } });
-      /* ...and archive its active run, if it had one we are not keeping. */
-      if (other.value.active && other.value.run && !seen[other.value.run.id]) {
-        var loser = clone(other.value.run);
-        loser.daysSurvived = verifiedRunDays(other.rawRun, other.value.run);
+      /* Archive every distinct unchosen run. The normalized merge shape is
+         a runs list, so reading its former active/run mirror loses evidence. */
+      for (var index = 0; index < other.value.runs.length; index++) {
+        var otherRun = other.value.runs[index];
+        if (seen[otherRun.id]) continue;
+        var loser = clone(otherRun);
+        loser.daysSurvived = verifiedRunDays(other.rawById[otherRun.id], otherRun);
         delete loser.reinstatedAt;
-        loser.endedAt = Math.max(
+        var endStamp = Math.max(
           finiteInt(loser.startedAt, 0, 0, Number.MAX_SAFE_INTEGER),
           finiteInt(loser.lastCheckedAt, 0, 0, Number.MAX_SAFE_INTEGER),
+          finiteInt(otherRun.reinstatedAt, 0, 0, Number.MAX_SAFE_INTEGER),
           finiteInt(next.run && next.run.startedAt, 0, 0, Number.MAX_SAFE_INTEGER)
-        ) + 1;
+        );
+        if (endStamp >= Number.MAX_SAFE_INTEGER) return { ok:false, reason:"That run's timestamp cannot be superseded safely; nothing changed." };
+        loser.endedAt = endStamp + 1;
         loser.endReason = "superseded — you kept the other device's run";
         loser.missedDay = null;
         history.push(loser);
-        archivedId = loser.id;
+        seen[loser.id] = true;
+        archivedIds.push(loser.id);
       }
     }
     next.history = sortHistory(history);
-    if (next.active && next.run) next.daysSurvived = verifiedRunDays(chosen.rawRun, next.run);
-
-    state[FIELD] = next;
-    state.fh12HardcoreConflict = null;
-    try { if (typeof window.saveState === "function") window.saveState(); } catch (_) {}
+    var saved = await persistReplacementDurable(next, "resolve-conflict", { conflict:conflict });
+    if (!saved.ok) return saved;
     try { render(); } catch (_) {}
     toast(next.active && next.run
       ? "Hardcore resolved — keeping the run with " + (next.run.daysSurvived || 0) + " day" +
         ((next.run.daysSurvived || 0) === 1 ? "" : "s") + " survived." +
-        (archivedId ? " The other run was archived as a summary." : "")
-      : "Hardcore resolved — no run is active." + (archivedId ? " The other run was archived as a summary." : ""),
+        (archivedIds.length ? " Other distinct runs were archived as summaries." : "")
+      : "Hardcore resolved — no run is active." + (archivedIds.length ? " Other distinct runs were archived as summaries." : ""),
       "good");
-    return { ok: true, active: !!next.active, archivedRunId: archivedId };
+    return { ok: true, active: !!next.active, archivedRunId: archivedIds[0] || null, archivedRunIds:archivedIds };
   }
 
   function toast(message, kind) {

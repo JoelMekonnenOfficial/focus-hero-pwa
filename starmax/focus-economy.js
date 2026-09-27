@@ -37,9 +37,24 @@
     var map=new Map();
     [a,b].forEach(function(list){ (Array.isArray(list)?list:[]).forEach(function(e){
       if(!e||!e.id)return; var cur=map.get(e.id);
-      if(!cur || n(e.updatedAt||e.at)>=n(cur.updatedAt||cur.at)) map.set(e.id,clone(e));
+      if(!cur || eventWins(e,cur)) map.set(e.id,clone(e));
     }); });
-    return Array.from(map.values()).sort(function(x,y){return n(x.at)-n(y.at);});
+    return Array.from(map.values()).sort(function(x,y){return n(x.at)-n(y.at)||(String(x.id)<String(y.id)?-1:String(x.id)>String(y.id)?1:0);});
+  }
+  function stableEventText(value){
+    function ordered(v){
+      if(Array.isArray(v))return v.map(ordered);
+      if(v&&typeof v==="object"){var out={};Object.keys(v).sort().forEach(function(k){out[k]=ordered(v[k]);});return out;}
+      return v;
+    }
+    return JSON.stringify(ordered(value));
+  }
+  function eventWins(incoming,current){
+    /* Deletion is an explicit terminal decision, not a clock comparison.
+       A stale grant from a device with a faster clock cannot undo it. */
+    if(!!incoming.deleted!==!!current.deleted)return incoming.deleted===true;
+    var a=n(incoming.updatedAt||incoming.at),b=n(current.updatedAt||current.at);
+    return a>b||(a===b&&stableEventText(incoming)>stableEventText(current));
   }
   function normalized(raw){
     var e=(raw&&typeof raw==="object"&&!Array.isArray(raw))?clone(raw):{};
@@ -149,15 +164,17 @@
     var a=normalized(local), b=normalized(remote), out=normalized(a);
     Object.keys(b.grants).forEach(function(k){
       var x=a.grants[k], y=b.grants[k];
-      if(!x || n(y&&y.updatedAt)>=n(x&&x.updatedAt)) out.grants[k]=clone(y);
+      if(!x || eventWins(y,x)) out.grants[k]=clone(y);
     });
     out.spends=unionEvents(a.spends,b.spends);
     out.harvests=unionEvents(a.harvests,b.harvests);
     var pmap=new Map();
-    a.plots.concat(b.plots).forEach(function(p){ if(!p||!p.id)return; var cur=pmap.get(p.id); if(!cur||n(p.updatedAt)>=n(cur.updatedAt))pmap.set(p.id,clone(p)); });
+    a.plots.concat(b.plots).forEach(function(p){ if(!p||!p.id)return; var cur=pmap.get(p.id); if(!cur||eventWins(p,cur))pmap.set(p.id,clone(p)); });
     out.plots=Array.from(pmap.values()).sort(function(x,y){return String(x.id).localeCompare(String(y.id));}).slice(0,3);
     out.unlockedPlots=Math.max(a.unlockedPlots,b.unlockedPlots);
-    out.installedAt=Math.min.apply(null,[a.installedAt,b.installedAt].filter(Boolean).concat([Date.now()]));
+    out.version=Math.max(a.version,b.version);
+    var installed=[a.installedAt,b.installedAt].filter(Boolean);
+    out.installedAt=installed.length?Math.min.apply(null,installed):0;
     return normalized(out);
   };
 
@@ -507,7 +524,7 @@
   }
 
   function plotProgress(plot,availableFarmMinutes){var spec=plot&&CROPS[plot.crop];if(!spec)return 0;var available=availableFarmMinutes==null?totals().farmMinutes:int(availableFarmMinutes);return Math.max(0,Math.min(spec.required,available-int(plot.plantedAt)));}
-  function plant(plotId,cropId){var e=ensure(),p=e.plots.find(function(x){return x.id===plotId;}),spec=CROPS[cropId];if(!p||!spec||p.crop)return false;if(!spend("plant",{materials:{seed:1}},{crop:cropId})){window.toast("You need 1 seed.","warn");return false;}var plantedAt=totals().farmMinutes;e=ensure();p=e.plots.find(function(x){return x.id===plotId;});if(!p)return false;p.crop=cropId;p.plantedAt=plantedAt;p.updatedAt=Date.now();saveRender();return true;}
+  function plant(plotId,cropId){var e=ensure(),p=e.plots.find(function(x){return x.id===plotId;}),spec=CROPS[cropId];if(!p||!spec||p.crop)return false;if(!spend("plant",{materials:{seed:1}},{crop:cropId})){window.toast("You need 1 seed.","warn");return false;}var plantedAt=totals().farmMinutes;e=ensure();p=e.plots.find(function(x){return x.id===plotId;});if(!p)return false;p.crop=cropId;p.plantedAt=plantedAt;p.updatedAt=Date.now();p.plantingId=id("crop");saveRender();return true;}
   function recordHarvest(e,p,at){
     var spec=p&&CROPS[p.crop];if(!e||!p||!spec)return null;
     var baseYield=clone(spec.yield),utility=null;
@@ -515,9 +532,16 @@
       try{utility=window.fhGearUtilityHarvestYield(baseYield,S(),{crop:p.crop,plotId:p.id});}catch(_){utility=null;}
     }
     var actualYield=utility&&plainObject(utility.yield)?clone(utility.yield):baseYield;
-    var h={id:id("harvest"),plotId:p.id,crop:p.crop,yield:actualYield,at:at,updatedAt:at};
+    /* A crop is one claim shared across devices. New harvest ids derive from
+       the planted crop, not the device/action clock. The legacy fingerprint
+       also protects already-growing crops without rewriting old harvests. */
+    var cropKey=stableEventText([p.id,p.crop,p.plantedAt,p.updatedAt,p.plantingId||null]);
+    var harvestId="harvest_crop:"+encodeURIComponent(cropKey);
+    var h={id:harvestId,plotId:p.id,crop:p.crop,yield:actualYield,at:at,updatedAt:at,cropKey:cropKey};
     if(utility&&utility.applied)h.gearUtility={version:1,harvestYieldPct:int(utility.harvestYieldPct),bonus:clone(utility.bonus||{}),sources:(utility.sources||[]).slice(0,5)};
-    e.harvests.push(h);p.crop=null;p.plantedAt=0;p.updatedAt=at;return {event:h,name:spec.name};
+    var existing=e.harvests.find(function(row){return row&&row.id===harvestId;});
+    if(!existing)e.harvests.push(h);
+    p.crop=null;p.plantedAt=0;p.updatedAt=at;return {event:existing||h,name:spec.name};
   }
   function harvest(plotId){var e=ensure(),p=e.plots.find(function(x){return x.id===plotId;}),spec=p&&CROPS[p.crop];if(!p||!spec)return false;var available=totals().farmMinutes;e=ensure();p=e.plots.find(function(x){return x.id===plotId;});spec=p&&CROPS[p.crop];if(!p||!spec||plotProgress(p,available)<spec.required)return false;var result=recordHarvest(e,p,Date.now());window.toast(result.name+" harvested.","good");saveRender();return true;}
   function harvestAllReady(){
