@@ -34,7 +34,9 @@ Initial source under review: candidate `4176f7d`, followed by the authenticated-
 - Re-entering the same identity retains its protocol minimum and confirmed revision; it cannot authorize a downgrade. Different target identities keep their own separate floor.
 - Verified protocol pins survive browser reload and reject revision-increasing encrypted downgrades.
 
-All 19 end-to-end scenarios pass, including preserved offline work, expected mixed-version refusals and safe catch-up after updating. **A green test run is not deployment approval.**
+- Shared calendar receipts, the authenticated protocol minimum and cloud revision commit together and survive reload. Conflicting calendar choices refuse before changing either device's recorded state or the cloud row.
+
+All 21 end-to-end scenarios pass, including preserved offline work, expected mixed-version refusals and safe catch-up after updating. **A green test run is not deployment approval.**
 
 ## Rollout boundary and limitations
 

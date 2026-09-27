@@ -1101,6 +1101,13 @@ html[data-wallpaper="on"] .card{
 .theme-swatch .chips i{flex:1;display:block}
 .theme-swatch .tn{font-size:.74rem;line-height:1.15;color:var(--ink-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .theme-grid .grp{grid-column:1/-1;font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-mute);margin:.45rem 0 -.2rem}
+/* Native select widths differ across platforms. Give narrow theme controls a
+   full row instead of competing with their labels for the same grid track. */
+@media(max-width:480px){
+  #theme-modal .form-row{grid-template-columns:minmax(0,1fr);gap:6px}
+  #theme-modal .form-row .val{min-width:0;max-width:100%;width:100%}
+  #theme-modal .form-row select{min-width:0;max-width:100%;width:100%}
+}
 h4.sec-h{margin:.25rem 0;font-size:.82rem;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.1em}
 
 /* ================= clock styles ==========================================

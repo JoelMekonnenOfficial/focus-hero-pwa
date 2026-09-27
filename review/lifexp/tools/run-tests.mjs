@@ -82,6 +82,8 @@ try {
   }
   const concurrency = Math.max(1, Math.min(2, Number(process.env.LIFEXP_TEST_WORKERS) || 2));
   await Promise.all(Array.from({ length:concurrency }, () => worker()));
+  // Final artifact publication has one writer after all per-suite updates end.
+  await writeFile(resolve(logs, 'summary.json'), JSON.stringify(results, null, 2) + '\n');
   const failures = results.filter(result => !result.passed);
   console.log(`${results.length - failures.length}/${results.length} suites passed. Logs: test-results/`);
   process.exitCode = failures.length ? 1 : 0;

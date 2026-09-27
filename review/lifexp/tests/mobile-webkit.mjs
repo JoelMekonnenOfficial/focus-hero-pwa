@@ -110,11 +110,19 @@ try{
         gridTemplateColumns:s.gridTemplateColumns,display:s.display,font:s.font,whiteSpace:s.whiteSpace
       };};
       const bounds=el.getBoundingClientRect();
-      return {viewport:innerWidth,modal:box(el),controls:[...el.querySelectorAll('.form-row,.val,select,input,.timer-style-preview,.theme-grid')].map(box),
+      const rowOverflow=[...el.querySelectorAll('.form-row')].flatMap(row=>[...row.querySelectorAll('label,.val,select,input,button')].filter(node=>{
+        const r=node.getBoundingClientRect(),parent=(node.closest('.val')||row).getBoundingClientRect(),rowBox=row.getBoundingClientRect();
+        return r.width>0&&(r.left<parent.left-1||r.right>parent.right+1||r.left<rowBox.left-1||r.right>rowBox.right+1);
+      }).map(box));
+      return {viewport:innerWidth,modal:box(el),rowOverflow,controls:[...el.querySelectorAll('.form-row,.val,select,input,.timer-style-preview,.theme-grid')].map(box),
         overflow:[...el.querySelectorAll('*')].filter(node=>{const r=node.getBoundingClientRect();return r.width>0&&(r.right>bounds.right+1||r.left<bounds.left-1);}).map(box)};
     });
-    layoutMeasurements.push({width,chooser});console.log('LAYOUT',JSON.stringify({width,chooser}));
+    layoutMeasurements.push({width,chooser});
+    console.log('LAYOUT modal',JSON.stringify({viewportWidth:width,...chooser.modal}));
+    for(const [index,control] of chooser.controls.entries())console.log('LAYOUT control',JSON.stringify({viewportWidth:width,index,...control}));
+    console.log('LAYOUT row overflow',JSON.stringify({width,rows:chooser.rowOverflow}));
     check(`theme chooser fits ${width}px WebKit viewport`,chooser.modal.scrollWidth<=chooser.modal.clientWidth+2);
+    check(`visible theme controls stay inside their rows at ${width}px`,chooser.rowOverflow,[]);
     await page.locator('#theme-modal [data-close]').click();
     const layout=await page.evaluate(()=>({viewport:innerWidth,root:document.documentElement.scrollWidth,body:document.body.scrollWidth}));
     check(`main layout has no horizontal overflow at ${width}px`,layout.root<=width+2&&layout.body<=width+2&&layout.viewport<=width+2);
