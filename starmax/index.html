@@ -8293,7 +8293,7 @@ function notifySaveFailure(err){
     toast(msg, "bad", [{ label:"Export", onClick:()=>{
       const { blob, fname } = buildBackupBlob({ labelSuffix:"-storage-warning" });
       triggerDownload(blob, fname);
-    }}]);
+    }}], {record:false});
   } catch(_){}
 }
 /* ---- v10.8.1 storage relief, merged into v10.9.5 -----------------------
@@ -8846,8 +8846,11 @@ function openNotificationCentre(){
      visible on the pass that actually shows it. */
   setTimeout(()=>{ markNotificationsSeen(); renderNotificationCentre(); }, 900);
 }
-function toast(msg, kind="", actions=[]){
-  recordNotification(msg, kind);
+function toast(msg, kind="", actions=[], options={}){
+  /* A storage-failure warning must remain display-only. Appending it to the
+     profile while a durable save rejects makes a guarded merge rollback look
+     like newer player activity, leaving an unsaved union in memory. */
+  if(options.record!==false)recordNotification(msg, kind);
   const wrap = $("#toasts");
   const el = document.createElement("div");
   el.className = "toast " + (kind||"");
