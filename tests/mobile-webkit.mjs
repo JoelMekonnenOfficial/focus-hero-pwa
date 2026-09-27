@@ -12,7 +12,7 @@ const port=Number(process.argv[2]);
 assert(Number.isInteger(port)&&port>0&&port<65536,'a loopback source-server port is required');
 const browser=await webkit.launch(process.env.LIFEXP_WEBKIT_PATH?{executablePath:process.env.LIFEXP_WEBKIT_PATH}:{});
 const ctx=await browser.newContext({serviceWorkers:'block',acceptDownloads:false,viewport:{width:390,height:844},isMobile:true,hasTouch:true,deviceScaleFactor:2,timezoneId:'America/Toronto'});
-const rows=[],errors=[];
+const rows=[],errors=[],layoutMeasurements=[];
 const check=(label,actual,expected=true)=>{assert.deepEqual(actual,expected,label);rows.push({label,actual});console.log('PASS',label);};
 await ctx.route('**/*',route=>{const url=new URL(route.request().url());return url.hostname==='127.0.0.1'&&url.port===String(port)?route.continue():route.abort('blockedbyclient');});
 const page=await ctx.newPage();
@@ -103,7 +103,18 @@ try{
     await page.setViewportSize({width,height:844});
     await page.locator('#btn-theme').click();await page.locator('.theme-swatch[data-theme="afterglow"]').click();
     check(`Afterglow theme applies at ${width}px`,await page.getAttribute('html','data-theme'),'afterglow');
-    check(`theme chooser fits ${width}px WebKit viewport`,await page.locator('#theme-modal .modal').evaluate(el=>el.scrollWidth<=el.clientWidth+2));
+    const chooser=await page.locator('#theme-modal .modal').evaluate(el=>{
+      const box=node=>{const r=node.getBoundingClientRect(),s=getComputedStyle(node);return{
+        tag:node.tagName,id:node.id,className:String(node.className),left:r.left,right:r.right,width:r.width,
+        clientWidth:node.clientWidth,scrollWidth:node.scrollWidth,minWidth:s.minWidth,maxWidth:s.maxWidth,
+        gridTemplateColumns:s.gridTemplateColumns,display:s.display,font:s.font,whiteSpace:s.whiteSpace
+      };};
+      const bounds=el.getBoundingClientRect();
+      return {viewport:innerWidth,modal:box(el),controls:[...el.querySelectorAll('.form-row,.val,select,input,.timer-style-preview,.theme-grid')].map(box),
+        overflow:[...el.querySelectorAll('*')].filter(node=>{const r=node.getBoundingClientRect();return r.width>0&&(r.right>bounds.right+1||r.left<bounds.left-1);}).map(box)};
+    });
+    layoutMeasurements.push({width,chooser});console.log('LAYOUT',JSON.stringify({width,chooser}));
+    check(`theme chooser fits ${width}px WebKit viewport`,chooser.modal.scrollWidth<=chooser.modal.clientWidth+2);
     await page.locator('#theme-modal [data-close]').click();
     const layout=await page.evaluate(()=>({viewport:innerWidth,root:document.documentElement.scrollWidth,body:document.body.scrollWidth}));
     check(`main layout has no horizontal overflow at ${width}px`,layout.root<=width+2&&layout.body<=width+2&&layout.viewport<=width+2);
@@ -113,9 +124,13 @@ try{
   check('WebKit reports no page errors',errors,[]);
   await mkdir(new URL('../test-results/',import.meta.url),{recursive:true});
   await page.screenshot({path:fileURLToPath(new URL('../test-results/mobile-webkit.png',import.meta.url))});
+}catch(error){
+  await mkdir(new URL('../test-results/',import.meta.url),{recursive:true});
+  try{await page.screenshot({path:fileURLToPath(new URL('../test-results/mobile-webkit-failure.png',import.meta.url))});}catch{}
+  throw error;
 }finally{
   await mkdir(new URL('../test-results/',import.meta.url),{recursive:true});
-  await writeFile(new URL('../test-results/mobile-webkit.json',import.meta.url),JSON.stringify({engine:'WebKit',scope:'isolated engine coverage, not physical iPhone/PWA certification',checks:rows,errors},null,2));
+  await writeFile(new URL('../test-results/mobile-webkit.json',import.meta.url),JSON.stringify({engine:'WebKit',scope:'isolated engine coverage, not physical iPhone/PWA certification',checks:rows,errors,layoutMeasurements},null,2));
   await ctx.close();await browser.close();
 }
 console.log(`${rows.length} WebKit checks passed.`);
