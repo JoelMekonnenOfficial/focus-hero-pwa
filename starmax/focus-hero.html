@@ -10694,7 +10694,7 @@ function commitFocusTimerSession(claim, minutes){
   const durableClaim=normalizePendingFocusClaim(state?.pendingFocusClaim);
   const claimCleared=!!(claimSessionId&&durableClaim&&durableClaim.sessionId===claimSessionId&&clearPendingFocusClaim(claimSessionId,{save:false}));
   renderAll();
-  if (state.settings.autoStart){ setTimeout(startTimer, 900); }
+  if (state.settings.autoStart && statePersistenceBarrierDepth === 0){ setTimeout(startTimer, 900); }
   return { ok:true, duplicate:false, claimCleared, sessionId:sessionRecord.id, record:sessionRecord };
 }
 function completeSession(){
@@ -20442,6 +20442,12 @@ async function deleteSessionRecord(sessionId){
     console.warn("Session deletion stopped because its verified recovery copy could not be staged", error);
     return { ok:false, reason:"safe backup could not be staged; nothing was deleted" };
   }
+  /* The backup can finish after newer activity. Rebase only to the exact
+     verified current bytes, then mark this entirely synchronous mutation's
+     final state so a later save failure cannot restore a pre-backup snapshot. */
+  const finishAccountingMutation=window.__fhAccountingBoundary?.prepareSynchronousMutation("deleteSessionRecord",preserved.raw);
+  const deletedRecord=JSON.parse(JSON.stringify(rec));
+  try {
   const day = fitnessDayForRecord(rec) || todayKey();
   const minutes = rec.minutes | 0;
   const xp = rec.xp | 0;
@@ -20528,7 +20534,8 @@ async function deleteSessionRecord(sessionId){
   }
   renderAll();
   dismissDeletedSessionUi(sessionId);
-  return { ok:true, minutesRemoved: minutes, xpRemoved: xp, lootRemoved };
+  return { ok:true, minutesRemoved: minutes, xpRemoved: xp, lootRemoved, deletedRecord };
+  } finally { if(finishAccountingMutation)finishAccountingMutation(); }
 }
 function sessionRecordById(sessionId){
   return (state.sessionsLog||[]).find(r=>r&&r.id===sessionId) || null;
@@ -25308,7 +25315,15 @@ else boot();
     }
     return false;
   }
-  function wrap(name){ var orig=window[name]; if (typeof orig!=="function"||orig.__fhtWrapped) return; var w=function(){ var suppressRewards=wrappedMutationIsTimeOnly(name,arguments); var r=orig.apply(this,arguments); if(r&&typeof r.then==="function")return r.then(function(result){if(result&&(result.ok===false||result.duplicate===true))return result;fhTargetsCheck({suppressRewards:suppressRewards,accountingCritical:true});return result;}); if(r&&(r.ok===false||r.duplicate===true))return r; fhTargetsCheck({suppressRewards:suppressRewards,accountingCritical:true}); return r; }; w.__fhtWrapped=true; try{ window[name]=w; }catch(_){} }
+  function checkTargetsAfterAwait(name,suppressRewards){
+    /* Deletion's core and reward layers share one owner across their awaited
+       continuations. A target award must not land on a newer adopted state. */
+    var finishMutation=name==="deleteSessionRecord"&&window.__fhAccountingBoundary
+      ?window.__fhAccountingBoundary.resumeSynchronousMutation(name):null;
+    try{fhTargetsCheck({suppressRewards:suppressRewards,accountingCritical:true});}
+    finally{if(finishMutation)finishMutation();}
+  }
+  function wrap(name){ var orig=window[name]; if (typeof orig!=="function"||orig.__fhtWrapped) return; var w=function(){ var suppressRewards=wrappedMutationIsTimeOnly(name,arguments); var r=orig.apply(this,arguments); if(r&&typeof r.then==="function")return r.then(function(result){if(result&&(result.ok===false||result.duplicate===true))return result;checkTargetsAfterAwait(name,suppressRewards);return result;}); if(r&&(r.ok===false||r.duplicate===true))return r; fhTargetsCheck({suppressRewards:suppressRewards,accountingCritical:true}); return r; }; w.__fhtWrapped=true; try{ window[name]=w; }catch(_){} }
   ["commitFocusTimerSession","finalizeStopwatch","applyTaskTimeAdjustment","applySessionEdit","deleteSessionRecord"].forEach(wrap);
   (function(){ var orig=window.renderAll; if (typeof orig==="function" && !orig.__fhtWrapped){ var w=function(){ var r=orig.apply(this,arguments); try{ renderCard(); }catch(_){} return r; }; w.__fhtWrapped=true; window.renderAll=w; } })();
 

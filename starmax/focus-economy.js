@@ -349,7 +349,21 @@
     }
     var del=window.deleteSessionRecord;
     if(typeof del==="function"&&!del.__fh105){
-      var dw=async function(sessionId){var rec=(S().sessionsLog||[]).find(function(r){return r&&r.id===sessionId;}),snapshot=rec?clone(rec):null,coins=rec?int(rec.coins):0;var r=await del.apply(this,arguments);if(r&&r.ok){if(coins)applyCoinDelta(-coins);reverseGrant(sessionId);if(snapshot&&snapshot.rewarded)applyEggMinuteCorrection(-int(snapshot.minutes),"egg_session_delete_"+String(sessionId)+"_"+(latestEditId()||"noedit"),false,{ownerId:sessionId,taskId:snapshot.taskId||"",kind:"session-delete"});saveRender();}return r;};dw.__fh105=true;window.deleteSessionRecord=dw;
+      var dw=async function(sessionId){
+        var r=await del.apply(this,arguments);
+        if(r&&r.ok){
+          var finishMutation=window.__fhAccountingBoundary.resumeSynchronousMutation("deleteSessionRecord");
+          try{
+            var snapshot=r.deletedRecord;
+            if(!snapshot||snapshot.id!==sessionId)throw new Error("Verified deleted-session reward receipt is unavailable.");
+            var coins=int(snapshot.coins);
+            if(coins)applyCoinDelta(-coins);reverseGrant(sessionId);
+            if(snapshot.rewarded)applyEggMinuteCorrection(-int(snapshot.minutes),"egg_session_delete_"+String(sessionId)+"_"+(latestEditId()||"noedit"),false,{ownerId:sessionId,taskId:snapshot.taskId||"",kind:"session-delete"});
+            saveRender();
+          }finally{if(finishMutation)finishMutation();}
+        }
+        return r;
+      };dw.__fh105=true;window.deleteSessionRecord=dw;
     }
   }
 
@@ -359,7 +373,7 @@
     var claim=args&&args[0], claimId=claim&&claim.sessionId;
     var rec=newRecord(before) || (result&&result.record) || (claimId?(S().sessionsLog||[]).find(function(r){return r&&r.id===claimId;}):null);
     if(rec&&!(result&&result.duplicate===true)){rec.priorityRun=!!priorityPassed;rec.priorityVerified=!!priorityPassed||!!rec.priorityVerified;var raw=int(rec.xpRaw!=null?rec.xpRaw:rec.xp),actual=rec.rewarded?int(window.rewardXpTotal(raw)):0;var ctx={xpRaw:raw,xp:actual,xpMultiplier:raw?actual/raw:1,coins:rec.rewarded?int(window.computeCoins(rec.minutes,true)):0,coinBase:rec.rewarded?int(window.computeCoins(rec.minutes,false)):0,combo:int(rec.comboPriorCount),streak:int(rec.streakForCalc)};ctx.coinMultiplier=ctx.coinBase?ctx.coins/ctx.coinBase:1;patchRecord(rec,ctx);upsertGrant(rec);}
-    S().timer.priorityRun=false;saveRender();return result;
+    if(rec&&!(result&&(result.duplicate||result.noChange||result.ok===false)))S().timer.priorityRun=false;saveRender();return result;
   }
   function prioritySucceededForRun(claim){
     if(claim&&typeof claim==="object"&&Object.prototype.hasOwnProperty.call(claim,"priorityRun"))return !!claim.priorityRun;
@@ -436,23 +450,49 @@
           if(!taskOpts.operationId)taskOpts.operationId=commandToken;
           arguments[2]=taskOpts;
         }
-        accountingCommandActive={name:name,token:commandToken};
+        var ownedState=S(),ownedRaw=JSON.stringify(S());
+        var rememberOwnedState=function(){ownedState=S();ownedRaw=JSON.stringify(ownedState);};
+        var stillOwnsState=function(){try{return S()===ownedState&&JSON.stringify(S())===ownedRaw;}catch(_){return false;}};
+        var activeCommand={name:name,token:commandToken,resumeMutation:function(){
+          if(accountingCommandActive!==activeCommand||!stillOwnsState())throw new Error("Accounting continuation state changed; mutation refused.");
+          return function(){
+            if(accountingCommandActive!==activeCommand)throw new Error("Accounting mutation ownership changed.");
+            rememberOwnedState();
+          };
+        },prepareMutation:function(raw){
+          if(accountingCommandActive!==activeCommand||typeof raw!=="string"||JSON.stringify(S())!==raw)throw new Error("Accounting pre-mutation state changed; mutation refused.");
+          snapshot=JSON.parse(raw);rememberOwnedState();
+          return function(){
+            if(accountingCommandActive!==activeCommand)throw new Error("Accounting mutation ownership changed.");
+            rememberOwnedState();
+          };
+        }};
+        accountingCommandActive=activeCommand;
         var deferAutoStart=name==="commitFocusTimerSession"&&!!(S()&&S().settings&&S().settings.autoStart);
-        if(deferAutoStart)S().settings.autoStart=false;
         if(typeof window.beginStatePersistenceBarrier==="function")window.beginStatePersistenceBarrier();
-        var result, failure=null;
+        var result, failure=null,originalReturned=false,newerFailure=false,newerRefusal=false;
         try{
-          result=await original.apply(this,arguments);
+          var pendingCommand=original.apply(this,arguments);
+          originalReturned=true;rememberOwnedState();
+          result=await pendingCommand;
           if(accountingResultDoesNotCommit(result)){
-            window.state=snapshot;
+            if(stillOwnsState())window.state=snapshot;
+            else newerRefusal=true;
           }
         }catch(error){
-          window.state=snapshot;
+          if(!originalReturned||stillOwnsState())window.state=snapshot;
+          else newerFailure=true;
           failure=error;
         }finally{
           if(typeof window.endStatePersistenceBarrier==="function")window.endStatePersistenceBarrier();
         }
         if(failure){
+          if(newerFailure){
+            if(typeof window.activateAccountingStorageIndeterminate==="function")window.activateAccountingStorageIndeterminate({reason:"An accounting action failed after newer activity arrived. Newer data was retained; its accounting result needs verification.",source:"accounting:"+name,rollbackVerified:false},{show:false});
+            try{window.toast("The action failed while newer activity arrived. Newer data was kept; accounting is paused until storage can be verified.","warn");}catch(_){}
+            accountingCommandActive=null;
+            return Object.assign(storageIndeterminateResult(failure),{newerStatePreserved:true});
+          }
           renderAccountingSnapshotWithoutPersistence(snapshot);
           try{window.toast("Accounting action rolled back safely. Nothing was saved.","warn");}catch(_){}
           console.warn("[Life XP] accounting command rolled back",name,failure);
@@ -460,12 +500,18 @@
           return {ok:false,reason:"accounting_rolled_back",error:failure&&failure.message||String(failure)};
         }
         if(accountingResultDoesNotCommit(result)){
-          renderAccountingSnapshotWithoutPersistence(snapshot);
+          /* A refusal is not authority to replace another actor's state. A
+             delayed backup refusal/not-found result has changed no accounting
+             itself, so preserve the newer state without manufacturing a lock. */
+          if(!newerRefusal)renderAccountingSnapshotWithoutPersistence(snapshot);
           accountingCommandActive=null;
-          return result;
+          return newerRefusal?Object.assign({},result,{newerStatePreserved:true}):result;
         }
-        if(deferAutoStart&&S()&&S().settings)S().settings.autoStart=true;
         var persistenceOk=false,persistenceError=null,commandState=S(),commandRaw=JSON.stringify(S());
+        var autoTimer=commandState&&commandState.timer;
+        var autoStartReceipt=function(s){return JSON.stringify([s&&s.timer,s&&s.fh11Clocks,s&&s.activeTaskId,
+          s&&s.settings&&[s.settings.autoStart,s.settings.gameMode,s.settings.priorityMode,s.settings.lockedInXpPct],s&&s.adventure&&s.adventure.action]);};
+        var autoStartRaw=deferAutoStart?autoStartReceipt(commandState):null;
         try{
           if(typeof window.saveStateDurable!=="function")throw new Error("durable primary save is unavailable");
           var pendingSave=window.saveStateDurable({source:"accounting:"+name});
@@ -501,7 +547,12 @@
             error:persistenceError&&persistenceError.message||window.saveState?._lastPrimarySave?.error||"primary state save failed"
           };
         }
-        if(deferAutoStart)setTimeout(function(){try{window.startTimer();}catch(_){}},900);
+        if(deferAutoStart&&!(result&&result.duplicate))setTimeout(function(){
+          try{
+            var live=S();
+            if(live===commandState&&live.timer===autoTimer&&live.settings&&live.settings.autoStart&&autoStartReceipt(live)===autoStartRaw)window.startTimer();
+          }catch(_){}
+        },900);
         accountingCommandActive=null;
         return result;
       };
@@ -519,6 +570,14 @@
       transitional:true,
       receiptJournal:false,
       commands:ACCOUNTING_COMMANDS.slice(),
+      resumeSynchronousMutation:function(name){
+        if(!accountingCommandActive||accountingCommandActive.name!==name)throw new Error("Accounting continuation has no active owner.");
+        return accountingCommandActive.resumeMutation();
+      },
+      prepareSynchronousMutation:function(name,raw){
+        if(!accountingCommandActive||accountingCommandActive.name!==name)return null;
+        return accountingCommandActive.prepareMutation(raw);
+      },
       active:function(){return accountingCommandActive;}
     };
   }
