@@ -14,7 +14,7 @@ Older parked clocks did not store every setting. Their recorded Priority flag ca
 
 Equipment supports combat through damage, defense, critical chance and related combat stats. Gear no longer provides XP, coin, energy-discount, loot-quality or farm-yield perks. Existing items and historical earnings are retained. Old saved noncombat affixes are inactive; new affixes are combat effects.
 
-Fight drops use regional equipment pools. Peaceful actions retain their resource and consumable rewards. Defeat five normal enemies and the regional boss to clear a route, then cover 60 distance through Travel to unlock the next world. Equipped mounts increase travel speed by 7–22%, depending on tier. Distance never multiplies credited focus minutes. Already unlocked worlds remain open, and previously earned maps and shards remain owned.
+Fight drops use regional equipment pools. Peaceful actions retain their resource and consumable rewards. Defeat five normal enemies and the regional boss to clear a route, then cover 60 distance through Travel to unlock the next world. Equipped mounts increase travel speed by 7–22%, depending on tier. Distance never multiplies credited focus minutes. Already unlocked worlds remain open, and previously earned maps and shards remain owned. Later session-time corrections do not retract earned route progress or re-lock worlds.
 
 ## Ranked Standing
 

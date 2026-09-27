@@ -123,4 +123,49 @@ test('Prior policy-3 receipts remain valid without loosening their proof require
   assert.equal(w.lrNormalizeSessionRewardReceipt('prior-three',prior).policyVersion,3);
   const bad=clone(prior);delete bad.semanticCommitment;assert.throws(()=>w.lrNormalizeSessionRewardReceipt('prior-three',bad),/semantic commitment/);
 });
+// Additional adversarial scenarios from independent review.
+test('Only actual victories can grant Fight equipment or route wins',()=>{
+  let losses=0;
+  for(let seed=0;seed<60;seed++){
+    const s=fresh();s.hero.level=50;s.hero.hp=1;s.world.currentZone='astral_plains';w.state=s;
+    const result=w.lrSessionEndLootPipeline('Fight',90,'independent-losing-fight-'+seed,{zoneId:'astral_plains'});
+    assert(result.encounters.length>0);
+    const winners=new Set(result.encounters.filter(e=>e.killed).map(e=>e.enemy.id));
+    losses+=result.encounters.filter(e=>!e.killed).length;
+    assert(result.drops.every(d=>winners.has(d.enemyId)));
+    assert.equal(w.wdJourneyStatus(s,'astral_plains').enemyWins,result.encounters.filter(e=>e.killed&&!e.enemy.boss).length);
+  }
+  assert(losses>0,'fixture must include actual losses');
+});
+test('Each world records exactly its actual non-boss wins and captured origin',()=>{
+  for(const zone of Object.keys(w.WD_ZONES)){
+    const s=fresh();s.hero.level=100;s.world.currentZone='verdant_vale';w.state=s;
+    const id='independent-route-'+zone,result=w.lrSessionEndLootPipeline('Fight',120,id,{zoneId:zone});
+    const row=s.world.journeySessionRewards['session:'+id];
+    assert.equal(row.enemyWins,result.encounters.filter(e=>e.killed&&!e.enemy.boss).length);
+    assert.equal(row.bossDefeated,result.encounters.some(e=>e.killed&&e.enemy.boss));
+    assert.equal(row.zoneId,zone);assert.equal(s.world.currentZone,'verdant_vale');
+    for(const d of result.drops.filter(d=>!d.mountReason))assert(w.wdGearForZone(zone).includes(d.templateId));
+  }
+});
+test('Mismatched session replay fails before adding route credit or loot',()=>{
+  const s=fresh();w.state=s;w.lrSessionEndLootPipeline('Fight',25,'independent-repeat',{zoneId:'verdant_vale'});
+  const saved=JSON.stringify(s);
+  assert.throws(()=>w.lrSessionEndLootPipeline('Travel',25,'independent-repeat',{zoneId:'frostpeak'}),/semantic mismatch/);
+  assert.equal(JSON.stringify(s),saved);
+  assert.throws(()=>w.lrSessionEndLootPipeline('Fight',90,'independent-repeat'),/semantic mismatch/);
+  assert.equal(JSON.stringify(s),saved);
+});
+test('Replay after world switch retains the original proof and gives nothing twice',()=>{
+  const s=fresh();w.state=s;w.lrSessionEndLootPipeline('Fight',25,'independent-zone-replay',{zoneId:'verdant_vale'});
+  s.world.currentZone='frostpeak';const saved=JSON.stringify(s);
+  const result=w.lrSessionEndLootPipeline('Fight',25,'independent-zone-replay',{zoneId:'frostpeak'});
+  assert(result.duplicate);assert.equal(result.zoneId,'verdant_vale');assert.equal(JSON.stringify(s),saved);
+});
+test('Unknown world fails with no credited route or economic change',()=>{
+  const s=fresh();w.lrEnsureShape(s);w.state=s;const before=clone(s);
+  assert.throws(()=>w.lrSessionEndLootPipeline('Travel',120,'independent-bad-world',{zoneId:'missing_world'}),/Unknown session world/);
+  assert.equal(s.totalFocusMin,before.totalFocusMin);assert.equal(s.coins,before.coins);assert.deepEqual(s.hero,before.hero);
+  assert(!s.world.journeySessionRewards?.['session:independent-bad-world']);
+});
 console.log(`${checks} gameplay regression checks passed`);
