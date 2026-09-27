@@ -24,6 +24,7 @@ function fixture(mode){
     hasSupabase:()=>true,sha256:async()=>'synthetic-hash',derivePlayerId:async()=>'synthetic-player',now:()=>100,
     syncControlError:(code,message)=>Object.assign(new Error(message),{code}),safeClaimErrorMessage:e=>e.message,
     cloudStateFingerprint:async()=>'synthetic-fingerprint',noteCloudProtocol(){},
+    assertCloudReadFloor:(row,version,sync)=>{assert.equal(version,2);assert(row.cloud_rev>=sync.cloudRev);},
     clearCloudRetryTimer(){},clearPendingCloudAdoption(){},renderAll(){},renderSyncStatus(){},renderSecurityPanel(){},toast(){},
     renderPendingCloudAdoption(){},startPullPoll(){},scheduleCloudRetry(){},flushHardcoreMergeNotices(){},
     async fetchCloudRemote(){

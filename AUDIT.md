@@ -26,6 +26,8 @@ RELEASE_NOTES.md describes the exact rules and older-clock limitations.
 
 The prior complete-bundle integrity gate remains: executable files carry SHA-384 receipts, incomplete bundles stop before primary hydration, and an offline cache identifies its exact content. The failed-pull, asynchronous rollback, reward continuation, duplicate harvest, Hardcore evidence and task-text injection corrections are retained.
 
+The additional calendar review reproduced a failed-pull rollback error caused by synchronous save preparation changing the comparison bytes. Rollback now captures the exact prepared state before awaiting the save and still refuses to overwrite newer work. Source inspection found the same stale-restoration risk in identity claim/adoption failures. Eleven exact-source fault cases cover unchanged, prepared, newer-in-place and replacement states, explicit save refusal and a read failure before installation; the older implementation fails the newer-work case. These are synthetic checks of source behavior, not production recovery operations.
+
 ## Verification and limits
 
 The combined suite covers real encrypted three-device CAS exchanges, legacy refusal and in-place upgrade, lost replies, malformed receipts, edits during uploads, storage failures, calendar algebra, DST and timestamp ownership, ranking, world progression, clock races, task rendering, worker transitions and offline startup. WebKit coverage checks durable sessions, clock controls, mobile layouts, encryption and Toronto/Los Angeles/UTC boundaries, including 23- and 25-hour days.
@@ -40,7 +42,7 @@ The current supplied AGENTS.md requires a review/CI boundary that the source wri
 
 The GitHub integration now reports source push access to JoelMekonnenOfficial/focus-hero-pwa. Main is marked protected; its detailed protection settings remain inaccessible to the integration. The source submission is prepared under review/lifexp/, with read-only CI and historical paths preserved. Its sparse checkout excludes the historical backup folder. Adding this CI file alone does not establish required-review enforcement.
 
-The release authority should use the exact checked commit and publish only its 47 starmax/ assets through the existing Cloudflare Worker. The corrected Chrome profile currently requires Cloudflare sign-in. Public GET checks after release must verify identical build/bytes at /, /index.html, /focus-hero.html and /focus-hero, plus sealed modules.
+The release authority should use the exact checked commit and publish only its 47 starmax/ assets through the existing Cloudflare Worker. The corrected Chrome profile is signed in to the correct Cloudflare account and the existing Focus Hero deployment has been located. Public GET checks after release must verify identical build/bytes at /, /index.html, /focus-hero.html and /focus-hero, plus sealed modules.
 
 For rollout, finish and save current work, then close/reopen old app windows normally when ready. A waiting update may reflect another open window with unfinished work. Do not clear site data, caches, cookies or registrations; do not import an old copy or force-sync. Check the displayed build on each device before expecting new-format progress to sync. Older offline work stays on its device until it receives the compatible reader.
 
