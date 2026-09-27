@@ -47,7 +47,7 @@ if (!window.__focusHeroBrowserSmokeDisabled){
    loaded, validated, migrated, and synced only by the normal boot path. */
 (function prepaintFocusHeroPresentation(){
   const root=document.documentElement;
-  const allowedThemes=new Set(["dark","light","auto","forest","ocean","ember","cyber","minimal","nintendo","wow","aquarium","candy","citrus","meadow","sakura","sand","mist","arcade","vapor","galaxy","deepsea","aurora","aquariumdusk","slate","clay","moss","dusk","parchment","ash","seaglass","oat","pearl"]);
+  const allowedThemes=new Set(["dark","light","auto","forest","ocean","ember","cyber","minimal","nintendo","wow","aquarium","candy","citrus","meadow","sakura","sand","mist","arcade","vapor","galaxy","deepsea","aurora","aquariumdusk","slate","clay","moss","dusk","parchment","ash","seaglass","oat","pearl","afterglow","voltage","cobalt"]);
   const allowedLayouts=new Set(["dashboard","rail","deck","dock","split","mobile","focus","compact","zen","arcade","cockpit"]);
   const allowedShells=new Set(["classic","arcane","frontier","tactical"]);
   let settings={};
@@ -162,6 +162,31 @@ html[data-theme="cyber"]{
   --border:rgba(255,77,220,.10); --border-strong:rgba(255,77,220,.24);
   --shadow:0 12px 40px rgba(255,77,220,.18);
   --accent-rgb:255,77,220; --accent-2-rgb:61,245,232;
+}
+/* Complementary dark palettes: quiet surfaces and distinct paired accents. */
+html[data-theme="afterglow"]{
+  color-scheme:dark;
+  --bg:#160d1b; --bg-2:#20132a; --panel:#281c32; --panel-2:#342640; --ink:#fff2f8; --ink-dim:#e0c5d7; --ink-mute:#c9afc3; --accent:#ff9c86; --accent-2:#65e6df; --accent-rgb:255,156,134; --accent-2-rgb:101,230,223;
+  --good:#a6eec6; --warn:#ffdb8d; --bad:#ff94b3;
+  --border:rgba(255,156,134,.2); --border-strong:rgba(101,230,223,.5);
+  --shadow:0 12px 40px rgba(255,156,134,.15);
+}
+html[data-theme="voltage"]{
+  color-scheme:dark;
+  --bg:#100e22; --bg-2:#18142e; --panel:#221b39; --panel-2:#302646; --ink:#f6f2ff; --ink-dim:#d2c9ed; --ink-mute:#bfb5d7; --accent:#bc9cff; --accent-2:#d6f576; --accent-rgb:188,156,255; --accent-2-rgb:214,245,118;
+  --good:#a6eec6; --warn:#ffdb8d; --bad:#ff94b3;
+  --border:rgba(188,156,255,.2); --border-strong:rgba(214,245,118,.5);
+  --shadow:0 12px 40px rgba(188,156,255,.15);
+}
+html[data-theme="cobalt"]{
+  color-scheme:dark;
+  --bg:#071527; --bg-2:#0d2139; --panel:#132b46; --panel-2:#203c59; --ink:#f0f7ff; --ink-dim:#c4d7ee; --ink-mute:#b0c4de; --accent:#83c6ff; --accent-2:#ffd17b; --accent-rgb:131,198,255; --accent-2-rgb:255,209,123;
+  --good:#a6eec6; --warn:#ffdb8d; --bad:#ff94b3;
+  --border:rgba(131,198,255,.2); --border-strong:rgba(255,209,123,.5);
+  --shadow:0 12px 40px rgba(131,198,255,.15);
+}
+html:is([data-theme="afterglow"],[data-theme="voltage"],[data-theme="cobalt"]) .card{
+  background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 5%,var(--panel)),var(--panel) 70%);
 }
 [data-theme="minimal"]{
   --bg:#fafafa; --bg-2:#f0f1f5; --panel:#ffffff; --panel-2:#f5f6fa;
@@ -4542,6 +4567,9 @@ svg{shape-rendering:geometricPrecision}
       <option value="ocean">Ocean</option>
       <option value="ember">Sunset</option>
       <option value="cyber">Neon</option>
+      <option value="afterglow">Afterglow · coral &amp; cyan</option>
+      <option value="voltage">Voltage · violet &amp; lime</option>
+      <option value="cobalt">Cobalt &amp; Gold</option>
       <option value="minimal">Minimal</option>
       <option value="nintendo">Mushroom Kingdom</option>
       <option value="wow">Azeroth</option>
@@ -4589,6 +4617,7 @@ svg{shape-rendering:geometricPrecision}
       <option value="mobile">Mobile Stack</option>
     </select></div></div>
     <div class="form-row"><label>Color vibe</label><div class="val"><select id="cfg-color">
+      <option value="theme">Theme colors</option>
       <option value="mint">Mint focus</option>
       <option value="sapphire">Sapphire</option>
       <option value="violet">Violet</option>
@@ -4999,6 +5028,7 @@ svg{shape-rendering:geometricPrecision}
     <hr>
     <h4 style="margin:.25rem 0 .25rem;font-size:.82rem;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.1em">Color vibe</h4>
     <div class="color-choice-grid" aria-label="App color selection">
+      <button type="button" data-color-choice="theme" style="--chip-a:var(--accent);--chip-b:var(--accent-2)"><span class="color-dot"></span><b>Theme colors</b><span>matched contrast pair</span></button>
       <button type="button" data-color-choice="mint" style="--chip-a:#66e3c4;--chip-b:#8b9cff"><span class="color-dot"></span><b>Mint focus</b><span>clean + bright</span></button>
       <button type="button" data-color-choice="sapphire" style="--chip-a:#38bdf8;--chip-b:#6366f1"><span class="color-dot"></span><b>Sapphire</b><span>cool command</span></button>
       <button type="button" data-color-choice="violet" style="--chip-a:#a78bfa;--chip-b:#f0abfc"><span class="color-dot"></span><b>Violet</b><span>arcane studio</span></button>
@@ -21267,10 +21297,11 @@ function injectV76DomScaffolding(){
 const VALID_THEMES = ["dark","light","auto","forest","ocean","ember","cyber","minimal","nintendo","wow",
   "aquarium", "candy", "citrus", "meadow", "sakura", "sand", "mist", "arcade", "vapor", "galaxy", "deepsea", "aurora",
   "aquariumdusk", "slate", "clay", "moss", "dusk",
-  "parchment", "ash", "seaglass", "oat", "pearl"];
+  "parchment", "ash", "seaglass", "oat", "pearl", "afterglow", "voltage", "cobalt"];
 const THEME_LABELS = {
   dark:"Midnight", light:"Paper", auto:"Auto (system)",
   forest:"Forest", ocean:"Ocean", ember:"Sunset", cyber:"Neon", minimal:"Minimal",
+  afterglow:"Afterglow", voltage:"Voltage", cobalt:"Cobalt & Gold",
   nintendo:"Mushroom Kingdom", wow:"Azeroth",
   aquarium:"Aquarium", candy:"Candy", citrus:"Citrus", meadow:"Meadow",
   sakura:"Sakura", sand:"Sand", mist:"Mist",
@@ -21280,6 +21311,7 @@ const THEME_LABELS = {
   parchment:"Parchment", ash:"Ash", seaglass:"Seaglass", oat:"Oat", pearl:"Pearl"
 };
 const COLOR_PRESETS = {
+  theme: { label:"Theme colors" },
   mint:     { label:"Mint focus", accent:"#66e3c4", accent2:"#8b9cff" },
   sapphire: { label:"Sapphire",   accent:"#38bdf8", accent2:"#6366f1" },
   violet:   { label:"Violet",     accent:"#a78bfa", accent2:"#f0abfc" },
@@ -21569,11 +21601,12 @@ document.addEventListener("visibilitychange", ()=>{
    Before this they were buried in Settings and the Theme button only cycled a
    hardcoded list that did not include any theme added after it was written -
    so half the themes in the app were unreachable from the UI. */
-const THEME_SWATCHES = {"dark": ["#0b0d1a", "#66e3c4", "#7aa7ff"], "light": ["#f4f5fb", "#4a5ce0", "#8250e0"], "forest": ["#0c1310", "#7bc99a", "#c9b56a"], "ocean": ["#08111e", "#5cc4ff", "#7ee4d2"], "ember": ["#150906", "#ff8a3d", "#ffc66e"], "cyber": ["#05060d", "#ff4ddc", "#3df5e8"], "minimal": ["#fafafa", "#3a7bd5", "#6c63ff"], "nintendo": ["#1b2a6b", "#e8402a", "#ffd23f"], "wow": ["#0f0b07", "#c8a02c", "#4a86c8"], "aquarium": ["#63abc9", "#0d7ea6", "#f2a33c"], "candy": ["#ffe9f3", "#e8357f", "#8b5cf6"], "citrus": ["#fff3d9", "#e8710a", "#1fa363"], "meadow": ["#e7f5e3", "#2f9349", "#e0912a"], "sakura": ["#fdeef2", "#d9748f", "#8ba6cc"], "sand": ["#f5ede1", "#b5793f", "#5f8f90"], "mist": ["#edf1f5", "#5b83aa", "#7e9c8f"], "arcade": ["#fff7e0", "#ff2d6f", "#2d6fff"], "vapor": ["#f3e0ff", "#e03fc4", "#00bcd4"], "galaxy": ["#1a1040", "#a98bff", "#ff8ad8"], "deepsea": ["#06262e", "#2ed9c3", "#48a9f0"], "aurora": ["#0d1b2a", "#6ee7b7", "#a78bfa"], "aquariumdusk": ["#3d6274", "#6fd4e8", "#f0b366"], "slate": ["#3a4450", "#8ab4d8", "#b0c4a8"], "clay": ["#4a3f36", "#d9a273", "#9cb4a0"], "moss": ["#3a4a3e", "#8ecb9a", "#d8b878"], "dusk": ["#413a55", "#b39ae0", "#e8a0c0"], "parchment": ["#ece7dd", "#8a7a5c", "#6f7f78"], "ash": ["#e7e9ec", "#5f7286", "#7a8478"], "seaglass": ["#dee8e9", "#4f8088", "#94806a"], "oat": ["#ebe7de", "#96794f", "#6d8078"], "pearl": ["#eae9ee", "#6f6a8c", "#7d8a88"]};
+const THEME_SWATCHES = {"afterglow":["#160d1b","#ff9c86","#65e6df"],"voltage":["#100e22","#bc9cff","#d6f576"],"cobalt":["#071527","#83c6ff","#ffd17b"],"dark": ["#0b0d1a", "#66e3c4", "#7aa7ff"], "light": ["#f4f5fb", "#4a5ce0", "#8250e0"], "forest": ["#0c1310", "#7bc99a", "#c9b56a"], "ocean": ["#08111e", "#5cc4ff", "#7ee4d2"], "ember": ["#150906", "#ff8a3d", "#ffc66e"], "cyber": ["#05060d", "#ff4ddc", "#3df5e8"], "minimal": ["#fafafa", "#3a7bd5", "#6c63ff"], "nintendo": ["#1b2a6b", "#e8402a", "#ffd23f"], "wow": ["#0f0b07", "#c8a02c", "#4a86c8"], "aquarium": ["#63abc9", "#0d7ea6", "#f2a33c"], "candy": ["#ffe9f3", "#e8357f", "#8b5cf6"], "citrus": ["#fff3d9", "#e8710a", "#1fa363"], "meadow": ["#e7f5e3", "#2f9349", "#e0912a"], "sakura": ["#fdeef2", "#d9748f", "#8ba6cc"], "sand": ["#f5ede1", "#b5793f", "#5f8f90"], "mist": ["#edf1f5", "#5b83aa", "#7e9c8f"], "arcade": ["#fff7e0", "#ff2d6f", "#2d6fff"], "vapor": ["#f3e0ff", "#e03fc4", "#00bcd4"], "galaxy": ["#1a1040", "#a98bff", "#ff8ad8"], "deepsea": ["#06262e", "#2ed9c3", "#48a9f0"], "aurora": ["#0d1b2a", "#6ee7b7", "#a78bfa"], "aquariumdusk": ["#3d6274", "#6fd4e8", "#f0b366"], "slate": ["#3a4450", "#8ab4d8", "#b0c4a8"], "clay": ["#4a3f36", "#d9a273", "#9cb4a0"], "moss": ["#3a4a3e", "#8ecb9a", "#d8b878"], "dusk": ["#413a55", "#b39ae0", "#e8a0c0"], "parchment": ["#ece7dd", "#8a7a5c", "#6f7f78"], "ash": ["#e7e9ec", "#5f7286", "#7a8478"], "seaglass": ["#dee8e9", "#4f8088", "#94806a"], "oat": ["#ebe7de", "#96794f", "#6d8078"], "pearl": ["#eae9ee", "#6f6a8c", "#7d8a88"]};
 const THEME_GROUPS = [
   ["Bright & playful", ["aquarium","candy","citrus","meadow"]],
   ["Soft & calm",      ["sakura","sand","mist","light","minimal"]],
   ["Vivid & bold",     ["arcade","vapor","cyber","nintendo"]],
+  ["Contrast pairs",   ["afterglow","voltage","cobalt"]],
   ["Light & muted",    ["seaglass","parchment","ash","oat","pearl"]],
   ["Neutral & muted",  ["aquariumdusk","slate","clay","moss","dusk"]],
   ["Rich dark",        ["galaxy","deepsea","aurora","ocean","forest","ember","wow","dark"]],
@@ -21619,6 +21652,7 @@ function renderThemeGrid(){
       b.appendChild(chips); b.appendChild(n);
       b.addEventListener("click", ()=>{
         state.settings.theme = k;
+        if (["afterglow","voltage","cobalt"].includes(k)) state.settings.colorPreset = "theme";
         saveState(); applyTheme(); renderThemeGrid(); renderBackgroundRows();
       });
       grid.appendChild(b);
@@ -21700,10 +21734,15 @@ function applyColorPreset(){
   const accent2 = key === "custom" ? normalizeHexColor(state.settings.customAccent2, preset.accent2) : preset.accent2;
   const root = document.documentElement;
   root.setAttribute("data-color", key);
-  root.style.setProperty("--accent", accent);
-  root.style.setProperty("--accent-2", accent2);
-  root.style.setProperty("--accent-rgb", hexToRgbTriplet(accent));
-  root.style.setProperty("--accent-2-rgb", hexToRgbTriplet(accent2));
+  if (key === "theme"){
+    // Reveal the selected theme's own pair instead of an unrelated global tint.
+    for (const name of ["--accent","--accent-2","--accent-rgb","--accent-2-rgb"]) root.style.removeProperty(name);
+  } else {
+    root.style.setProperty("--accent", accent);
+    root.style.setProperty("--accent-2", accent2);
+    root.style.setProperty("--accent-rgb", hexToRgbTriplet(accent));
+    root.style.setProperty("--accent-2-rgb", hexToRgbTriplet(accent2));
+  }
   $$("[data-color-choice]").forEach(b=>b.setAttribute("aria-pressed", b.dataset.colorChoice === key ? "true" : "false"));
   const select = $("#cfg-color");
   if (select && select.value !== key) select.value = key;

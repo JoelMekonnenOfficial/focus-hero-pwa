@@ -17,7 +17,7 @@ const browserSuites = [
   'scenes', 'scroll', 'hardcore', 'devices', 'budget', 'skillremoval',
   'hourremoval', 'mergereduce', 'guardreduce', 'runmode', 'animpause', 'heroxp',
   'latestart', 'runmodehistory', 'conflictresolve', 'quietalarms', 'forceupdate',
-  'adoption-presentation'
+  'adoption-presentation', 'contrast-themes'
 ];
 const mime = { '.html':'text/html', '.js':'application/javascript', '.json':'application/json',
   '.webmanifest':'application/manifest+json', '.svg':'image/svg+xml', '.png':'image/png' };
