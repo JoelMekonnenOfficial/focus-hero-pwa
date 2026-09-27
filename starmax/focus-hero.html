@@ -8454,21 +8454,24 @@ function preparePrimarySnapshot(opts={}){
      accounting progress. Keep those ticks durable immediately without turning
      a local checkpoint into a full encrypted cloud upload. A later meaningful
      save includes the accumulated legacy estimate automatically. */
-  if(state?.sync?.enabled&&!opts.fromPull&&!opts.deferCloudTransfer){
-    state.sync.pendingSync=true;
-    if(!(state.sync.pendingSince>0))state.sync.pendingSince=Date.now();
+  try{
+    if(state?.sync?.enabled&&!opts.fromPull&&!opts.deferCloudTransfer){
+      state.sync.pendingSync=true;
+      if(!(state.sync.pendingSince>0))state.sync.pendingSince=Date.now();
+    }
+    fhTrimLogs(state,FH_LOG_CAPS);
+    const snapshot=deepClone(opts.snapshot||state);
+    if(preparedCalendar&&!opts.snapshot)snapshot.fhCalendar=preparedCalendar;
+    const raw=JSON.stringify(snapshot);
+    if(typeof raw!=="string"||!isStateSane(snapshot,{skipLegacyMonotonic:true}))throw new Error("State failed durable primary validation; nothing was committed.");
+    if(preparedCalendar&&!opts.snapshot)state.fhCalendar=preparedCalendar;
+    return{snapshot,raw};
+  }finally{
+    /* Capture this transaction's synchronous changes even when validation
+       refuses after pending flags or log trimming. No save await has run;
+       later work still fails the object-and-bytes rollback ownership guard. */
+    if(typeof opts.onPrepared==="function")opts.onPrepared({state,raw:JSON.stringify(state)});
   }
-  fhTrimLogs(state,FH_LOG_CAPS);
-  const snapshot=deepClone(opts.snapshot||state);
-  if(preparedCalendar&&!opts.snapshot)snapshot.fhCalendar=preparedCalendar;
-  const raw=JSON.stringify(snapshot);
-  if(typeof raw!=="string"||!isStateSane(snapshot,{skipLegacyMonotonic:true}))throw new Error("State failed durable primary validation; nothing was committed.");
-  if(preparedCalendar&&!opts.snapshot)state.fhCalendar=preparedCalendar;
-  /* An owner transaction may record exactly the synchronous preparation it
-     requested. This callback runs before any save await; newer later changes
-     still fail the existing object-and-bytes rollback guard. */
-  if(typeof opts.onPrepared==="function")opts.onPrepared({state,raw:JSON.stringify(state)});
-  return{snapshot,raw};
 }
 function primaryEvidenceRegression(message){
   const error=new Error(message);
