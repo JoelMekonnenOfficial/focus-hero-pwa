@@ -26,11 +26,13 @@ try{
       pending:adopted.sync.pendingSync===false,revision:adopted.sync.cloudRev===44};
     adopted.settings.customAccent='#ffffff';adopted.timer.remaining=1;adopted.fh11Clocks.slots[0].minutes=9;
     out.detached=local.settings.customAccent==='#123456'&&timer.remaining===123&&clocks.slots[0].minutes===3;
-    const fallback=window.buildAuthoritativeCloudState(remote,sync,{cloud_rev:44},false,timer,clocks,{theme:undefined});
+    const fallback=window.buildAuthoritativeCloudState(remote,sync,{cloud_rev:44},false,timer,clocks,{theme:undefined,e2eEncryption:false});
     out.missingPresentationDoesNotErase=fallback.settings.theme==='light';
     const sourceRemote=clone(window.state),calls=[];
-    window.supabaseRequest=async(path,opts)=>{calls.push({path,opts});return new Response(JSON.stringify([{cloud_rev:55,data:sourceRemote}]),{status:200,headers:{'Content-Type':'application/json'}});};
-    const detachedSync={...clone(window.state.sync),backend:'supabase',playerId:'synthetic-player',cloudRev:2};
+    const detachedSync={...clone(window.state.sync),backend:'supabase',playerId:'synthetic-player',cloudRev:2,syncCode:'SYNTHETIC',syncSecret:'SYNTHETIC-ONLY',saltB64:'MDEyMzQ1Njc4OWFiY2RlZg=='};
+    sourceRemote.sync={...detachedSync,cloudRev:54};sourceRemote.settings.e2eEncryption=true;
+    const encryptedRemote=await encryptStateBlob(sourceRemote);
+    window.supabaseRequest=async(path,opts)=>{calls.push({path,opts});return new Response(JSON.stringify([{cloud_rev:55,data:encryptedRemote}]),{status:200,headers:{'Content-Type':'application/json'}});};
     const storageBefore=localStorage.getItem('focusHero.v4.lastCloudReconcileAt');
     const stateBefore=JSON.stringify(window.state);
     const response=await window.fetchCloudRemote({force:true,requireRemote:true,persistAuth:false,authReadOnly:true,syncContext:detachedSync});

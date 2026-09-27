@@ -19,25 +19,52 @@ retaining the supplied text instead of treating it as markup. The separate
 `tests/task-text-safety.mjs` regression covers both exact renderers. This finding
 does not claim that a real profile contained malicious text.
 
-## Unresolved encryption policy decision
+## Plaintext downgrade and compatibility boundary, corrected in the candidate
 
-`starmax/index.html:12343` (`decryptStateBlob`) accepts recognizable plaintext or a
-`plain` wrapper whenever `e2e` is absent. `fetchCloudRemote` (`:16123`) and cloud
-adoption only force the encryption setting on when the incoming source is encrypted;
-they do not refuse plaintext because the local profile already requires encryption.
-Thus an attacker with cloud-row write authority could replace ciphertext with an
-unauthenticated legacy plaintext payload. AES-GCM does authenticate encrypted
-payloads; this alternate path bypasses that guarantee. TLS and backend access
-controls still matter and were not tested against production.
+`decryptStateBlob` now refuses every plaintext shape when the device requires
+encryption. Legacy plaintext is readable only after the user explicitly chooses
+encryption off locally; switching it off explains the exposure and requires a
+confirmation. No setting, key, salt, identity or history is guessed or migrated.
+The setting's failed durable save can roll back only its own unchanged snapshot,
+so a delayed failure cannot overwrite newer activity.
 
-This inherited compatibility path needs an explicit policy for legacy plaintext,
-encryption-required identities and any owner-approved transition. It is an open
-release-security finding, not a claim that server access has been compromised.
-This audit does not silently migrate, rewrite, reject or restore existing data.
-`node tests/cloud-plaintext-policy-probe.cjs [path/to/starmax]` extracts the actual
-parser/decrypt functions and confirms three recognizable synthetic plaintext forms
-are accepted while local encryption is enabled, with no keys or network available.
-It is an explicit evidence probe, not an automatically passing security requirement.
+Every new encrypted upload uses protocol 2 AES-GCM additional authenticated data.
+The authenticated fields include protocol, algorithm, KDF, iteration count,
+profile identity, cloud revision, salt, IV and compression. The parser rejects
+malformed/ambiguous envelopes, unknown parameters, an incorrect row binding, and
+unrecognizable decrypted profiles before merge. Existing encrypted protocol 1
+remains readable until a verified protocol-2 pull/upload receipt is saved. The
+per-identity minimum is durable and monotonic; a higher cloud revision cannot
+make the same identity accept older encrypted or plaintext formats. Read-only
+inspection does not persist a pin or modify profile state.
+
+The actual 10.63.4 reader omits AAD and therefore cannot authenticate protocol 2.
+It fails before parsing any shared fields, including when there are no new reward
+receipts. Explicit encryption-off uploads use a distinct protocol-2 plaintext
+wrapper that the old profile recognizer also refuses. This wrapper is a semantic
+compatibility boundary, not encryption or authentication. Supabase revision CAS
+prevents a stale old writer from replacing the newer row after either refusal.
+Old offline work remains on its device and can converge after an in-place update.
+Old code cannot be made to understand this protocol by deploying source elsewhere;
+all devices must update to resume shared progress.
+
+JSONStorage has no equivalent revision CAS. New publishing there is refused
+before auth, salt generation or cloud writes, with a visible explanation; read
+compatibility remains. This cannot prevent an old, unmodified JSONStorage client
+from writing. No provider migration, credential change or cloud-row change is
+performed automatically.
+
+`tests/encryption-protocol-safety.mjs` runs 50 exact-source real-crypto checks,
+including actual old-reader rejection, compression/uncompressed operation,
+parameter/ciphertext tampering, plaintext policy, identity-scoped pins, future
+protocol refusal and encryption-setting rollback ownership.
+`tests/cloud-plaintext-policy-probe.cjs` now asserts that the three formerly
+accepted plaintext forms are refused. `tests/multidevice-sync-safety.mjs` exercises
+real encrypted uploads, browser storage, CAS, refusal and in-place upgrade using
+only disposable synthetic devices. These do not establish real backend access
+controls or that an actual device has updated. A compromised same-origin script,
+stolen secret, hostile authenticated endpoint or arbitrary local-storage write
+remains outside the protection supplied by an envelope format alone.
 
 ## Key and identity boundaries inspected
 

@@ -12161,6 +12161,8 @@ function sanitizeForCloud(s, budgetOverride){
     delete out.sync.refreshToken;
     delete out.sync.tokenExpiresAt;
     delete out.sync.createAuthorization;
+    delete out.sync.cloudProtocolVersion;
+    delete out.sync.cloudProtocolIdentity;
   }
   return trimCloudTransportLogs(out, budgetOverride);
 }
@@ -12226,13 +12228,52 @@ async function fhGunzipBytes(u8){
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
+/* Protocol 2 is a semantic compatibility boundary, not a reward record. Its
+   AES-GCM AAD makes legacy readers fail authentication before they can merge
+   fields whose rules they do not know. Existing keys and salts are unchanged.
+   Only a verified pull or upload receipt pins this protocol for this identity. */
+const CLOUD_PROTOCOL_VERSION = 2;
+function cloudProtocolMinimum(sync){
+  return sync && sync.cloudProtocolIdentity === sync.playerId
+    ? Math.max(1, Number(sync.cloudProtocolVersion) || 1) : 1;
+}
+function noteCloudProtocol(sync, version){
+  if(sync && sync.playerId && version >= 2){
+    sync.cloudProtocolVersion=Math.max(cloudProtocolMinimum(sync),version);
+    sync.cloudProtocolIdentity=sync.playerId;
+  }
+}
+function cloudEnvelopeVersion(blob){
+  blob=parseSerializedCloudValue(blob);
+  return blob && blob.e2e ? blob.e2e.v : blob && blob.lifexp ? blob.lifexp.v : 1;
+}
+function cloudEnvelopeAAD(e){
+  return new TextEncoder().encode(JSON.stringify([
+    "Life XP cloud",e.v,e.alg,e.kdf,e.iter,e.profile,e.revision,e.salt,e.iv,e.z||null
+  ]));
+}
+function cloudProtocolError(message){
+  return syncControlError("FH_SYNC_UPDATE_REQUIRED", message +
+    " Update Life XP on every device. Offline work stays on its device until compatible sync can resume.");
+}
+function cloudEnvelopeBytes(value, name, length){
+  try{
+    if(typeof value!=="string"||!value.length||value.length>1500000)throw new Error();
+    const bytes=unb64(value);
+    if(b64(bytes)!==value||(length ? bytes.byteLength!==length : bytes.byteLength<16))throw new Error();
+    return bytes;
+  }catch(_){throw syncControlError("FH_SYNC_INVALID_ENVELOPE","Cloud encryption "+name+" is malformed; nothing was merged.");}
+}
+
 async function encryptStateBlob(plainObj, budgetOverride){
   const safe = sanitizeForCloud(plainObj, budgetOverride);
   const settings=plainObj&&plainObj.settings&&typeof plainObj.settings==="object"?plainObj.settings:{};
   const sync=plainObj&&plainObj.sync&&typeof plainObj.sync==="object"?plainObj.sync:{};
-  if (!settings.e2eEncryption){
-    // E2E intentionally off — sync subtree is still stripped of credentials.
-    return { plain: safe };
+  if(cloudProtocolMinimum(sync)>CLOUD_PROTOCOL_VERSION)throw cloudProtocolError("This device is older than the last verified cloud protocol.");
+  if (settings.e2eEncryption===false){
+    /* Explicit local opt-out remains plaintext. The distinct wrapper makes
+       legacy readers refuse it rather than merge unfamiliar accounting rules. */
+    return { lifexp: { v:CLOUD_PROTOCOL_VERSION, format:"plain", state:safe } };
   }
   if (!sync.syncCode || !sync.syncSecret){
     // v4.2: refuse to silently downgrade to plaintext. Caller should set up
@@ -12242,6 +12283,7 @@ async function encryptStateBlob(plainObj, budgetOverride){
   }
   const saltB64 = sync.saltB64;
   if(!saltB64)throw new Error("E2E encryption salt is not part of the verified durable upload snapshot");
+  cloudEnvelopeBytes(saltB64,"salt",SALT_BYTES);
   const key = await deriveE2EKey({ code: sync.syncCode, secret: sync.syncSecret, saltB64 });
   const iv = new Uint8Array(IV_BYTES); crypto.getRandomValues(iv);
   const enc = new TextEncoder();
@@ -12249,16 +12291,18 @@ async function encryptStateBlob(plainObj, budgetOverride){
   let encoding = null;
   if (CLOUD_GZIP_WRITE && fhStreamsAvailable()){
     /* Never let a compression failure block a save: fall back to the
-       uncompressed body, which every build can already read. */
+       uncompressed body, supported by the same protocol-2 readers. */
     try {
       const packed = await fhGzipBytes(body);
       if (packed && packed.length && packed.length < body.length){ body = packed; encoding = "gzip"; }
     } catch(_){ encoding = null; }
   }
-  const ct = await crypto.subtle.encrypt({ name:"AES-GCM", iv }, key, body);
-  const envelope = { v:1, alg:"AES-GCM-256", kdf:"PBKDF2-SHA256", iter: PBKDF2_ITERATIONS,
-                     ct: b64(ct), iv: b64(iv.buffer), salt: saltB64, zc: 1 };
+  const envelope = { v:CLOUD_PROTOCOL_VERSION, alg:"AES-GCM-256", kdf:"PBKDF2-SHA256", iter: PBKDF2_ITERATIONS,
+                     profile:String(sync.playerId||""),revision:Math.max(0,Math.trunc(Number(sync.cloudRev)||0))+1,
+                     iv: b64(iv.buffer), salt: saltB64, zc: 1 };
   if (encoding) envelope.z = encoding;
+  const ct = await crypto.subtle.encrypt({ name:"AES-GCM", iv, additionalData:cloudEnvelopeAAD(envelope) }, key, body);
+  envelope.ct=b64(ct);
   return { e2e: envelope };
 }
 /* v10.37: TRIM AGAINST WHAT THE SERVER ACTUALLY MEASURES.
@@ -12340,21 +12384,51 @@ function isRecognizableCloudState(value){
     !!value.hero && typeof value.hero === "object" && !Array.isArray(value.hero) &&
     !!value.settings && typeof value.settings === "object" && !Array.isArray(value.settings);
 }
-async function decryptStateBlob(blob, syncContext){
+async function decryptStateBlob(blob, syncContext, options={}){
   blob = parseSerializedCloudValue(blob);
-  if (!blob || typeof blob !== "object") return blob;
+  const sync = syncContext || state.sync;
+  const requireEncrypted=options.requireEncrypted!==undefined ? options.requireEncrypted!==false : state.settings?.e2eEncryption!==false;
+  if (!blob || typeof blob !== "object" || Array.isArray(blob))throw syncControlError("FH_SYNC_INVALID_ENVELOPE","Cloud payload is not a valid envelope; nothing was merged.");
+  if(blob.e2e && (Object.prototype.hasOwnProperty.call(blob,"plain")||Object.prototype.hasOwnProperty.call(blob,"lifexp")))throw syncControlError("FH_SYNC_INVALID_ENVELOPE","Cloud payload contains conflicting formats; nothing was merged.");
   if (!blob.e2e){
+    if(requireEncrypted)throw syncControlError("FH_SYNC_ENCRYPTION_REQUIRED",
+      "Cloud payload is unencrypted, but encryption is required on this device. Nothing was merged or uploaded. Check the other device's encryption setting; plaintext requires an explicit local opt-out.");
+    if(blob.lifexp){
+      const frame=blob.lifexp;
+      if(frame.v!==CLOUD_PROTOCOL_VERSION)throw cloudProtocolError("This cloud profile uses an unsupported sync protocol.");
+      if(frame.v<cloudProtocolMinimum(sync))throw cloudProtocolError("Cloud sync protocol moved backwards. The older payload was refused.");
+      if(frame.format!=="plain"||!frame.state||Object.prototype.hasOwnProperty.call(blob,"plain"))throw syncControlError("FH_SYNC_INVALID_ENVELOPE","Cloud plaintext envelope is malformed; nothing was merged.");
+      const plain=parseSerializedCloudValue(frame.state);
+      if(!isRecognizableCloudState(plain))throw syncControlError("FH_SYNC_INVALID_ENVELOPE","Cloud plaintext profile is invalid; nothing was merged.");
+      return plain;
+    }
+    if(cloudProtocolMinimum(sync)>1)throw cloudProtocolError("Cloud sync protocol moved backwards. The older payload was refused.");
     const plain = Object.prototype.hasOwnProperty.call(blob, "plain") ? blob.plain : blob;
-    return parseSerializedCloudValue(plain);   // plaintext or legacy (state was top-level data)
+    const parsed=parseSerializedCloudValue(plain);
+    if(!isRecognizableCloudState(parsed))throw syncControlError("FH_SYNC_INVALID_ENVELOPE","Legacy cloud plaintext profile is invalid; nothing was merged.");
+    return parsed;
   }
   const e = blob.e2e;
-  const sync = syncContext || state.sync;
+  if(!e||typeof e!=="object"||Array.isArray(e))throw syncControlError("FH_SYNC_INVALID_ENVELOPE","Cloud encryption envelope is malformed; nothing was merged.");
+  if(e.v!==1&&e.v!==CLOUD_PROTOCOL_VERSION)throw cloudProtocolError("This cloud profile uses an unsupported sync protocol.");
+  if(e.v<cloudProtocolMinimum(sync))throw cloudProtocolError("Cloud sync protocol moved backwards. The older payload was refused.");
+  if(e.alg!=="AES-GCM-256"||e.kdf!=="PBKDF2-SHA256"||e.iter!==PBKDF2_ITERATIONS||
+     (e.z!==undefined&&e.z!=="gzip"))throw syncControlError("FH_SYNC_INVALID_ENVELOPE","Cloud encryption parameters are unsupported; nothing was merged.");
+  const ct=cloudEnvelopeBytes(e.ct,"ciphertext"),iv=cloudEnvelopeBytes(e.iv,"IV",IV_BYTES);
+  cloudEnvelopeBytes(e.salt,"salt",SALT_BYTES);
+  if(e.v===CLOUD_PROTOCOL_VERSION){
+    if(typeof e.profile!=="string"||!Number.isSafeInteger(e.revision)||e.revision<1)throw syncControlError("FH_SYNC_INVALID_ENVELOPE","Cloud protocol identity or revision is malformed; nothing was merged.");
+    if(e.profile!==String(sync.playerId||"")||(options.cloudRev!==undefined&&e.revision!==options.cloudRev))throw syncControlError("FH_SYNC_INVALID_ENVELOPE","Cloud encrypted identity or revision does not match its row; nothing was merged.");
+  }
   if (!sync.syncCode || !sync.syncSecret){
     throw new Error("Cannot decrypt — missing sync code/secret on this device");
   }
   const key = await deriveE2EKey({ code: sync.syncCode, secret: sync.syncSecret, saltB64: e.salt });
-  const ct = unb64(e.ct); const iv = unb64(e.iv);
-  const plain = await crypto.subtle.decrypt({ name:"AES-GCM", iv: new Uint8Array(iv) }, key, ct);
+  const algorithm={ name:"AES-GCM", iv: new Uint8Array(iv) };
+  if(e.v===CLOUD_PROTOCOL_VERSION)algorithm.additionalData=cloudEnvelopeAAD(e);
+  let plain;
+  try{plain=await crypto.subtle.decrypt(algorithm,key,ct);}
+  catch(_){throw syncControlError("FH_SYNC_AUTHENTICATION_FAILED","Cloud authentication failed. The encrypted profile or its protocol details could not be verified; nothing was merged. Check the sync code and update Life XP on every device.");}
   let bytes = new Uint8Array(plain);
   if (e.z === "gzip"){
     if (!fhStreamsAvailable()){
@@ -12365,7 +12439,9 @@ async function decryptStateBlob(blob, syncContext){
   } else if (e.z){
     throw new Error("Unsupported cloud payload encoding \"" + e.z + "\"; update the app.");
   }
-  return parseSerializedCloudValue(JSON.parse(new TextDecoder().decode(bytes)));
+  const result=parseSerializedCloudValue(JSON.parse(new TextDecoder().decode(bytes)));
+  if(!isRecognizableCloudState(result))throw syncControlError("FH_SYNC_INVALID_ENVELOPE","Decrypted cloud profile is invalid; nothing was merged.");
+  return result;
 }
 function renderSecurityPanel(){
   const panel = $("#sec-panel"); if (!panel) return;
@@ -12382,12 +12458,11 @@ function renderSecurityPanel(){
     sub.textContent = "";
     lines.push("Your data lives only on this device + monthly backups.");
     lines.push("Enable sync below to back it up across devices.");
-  } else if (enabled && backend === "jsonstorage" && !e2e){
-    panel.classList.add("bad");
-    hl.textContent = "Unencrypted public backend";
-    sub.textContent = "not recommended";
-    lines.push("jsonstorage.net is a public KV. Without E2E your data is readable.");
-    lines.push("Turn on End-to-end encryption above.");
+  } else if (enabled && backend !== "supabase"){
+    panel.classList.add("warn");
+    hl.textContent = "Cloud publishing paused";
+    sub.textContent = "Revision protection required";
+    lines.push("This provider cannot prevent an older device from overwriting newer cloud work. Local saves continue; publishing requires revision-safe Supabase sync.");
   } else if (enabled && !hasKey){
     panel.classList.add("warn");
     hl.textContent = "Key not generated yet";
@@ -12398,14 +12473,15 @@ function renderSecurityPanel(){
     hl.textContent = "Encrypted cloud sync active";
     sub.textContent = "AES-GCM-256 · PBKDF2-SHA256 · 100k iter";
     lines.push(`Backend: ${backend}`);
-    lines.push("Server sees only ciphertext + IV + salt + cloud_rev + sync_secret_hash.");
-    lines.push("Your sync code and secret never leave this device (only the derived key and hash do).");
+    lines.push("Server receives ciphertext and sync metadata; your progress is encrypted.");
+    lines.push("Your sync secret and encryption key stay on this device; the server receives a verification hash.");
   } else if (enabled && !e2e){
     panel.classList.add("warn");
     hl.textContent = "Plaintext cloud sync";
     sub.textContent = "consider enabling E2E";
     lines.push("Your state is stored as plaintext on the backend. Toggle E2E above to encrypt.");
   }
+  lines.push("Update Life XP on every device before expecting shared progress. Older apps cannot read this sync format; their offline work stays local until updated.");
   det.innerHTML = lines.map(l=>`<li>${escapeHtml(l)}</li>`).join("");
 }
 
@@ -15017,6 +15093,7 @@ const DEVICE_PRESENTATION_SETTINGS = Object.freeze([
   "wallpaperOn","wallpaperIntensity","wallpaperMotion","bgStyle","scene"
 ]);
 function buildAuthoritativeCloudState(remoteState,candidateSync,remotePayload,sourceEncrypted,localTimer,localClocks,localSettings){
+  if(!sourceEncrypted&&localSettings?.e2eEncryption!==false)throw syncControlError("FH_SYNC_ENCRYPTION_REQUIRED","Encryption is required on this device; the unencrypted cloud profile was not adopted.");
   let adopted;
   fhBeginMigrateReadOnly();
   try{adopted=migrate(deepClone(remoteState));}finally{fhEndMigrateReadOnly();}
@@ -15036,6 +15113,7 @@ function buildAuthoritativeCloudState(remoteState,candidateSync,remotePayload,so
      write. The user can review the profile and then enable normal sync. */
   adopted.sync.enabled=false;
   adopted.sync.cloudRev=Math.max(0,remotePayload&&remotePayload.cloud_rev|0);
+  noteCloudProtocol(adopted.sync,cloudEnvelopeVersion(remotePayload&&remotePayload.data));
   adopted.sync.lastPulledAt=now();
   adopted.sync.lastSuccessfulSyncAt=adopted.sync.lastPulledAt;
   adopted.sync.lastPushedAt=0;
@@ -15214,6 +15292,7 @@ async function claimSyncCode(full){
     const preClaimBase=await readVerifiedPrimaryUploadBase();
     if(JSON.stringify(state)!==preClaimBase.raw)throw syncControlError("FH_SYNC_LOCAL_CHANGED","Claim paused because newer local activity is not durable yet.");
     const preClaimLocal=JSON.parse(preClaimBase.raw);
+    if(!pulled.sourceEncrypted&&preClaimLocal.settings?.e2eEncryption!==false)throw syncControlError("FH_SYNC_ENCRYPTION_REQUIRED","Encryption became required before the cloud merge; nothing was merged or uploaded.");
     if(["playerId","syncCode","syncSecretHash","backend","jsonstorageUrl"].some(key=>(preClaimLocal.sync&&preClaimLocal.sync[key]||null)!==(existingSync[key]||null))){
       throw syncControlError("FH_SYNC_LOCAL_CHANGED","Claim paused because this device's cloud identity changed during verification. Retry from the current profile.");
     }
@@ -15221,6 +15300,7 @@ async function claimSyncCode(full){
     if (pulled.sourceEncrypted) merged.settings.e2eEncryption = true;
     merged.sync = deepClone(candidateSync);
     merged.sync.cloudRev = pulled.remotePayload.cloud_rev|0;
+    noteCloudProtocol(merged.sync,pulled.sourceProtocolVersion);
     merged.sync.lastPulledAt = now();
     /* v10.31.9: Claim just produced a union containing facts from TWO rows.
        Saving it as a clean pull left the selected row unchanged, so the phone
@@ -15831,6 +15911,8 @@ async function cloudPushOnce(opts){
   const initialCandidate=JSON.parse(initialBase.raw);
   assertCloudPushPayloadSafe((initialCandidate.sync?.cloudRev|0),opts,initialCandidate);
   const backend = currentBackend();
+  if(backend!=="supabase")throw syncControlError("FH_SYNC_CAS_REQUIRED",
+    "Publishing is paused: this cloud provider cannot protect newer data from an older device's overwrite. Local work remains queued. Use revision-safe Supabase sync after updating all devices; no identity or cloud data was changed.");
   if(state.sync.backend!==backend){
     state.sync.backend=backend;
     await saveStateDurable({fromPull:true,identityOperation:opts.identityOperation===true,source:"cloud-backend-selection"});
@@ -15915,6 +15997,7 @@ async function cloudPushOnce(opts){
     const replayRequired=primaryHead.commitId!==uploadWatermark.commitId||
       primaryLastDurableRaw!==uploadWatermark.raw||JSON.stringify(state)!==uploadWatermark.raw;
     state.sync.cloudRev=nextRevision;state.sync.lastPushedAt=now();
+    noteCloudProtocol(state.sync,CLOUD_PROTOCOL_VERSION);
     state.sync.createAuthorization=null;
     if(replayRequired){
       state.sync.pendingSync=true;
@@ -16125,6 +16208,7 @@ async function fetchCloudRemote(opts){
   const operationGeneration = opts.operationGeneration ?? syncIdentityGeneration;
   assertSyncOperationCurrent(operationGeneration);
   const sync = opts.authReadOnly ? deepClone(opts.syncContext || state.sync) : (opts.syncContext || state.sync);
+  const requireEncrypted=state.settings?.e2eEncryption!==false;
   const persistAuth = !opts.authReadOnly && opts.persistAuth !== false && sync === state.sync;
   const backend = sync.backend || (hasSupabase() ? "supabase" : "jsonstorage");
   sync.backend = backend;
@@ -16208,19 +16292,22 @@ async function fetchCloudRemote(opts){
   assertCloudMetadataAuthorized(remotePayload,sync);
   let remoteState;
   let sourceEncrypted = false;
+  let sourceProtocolVersion = 1;
   try {
     const normalizedData = parseSerializedCloudValue(remotePayload.data);
     sourceEncrypted = !!normalizedData && typeof normalizedData === "object" &&
       !Array.isArray(normalizedData) && !!normalizedData.e2e;
-    remoteState = await decryptStateBlob(normalizedData, sync);
+    remoteState = await decryptStateBlob(normalizedData, sync,{requireEncrypted,cloudRev:Number(remotePayload.cloud_rev)});
+    sourceProtocolVersion=cloudEnvelopeVersion(normalizedData);
   }
-  catch(e){ throw new Error("Decrypt failed: "+(e.message||e)); }
+  catch(e){ throw syncControlError(e.code||"FH_SYNC_DECRYPT_FAILED","Decrypt failed: "+(e.message||e)); }
+  if(!sourceEncrypted&&state.settings?.e2eEncryption!==false)throw syncControlError("FH_SYNC_ENCRYPTION_REQUIRED","Encryption became required while the cloud request was pending; nothing was merged or uploaded.");
   assertSyncOperationCurrent(operationGeneration);
   if (!isRecognizableCloudState(remoteState)){
     if (opts.requireRemote) throw new Error("Cloud state payload is invalid");
     return null;
   }
-  return { remotePayload, remoteState, sourceEncrypted };
+  return { remotePayload, remoteState, sourceEncrypted, sourceProtocolVersion };
 }
 
 async function cloudPull(opts){
@@ -16265,6 +16352,7 @@ async function cloudPull(opts){
     throw syncControlError("FH_SYNC_LOCAL_CHANGED","Cloud merge paused because newer local activity is not durable yet.");
   }
   const prePullLocal=JSON.parse(prePullBase.raw);
+  if(!pulled.sourceEncrypted&&prePullLocal.settings?.e2eEncryption!==false)throw syncControlError("FH_SYNC_ENCRYPTION_REQUIRED","Encryption became required before the cloud merge; nothing was merged or uploaded.");
   const merged = mergeRemoteState(prePullLocal, remoteState);
   /* Ask the same merger what the cloud row would absorb from this union while
      keeping the cloud row in the local/device-preference position. Comparing
@@ -16285,6 +16373,7 @@ async function cloudPull(opts){
   const previousState=state;
   state = merged;
   state.sync.cloudRev = remotePayload.cloud_rev|0;
+  noteCloudProtocol(state.sync,pulled.sourceProtocolVersion);
   state.sync.lastPulledAt = now();
   if(mergedNeedsPublish){
     state.sync.pendingSync=true;
@@ -18969,10 +19058,18 @@ function bindSync(){
   setToggle("#tog-sync", !!state.sync.enabled);
   const togE = $("#tog-e2e");
   togE.addEventListener("click", async ()=>{
-    const next = !readToggle("#tog-e2e"); setToggle("#tog-e2e",next);
-    const before=state.settings.e2eEncryption;state.settings.e2eEncryption = next;
+    const next = !readToggle("#tog-e2e");
+    if(!next&&!confirm("Turn off cloud encryption? Future uploads will contain readable profile data. Devices that require encryption will refuse those uploads until you explicitly choose the same setting there. Your sync code and existing local history will stay unchanged."))return;
+    setToggle("#tog-e2e",next);
+    const owner=state,ownerSettings=state.settings,before=ownerSettings.e2eEncryption;
+    ownerSettings.e2eEncryption = next;
+    const selectedRaw=JSON.stringify(owner);
     try{await saveStateDurable({source:"e2e-toggle"});}
-    catch(error){state.settings.e2eEncryption=before;setToggle("#tog-e2e",!!before);toast("Encryption setting was not changed because the durable save failed.","bad");return;}
+    catch(error){
+      if(state===owner&&state.settings===ownerSettings&&JSON.stringify(owner)===selectedRaw)ownerSettings.e2eEncryption=before;
+      setToggle("#tog-e2e",!!state.settings.e2eEncryption);
+      toast("The encryption-setting save was not confirmed. Newer local changes were kept.","bad",undefined,{record:false});return;
+    }
     renderSecurityPanel();
   });
   setToggle("#tog-e2e", !!state.settings.e2eEncryption);
@@ -23121,14 +23218,12 @@ async function runSmokeTests(){
   add("App-open tracking: totalAppOpenMs is number", typeof state.totalAppOpenMs === "number");
   add("App uptime: >24d formats without truncation", formatHMS(35*24*60*60*1000 + 3*60*60*1000 + 7*60*1000 + 11*1000) === "843:07:11");
   try {
-    const snapshot = deepClone(state);
-    state.sync.syncCode = "TESTCODE"; state.sync.syncSecret = "TESTSECRETTESTSECRET";
-    state.settings.e2eEncryption = true; state.sync.saltB64 = null;
-    const plain = { dataVersion:DATA_VERSION, totalFocusMin:42, tasks:[{id:"a",name:"x",totalFocusMin:5}] };
+    const plain = { dataVersion:DATA_VERSION, totalFocusMin:42, tasks:[{id:"a",name:"x",totalFocusMin:5}],history:{},hero:{level:1},
+      settings:{e2eEncryption:true},sync:{syncCode:"TESTCODE",syncSecret:"TESTSECRETTESTSECRET",
+        playerId:"synthetic-encryption-self-test",cloudRev:1,saltB64:b64(new Uint8Array(SALT_BYTES))} };
     const blob = await encryptStateBlob(plain);
-    const round = await decryptStateBlob(blob);
+    const round = await decryptStateBlob(blob,plain.sync,{requireEncrypted:true,cloudRev:2});
     add("Encryption: AES-GCM round-trip", !!blob.e2e && round.totalFocusMin === 42);
-    state = snapshot; saveState();
   } catch(e){ add("Encryption: AES-GCM round-trip", false, e.message||String(e)); }
   {
     const v3 = {

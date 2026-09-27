@@ -74,7 +74,7 @@ for(const malformed of ['invalid-json',null,{},'unexpected',[null],[{}],[{cloud_
 
 function pullFixture(){
   const x=fresh();const remote=JSON.parse(JSON.stringify(x.c.state));
-  x.c.fetchCloudRemote=async()=>({remoteState:remote,remotePayload:{cloud_rev:101},sourceEncrypted:false});
+  x.c.fetchCloudRemote=async()=>({remoteState:remote,remotePayload:{cloud_rev:101},sourceEncrypted:true});
   x.c.mergeRemoteState=local=>JSON.parse(JSON.stringify(local));
   x.c.canonicalCloudSharedState=()=>'same';x.c.pendingHardcoreMergeNotices=[];x.c.flushHardcoreMergeNotices=()=>{};
   return x;

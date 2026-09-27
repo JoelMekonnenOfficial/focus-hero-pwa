@@ -18,7 +18,7 @@ function fresh(){
   let clock=1800000000000,seq=0;
   const c={URL,Promise,Math,JSON,Number,Date:class extends Date{constructor(...args){super(...(args.length?args:[clock]));}static now(){return clock;}},
     state:{sync:{enabled:true,backend:'supabase',cloudRev:100,playerId:'synthetic',userToken:'fake',tokenExpiresAt:clock+3600000,
-      syncSecretHash:'synthetic',pendingSync:true,pendingSince:clock-1000},settings:{},totalFocusMin:60},
+      syncSecretHash:'synthetic',pendingSync:true,pendingSince:clock-1000},settings:{e2eEncryption:false},totalFocusMin:60},
     SUPABASE_URL:'https://synthetic.invalid',SUPABASE_ANON_KEY:'synthetic',syncIdentityGeneration:1,syncOperationsPaused:false,
     cloudPushInFlight:null,CLOUD_PUSH_REPLAY_CAP:6,primarySaveTail:Promise.resolve(),primaryHead:{commitId:'c0'},
     localStorage:{getItem:k=>memory.get(k)??null,setItem:(k,v)=>memory.set(k,String(v))},
@@ -29,6 +29,7 @@ function fresh(){
     assertAccountingStorageDeterminate(){},assertSyncOperationCurrent(){},assertCloudPushPayloadSafe(){},
     readVerifiedPrimaryUploadBase:async expected=>{if(expected)assert.equal(expected.raw,c.primaryLastDurableRaw);return{raw:c.primaryLastDurableRaw,head:{...c.primaryHead}};},
     saveStateDurable:async()=>{c.primaryLastDurableRaw=JSON.stringify(c.state);c.primaryHead={commitId:'c'+(++seq)};},
+    CLOUD_PROTOCOL_VERSION:2,noteCloudProtocol(){},cloudEnvelopeVersion:()=>1,
     syncControlError:(code,message)=>Object.assign(new Error(message),{code}),isSyncControlError:()=>false,
     markCloudPending:async e=>{c.state.sync.pendingSync=true;c.state.sync.lastSyncError=e.message;},
     markCloudSynced:async()=>{c.state.sync.pendingSync=false;return true;},

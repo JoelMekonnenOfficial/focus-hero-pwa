@@ -123,35 +123,23 @@ function eq(value,expected,label){assert.equal(value,expected,label);checks++;co
   x.advance(300001);await assert.rejects(x.c.supabaseRequest('players?select=data',{method:'GET'}),e=>e.code==='FH_CLOUD_BUDGET');
   eq(x.usage().day,91,'grace expires without another charge or history reset');
 }
-// JSONStorage reads and writes obey the same request boundary.
+// JSONStorage remains readable, but cannot safely publish across mixed clients.
 {
   const x=fresh();x.c.state.sync.backend='jsonstorage';x.c.state.sync.jsonstorageUrl='https://synthetic.invalid/json';
   await x.c.saveStateDurable();x.c.respond=async()=>response({cloud_rev:100,data:{plain:{totalFocusMin:60}}});
-  await x.c.fetchCloudRemote({force:true});await x.c.cloudPush({force:true});
-  eq(x.hits.map(h=>h.method).join(','),'GET,PUT','JSONStorage reads and uploads use actual transport');
-  eq(x.usage().day,2,'JSONStorage transfers each count once');
+  await x.c.fetchCloudRemote({force:true});
+  await assert.rejects(x.c.cloudPush({force:true}),e=>e.code==='FH_SYNC_CAS_REQUIRED');
+  eq(x.hits.map(h=>h.method).join(','),'GET','JSONStorage compatibility read is the only transfer');
+  eq(x.usage().day,1,'refused non-CAS publication consumes no transfer');
+  eq(x.c.state.sync.pendingSync,true,'unsupported provider keeps work queued');
 }
 {
   const x=fresh();x.c.state.sync.backend='jsonstorage';x.c.state.sync.cloudRev=0;
   x.c.state.sync.createAuthorization={version:1,playerId:'synthetic',attemptCount:0,lastAttemptAt:0};
-  await x.c.saveStateDurable();x.seed(90);
-  await assert.rejects(x.c.cloudPush({force:true}),e=>e.code==='FH_CLOUD_BUDGET');
-  eq(x.hits.length,0,'budget-blocked JSONStorage create sends no request');
-  eq(x.c.state.sync.createAuthorization.attemptCount,0,'never-sent JSONStorage create retains its existing grant');
-  x.c.fhBudgetResumeNow();x.c.respond=async()=>response({uri:'https://synthetic.invalid/new-json'});
-  await x.c.cloudPush({force:true});
-  eq(x.hits.filter(h=>h.method==='POST').length,1,'deferred JSONStorage creation remains retryable exactly once');
-  eq(x.hits[0].method,'POST','JSONStorage creation uses a counted POST');
-  eq(x.usage().day,90+x.hits.length,'JSONStorage creation and subsequent replay are each charged');
-}
-{
-  const x=fresh();x.c.state.sync.backend='jsonstorage';x.c.state.sync.cloudRev=0;
-  x.c.state.sync.createAuthorization={version:1,playerId:'synthetic',attemptCount:0,lastAttemptAt:0};
-  await x.c.saveStateDurable();x.c.respond=async()=>{throw new Error('synthetic lost response');};
-  await assert.rejects(x.c.cloudPush({force:true}),/lost response/);
-  eq(x.c.state.sync.createAuthorization.attemptCount,1,'uncertain JSONStorage request retains its one-shot protection');
-  await assert.rejects(x.c.cloudPush({force:true}),e=>e.code==='FH_SYNC_JSON_CREATE_UNCERTAIN');
-  eq(x.hits.length,1,'uncertain JSONStorage create is never duplicated');
-  eq(x.usage().day,1,'uncertain JSONStorage create attempt remains charged');
+  await x.c.saveStateDurable();const before=JSON.stringify(x.c.state.sync.createAuthorization);
+  await assert.rejects(x.c.cloudPush({force:true}),e=>e.code==='FH_SYNC_CAS_REQUIRED');
+  eq(x.hits.length,0,'unsupported create sends no request');
+  eq(JSON.stringify(x.c.state.sync.createAuthorization),before,'unsupported provider leaves creation identity and grant untouched');
+  eq(x.usage().day,0,'unsupported provider does not charge a never-attempted transfer');
 }
 console.log(`${checks} transport accounting checks passed.`);

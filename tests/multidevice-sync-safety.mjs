@@ -39,6 +39,7 @@ function cloud(){return{row:null,requests:[],fault:null,async route(route){
   if(method==='GET'){
     const fields=(u.searchParams.get('select')||'').split(',');
     const out=this.row&&Object.fromEntries(fields.map(k=>[k,this.row[k]]));
+    if(this.beforeReadReply){const hook=this.beforeReadReply;this.beforeReadReply=null;await hook();}
     return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(out?[out]:[])});
   }
   assert.equal(method,'PATCH','unexpected create/auth/write');
@@ -55,6 +56,8 @@ async function device(name,c,old=false,base=null){
   const ctx=await browser.newContext({serviceWorkers:'block',acceptDownloads:false,timezoneId:'America/Toronto',viewport:name==='phone'?{width:390,height:844}:{width:1280,height:900}});contexts.push(ctx);
   await ctx.route('**/*',route=>{const u=new URL(route.request().url());return u.hostname==='127.0.0.1'&&u.port===String(port)?route.continue():u.hostname.endsWith('.supabase.co')?c.route(route):route.abort('blockedbyclient');});
   const page=await ctx.newPage();
+  page.on('pageerror',e=>console.error('SYNTHETIC PAGE ERROR',name,e.message));
+  page.on('console',m=>{if(m.type()==='error')console.error('SYNTHETIC CONSOLE',name,m.text());});
   await page.goto(`http://127.0.0.1:${port}/${old?'old/':''}index.html`,{waitUntil:'load'});
   await page.waitForFunction(()=>!!window.state&&typeof window.saveStateDurable==='function');
   await page.waitForTimeout(600);
@@ -66,7 +69,7 @@ async function device(name,c,old=false,base=null){
   },{sync,base,name});
   return {name,page,ctx,old};
 }
-async function snapshot(d){return d.page.evaluate(()=>({total:state.totalFocusMin,history:state.history,tasks:state.tasks.map(t=>({id:t.id,total:t.totalFocusMin})),sessions:state.sessionsLog.map(s=>({id:s.id,minutes:s.minutes})),receipts:Object.fromEntries(Object.entries(state.loot.sessionRewardReceipts).map(([k,v])=>[k,v.policyVersion])),pending:state.sync.pendingSync,error:state.sync.lastSyncError,rev:state.sync.cloudRev,coins:state.coins,xp:totalXpForLevel(state.hero.level)+state.hero.xp,economy:window.__fhEconomyTest.totals(),harvests:state.focusEconomy.harvests.length}));}
+async function snapshot(d){await d.page.waitForFunction(()=>!!window.state&&typeof window.__fhEconomyTest?.totals==='function');return d.page.evaluate(()=>({total:state.totalFocusMin,history:state.history,tasks:state.tasks.map(t=>({id:t.id,total:t.totalFocusMin})),sessions:state.sessionsLog.map(s=>({id:s.id,minutes:s.minutes})),receipts:Object.fromEntries(Object.entries(state.loot.sessionRewardReceipts).map(([k,v])=>[k,v.policyVersion])),pending:state.sync.pendingSync,error:state.sync.lastSyncError,rev:state.sync.cloudRev,protocol:state.sync.cloudProtocolVersion||1,coins:state.coins,xp:totalXpForLevel(state.hero.level)+state.hero.xp,economy:window.__fhEconomyTest.totals(),harvests:state.focusEconomy.harvests.length}));}
 async function invoke(d,what){return d.page.evaluate(async what=>{try{const result=await window[what]({force:true,requireRemote:true,reason:'synthetic-audit'});return{ok:true,result:typeof result==='object'?{uploadedCloudRev:result?.uploadedCloudRev,replayRequired:result?.replayRequired}:result};}catch(e){return{ok:false,code:e.code||'',message:e.message};}},what);}
 async function edit(d,taskId,minutes,id){return d.page.evaluate(async({taskId,minutes,id})=>await applyTaskTimeAdjustment(taskId,minutes,{operationId:id,surface:'synthetic-audit'}),{taskId,minutes,id});}
 async function scenario(name,fn){if(process.env.LIFEXP_SYNC_SCENARIO&&!name.includes(process.env.LIFEXP_SYNC_SCENARIO))return;const start=contexts.length;try{await fn();console.log('PASS',name);evidence.push({name,pass:true});}catch(e){console.log('FAIL',name,e.message);evidence.push({name,pass:false,error:e.message});}finally{await Promise.all(contexts.splice(start).map(c=>c.close()));}}
@@ -75,7 +78,7 @@ async function setup(oldFlags=[false,false,false]){
   const a=await device('chrome',c,oldFlags[0]);
   const taskId=await a.page.evaluate(async()=>{const t=createTask({name:'Synthetic shared skill'});await saveStateDurable({fromPull:true,source:'synthetic-task'});return t.id;});
   const base=await a.page.evaluate(()=>structuredClone(state));
-  c.row={id:sync.playerId,cloud_rev:100,sync_secret_hash:sync.syncSecretHash,updated_at:new Date().toISOString(),data:await a.page.evaluate(()=>encryptStateBlob(state))};
+  c.row={id:sync.playerId,cloud_rev:100,sync_secret_hash:sync.syncSecretHash,updated_at:new Date().toISOString(),data:await a.page.evaluate(()=>encryptStateBlob({...state,sync:{...state.sync,cloudRev:99}}))};
   const devices=[a];for(let i=1;i<oldFlags.length;i++)devices.push(await device(['chrome','opera','phone'][i],c,oldFlags[i],base));
   return{c,devices,taskId};
 }
@@ -104,15 +107,16 @@ try{
     const states=await Promise.all(devices.map(snapshot));evidence.push({detail:'lost-response',failed,states,requests:c.requests});
     assert.deepEqual(states.map(s=>s.total),[19,19,19]);assert(states.every(s=>s.sessions.length===1));
   });
-  await scenario('mixed clients refuse policy4 without changing existing time (rollout blocker)',async()=>{
+  await scenario('mixed clients refuse authenticated protocol before merging and retain offline work on upgrade',async()=>{
     const {c,devices,taskId}=await setup([true,false,true]);const[a,b,d]=devices;
     assert.equal((await edit(a,taskId,11,'old-offline-progress')).ok,true);
     assert.equal((await edit(b,taskId,29,'new-policy-four')).ok,true);
     assert.equal((await invoke(b,'cloudPush')).ok,true);
     const pulls=await Promise.all([invoke(a,'cloudPull'),invoke(d,'cloudPull')]);
     const states=await Promise.all(devices.map(snapshot));evidence.push({detail:'mixed-policy',pulls,states,requests:c.requests});
-    assert(pulls.every(p=>!p.ok&&/Unsupported session reward tombstone policy/.test(p.message)),JSON.stringify(pulls));
+    assert(pulls.every(p=>!p.ok&&/Decrypt failed/.test(p.message)),JSON.stringify(pulls));
     assert.deepEqual(states.map(s=>s.total),[11,29,0]);assert.deepEqual(states.map(s=>s.rev),[100,101,100]);
+    await a.page.evaluate(()=>document.getElementById('btn-sync-now').onclick());assert.equal((await snapshot(a)).rev,100);
     const before=JSON.stringify(c.row),blocked=await invoke(a,'cloudPush');assert.equal(blocked.ok,false);assert.equal(JSON.stringify(c.row),before);
     evidence.push({detail:'old-client-conflict-retry',blocked});
     for(const x of[a,d]){await x.page.goto(`http://127.0.0.1:${port}/index.html`,{waitUntil:'load'});await x.page.waitForFunction(()=>!!window.state);await x.page.waitForTimeout(600);}
@@ -170,7 +174,7 @@ try{
     const mutation=await a.page.evaluate(()=>{const before=window.__auditBefore||{},after=window.__auditAfter||{};return Object.fromEntries(Object.keys(after).filter(k=>JSON.stringify(before[k])!==JSON.stringify(after[k])).map(k=>[k,{before:before[k],after:after[k]}]));});
     await a.page.reload({waitUntil:'load'});await a.page.waitForFunction(()=>!!window.state);
     const durable=await snapshot(a);evidence.push({detail:'pull-save-failure',failed,memory,durable,mutation,warningVisible:true});
-    assert.equal(failed.ok,false);assert.equal(memory.total,7);assert.equal(JSON.stringify(c.row),cloudBefore);assert.equal(durable.total,7);assert.equal(durable.sessions.length,1);
+    assert.equal(failed.ok,false);assert.equal(memory.total,7);assert.equal(JSON.stringify(c.row),cloudBefore);assert.equal(durable.total,7);assert.equal(durable.sessions.length,1);assert.equal(memory.protocol,1);assert.equal(durable.protocol,1,'failed pull commit cannot persist a protocol pin');
     assert.deepEqual(mutation,{},'failed save warning does not mutate the profile awaiting guarded rollback');
   });
   await scenario('two offline devices reaching the same target can converge',async()=>{
@@ -197,24 +201,72 @@ try{
     assert(states.every(s=>s.harvests===(distinct?2:1)&&s.economy.farmMinutes===60));
     for(const x of devices)assert.equal(await x.page.evaluate(()=>window.__fhEconomyTest.harvest('plot1')),false,'crop cannot be harvested again after merge');
   });
-  await scenario('old merger loses new journey additions if receipt protection is absent (bridge blocker)',async()=>{
-    const {c,devices}=await setup([true,false]);const[a,b]=devices;
-    const record=async(d,id)=>d.page.evaluate(async id=>{
+  await scenario('protocol barrier protects new shared fields before any reward receipt',async()=>{
+    const {c,devices}=await setup([true,false,true]);const[a,b,d]=devices;
+    const record=async(id)=>b.page.evaluate(async id=>{
       wdRecordJourneySession(state,{sessionId:id,action:'Fight',minutes:30,zoneId:'verdant_vale',encounters:[{killed:true,enemy:wdEnemiesForZone('verdant_vale').find(e=>!e.boss)}]});
       await saveStateDurable({fromPull:true,source:'synthetic-isolated-journey-field'});
     },id);
-    await record(b,'journey-one');assert.equal((await invoke(b,'cloudPush')).ok,true);
-    assert.equal((await invoke(a,'cloudPull')).ok,true);
-    const first=await a.page.evaluate(()=>Object.keys(state.world.journeySessionRewards||{}));assert.equal(first.length,1);
-    await record(b,'journey-two');assert.equal((await invoke(b,'cloudPush')).ok,true);
-    assert.equal((await invoke(a,'cloudPull')).ok,true);
-    const after=await a.page.evaluate(()=>Object.keys(state.world.journeySessionRewards||{}));
-    assert.equal(after.length,1,'baseline keeps its older whole journey map');
-    assert.equal((await invoke(a,'cloudPush')).ok,true);
+    await record('journey-one');await record('journey-two');
+    assert.equal(await b.page.evaluate(()=>Object.keys(state.loot.sessionRewardReceipts).length),0,'no reward-policy sentinel or fake accounting receipt');
+    assert.equal((await invoke(b,'cloudPush')).ok,true);
+    const before=JSON.stringify(c.row);
+    for(const x of[a,d]){
+      const pull=await invoke(x,'cloudPull');assert.equal(pull.ok,false);assert.match(pull.message,/Decrypt failed/);
+      assert.equal((await snapshot(x)).rev,100);
+      const push=await invoke(x,'cloudPush');assert.equal(push.ok,false);assert.equal(JSON.stringify(c.row),before);
+    }
     const stored=await b.page.evaluate(blob=>decryptStateBlob(blob),c.row.data);
-    const cloudKeys=Object.keys(stored.world.journeySessionRewards||{});assert.equal(cloudKeys.length,1);
-    evidence.push({detail:'old-journey-field',fixtureScope:'isolated new field without policy4 receipt guard; not a normal candidate reward',first,after,cloudKeys});
+    assert.deepEqual(Object.keys(stored.world.journeySessionRewards).sort(),['session:journey-one','session:journey-two']);
+    for(const x of[a,d]){await x.page.goto(`http://127.0.0.1:${port}/index.html`,{waitUntil:'load'});await x.page.waitForFunction(()=>!!window.state);await x.page.waitForTimeout(600);assert.equal((await invoke(x,'cloudPull')).ok,true);assert.deepEqual(await x.page.evaluate(()=>Object.keys(state.world.journeySessionRewards).sort()),['session:journey-one','session:journey-two']);}
+    evidence.push({detail:'protocol-before-rewards',requests:c.requests});
   });
+  await scenario('explicit plaintext opt-out keeps the same old-reader CAS barrier',async()=>{
+    const {c,devices}=await setup([true,false,true]);const[a,b,d]=devices;
+    for(const x of devices)await x.page.evaluate(async()=>{state.settings.e2eEncryption=false;await saveStateDurable({fromPull:true,source:'synthetic-explicit-plaintext-choice'});});
+    assert.equal((await invoke(b,'cloudPush')).ok,true);assert.equal(c.row.data.lifexp.v,2);assert.equal(c.row.data.plain,undefined);
+    const before=JSON.stringify(c.row);
+    for(const x of[a,d]){assert.equal((await invoke(x,'cloudPull')).ok,false);assert.equal((await snapshot(x)).rev,100);assert.equal((await invoke(x,'cloudPush')).ok,false);assert.equal(JSON.stringify(c.row),before);}
+    const profileBefore=await b.page.evaluate(()=>({total:state.totalFocusMin,rev:state.sync.cloudRev,code:state.sync.syncCode,salt:state.sync.saltB64}));
+    await b.page.evaluate(async()=>{state.settings.e2eEncryption=true;await saveStateDurable({fromPull:true,source:'synthetic-require-encryption'});});
+    const refused=await invoke(b,'cloudPull');assert.equal(refused.code,'FH_SYNC_ENCRYPTION_REQUIRED');assert.equal(JSON.stringify(c.row),before);
+    assert.deepEqual(await b.page.evaluate(()=>({total:state.totalFocusMin,rev:state.sync.cloudRev,code:state.sync.syncCode,salt:state.sync.saltB64})),profileBefore);
+    evidence.push({detail:'plaintext-choice-boundary',refused,requests:c.requests});
+  });
+  await scenario('legacy first-create and lost-create retry cannot replace a newer protocol row',async()=>{
+    const {c,devices}=await setup([true,false,true]);const[a,b,d]=devices;
+    assert.equal((await invoke(b,'cloudPush')).ok,true);const before=JSON.stringify(c.row);
+    for(const [index,x] of[a,d].entries()){
+      await x.page.evaluate(async index=>{state.sync.cloudRev=0;issueSyncCreateAuthorization(state.sync);state.sync.createAuthorization.attemptCount=index;state.sync.createAuthorization.lastAttemptAt=index?Date.now():0;await saveStateDurable({fromPull:true,source:'synthetic-old-create-recovery'});},index);
+      const requestStart=c.requests.length;const push=await invoke(x,'cloudPush');assert.equal(push.ok,false);assert.match(push.message,/Decrypt failed/);
+      assert.equal((await snapshot(x)).rev,0);assert.equal(JSON.stringify(c.row),before);
+      assert(c.requests.slice(requestStart).length>=1);assert(c.requests.slice(requestStart).every(r=>r.method==='GET'),'old create recovery stops before any POST or PATCH');
+    }
+    evidence.push({detail:'legacy-create-refusal',requests:c.requests});
+  });
+  await scenario('enabling encryption during an in-flight plaintext read prevents merge',async()=>{
+    const {c,devices}=await setup([false]);const[a]=devices;
+    await a.page.evaluate(async()=>{state.settings.e2eEncryption=false;await saveStateDurable({fromPull:true,source:'synthetic-legacy-plaintext-choice'});});
+    c.row={...c.row,data:{plain:await a.page.evaluate(()=>sanitizeForCloud(state))}};
+    let seen,release;const reached=new Promise(r=>seen=r),held=new Promise(r=>release=r);
+    c.beforeReadReply=async()=>{seen();await held;};
+    const pulling=invoke(a,'cloudPull');await reached;
+    await a.page.evaluate(async()=>{state.settings.e2eEncryption=true;await saveStateDurable({fromPull:true,source:'synthetic-require-encryption-during-read'});});
+    const before=await snapshot(a);release();const result=await pulling;
+    assert.equal(result.code,'FH_SYNC_ENCRYPTION_REQUIRED');assert.deepEqual(await snapshot(a),before);
+    assert.equal(await a.page.evaluate(()=>state.settings.e2eEncryption),true);
+    evidence.push({detail:'inflight-encryption-choice',result,requests:c.requests});
+  });
+  await scenario('confirmed protocol pin survives reload and rejects a higher-revision downgrade',async()=>{
+    const {c,devices}=await setup([true,false,false]);const[a,b,d]=devices;
+    const oldEnvelope=structuredClone(c.row.data);
+    assert.equal((await invoke(b,'cloudPush')).ok,true);assert.equal((await invoke(d,'cloudPull')).ok,true);
+    for(const x of[b,d]){await x.page.reload({waitUntil:'load'});await x.page.waitForFunction(()=>!!window.state);await x.page.waitForTimeout(600);assert.equal(await x.page.evaluate(()=>state.sync.cloudProtocolVersion),2);}
+    c.row={...c.row,cloud_rev:c.row.cloud_rev+1,data:oldEnvelope};
+    for(const x of[b,d]){const prev=await snapshot(x);const pull=await invoke(x,'cloudPull');assert.equal(pull.code,'FH_SYNC_UPDATE_REQUIRED');assert.deepEqual(await snapshot(x),prev);}
+    evidence.push({detail:'durable-protocol-pin',requests:c.requests});
+  });
+
 }finally{
   await Promise.all(contexts.map(c=>c.close()));await browser.close();await new Promise(r=>server.close(r));
   await mkdir(path.join(root,'test-results'),{recursive:true});

@@ -117,7 +117,7 @@
  * into cache-served HTML too.
  */
 const BUILD_ID    = "fh-2026-09-27-v10-64-1-audited";
-const BUNDLE_HASH = "2243e295c64bcef0fa765c1c37ea394b2eec65db07b94deb574c205db270b065";
+const BUNDLE_HASH = "00a4f782407e860434b4239d414df91c28a02d2f250bcd3cc2b2b5aef2ec03e7";
 const CACHE_NAME  = `focus-hero-${BUILD_ID}-${BUNDLE_HASH}`;
 /* BEGIN MODULE INTEGRITY */
 const MODULE_INTEGRITY = {
