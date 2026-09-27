@@ -341,7 +341,7 @@
     var result=original.apply(window,args);
     var claim=args&&args[0], claimId=claim&&claim.sessionId;
     var rec=newRecord(before) || (result&&result.record) || (claimId?(S().sessionsLog||[]).find(function(r){return r&&r.id===claimId;}):null);
-    if(rec&&!(result&&result.duplicate===true)){rec.priorityVerified=!!priorityPassed||!!rec.priorityVerified;var raw=int(rec.xpRaw!=null?rec.xpRaw:rec.xp),actual=rec.rewarded?int(window.rewardXpTotal(raw)):0;var ctx={xpRaw:raw,xp:actual,xpMultiplier:raw?actual/raw:1,coins:rec.rewarded?int(window.computeCoins(rec.minutes,true)):0,coinBase:rec.rewarded?int(window.computeCoins(rec.minutes,false)):0,combo:int(rec.comboPriorCount),streak:int(rec.streakForCalc)};ctx.coinMultiplier=ctx.coinBase?ctx.coins/ctx.coinBase:1;patchRecord(rec,ctx);upsertGrant(rec);}
+    if(rec&&!(result&&result.duplicate===true)){rec.priorityRun=!!priorityPassed;rec.priorityVerified=!!priorityPassed||!!rec.priorityVerified;var raw=int(rec.xpRaw!=null?rec.xpRaw:rec.xp),actual=rec.rewarded?int(window.rewardXpTotal(raw)):0;var ctx={xpRaw:raw,xp:actual,xpMultiplier:raw?actual/raw:1,coins:rec.rewarded?int(window.computeCoins(rec.minutes,true)):0,coinBase:rec.rewarded?int(window.computeCoins(rec.minutes,false)):0,combo:int(rec.comboPriorCount),streak:int(rec.streakForCalc)};ctx.coinMultiplier=ctx.coinBase?ctx.coins/ctx.coinBase:1;patchRecord(rec,ctx);upsertGrant(rec);}
     S().timer.priorityRun=false;saveRender();return result;
   }
   function prioritySucceededForRun(claim){
@@ -448,10 +448,15 @@
           return result;
         }
         if(deferAutoStart&&S()&&S().settings)S().settings.autoStart=true;
-        var persistenceOk=false,persistenceError=null;
+        var persistenceOk=false,persistenceError=null,commandState=S(),commandRaw=JSON.stringify(S());
         try{
           if(typeof window.saveStateDurable!=="function")throw new Error("durable primary save is unavailable");
-          persistenceOk=await window.saveStateDurable({source:"accounting:"+name})===true;
+          var pendingSave=window.saveStateDurable({source:"accounting:"+name});
+          /* Save preparation may update queue metadata synchronously. From
+             this point on, any replacement or changed bytes belong to newer
+             activity and are not ours to roll back after the awaited write. */
+          if(S()===commandState)commandRaw=JSON.stringify(commandState);
+          persistenceOk=await pendingSave===true;
         }
         catch(error){
           persistenceError=error;
@@ -462,6 +467,13 @@
             try{window.toast("Accounting is locked because device storage could not be verified. Do not retry; export raw state and use Recovery.","warn");}catch(_){}
             accountingCommandActive=null;
             return storageIndeterminateResult(persistenceError);
+          }
+          if(S()!==commandState||JSON.stringify(S())!==commandRaw){
+            var changedError=new Error("The save failed while newer activity arrived. Newer data was kept; the accounting result must be verified before retrying.");
+            if(typeof window.activateAccountingStorageIndeterminate==="function")window.activateAccountingStorageIndeterminate({reason:changedError.message,source:"accounting:"+name,rollbackVerified:false},{show:false});
+            try{window.toast("The save could not be confirmed. Your newer activity was kept. Accounting is paused until storage can be verified; do not retry this session.","warn");}catch(_){}
+            accountingCommandActive=null;
+            return Object.assign(storageIndeterminateResult(changedError),{newerStatePreserved:true});
           }
           window.state=snapshot;
           renderAccountingSnapshotWithoutPersistence(snapshot);
@@ -551,12 +563,30 @@
   window.fhValidateFocusEconomy=validateEconomy;
 
   function updateToggle(){var el=document.getElementById("tog-prioritymode"),on=!!(S()&&S().settings&&S().settings.priorityMode);if(!el)return;el.setAttribute("aria-checked",on?"true":"false");el.classList.toggle("on",on);}
-  function updatePriorityUi(){
+  var priorityChoiceGeneration=0;
+  function updatePriorityUi(options){
+    if(options&&options.invalidatePending)priorityChoiceGeneration++;
     var s=S();if(!s)return;ensure();var badge=document.getElementById("priority-mode-badge"),armed=!!s.timer.priorityRun&&(s.timer.running||int(s.timer.swAccumulatedMs)>0||int(s.timer.msLeft)===0),on=!!s.settings.priorityMode;
     if(badge){badge.textContent=armed?"Priority · ARMED":(on?"Priority · ON":"Priority · OFF");badge.classList.toggle("armed",armed);badge.setAttribute("aria-pressed",on?"true":"false");}
     updateToggle();
   }
-  function togglePriority(){ensure();S().settings.priorityMode=!S().settings.priorityMode;window.saveState();updatePriorityUi();window.toast(S().settings.priorityMode?"Priority mode on — use the shared Cancel run button for zero credit if needed.":"Priority mode off for new focus runs.","info");}
+  function togglePriority(){
+    ensure();var s=S(),beforeMode=s.settings.priorityMode,beforeRun=s.timer.priorityRun;
+    var choiceGeneration=++priorityChoiceGeneration;
+    s.settings.priorityMode=!s.settings.priorityMode;
+    if(s.timer.mode==="focus"||s.timer.mode==="stopwatch")s.timer.priorityRun=s.settings.priorityMode;
+    var nextMode=s.settings.priorityMode,nextRun=s.timer.priorityRun,timer=s.timer;
+    var finish=function(saved){
+      if(saved===false){
+        if(choiceGeneration===priorityChoiceGeneration&&S()===s&&s.timer===timer&&s.settings.priorityMode===nextMode&&s.timer.priorityRun===nextRun){s.settings.priorityMode=beforeMode;s.timer.priorityRun=beforeRun;}
+        updatePriorityUi();window.toast("Priority could not be saved. Check this clock's choice before continuing.","warn");return false;
+      }
+      updatePriorityUi();window.toast(nextMode?"Priority on for this clock — use Cancel run for zero credit if needed.":"Priority off for this clock.","info");return true;
+    };
+    var saved;try{saved=window.saveState();}catch(_){return finish(false);}
+    return saved&&typeof saved.then==="function"?saved.then(finish,function(){return finish(false);}):finish(saved);
+  }
+  window.fhUpdatePriorityUi=updatePriorityUi;
   function installDom(){
     if(!document.getElementById("fhe-style")){
       var st=document.createElement("style");st.id="fhe-style";st.textContent=[

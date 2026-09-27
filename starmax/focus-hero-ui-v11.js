@@ -1344,6 +1344,9 @@
     swAccumulatedMs: 0, swLaps: [], swSessionStartedAt: 0,
     swWorkoutMode: false, liveAdjustedAt: 0
   };
+  /* Only choices that affect this run belong to a parked clock. Theme,
+     account settings and past session records remain outside the snapshot. */
+  var CLOCK_SESSION_SETTINGS = ["gameMode", "priorityMode", "lockedInXpPct"];
 
   var CLOCK_STRIP_CSS = [
     '#fh11-clocks{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;',
@@ -1406,6 +1409,12 @@
       catch (e) { snap[f] = null; }
     });
     snap.activeTaskId = effectiveTaskId();
+    snap.sessionSettings = {};
+    CLOCK_SESSION_SETTINGS.forEach(function (key) {
+      var value = S().settings && S().settings[key];
+      if (value !== undefined) snap.sessionSettings[key] = JSON.parse(JSON.stringify(value));
+    });
+    if (S().adventure && typeof S().adventure.action === "string") snap.adventureAction = S().adventure.action;
     return snap;
   }
 
@@ -1424,6 +1433,17 @@
       try { t[f] = JSON.parse(JSON.stringify(value)); }
       catch (e) { t[f] = JSON.parse(JSON.stringify(RUN_DEFAULTS[f])); }
     });
+    /* Older parked clocks have no settings snapshot. Leave those unknown
+       choices unchanged rather than inventing or migrating their history. */
+    var choices = slot.sessionSettings;
+    if (choices && typeof choices === "object" && s.settings) {
+      CLOCK_SESSION_SETTINGS.forEach(function (key) {
+        if (Object.prototype.hasOwnProperty.call(choices, key)) s.settings[key] = choices[key];
+      });
+    }
+    if ((!choices || typeof choices.priorityMode !== "boolean") && typeof slot.priorityRun === "boolean" && s.settings) s.settings.priorityMode=slot.priorityRun;
+    if ((!choices || typeof choices.gameMode !== "boolean") && typeof window.toast === "function") window.toast("This older clock did not save Locked In; check it once.","info");
+    if (typeof slot.adventureAction === "string" && s.adventure) s.adventure.action = slot.adventureAction;
     t.running = false; t.endAt = 0; t.pausedAt = Date.now();
     try {
       s.activeTaskId = t.activeTaskId || null;   // idle-state truth, including explicit clear
@@ -1432,6 +1452,10 @@
     try { if (typeof window.renderModeTabs === "function") window.renderModeTabs(); } catch (e) {}
     try { if (typeof window.renderActiveTaskRow === "function") window.renderActiveTaskRow(); } catch (e) {}
     try { if (typeof window.renderTasks === "function") window.renderTasks(); } catch (e) {}
+    try { if (typeof window.updateGameModeIndicator === "function") window.updateGameModeIndicator(); } catch (e) {}
+    try { if (typeof window.renderWorkoutModeUi === "function") window.renderWorkoutModeUi(); } catch (e) {}
+    try { if (typeof window.fhUpdatePriorityUi === "function") window.fhUpdatePriorityUi({invalidatePending:true}); } catch (e) {}
+    try { if (typeof window.renderActionPicker === "function") window.renderActionPicker(); } catch (e) {}
   }
 
   function pauseLiveIfRunning() {
@@ -1730,13 +1754,22 @@
     var beforeClocks=s?JSON.parse(JSON.stringify(s.fh11Clocks||{slots:[]})):{slots:[]};
     var beforeTimer=s&&s.timer?JSON.parse(JSON.stringify(s.timer)):null;
     var beforeActiveTaskId=s?s.activeTaskId:null;
+    var sessionChoices=function(){return CLOCK_SESSION_SETTINGS.map(function(key){return s&&s.settings&&s.settings[key];}).concat([s&&s.adventure&&s.adventure.action]);};
+    var beforeSettings=sessionChoices();
     if(c.slots.length){
       var incoming=c.slots.shift();
       thaw(incoming);
     }
     renderClocks();ensureClockAffordance();
+    var installedTimer=s&&s.timer,installedClocks=s&&s.fh11Clocks;
+    var installedRaw=JSON.stringify([installedTimer,installedClocks,s&&s.activeTaskId,sessionChoices()]);
     var rollback=function(error){
-      if(s){s.fh11Clocks=beforeClocks;if(beforeTimer)s.timer=beforeTimer;s.activeTaskId=beforeActiveTaskId;}
+      if(S()===s&&s.timer===installedTimer&&s.fh11Clocks===installedClocks&&
+         JSON.stringify([s.timer,s.fh11Clocks,s.activeTaskId,sessionChoices()])===installedRaw){
+        s.fh11Clocks=beforeClocks;if(beforeTimer)s.timer=beforeTimer;s.activeTaskId=beforeActiveTaskId;
+        CLOCK_SESSION_SETTINGS.forEach(function(key,index){if(beforeSettings[index]!==undefined)s.settings[key]=beforeSettings[index];});
+        if (s.adventure && beforeSettings[CLOCK_SESSION_SETTINGS.length] !== undefined) s.adventure.action = beforeSettings[CLOCK_SESSION_SETTINGS.length];
+      }
       try{renderClocks();ensureClockAffordance();if(typeof window.renderTimer==="function")window.renderTimer();}catch(_){}
       throw error;
     };
@@ -1758,15 +1791,35 @@
     var orig=window.finalizeStopwatch;
     var wrapped=function(){
       var s=S(),before=s?Number(s.completedFocusSessions)||0:0;
+      var expectedState,expectedTimer,expectedClockRaw;
+      var clockReceipt=function(live){return JSON.stringify([live&&live.timer,live&&live.fh11Clocks,live&&live.activeTaskId,
+        CLOCK_SESSION_SETTINGS.map(function(key){return live&&live.settings&&live.settings[key];}),live&&live.adventure&&live.adventure.action]);};
       var finish=function(result){
         var live=S();
-        if(!(result&&result.ok===false)&&live&&(Number(live.completedFocusSessions)||0)>before&&
+        var loggedRecord=result&&result.logged&&result.sessionId&&live&&
+          (live.sessionsLog||[]).some(function(row){return row&&row.id===result.sessionId;});
+        var done=function(){
+          if(result&&result.ok!==false&&result.subMinute&&typeof window.toast==="function")window.toast(result.seconds+"s logged — under a minute, so no XP, loot or session credit.","info");
+          return result;
+        };
+        if(!(result&&(result.ok===false||result.noChange||result.duplicate))&&live&&(loggedRecord||(Number(live.completedFocusSessions)||0)>before)&&
            (clocks().slots.length||document.getElementById("fh11-clocks"))){
-          return Promise.resolve(retireLoggedLiveClock()).then(function(){return result;});
+          /* Another run, clock switch, or primary-state replacement may arrive
+             while the durable accounting receipt is pending. It owns the live
+             engine now; this completed run must not promote over it. */
+          if(live!==expectedState||live.timer!==expectedTimer||clockReceipt(live)!==expectedClockRaw){
+            if(typeof window.toast==="function")window.toast("The session was saved. Your newer clock choices were kept.","info");
+            return Object.assign({},result||{ok:true,logged:true},{clockChangedWhileSaving:true});
+          }
+          return Promise.resolve(retireLoggedLiveClock()).then(done,function(){
+            if(typeof window.toast==="function")window.toast("The session was saved, but the next-clock change could not be confirmed. Your remaining clocks were kept.","warn");
+            return Object.assign({},result||{ok:true,logged:true},{clockRetirementPending:true});
+          });
         }
-        return result;
+        return done();
       };
       var out=orig.apply(this,arguments);
+      expectedState=S();expectedTimer=expectedState&&expectedState.timer;expectedClockRaw=clockReceipt(expectedState);
       return out&&typeof out.then==="function"?out.then(finish):finish(out);
     };
     wrapped.__fh11ClockLifecycle=true;

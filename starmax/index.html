@@ -9220,11 +9220,13 @@ function normalizeSessionDetails(raw){
     beforeMinutes:Math.max(0,Math.round(Number(event?.beforeMinutes)||0)), afterMinutes:Math.max(0,Math.round(Number(event?.afterMinutes)||0)),
     deltaMinutes:Math.round(Number(event?.deltaMinutes)||0)
   })).filter(event=>event.at>0);
-  return { version:1, runId:String(raw.runId||"").slice(0,120), startedAt:cleanTime(raw.startedAt), completedAt:cleanTime(raw.completedAt), pauses, timeChanges };
+  return { version:1, runId:String(raw.runId||"").slice(0,120), startedAt:cleanTime(raw.startedAt), completedAt:cleanTime(raw.completedAt), pauses, timeChanges,
+    ...(typeof raw.adventureZoneId === "string" && raw.adventureZoneId ? {adventureZoneId:raw.adventureZoneId.slice(0,120)} : {}) };
 }
 function beginTimerRunDetails(at){
   at=Math.max(1,Math.round(Number(at)||now()));
   state.timer.runDetails={version:1,runId:"run_"+at+"_"+Math.random().toString(36).slice(2,8),startedAt:at,completedAt:0,pauses:[],timeChanges:[]};
+  if (typeof state.world?.currentZone === "string" && state.world.currentZone) state.timer.runDetails.adventureZoneId=state.world.currentZone;
   return state.timer.runDetails;
 }
 function ensureTimerRunDetails(at){
@@ -9849,13 +9851,22 @@ function lapStopwatch(){
   state.timer.swLaps = appendStopwatchLap(state.timer.swLaps, elapsed, now());
   saveState(); renderSwLaps();
 }
+/* A completed stopwatch never remains a resumable copy of the logged time. */
+function resetLoggedStopwatch(){
+  Object.assign(state.timer,{running:false,endAt:0,pausedAt:0,msLeft:0,plannedMs:0,
+    swAccumulatedMs:0,swStartedAt:0,swSessionStartedAt:0,swLaps:[],
+    workoutMode:false,swWorkoutMode:false,runDetails:null,liveAdjustedAt:0,
+    activeTaskId:null,activeTaskNameAtStart:null,priorityRun:false});
+  clearStopwatchRuntimeAnchor();
+  stopKeepalive();releaseWakeLock();
+}
 /* v4.1: stop-and-log a stopwatch session — runs the focus reward pipeline. */
 function finalizeStopwatch(){
   if (!isStopwatch()) return {ok:false,noChange:true,reason:"not_stopwatch"};
   const stopwatchCompletedAt = now();
   const workoutSession = state.timer.workoutMode === true;
   const stopwatchSessionDetails = snapshotTimerRunDetails(stopwatchCompletedAt);
-  /* Validate the one-minute accounting floor before changing the live clock.
+  /* Validate the minimum elapsed time before changing the live clock.
      The durable accounting boundary treats noChange as a rollback receipt, so
      an accidental early Stop & Log leaves the running stopwatch and UI intact. */
   const elapsedAtStop = stopwatchElapsedMs(state.timer,stopwatchCompletedAt,monotonicNowMs());
@@ -9878,22 +9889,28 @@ function finalizeStopwatch(){
       toast("Nothing to log yet — stopwatch is still running.", "warn");
       return {ok:false,noChange:true,reason:"under_minimum"};
     }
-    if (state.timer.running){
-      state.timer.swAccumulatedMs = elapsedAtStop;
-      state.timer.swStartedAt = 0;
-      clearStopwatchRuntimeAnchor();
-      state.timer.running = false;
-    }
-    try {
-      pushSessionLog({ id: uid(), type:"focus", action:"focus", minutes:0, seconds,
-        at: now(), taskId: state.timer.activeTaskId || null,
-        taskLabel: currentSessionTaskLabel(), rewarded:false, subMinute:true,
-        source:"stopwatch" });
-    } catch(_){}
+    const taskLabel = currentSessionTaskLabel();
+    const day = todayKey(new Date(stopwatchCompletedAt));
+    const record = {
+      id:uid(),type:"focus",action:currentAdventureActionId(),source:"stopwatch",
+      minutes:0,seconds,elapsedMs:elapsedAtStop,at:stopwatchCompletedAt,localDay:day,dayKey:day,
+      taskId:state.timer.activeTaskId||null,taskName:taskLabel,taskLabel,
+      rewarded:false,subMinute:true,xp:0,sessionCountApplied:0,dailyFocusApplied:0,dailyMinApplied:0,
+      lockedInRun:!!(state.settings&&state.settings.gameMode),
+      lockedInPct:lockedInPctNow(!!(state.settings&&state.settings.gameMode)),
+      priorityRun:!!state.timer.priorityRun,priorityVerified:false,workoutSession,
+      startedAt:stopwatchSessionDetails.startedAt||nonNegativeNumber(state.timer.swSessionStartedAt),
+      completedAt:stopwatchCompletedAt,sessionDetails:stopwatchSessionDetails,
+      stopwatchLaps:Array.isArray(state.timer.swLaps)?deepClone(state.timer.swLaps):[]
+    };
+    // A failed record insertion must reach the accounting rollback boundary.
+    pushSessionLog(record);
+    resetLoggedStopwatch();
     saveState();
     try { renderAll(); } catch(_){}
-    toast(seconds + "s logged — under a minute, so no XP or loot.", "info");
-    return {ok:true, logged:true, seconds, rewarded:false, reason:"under_minimum_logged"};
+    // The outer durable receipt confirms success before the clock UI announces it.
+    return {ok:true,logged:true,sessionId:record.id,seconds,elapsedMs:elapsedAtStop,
+      subMinute:true,rewarded:false,reason:"under_minimum_logged"};
   }
   // Capture elapsed only after the run is eligible to log.
   if (state.timer.running){
@@ -9937,7 +9954,7 @@ function finalizeStopwatch(){
     /* v8.x: multi-encounter loot pipeline replaces the single rollLoot() call.
        Falls back to legacy if loot-rework.js failed to load. */
     var __lrSwSessId = "sw_" + Date.now() + "_" + Math.floor(Math.random()*1e6);
-    var __lrSwRun = runSessionRewardPipeline(currentAdventureActionId(), minutes, __lrSwSessId);
+    var __lrSwRun = runSessionRewardPipeline(currentAdventureActionId(), minutes, __lrSwSessId, {zoneId:stopwatchSessionDetails.adventureZoneId});
     lootItem = __lrSwRun.legacyItem;
     updateDailyProgress("focus", 1);
     updateDailyProgress("minutes", minutes);
@@ -9997,24 +10014,10 @@ function finalizeStopwatch(){
   }
   showXpBreakdown(xp, Object.assign({}, breakdownMeta, { sessionId: sessionRecord.id }));
   playChime(false);
-  // reset stopwatch counter, stay in stopwatch mode for another session
-  state.timer.swAccumulatedMs = 0;
-  state.timer.swStartedAt = 0;
-  clearStopwatchRuntimeAnchor();
-  state.timer.swSessionStartedAt = 0;
-  state.timer.swLaps = []; // v4.2.1: clear laps with the rest of the session state
-  state.timer.workoutMode = false;
-  state.timer.swWorkoutMode = false;
-  state.timer.runDetails = null;
-  /* v7.4 fix (Joel report: task switch sticks): also clear the in-flight task
-     pointer here so the next stopwatch start re-snapshots from state.activeTaskId
-     (which IS whatever the user last selected). Same root cause as the
-     completeSession fix; both finalization paths used to leave a stale pointer. */
-  state.timer.activeTaskId = null;
-  state.timer.activeTaskNameAtStart = null;
-  stopKeepalive(); releaseWakeLock();
+  resetLoggedStopwatch();
   checkAchievements({ source:"stopwatchComplete", suppressRewards:__timeOnly });
   saveState(); renderAll();
+  return {ok:true,logged:true,sessionId:sessionRecord.id,minutes,elapsedMs:elapsedAtStop};
 }
 function ensureTickInterval(){
   if (tickInterval) return;
@@ -10560,7 +10563,7 @@ function commitFocusTimerSession(claim, minutes){
     state.hero.hp = Math.min(100, state.hero.hp + 2);
     /* v8.x: multi-encounter loot pipeline. */
     var __lrSessId = claimSessionId || ("focus_" + Date.now() + "_" + Math.floor(Math.random()*1e6));
-    var __lrRun = runSessionRewardPipeline(claim.action || currentAdventureActionId(), minutes, __lrSessId);
+    var __lrRun = runSessionRewardPipeline(claim.action || currentAdventureActionId(), minutes, __lrSessId, {zoneId:claim.sessionDetails?.adventureZoneId});
     lootItem = __lrRun.legacyItem;
     updateDailyProgress("focus", 1);
     updateDailyProgress("minutes", minutes);
@@ -19300,9 +19303,9 @@ function renderAnalytics(){
 let burstInterval = null;
 function currentAdventureActionId(){ ensureV76StateShape(state); return normalizeAdventureAction(state.adventure?.action); }
 function currentAdventureSpec(){ return ACTION_BY_ID[currentAdventureActionId()] || ACTION_BY_ID.Travel; }
-function runSessionRewardPipeline(action, minutes, sessionId){
+function runSessionRewardPipeline(action, minutes, sessionId, options){
   return (typeof lrSessionEndLootPipeline === "function")
-    ? lrSessionEndLootPipeline(action, minutes, sessionId)
+    ? lrSessionEndLootPipeline(action, minutes, sessionId, options)
     : { legacyItem: rollLoot(minutes), drops:[], encounters:[] };
 }
 function buildSessionLogRecordV76(meta){
@@ -20917,6 +20920,11 @@ function applySessionEdit(sessionId,newMinutes,opts){
   saveState(); renderAll();
   return{ok:true,sessionId,oldMinutes,newMinutes:nm,newMinutesCap:cap,minutesDelta:-delta,xpDelta:-xpDelta,rewardedAfter:xpInfo.willReward, clawback:__clawbackResult, clamped:__clampedEdit, requested:raw};
 }
+function sessionRecordedDurationLabel(rec){
+  const minutes=Math.max(0,Number(rec?.minutes)||0);
+  const seconds=Number(rec?.elapsedMs)>0?Math.floor(Number(rec.elapsedMs)/1000):Math.floor(Number(rec?.seconds)||0);
+  return rec?.subMinute&&minutes===0&&seconds>0 ? seconds+"s" : (minutes|0)+"m";
+}
 function renderEditableSessionRows(){
   const rows=(state.sessionsLog||[]).filter(r=>r&&r.type==="focus").slice(-8).reverse();
   if(!rows.length)return`<div class="analytics-empty">No editable focus sessions yet.</div>`;
@@ -20925,7 +20933,7 @@ function renderEditableSessionRows(){
     const dt=r.at?new Date(r.at).toLocaleString():"unknown time";
     const editable=canEditSessionRecord(r);
     const marks = `${sessionLockedInState(r).on?" 🔒":""}${sessionPriorityState(r).on?" ⭐":""}`;
-    return`<div class="session-row ${r.edited?"edited":""}"><div class="ttl">${escapeHtml(task?.emoji||"⏱️")} ${escapeHtml(task?.name||r.action||"Focus")}${marks} <span class="muted">${escapeHtml(dt)}</span></div><div class="min">${r.minutes|0}m</div>${editable?`<button class="edit-btn" data-edit-session="${escapeHtml(r.id)}">Edit</button>`:`<span class="muted" style="font-size:.7rem">locked</span>`}</div>`;
+    return`<div class="session-row ${r.edited?"edited":""}"><div class="ttl">${escapeHtml(task?.emoji||"⏱️")} ${escapeHtml(task?.name||r.action||"Focus")}${marks} <span class="muted">${escapeHtml(dt)}</span></div><div class="min">${sessionRecordedDurationLabel(r)}</div>${editable?`<button class="edit-btn" data-edit-session="${escapeHtml(r.id)}">Edit</button>`:`<span class="muted" style="font-size:.7rem">locked</span>`}</div>`;
   }).join("")}</div>`;
 }
 let sessionEditModalId = null;
@@ -24429,7 +24437,7 @@ function renderSessionHistoryPanel(){
   const hasSessionLedger = !!(state.sessionHistory && Object.keys(state.sessionHistory).some(day=>last30Keys.has(day)));
   const sessions30 = hasSessionLedger
     ? Object.keys(state.sessionHistory||{}).reduce((total,day)=>total+(last30Keys.has(day)?Math.max(0,(state.sessionHistory[day]|0)):0),0)
-    : last30.filter(r=>r.source!=="ledger").length;
+    : last30.filter(r=>r.source!=="ledger"&&!r.subMinute).length;
   const xp30 = sum(last30, r=>r.xp || r.xpBreakdown?.total || 0);
   const rewarded30 = last30.filter(r=>r.rewarded).length;
   const corrections = (state.activityLog||[]).filter(a=>a&&a.category==="edit"&&a.action==="time_edit"&&a.source==="ledger"&&(a.delta|0)<0);
@@ -24499,7 +24507,7 @@ function renderSessionHistoryPanel(){
     return `<div class="session-history-row">
       <div class="session-history-date">${escapeHtml(sessionHistoryDateLabel(rec.at))}</div>
       <div class="session-history-task"><b>${escapeHtml(task)}</b><span>${escapeHtml(source)} · ${escapeHtml(action)}</span>${skillPicker}${detailHtml}</div>
-      <div class="session-history-meta">${mins}m</div>
+      <div class="session-history-meta">${sessionRecordedDurationLabel(rec)}</div>
       <div class="session-history-meta">+${xp} XP</div>
       <div class="session-history-meta">${escapeHtml(loot)}</div>
       <div class="session-history-actions">${workoutSession?'<span class="session-history-pill workout">workout</span>':''}<span class="session-history-pill${pillCls}">${pillText}</span>${edit}</div>
