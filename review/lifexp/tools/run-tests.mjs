@@ -13,12 +13,12 @@ const assets = resolve(root, 'starmax');
 const logs = resolve(root, 'test-results');
 const run = promisify(execFile);
 const browserSuites = [
-  'boot', 'core', 'sync', 'themes', 'audio', 'stability', 'panels', 'audit',
+  'mobile-webkit', 'boot', 'core', 'sync', 'themes', 'audio', 'stability', 'panels', 'audit',
   'scenes', 'scroll', 'hardcore', 'devices', 'budget', 'skillremoval',
   'hourremoval', 'mergereduce', 'guardreduce', 'runmode', 'animpause', 'heroxp',
   'latestart', 'runmodehistory', 'conflictresolve', 'quietalarms', 'forceupdate',
   'adoption-presentation', 'contrast-themes', 'gearworld',
-  'clock-session-controls', 'clock-save-races', 'persistence-clock-audit', 'mobile-webkit'
+  'clock-session-controls', 'clock-save-races', 'persistence-clock-audit'
 ];
 const mime = { '.html':'text/html', '.js':'application/javascript', '.json':'application/json',
   '.webmanifest':'application/manifest+json', '.svg':'image/svg+xml', '.png':'image/png' };
@@ -74,6 +74,9 @@ try {
       const result = { name:job.name, passed:!error, elapsedMs:Date.now() - started, error };
       results.push(result);
       console.log(`${result.passed ? 'PASS' : 'FAIL'} ${job.name} (${Math.round(result.elapsedMs / 1000)}s)`);
+      // Surface synthetic failure evidence while CI is still running; retain
+      // the complete output in the artifact without flooding the live log.
+      if(error)console.error(output.slice(-16000));
       await writeFile(resolve(logs, 'summary.json'), JSON.stringify(results, null, 2) + '\n');
     }
   }

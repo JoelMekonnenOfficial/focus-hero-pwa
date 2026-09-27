@@ -11,7 +11,12 @@ import {launch} from './harness.mjs';
 const root=fileURLToPath(new URL('../',import.meta.url));
 const base='d9d8d6c0a24a6d4cdd84cd3f97a178b33f197265';
 const files=readdirSync(resolve(root,'starmax'));
-const previousNames=execFileSync('git',['ls-tree','--name-only',base+':starmax'],{cwd:root}).toString().trim().split('\n');
+// CI packages this candidate below the historical repository root. Without
+// --full-tree, ls-tree silently applies that cwd prefix to the selected tree.
+const historicalNames=cwd=>execFileSync('git',['ls-tree','--full-tree','--name-only','-z',base+':starmax'],{cwd}).toString().split('\0').filter(Boolean);
+const previousNames=historicalNames(root);
+assert.deepEqual(historicalNames(resolve(root,'tests')),previousNames,'Historical fixture enumeration must not depend on repository-relative cwd');
+for(const required of ['sw.js','index.html','focus-hero.html','gear-utility.js','focus-economy.js'])assert(previousNames.includes(required),'Historical release fixture is missing '+required);
 const previous=Object.fromEntries(previousNames.map(name=>[name,execFileSync('git',['show',base+':starmax/'+name],{cwd:root,maxBuffer:5e6})]));
 const next=Object.fromEntries(files.map(name=>[name,readFileSync(resolve(root,'starmax',name))]));
 const sha=body=>createHash('sha256').update(body).digest('hex');
