@@ -11369,7 +11369,7 @@ function startActiveTaskRename(){
   if (activeTaskRowEditing) return;
   activeTaskRowEditing = true;
   const host = $("#active-task-label"); if (!host) return;
-  host.innerHTML = `<span>${t.emoji}</span><input type="text" id="active-task-rename" maxlength="40" value="${escapeHtml(t.name)}" aria-label="Rename task">`;
+  host.innerHTML = `<span>${escapeHtml(t.emoji||"")}</span><input type="text" id="active-task-rename" maxlength="40" value="${escapeHtml(t.name)}" aria-label="Rename task">`;
   const input = $("#active-task-rename");
   input.focus(); input.select();
   const commit = () => {
@@ -14334,7 +14334,7 @@ function renderActiveTaskRow(){
   }
   row.hidden = false;
   const host = $("#active-task-label");
-  host.innerHTML = `<span>${t.emoji}</span> <b class="active-task-name">${escapeHtml(t.name)}</b> <button class="active-task-switch" type="button" title="Switch this session to a different task">⇋ Switch</button>`;
+  host.innerHTML = `<span>${escapeHtml(t.emoji||"")}</span> <b class="active-task-name">${escapeHtml(t.name)}</b> <button class="active-task-switch" type="button" title="Switch this session to a different task">⇋ Switch</button>`;
   host.onclick = (e)=>{
     if (e.target.closest(".active-task-switch")){ openTaskSwitcher(); return; }
     if (e.target.closest(".active-task-name") || e.target === host) startActiveTaskRename();
@@ -25334,7 +25334,7 @@ else boot();
   else window.addEventListener("load", function(){ setTimeout(boot,300); });
 })();
 </script>
-<script src="./focus-economy.js" integrity="sha384-sKgSmfIs+5Ho9hUAWh6ms/2Evr7Ls9dqooCTlK1uCOThcLC9g4QrFP/qKMszK7O8" crossorigin="anonymous"></script>
+<script src="./focus-economy.js" integrity="sha384-+AWFFShJcYxp6FNMSyRIV7y9UxCfZHLaTvEsqdRyQD11ZNl7xk8jT3PYpTGblh99" crossorigin="anonymous"></script>
 <script src="./loot-purpose-actions.js" integrity="sha384-RwF7kfAdNgvSfHQOgI/g9j7/TJeRH3iUQigqcomhxLom/d2ef7gBxcWSre1bRFrp" crossorigin="anonymous"></script>
 <script src="./gear-utility.js" integrity="sha384-5wr5Japtyg1xcF4ZoUlvXC+DCBYBEQAFJYtc3k4L86MoVPSm/JCC7C/OFaX1EHib" crossorigin="anonymous"></script>
 <script src="./progression-hub.js" integrity="sha384-GnCSkKkChKfdIdG/2WTUkdprDzRa4rODZU4XPNeeXylDOvQFEGNfar81FhMj1wQv" crossorigin="anonymous"></script>

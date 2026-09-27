@@ -117,7 +117,7 @@
  * into cache-served HTML too.
  */
 const BUILD_ID    = "fh-2026-09-27-v10-64-0-clock-world-rank";
-const BUNDLE_HASH = "49ba50efe811872c3bb9712a279f39d9017f26c287291f569148bc913a6b92f2";
+const BUNDLE_HASH = "259fe42ce0aead3ecdb00022b722cdec642676d31fb029d65fc6a16199f4bbf4";
 const CACHE_NAME  = `focus-hero-${BUILD_ID}-${BUNDLE_HASH}`;
 /* BEGIN MODULE INTEGRITY */
 const MODULE_INTEGRITY = {
@@ -136,7 +136,7 @@ const MODULE_INTEGRITY = {
   "fh-storage-relief.js": "sha384-2I6W3SyY4YJeu2zZGO5LpNzdcUOFPVOgy5PS/hcO790y+qhIaQ1A2QD0u8XwHbvw",
   "fh-sync-doctor-v1.js": "sha384-CUul7H+zW3FVlqcOr5Maqe5M7JYoCmfwE/U5TodvZwTkt92Azef4w+/CmnlzvQ1t",
   "fh-theater-v1.js": "sha384-sINesCJ+dsaF14OkysPDv+Faume1YDsAlvCrliO6jZK5r1hMw5wiXLC8Ioi5i3BI",
-  "focus-economy.js": "sha384-sKgSmfIs+5Ho9hUAWh6ms/2Evr7Ls9dqooCTlK1uCOThcLC9g4QrFP/qKMszK7O8",
+  "focus-economy.js": "sha384-+AWFFShJcYxp6FNMSyRIV7y9UxCfZHLaTvEsqdRyQD11ZNl7xk8jT3PYpTGblh99",
   "focus-hero-immersive-v1.js": "sha384-lNLnx/16nDrzfoY2PPlSiYQF1GkyZPCQmb66AQ/YvlRiEgHWrOcSecrriqiI3z9F",
   "focus-hero-ui-v11.js": "sha384-6UL9zvj89GRdJLi/aNLl0hbKynoEKvvioGz2ywHPYiPQ0zGBZfTOOD+AID3jpcnM",
   "game-shells.js": "sha384-WLEnqLSNJBxaiQtIl51AlWszBf9v6UTxroagZtdExs2v2EEu3lgLH+K/exT/Ynrg",
