@@ -52,7 +52,7 @@
   function eventWins(incoming,current){
     /* Deletion is an explicit terminal decision, not a clock comparison.
        A stale grant from a device with a faster clock cannot undo it. */
-    if(!!incoming.deleted!==!!current.deleted)return incoming.deleted===true;
+    if(!!incoming.deleted!==!!current.deleted)return !!incoming.deleted;
     var a=n(incoming.updatedAt||incoming.at),b=n(current.updatedAt||current.at);
     return a>b||(a===b&&stableEventText(incoming)>stableEventText(current));
   }

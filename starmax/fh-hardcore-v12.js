@@ -23,6 +23,7 @@
   var automaticInFlight = null;
   var boundaryTimer = null;
   var lifecycleBound = false;
+  var latestConflictClear = null;
 
   var PRESETS = [
     { id: "session1", label: "1 session a day", type: "sessions", value: 1 },
@@ -837,6 +838,14 @@
     return atMs >= w.fromMs && atMs < w.toMs;
   }
 
+  function laterWindowOverlaps(day, fromMs, toMs) {
+    var ordinal = dayOrdinal(day), next = ordinal == null ? null : dayFromOrdinal(ordinal + 1);
+    var w = null;
+    try { if (next) w = window.dayWindowFor(next); } catch (_) {}
+    return !!(w && Number.isFinite(w.fromMs) && Number.isFinite(w.toMs) &&
+      Math.max(fromMs, w.fromMs) < Math.min(toMs, w.toMs));
+  }
+
   function claimedByNeighbourWindow(day, atMs, self) {
     var ordinal = dayOrdinal(day);
     if (ordinal == null) return false;
@@ -868,7 +877,10 @@
       var dayHist = Math.max(0, Math.floor(Number(hist[d]) || 0));
       var dayStart = midnightOfDay(d, 0), dayEnd = midnightOfDay(d, 1);
       if (dayStart == null || dayEnd == null) continue;
-      if (w.fromMs <= dayStart && w.toMs >= dayEnd) { total += dayHist; continue; }
+      /* A 24h window can contain an entire 23h DST date. Its later window
+         still owns overlapping work, so only unsplit dates use this shortcut. */
+      if (w.fromMs <= dayStart && w.toMs >= dayEnd &&
+          !laterWindowOverlaps(dayKeyOfWindow(w), dayStart, dayEnd)) { total += dayHist; continue; }
       var sawTimestamped = false, part = 0;
       for (var i = 0; i < log.length; i++) {
         var rec = log[i];
@@ -941,7 +953,8 @@
       var dayCount = Math.max(0, Math.floor(Number(sh[d]) || 0));
       var dayStart = midnightOfDay(d, 0), dayEnd = midnightOfDay(d, 1);
       if (dayStart == null || dayEnd == null) continue;
-      if (w.fromMs <= dayStart && w.toMs >= dayEnd) { total += dayCount; continue; }
+      if (w.fromMs <= dayStart && w.toMs >= dayEnd &&
+          !laterWindowOverlaps(dayKeyOfWindow(w), dayStart, dayEnd)) { total += dayCount; continue; }
       var sawTimestamped = false, part = 0;
       for (var i = 0; i < log.length; i++) {
         var rec = log[i];
@@ -1821,6 +1834,8 @@
     if (clearConflict && state.fh12HardcoreConflict !== clearConflict) {
       return { ok:false, reason:"The Hardcore conflict changed before it could be saved; review the current copies." };
     }
+    var conflictClearToken = clearConflict ? {} : null;
+    if (clearConflict) latestConflictClear = conflictClearToken;
     var hadField = Object.prototype.hasOwnProperty.call(state, FIELD);
     var priorField = state[FIELD];
     var hadRank = Object.prototype.hasOwnProperty.call(state, "fhRank");
@@ -1851,8 +1866,10 @@
       if (S() === state && state[FIELD] === next && JSON.stringify(next) === installedHardcoreJSON) {
         restoreField(state, hadField, priorField);
       }
-      /* A newer in-place run edit does not confirm our quarantine clear. */
-      if (S() === state && clearConflict && state.fh12HardcoreConflict === null) state.fh12HardcoreConflict = clearConflict;
+      /* A newer in-place run edit does not confirm our quarantine clear.
+         A newer resolution does own its clear, even if the field is null again. */
+      if (S() === state && clearConflict && latestConflictClear === conflictClearToken &&
+          state.fh12HardcoreConflict === null) state.fh12HardcoreConflict = clearConflict;
       if (S() === state && state.fhRank === installedRank && JSON.stringify(installedRank) === installedRankJSON) {
         if (hadRank) state.fhRank = priorRank;
         else delete state.fhRank;
@@ -2464,29 +2481,37 @@
       } catch (_) {
         return { ok:false, reason:"These copies give the same run different locked details. Both copies remain protected for review; choosing one cannot safely resolve this conflict." };
       }
+      var activeIds = Object.create(null);
+      chosen.value.runs.concat(other.value.runs).forEach(function (run) { activeIds[run.id] = true; });
+      if (Object.keys(activeIds).length > MAX_CONCURRENT_RUNS) {
+        /* The ordinary merge applies its cap before this manual choice can
+           archive unchosen runs. Do not let that discard the chosen set. */
+        return { ok:false, reason:"These copies contain more than " + MAX_CONCURRENT_RUNS + " distinct active runs together. Both copies remain protected for review; nothing changed." };
+      }
     }
 
-    var next = withRuns(chosen.value, chosen.value.runs.map(function (run) {
-      var copy = clone(run);
-      copy.daysSurvived = verifiedRunDays(chosen.rawById[run.id], run);
-      return copy;
-    }));
+    /* A choice concerns distinct run IDs. Shared identities must still join
+       evidence and lifecycle exactly as ordinary sync does: choosing a copy
+       cannot erase a pause, excuse, reversal, or a newer terminal record. */
+    var next;
+    /* Pass original records: normalization supplies a lock for display, but
+       that cannot prove that a legacy survival total was originally verified. */
+    try { next = mergeHardcoreState(keep === "peer" ? conflict.peer : state[FIELD],
+      keep === "peer" ? state[FIELD] : conflict.peer); }
+    catch (error) { return { ok:false, reason:cleanText(error && error.message, "Those run copies could not be joined safely.", 180) }; }
     var history = next.history.slice();
     var archivedIds = [];
     if (other) {
-      /* Fold in every run summary the other copy knows about... */
-      var seen = Object.create(null);
-      history.forEach(function (row) { seen[row.id] = true; });
-      /* A matching identity is one run, not a second archive entry. */
-      runsOf(next).forEach(function (run) { seen[run.id] = true; });
-      other.value.history.forEach(function (row) { if (!seen[row.id]) { seen[row.id] = true; history.push(clone(row)); } });
+      var chosenIds = Object.create(null);
+      chosen.value.runs.forEach(function (run) { chosenIds[run.id] = true; });
+      var joinedRuns = runsOf(next);
+      next = withRuns(next, joinedRuns.filter(function (run) { return !!chosenIds[run.id]; }));
       /* Archive every distinct unchosen run. The normalized merge shape is
          a runs list, so reading its former active/run mirror loses evidence. */
-      for (var index = 0; index < other.value.runs.length; index++) {
-        var otherRun = other.value.runs[index];
-        if (seen[otherRun.id]) continue;
+      for (var index = 0; index < joinedRuns.length; index++) {
+        var otherRun = joinedRuns[index];
+        if (chosenIds[otherRun.id]) continue;
         var loser = clone(otherRun);
-        loser.daysSurvived = verifiedRunDays(other.rawById[otherRun.id], otherRun);
         delete loser.reinstatedAt;
         var endStamp = Math.max(
           finiteInt(loser.startedAt, 0, 0, Number.MAX_SAFE_INTEGER),
@@ -2499,7 +2524,6 @@
         loser.endReason = "superseded — you kept the other device's run";
         loser.missedDay = null;
         history.push(loser);
-        seen[loser.id] = true;
         archivedIds.push(loser.id);
       }
     }

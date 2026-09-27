@@ -216,6 +216,107 @@ test('a same-ID locked-identity disagreement keeps both copies quarantined witho
   }
 });
 
+test('conflict choices retain shared active and archived owner decisions from both copies',async()=>{
+  for(const choice of ['local','peer']){
+    const mine=run('shared'),peer=run('shared'),old=run('old'),oldPeer=run('old');
+    mine.excusedDays=['2026-09-25'];peer.excusedDays=['2026-09-26'];
+    peer.pauses=[{from:1234,to:5678}];
+    peer.rankReversedFailures=[{id:'hcf:shared:2026-09-26',day:'2026-09-26'}];
+    old.endedAt=oldPeer.endedAt=1000;old.endReason=oldPeer.endReason='ended';
+    oldPeer.excusedDays=['2026-09-25'];oldPeer.pauses=[{from:1234,to:5678}];
+    const p=profile([mine,run('mine-only',60)]);
+    p.fh12Hardcore.history=[old];
+    p.fh12HardcoreConflict={peer:profile([peer,run('peer-only',120)]).fh12Hardcore};
+    p.fh12HardcoreConflict.peer.history=[oldPeer];
+    const c=hardcore(p);assert.equal((await c.FH_HARDCORE.resolveMergeConflict(choice)).ok,true);
+    const live=c.state.fh12Hardcore.runs.find(r=>r.id==='shared');
+    assert.deepEqual(clone(live.excusedDays),['2026-09-25','2026-09-26']);
+    assert.equal(live.pauses.length,1);assert.equal(live.rankReversedFailures.length,1);
+    const archived=c.state.fh12Hardcore.history.find(r=>r.id==='old');
+    assert.deepEqual(clone(archived.excusedDays),['2026-09-25']);assert.equal(archived.pauses.length,1);
+  }
+});
+
+test('conflict choices retain a shared terminal decision and converge with the unchanged peer',async()=>{
+  for(const choice of ['local','peer']){
+    const live=run('shared'),ended=run('shared');
+    live.excusedDays=['2026-09-25'];ended.endedAt=at('2026-09-26T12:00:00-04:00');ended.endReason='ended';
+    ended.excusedDays=['2026-09-26'];
+    const p=profile([live]);p.fh12HardcoreConflict={peer:profile([]).fh12Hardcore};
+    p.fh12HardcoreConflict.peer.history=[ended];
+    const other=clone(p.fh12HardcoreConflict.peer),c=hardcore(p);
+    assert.equal((await c.FH_HARDCORE.resolveMergeConflict(choice)).ok,true);
+    const resolved=c.state.fh12Hardcore;assert.equal(resolved.runs.length,0);
+    assert.deepEqual(clone(resolved.history[0].excusedDays),['2026-09-25','2026-09-26']);
+    assert.deepEqual(canonical(clone(c.FH_HARDCORE.merge(resolved,other))),canonical(clone(resolved)));
+  }
+});
+
+test('conflict choice keeps a valid newer reinstatement with terminal-copy evidence',async()=>{
+  const live=run('shared'),ended=run('shared');
+  ended.endedAt=at('2026-09-26T12:00:00-04:00');ended.endReason='ended';ended.excusedDays=['2026-09-25'];
+  live.reinstatedAt=ended.endedAt+1;
+  const p=profile([live]);p.fh12HardcoreConflict={peer:profile([]).fh12Hardcore};
+  p.fh12HardcoreConflict.peer.history=[ended];const c=hardcore(p);
+  assert.equal((await c.FH_HARDCORE.resolveMergeConflict('local')).ok,true);
+  assert.equal(c.state.fh12Hardcore.runs.length,1);
+  assert.deepEqual(clone(c.state.fh12Hardcore.runs[0].excusedDays),['2026-09-25']);
+});
+
+test('spring-forward whole-date shortcut respects later ownership for minutes and sessions',()=>{
+  for(const timestamped of [true,false]){
+    const p=profile([run('sessions',1,'sessions')]);
+    p.lateStarts={'2026-03-07':{startMin:1410,declaredAt:1},'2026-03-08':{startMin:720,declaredAt:2}};
+    p.history['2026-03-08']=60;p.sessionHistory['2026-03-08']=1;
+    if(timestamped)p.sessionsLog=[{id:'one',type:'focus',minutes:60,sessionCountApplied:1,at:at('2026-03-08T14:00:00-04:00')}];
+    const c=hardcore(p,'2026-03-09T12:00:00-04:00');
+    assert.equal(c.FH_HARDCORE.minutesOn('2026-03-07')+c.FH_HARDCORE.minutesOn('2026-03-08'),60);
+    assert.equal(c.FH_HARDCORE.progress('2026-03-07').have+c.FH_HARDCORE.progress('2026-03-08').have,1);
+  }
+});
+
+test('legacy truthy deletion flags obey the same terminal merge rule as balance calculation',()=>{
+  const c=economy(),a=ledger({x:grant('x',1)}),b=ledger({x:grant('x',2)});a.grants.x.deleted=1;
+  assert.equal(c.__fhEconomyTest.validate(a).ok,true);
+  const m=(l,r)=>c.fhMergeFocusEconomy(l,r);
+  assert.deepEqual(canonical(clone(m(a,b))),canonical(clone(m(b,a))));
+  c.state.focusEconomy=m(a,b);assert.equal(c.__fhEconomyTest.totals().orbs,0);
+});
+
+test('an older refused resolution cannot restore quarantine over a newer successful clear',async()=>{
+  const p=profile([run('mine',240)]);
+  p.fh12HardcoreConflict={peer:profile([run('first-peer',480)]).fh12Hardcore};
+  const c=hardcore(p);let refuseFirst,calls=0;
+  c.saveStateDurable=()=>++calls===1?new Promise(resolve=>{refuseFirst=resolve;}):Promise.resolve(true);
+  const first=c.FH_HARDCORE.resolveMergeConflict('local');
+  c.state.fh12HardcoreConflict={peer:profile([run('new-peer',120)]).fh12Hardcore};
+  assert.equal((await c.FH_HARDCORE.resolveMergeConflict('local')).ok,true);
+  const before=JSON.stringify(c.state);
+  refuseFirst(false);assert.equal((await first).ok,false);
+  assert.equal(c.state.fh12HardcoreConflict,null);assert.equal(JSON.stringify(c.state),before);
+});
+
+test('conflict joining does not manufacture verification for a legacy survival total',async()=>{
+  for(const choice of ['local','peer']){
+    const unverified=run('unverified');unverified.daysSurvived=2;unverified.lastCheckedDay='2026-09-26';
+    const p=profile([unverified]);p.fh12HardcoreConflict={peer:profile([unverified]).fh12Hardcore};
+    const c=hardcore(p);assert.equal((await c.FH_HARDCORE.resolveMergeConflict(choice)).ok,true);
+    assert.equal(c.state.fh12Hardcore.runs[0].daysSurvived,0);
+  }
+});
+
+test('an over-cap union refuses a manual choice instead of silently archiving the chosen runs',async()=>{
+  for(const choice of ['local','peer']){
+    const p=profile(Array.from({length:5},(_,i)=>run('z-mine-'+i)));
+    p.fh12HardcoreConflict={peer:profile(Array.from({length:5},(_,i)=>run('a-peer-'+i))).fh12Hardcore};
+    const c=hardcore(p),before=JSON.stringify(c.state);let saves=0;
+    c.saveStateDurable=async()=>{saves++;return true;};
+    const result=await c.FH_HARDCORE.resolveMergeConflict(choice);
+    assert.equal(result.ok,false);assert.match(result.reason,/more than 5/);
+    assert.equal(JSON.stringify(c.state),before);assert.equal(saves,0);
+  }
+});
+
 test('equal-time session grant corrections merge identically in either order',()=>{
   const c=economy(),a=ledger({same:grant('same',1)}),b=ledger({same:grant('same',2)});
   assert.deepEqual(canonical(clone(c.fhMergeFocusEconomy(a,b))),canonical(clone(c.fhMergeFocusEconomy(b,a))));

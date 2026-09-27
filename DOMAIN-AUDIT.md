@@ -74,3 +74,28 @@ external network: Hardcore, late start, core, merge reductions, and gear/world.
 Scratch reproduction sources/logs remain in `test-results/` for independent review;
 they contain synthetic values only. The tracked regression suite is the durable
 before/after evidence for the corrected cases.
+
+## Independent-review follow-up
+
+The final source review found additional edge cases and supplied eight independent
+counterexamples. Shared IDs in a manual conflict choice now use the ordinary pure
+merge, retaining both sides' pause, excuse and rank-reversal evidence and terminal
+lifecycle decisions. Original raw records are passed through so normalization does
+not turn an unverified legacy survival total into proof. Distinct unchosen active
+runs still become archived summaries; conflicting locked identities still refuse.
+A clear-operation token prevents an older failed save from reopening quarantine
+after a newer successful resolution, while preserving quarantine on a failed clear
+with unrelated newer run edits.
+If two quarantined copies contain more than five distinct live IDs together,
+manual choice refuses without writes and preserves both copies for review. This
+avoids the ordinary merge cap archiving selected runs before the choice is applied.
+
+A window spanning a complete 23-hour spring-forward date must still split recorded
+work when a later declared window owns part of that date. Both minute and session
+shortcuts now check that overlap. An accepted legacy truthy deletion flag also uses
+the same terminal merge rule as economy balance calculation. No stored records are
+rewritten by these pure merge changes.
+
+The expanded tracked suite passes 29/29, and the independent reviewer's eight exact
+counterexamples all pass. Existing Hardcore-sync 15/15 and rank-fairness 18/18 checks
+remain passing. The integrated release must still pass the full browser suite.
