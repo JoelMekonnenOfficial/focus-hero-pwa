@@ -446,7 +446,9 @@
     });
   }
 
+  var automaticReady = typeof window.FH_onPrimaryReady !== "function";
   function schedule(delay) {
+    if (!automaticReady) return;
     if (scheduled !== null) clearTimeout(scheduled);
     scheduled = setTimeout(function () {
       scheduled = null;
@@ -455,6 +457,7 @@
   }
 
   window.addEventListener("storage", function (event) {
+    if (!automaticReady) return;
     if (!event.key || !MOVABLE.test(event.key)) return;
     var recent = recentRemovals[event.key];
     if (recent && event.newValue !== null && event.newValue !== recent.raw) {
@@ -486,12 +489,14 @@
   };
 
   function start() {
+    automaticReady = true;
     schedule(2500);
     setInterval(function () {
       if (document.visibilityState !== "hidden") schedule(0);
     }, RESCAN_MS);
   }
-  if (document.readyState === "complete") start();
+  if (typeof window.FH_onPrimaryReady === "function") window.FH_onPrimaryReady(start);
+  else if (document.readyState === "complete") start();
   else window.addEventListener("load", start, { once: true });
 })();
 

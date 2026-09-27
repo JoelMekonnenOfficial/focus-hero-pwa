@@ -1,23 +1,16 @@
 /* Life XP - service worker.
  *
  * Update strategy:
- *   - HTML: NETWORK-FIRST (always try the network; fall back to cache only when
- *     offline). This means every launch picks up the latest deployed HTML — no
- *     more stale cached HTML serving an older version of the app to the user
- *     after a deploy.
+ *   - App HTML and executable modules: one verified, immutable build bundle.
  *   - Static assets (icons, manifest): cache-first.
  *   - On install (v10.12.1+): precache, then skipWaiting() immediately. The old
  *     FH_ACTIVATE_SAFE handshake could never succeed across a version change and
  *     parked every update in "waiting" forever; the page - not the worker - owns
  *     the decision to reload, so taking control here is safe.
- *   - On install (v10.16.0+): only the app document is a fatal precache failure.
- *     Any other asset that 404s is skipped and recorded, because one missing file
- *     used to abort install and freeze a device on its current build permanently.
- *   - On activate: evict stale focus-hero-* caches (keep current + one
- *     predecessor), clients.claim(), broadcast "SW_UPDATED" to existing tabs.
- *   - Static assets: cache-first with background revalidation (v10.16.0+), so a
- *     module can never stay stale for more than one launch even if BUILD_ID was
- *     not bumped.
+ *   - Every executable and app document is required before activation. Missing
+ *     or mismatched code leaves the previous complete worker active.
+ *   - On activate: preserve all prior caches, claim clients, broadcast the build.
+ *   - Only non-executable static assets may refresh in the background.
  *   - FH_WHICH_BUILD: the page can ask the live worker which build it is, so an
  *     outdated page can detect itself rather than waiting for an edge-triggered
  *     controllerchange it may have missed.
@@ -124,7 +117,39 @@
  * into cache-served HTML too.
  */
 const BUILD_ID    = "fh-2026-09-27-v10-64-0-clock-world-rank";
-const CACHE_NAME  = `focus-hero-${BUILD_ID}`;
+const BUNDLE_HASH = "3a541fb073b12e31ad417cab560d85a0c6631fd1fb9065619c4fc861be6ebbbd";
+const CACHE_NAME  = `focus-hero-${BUILD_ID}-${BUNDLE_HASH}`;
+/* BEGIN MODULE INTEGRITY */
+const MODULE_INTEGRITY = {
+  "character-rebuild.js": "sha384-x7gU180N3kuOyC44K/Qp54wzDZTIt6o/xVGc36LWu/EjVl6hodUMaFZzggIffASK",
+  "character-v86-fix.js": "sha384-//2lVFcbHu4KaDjc2+3ohQpWXmZPzw4heoIptCyhDOmrQML3JDUnqIdJvNxjJR/x",
+  "data-guard.js": "sha384-gralA8fxCiPEkJzyjElVA+coPMvEhmFsQye4ijOKkNVpt+B/DJ06QLj4/5VbrpBS",
+  "eggs.js": "sha384-WRy85tY5jB73PSsli1gyF/D9Q8WQGRwCScLSHi8k1sHun0n6GJNHY4enlohQM0Ou",
+  "fh-cosmetic-clothing-v13.js": "sha384-VAApH+AEmm/ZS8QXHyor+UyVxxFj6CKNYqGMqTyPTk7PdH/OS0nZ+lI3WHshMYVS",
+  "fh-gameplay-controls-v13.js": "sha384-ik+yeDUaEF9qIHmYfpmUs8VInl0Tm6Je9g7doAXTdSRWoAi5AOxE4ZaKW8cnZqMl",
+  "fh-hardcore-v12.js": "sha384-yokMQpWdbSPXuXimd9b9nkJUIuPURIcCg4uAO3TGPktPpv+kWLRFNBK32itZi2ut",
+  "fh-identity-v13.js": "sha384-MAYX6ulFH+mHWhf8ukbtrUQeUw3k0ZXH/z46YwvhvU+7XQT37C6kj7QP1f/HCxng",
+  "fh-models-v12.js": "sha384-ogQnT7y+qfJIRv9DEnTuwxUdSBhualSAJmP5XzighgKjeFhBX/I8Ot1Bq01CPeWm",
+  "fh-navigator-v1.js": "sha384-REu9WwBw4h1sZhOauBBL/ZZ73QlELwiTYp0l4f715d1+tpQukrfLere+SqS1Vedy",
+  "fh-primary-store-v13.js": "sha384-6Izjzvv3OzLlF7j6gaKXEAae6ex5cVmejWMxkMDReJssmkYp2y3Yk7LWYPSHchTo",
+  "fh-rank-v1.js": "sha384-kxq1jL5hD+Jnd8w5J2mstb4KFf2udyyelvtmqDQeQZ1QdZoqjc2GivcUzz8e7CGP",
+  "fh-storage-relief.js": "sha384-2I6W3SyY4YJeu2zZGO5LpNzdcUOFPVOgy5PS/hcO790y+qhIaQ1A2QD0u8XwHbvw",
+  "fh-sync-doctor-v1.js": "sha384-CUul7H+zW3FVlqcOr5Maqe5M7JYoCmfwE/U5TodvZwTkt92Azef4w+/CmnlzvQ1t",
+  "fh-theater-v1.js": "sha384-sINesCJ+dsaF14OkysPDv+Faume1YDsAlvCrliO6jZK5r1hMw5wiXLC8Ioi5i3BI",
+  "focus-economy.js": "sha384-JGll7MKH0be63Urw2sNDlrfO6FNNl0ziAEX5N1j0aNt7JgcNM7bhAhRuGYJfZxbM",
+  "focus-hero-immersive-v1.js": "sha384-lNLnx/16nDrzfoY2PPlSiYQF1GkyZPCQmb66AQ/YvlRiEgHWrOcSecrriqiI3z9F",
+  "focus-hero-ui-v11.js": "sha384-6UL9zvj89GRdJLi/aNLl0hbKynoEKvvioGz2ywHPYiPQ0zGBZfTOOD+AID3jpcnM",
+  "game-shells.js": "sha384-WLEnqLSNJBxaiQtIl51AlWszBf9v6UTxroagZtdExs2v2EEu3lgLH+K/exT/Ynrg",
+  "gear-utility.js": "sha384-5wr5Japtyg1xcF4ZoUlvXC+DCBYBEQAFJYtc3k4L86MoVPSm/JCC7C/OFaX1EHib",
+  "loot-purpose-actions.js": "sha384-RwF7kfAdNgvSfHQOgI/g9j7/TJeRH3iUQigqcomhxLom/d2ef7gBxcWSre1bRFrp",
+  "loot-rework-v1012.js": "sha384-RsvFS5JqwHskwbh2fztT0rw4pCnKor2Q4z4ImmmEGQB04jJED/pHoZI5T/GNcMNI",
+  "pixel-avatar.js": "sha384-k288VLKM/NJvs69WPwp7Ft+mYXcD7bvKjz5AyoyMb4ZCBDIMTgpO7XLMdgr5dACE",
+  "progression-hub.js": "sha384-GnCSkKkChKfdIdG/2WTUkdprDzRa4rODZU4XPNeeXylDOvQFEGNfar81FhMj1wQv",
+  "shop-rework.js": "sha384-3dGBjMbaVb4tjjmW8RoLRQs5ZTaqKPmqcrNxvJGNHh/xL9UO2l7aI1AjthQtcLFP",
+  "v8.6.3-patch.js": "sha384-Ehhf4nNmiq4PI+/bYSy2ypkHjcFKaZKdcQ6RqMKiCL4ENRmfmQyfyqQWvyV9ys4W",
+  "world-depth.js": "sha384-zIvKsTf22SP4/M2w7hdCxJmNsX1i7XkHmmNfSniEqB+UxNqMWHtPbsESl4e2M1DB"
+};
+/* END MODULE INTEGRITY */
 const PRECACHE = [
   "./",
   "./focus-hero.html",
@@ -171,14 +196,16 @@ const PRECACHE = [
   "./fh-sync-doctor-v1.js"
 ];
 
-/* v10.16.0: only these may abort an install. Everything else in PRECACHE is
-   best-effort - a single 404 on an optional asset used to throw, which meant the
-   new worker never installed, never activated, and the device silently stopped
-   receiving updates forever while the app kept working normally. The cache-first
-   branch falls back to the network for anything missing here, so the only cost of
-   a skipped asset is that it is unavailable offline until the next install. */
-const PRECACHE_CRITICAL = new Set(["./", "./focus-hero.html"]);
+/* Required code must arrive together. Cosmetic assets remain best-effort. */
+const PRECACHE_CRITICAL = new Set(PRECACHE.filter(asset=>asset==="./" || asset.endsWith(".html") || asset.endsWith(".js")));
 let precacheSkipped = [];
+async function verifiedModuleBody(name,body){
+  const expected=MODULE_INTEGRITY[name.replace(/^\.\//,"")];
+  if(!expected)return;
+  const bytes=new Uint8Array(await crypto.subtle.digest("SHA-384",body));
+  const actual="sha384-"+btoa(String.fromCharCode(...bytes));
+  if(actual!==expected)throw new Error("App module belongs to another release: "+name);
+}
 
 function isAppDocPath(pathname){
   return pathname === "/" || pathname === "/index.html" || pathname === "/focus-hero.html"
@@ -236,6 +263,12 @@ self.addEventListener("install", event => {
            waiting for every fetch can exhaust the browser's per-origin
            connection pool and deadlock installation on mobile/Chromium. */
         const body = await response.arrayBuffer();
+        await verifiedModuleBody(asset,body);
+        if(asset==="./" || asset==="./focus-hero.html"){
+          const page=new TextDecoder().decode(body);
+          const identified=/data-build-id="([^"]+)"/.exec(page);
+          if(!identified || identified[1]!==BUILD_ID)throw new Error("App page belongs to another release");
+        }
         const headers = new Headers(response.headers);
         headers.delete("content-length");
         return [requestUrl, new Response(body, {
@@ -283,16 +316,7 @@ self.addEventListener("install", event => {
 
 self.addEventListener("activate", event => {
   event.waitUntil((async () => {
-    /* v10.16.0: keep the live namespace and exactly one predecessor as an offline
-       rollback layer, and drop the rest. Earlier builds retained every namespace
-       forever - but the fetch handler only ever opens CACHE_NAME, so those older
-       caches were unreadable by any code path: pure dead storage (~3.3 MB each)
-       that raised the odds of iOS evicting the whole origin, live cache included. */
-    try {
-      const keys = await caches.keys();
-      const mine = keys.filter(k => k.startsWith("focus-hero-") && k !== CACHE_NAME);
-      await Promise.all(mine.slice(0, -1).map(k => caches.delete(k)));
-    } catch (_) {}
+    // Preserve all existing cache namespaces. This update never deletes them.
     await self.clients.claim();
     // Tell existing pages a new version is live; they decide whether to reload.
     const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
@@ -317,15 +341,25 @@ self.addEventListener("fetch", event => {
   const isHTML = req.mode === "navigate" || (req.headers.get("accept") || "").includes("text/html");
 
   if (isHTML) {
-    // NETWORK-FIRST for HTML. Always try fresh first; only fall back to cache
-    // when the network is unreachable.
+    // App pages stay with their bundle; standalone pages use the network.
     event.respondWith((async () => {
       const cache = await caches.open(CACHE_NAME);
       const injectHere = isAppDocPath(url.pathname);
+      // App HTML and executable modules belong to this verified bundle. A new
+      // worker installs the next bundle; a network page must not mix them.
+      if(injectHere){
+        const bundled=await cache.match("./focus-hero.html") || await cache.match("./");
+        if(bundled)return withDataGuard(await unredirect(bundled));
+      }
       try {
         /* v10.3.3: fetch by URL string — see header comment. */
         let fresh = await fetch(req.url, { cache: "no-store", credentials: "same-origin" });
         if (fresh && fresh.ok) {
+          if(injectHere){
+            const page=await fresh.clone().text();
+            if(/data-build-id="([^"]+)"/.exec(page)?.[1]!==BUILD_ID)
+              throw new Error("App page belongs to another release");
+          }
           fresh = await unredirect(fresh);
           if (injectHere) fresh = await withDataGuard(fresh);
           // Mirror under both keys so the next offline launch works regardless
@@ -364,13 +398,8 @@ self.addEventListener("fetch", event => {
        precached asset when offline, preserving a complete offline shell. */
     const cached = await cache.match(req, { ignoreSearch:true });
     if (cached) {
-      /* v10.16.0: stale-while-revalidate. Serve the cached copy immediately (so
-         startup and offline are unchanged), but refresh it in the background.
-         Before this, a module was ONLY ever refreshed by a new CACHE_NAME, i.e.
-         by remembering to bump BUILD_ID - miss that once and a new shell would
-         run old modules indefinitely, unfixable by force-quitting because the
-         stale bytes live in the Cache API, not the HTTP cache. Now the worst
-         case is one launch of skew instead of forever. */
+      if(url.pathname.endsWith(".js"))return cached;
+      // Icons and other non-executable assets may refresh independently.
       event.waitUntil((async () => {
         try {
           const fresh = await fetch(req.url, { cache:"no-store", credentials:"same-origin" });
@@ -385,6 +414,7 @@ self.addEventListener("fetch", event => {
     }
     try {
       const resp = await fetch(req);
+      if(resp && resp.ok && url.pathname.endsWith(".js"))await verifiedModuleBody(url.pathname.split("/").pop(),await resp.clone().arrayBuffer());
       if (resp && resp.ok && resp.type === "basic") await cache.put(req, resp.clone());
       return resp;
     } catch (e) {

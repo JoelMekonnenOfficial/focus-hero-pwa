@@ -801,11 +801,17 @@
 
   /* ---------- wiring ---------- */
   try {
-    setTimeout(function () { bootCheck(); }, 2500);
-    setTimeout(function () { takeSnapshot("boot"); }, 6000);
-    setInterval(function () { takeSnapshot("interval"); }, SNAP_INTERVAL_MS);
-    document.addEventListener("visibilitychange", function () { if (document.hidden) takeSnapshot("hide"); });
-    window.addEventListener("pagehide", function () { takeSnapshot("pagehide"); });
+    function startGuard() {
+      setTimeout(function () { bootCheck(); }, 2500);
+      setTimeout(function () { takeSnapshot("boot"); }, 6000);
+      setInterval(function () { takeSnapshot("interval"); }, SNAP_INTERVAL_MS);
+      document.addEventListener("visibilitychange", function () { if (document.hidden) takeSnapshot("hide"); });
+      window.addEventListener("pagehide", function () { takeSnapshot("pagehide"); });
+    }
+    // A mixed/incomplete release must not open profile or snapshot databases.
+    // Standalone recovery contexts keep their existing guard behavior.
+    if (typeof window.FH_onPrimaryReady === "function") window.FH_onPrimaryReady(startGuard);
+    else startGuard();
     window.__fhGuardTest = { summarize: summarize, focusEconomySummary: focusEconomySummary,
       summarizeWithResetIntent: summarizeWithResetIntent, validateResetIntentReceipt: validateResetIntentReceipt,
       anomalyReasons: anomalyReasons, isAnomaly: isAnomaly, sameDayReplaceOk: sameDayReplaceOk,

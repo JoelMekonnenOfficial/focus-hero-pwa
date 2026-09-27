@@ -1,83 +1,17 @@
 <!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Life XP — finishing the update</title>
-<!--
-  THE ESCAPE HATCH FOR A PAGE THAT CANNOT UPDATE ITSELF.
-
-  An installed iOS PWA does not always re-navigate when it is closed and
-  reopened - the system restores the suspended web view instead. So the page
-  keeps running whatever build it was showing when it was put away, the newer
-  service worker sits underneath it, and the app correctly reports that it is
-  running an older version while being completely unable to do anything about
-  it. "Close and reopen the app" is then advice that cannot work, given to
-  someone who has already tried it four times.
-
-  This page is deliberately NOT part of the app and NOT precached, so it is
-  always fetched fresh. It removes the two things that can pin a stale build -
-  the service worker registration and the Cache API copies - and then reloads
-  the app at a URL that no cache has ever seen.
-
-  It does NOT touch IndexedDB, localStorage, or the sync identity. Every hour,
-  every session and the cloud connection are stored there and are untouched.
--->
-<style>
-  :root { color-scheme: dark; }
-  html,body { margin:0; height:100%; }
-  body { background:#0A0C18; color:#E7EEF7; font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
-         display:flex; align-items:center; justify-content:center; padding:24px; }
-  .card { max-width:34rem; width:100%; text-align:center; }
-  h1 { font-size:1.35rem; margin:0 0 .5rem; letter-spacing:.01em; }
-  p { margin:.55rem 0; color:#A3B1C5; }
-  .ok { color:#6ED77F; }
-  .bad { color:#FF7A6B; }
-  code { color:#C9D3E1; font-size:.85em; }
-  button { margin-top:1.2rem; font:inherit; font-weight:600; padding:.7rem 1.4rem; border-radius:10px;
-           border:1px solid #3B5BDB; background:#233; color:#E7EEF7; }
-</style>
-</head>
-<body>
-<div class="card">
-  <h1>Finishing the update</h1>
-  <p id="msg">Clearing the stale copy…</p>
-  <p><small>Your hours, sessions and cloud sync are not touched.</small></p>
-  <button id="go" hidden>Open Life XP</button>
-</div>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Life XP — check for an update</title>
+<style>:root{color-scheme:dark}body{max-width:34rem;margin:10vh auto;padding:24px;background:#101526;color:#eef3ff;font:17px/1.6 system-ui}button,a{font:inherit;color:#eef3ff}button{padding:12px 20px;background:#293d6e;border:1px solid #809aef;border-radius:10px}a{display:block;margin-top:24px}</style></head><body>
+<h1>Check for a complete update</h1><p>Finish or log any open clocks in your other Life XP windows first. This page checks for updated app files without opening your profile.</p>
+<p id="message" role="status">Existing app files and saved progress will be kept.</p><button id="check" type="button">Check for update</button><a href="./">Return to Life XP</a>
 <script>
-(function () {
-  var msg = document.getElementById("msg");
-  var go = document.getElementById("go");
-  var target = "/?fresh=" + Date.now();
-  function say(text, cls) { msg.textContent = text; msg.className = cls || ""; }
-  function open_() { location.replace(target); }
-  go.addEventListener("click", open_);
-
-  (async function () {
-    var removed = 0, workers = 0;
-    try {
-      if ("serviceWorker" in navigator) {
-        var regs = await navigator.serviceWorker.getRegistrations();
-        for (var i = 0; i < regs.length; i++) {
-          try { if (await regs[i].unregister()) workers++; } catch (_) {}
-        }
-      }
-    } catch (_) {}
-    try {
-      if (window.caches) {
-        var keys = await caches.keys();
-        for (var j = 0; j < keys.length; j++) {
-          if (/^focus-hero-/.test(keys[j])) { try { if (await caches.delete(keys[j])) removed++; } catch (_) {} }
-        }
-      }
-    } catch (_) {}
-    say("Cleared " + workers + " worker" + (workers === 1 ? "" : "s") +
-        " and " + removed + " cached cop" + (removed === 1 ? "y" : "ies") + ". Reopening…", "ok");
-    go.hidden = false;
-    setTimeout(open_, 900);
-  })();
-})();
-</script>
-</body>
-</html>
+document.getElementById("check").onclick=async function(){
+  var button=this,message=document.getElementById("message");button.disabled=true;
+  try{
+    if(!("serviceWorker" in navigator))throw new Error("unavailable");
+    var registration=await navigator.serviceWorker.getRegistration();
+    if(registration){await registration.update();message.textContent="Update check requested. Give the download a moment, then return to Life XP. Incomplete downloads leave the previous version available.";}
+    else message.textContent="No installed app worker was found. Return to Life XP to load the current version.";
+  }catch(_){message.textContent="The update could not be checked. Connect to the internet and try again.";}
+  finally{button.disabled=false;}
+};
+</script></body></html>
