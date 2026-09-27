@@ -1862,7 +1862,6 @@
     var journey = typeof window.wdRecordJourneySession === "function" ? window.wdRecordJourneySession(s,{
       sessionId:sessionId,action:action,minutes:minutes,zoneId:zoneId,encounters:encounters
     }) : null;
-    if (journey && journey.unlockedZone) _toast("Route complete: " + window.WD_ZONES[journey.unlockedZone].label + " unlocked", "good");
     return { encounters:encounters, drops:drops, consumed:consumedLog, zoneId:zoneId, boss:bossResult, journey:journey, duplicate:false };
   }
 

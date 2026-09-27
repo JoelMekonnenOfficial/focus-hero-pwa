@@ -108,6 +108,14 @@ test('Captured world controls enemies, regional gear and route origin after a wo
   assert(result.encounters.every(e=>e.enemy.zoneId==='verdant_vale'));
   for(const drop of result.drops.filter(d=>!d.mountReason))assert(w.wdGearForZone('verdant_vale').includes(drop.templateId));
 });
+test('Travel reward preparation cannot announce an unlock before its durable save',()=>{
+  const s=fresh();clear(s);s.hero.equipped.mount={lootId:'mount_storm_dragon',tier:'mythic'};w.state=s;
+  const messages=[];w.toast=message=>messages.push(String(message));
+  const result=w.lrSessionEndLootPipeline('Travel',50,'unconfirmed-route',{zoneId:'verdant_vale'});
+  assert.equal(s.world.unlockedZones.frostpeak,true,'reward preparation calculates the pending unlock');
+  assert(result.rewardSnapshot || s.loot.sessionRewardReceipts['unconfirmed-route']);
+  assert(!messages.some(message=>/route complete|frostpeak.*unlocked/i.test(message)),'no success announcement precedes verified persistence');
+});
 test('Prior policy-3 receipts remain valid without loosening their proof requirements',()=>{
   const s=fresh();w.state=s;w.lrSessionEndLootPipeline('Fight',25,'prior-three');
   const prior=clone(s.loot.sessionRewardReceipts['prior-three']);prior.policyVersion=3;prior.rewardSnapshot.schemaVersion=3;

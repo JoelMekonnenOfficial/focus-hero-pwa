@@ -504,7 +504,9 @@
   }
 
   /* Route receipts are earned only at a new session's reward boundary. They
-     store game distance, never extra focus minutes or an earnings multiplier. */
+     store game distance, never extra focus minutes or an earnings multiplier.
+     Earned world progression is permanent: later session-time corrections do
+     not retract these receipts or re-lock an unlocked world. */
   function wdJourneyStatus(s, zoneId){
     var world = s && s.world || {};
     zoneId = WD_ZONES[zoneId] ? zoneId : (world.currentZone || "verdant_vale");
