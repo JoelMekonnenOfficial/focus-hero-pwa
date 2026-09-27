@@ -120,6 +120,20 @@ try{
       return {setting:window.state.settings.priorityMode,run:window.state.timer.priorityRun};
     });
     R.check('older rejected Priority toggle cannot overwrite a newer off/on choice',aba.setting&&aba.run);
+    const newClock=await page.evaluate(async()=>{
+      const save=window.saveState;
+      window.state.settings.priorityMode=false;window.state.timer.priorityRun=false;
+      let rejectOld;
+      window.saveState=()=>new Promise(resolve=>{rejectOld=resolve;});
+      const oldChoice=document.getElementById('priority-mode-badge').onclick();
+      window.saveState=save;
+      window.FH_UI11.addClock();window.startTimer();
+      const before={mode:window.state.settings.priorityMode,run:window.state.timer.priorityRun,running:window.state.timer.running};
+      rejectOld(false);await oldChoice;
+      const after={mode:window.state.settings.priorityMode,run:window.state.timer.priorityRun,running:window.state.timer.running};
+      return {before,after};
+    });
+    R.eq('rejected Priority save for old clock cannot change newly started clock',JSON.stringify(newClock.after),JSON.stringify(newClock.before));
   }
   for(const priority of [true,false]){
     const {page}=await fixture();

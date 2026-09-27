@@ -1562,6 +1562,7 @@
     s.timer.swAccumulatedMs = 0;
     s.timer.swLaps = [];
     s.timer.swSessionStartedAt = 0;
+    try { if (typeof window.fhUpdatePriorityUi === "function") window.fhUpdatePriorityUi({invalidatePending:true}); } catch (e) {}
     if (anyTicking()) startTicker();
     var seed = document.getElementById("fh11-addclock-seed");
     if (seed) seed.remove();
