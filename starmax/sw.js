@@ -117,7 +117,7 @@
  * into cache-served HTML too.
  */
 const BUILD_ID    = "fh-2026-09-27-v10-64-1-audited";
-const BUNDLE_HASH = "564590d14bb3f834bcdac0acaeb9d5a505c1d83401c744f36ca7ae9115b904f1";
+const BUNDLE_HASH = "2243e295c64bcef0fa765c1c37ea394b2eec65db07b94deb574c205db270b065";
 const CACHE_NAME  = `focus-hero-${BUILD_ID}-${BUNDLE_HASH}`;
 /* BEGIN MODULE INTEGRITY */
 const MODULE_INTEGRITY = {
@@ -127,7 +127,7 @@ const MODULE_INTEGRITY = {
   "eggs.js": "sha384-WRy85tY5jB73PSsli1gyF/D9Q8WQGRwCScLSHi8k1sHun0n6GJNHY4enlohQM0Ou",
   "fh-cosmetic-clothing-v13.js": "sha384-VAApH+AEmm/ZS8QXHyor+UyVxxFj6CKNYqGMqTyPTk7PdH/OS0nZ+lI3WHshMYVS",
   "fh-gameplay-controls-v13.js": "sha384-ik+yeDUaEF9qIHmYfpmUs8VInl0Tm6Je9g7doAXTdSRWoAi5AOxE4ZaKW8cnZqMl",
-  "fh-hardcore-v12.js": "sha384-brzSDNShiruh3LE/jDtOiazaK+VGLzKUrDZLbmQNFk+768LzRejRb4a3opXmHYN6",
+  "fh-hardcore-v12.js": "sha384-vbS5xVQEeFXFw0fQVRih4KN7Scyoh83XP9IYrVPE9gZrhustvdps82YfyybsS/Rg",
   "fh-identity-v13.js": "sha384-MAYX6ulFH+mHWhf8ukbtrUQeUw3k0ZXH/z46YwvhvU+7XQT37C6kj7QP1f/HCxng",
   "fh-models-v12.js": "sha384-ogQnT7y+qfJIRv9DEnTuwxUdSBhualSAJmP5XzighgKjeFhBX/I8Ot1Bq01CPeWm",
   "fh-navigator-v1.js": "sha384-REu9WwBw4h1sZhOauBBL/ZZ73QlELwiTYp0l4f715d1+tpQukrfLere+SqS1Vedy",
@@ -136,7 +136,7 @@ const MODULE_INTEGRITY = {
   "fh-storage-relief.js": "sha384-2I6W3SyY4YJeu2zZGO5LpNzdcUOFPVOgy5PS/hcO790y+qhIaQ1A2QD0u8XwHbvw",
   "fh-sync-doctor-v1.js": "sha384-CUul7H+zW3FVlqcOr5Maqe5M7JYoCmfwE/U5TodvZwTkt92Azef4w+/CmnlzvQ1t",
   "fh-theater-v1.js": "sha384-sINesCJ+dsaF14OkysPDv+Faume1YDsAlvCrliO6jZK5r1hMw5wiXLC8Ioi5i3BI",
-  "focus-economy.js": "sha384-+AWFFShJcYxp6FNMSyRIV7y9UxCfZHLaTvEsqdRyQD11ZNl7xk8jT3PYpTGblh99",
+  "focus-economy.js": "sha384-R4O/pvD6hqYJ8ZZ0PmqmYAvNAnCHDnr7d0rUZFDqUApBaJoUVPztmz1T8prMnAJQ",
   "focus-hero-immersive-v1.js": "sha384-lNLnx/16nDrzfoY2PPlSiYQF1GkyZPCQmb66AQ/YvlRiEgHWrOcSecrriqiI3z9F",
   "focus-hero-ui-v11.js": "sha384-6UL9zvj89GRdJLi/aNLl0hbKynoEKvvioGz2ywHPYiPQ0zGBZfTOOD+AID3jpcnM",
   "game-shells.js": "sha384-WLEnqLSNJBxaiQtIl51AlWszBf9v6UTxroagZtdExs2v2EEu3lgLH+K/exT/Ynrg",
