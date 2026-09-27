@@ -11,6 +11,9 @@ const workerBuild = /const BUILD_ID\s*=\s*["']([^"']+)/.exec(read('sw.js').toStr
 assert.ok(version && build && workerBuild, 'App and worker identify their builds');
 assert.equal(build, workerBuild, 'Page and service worker identify the same release');
 assert.equal(manifest.version, version, 'Manifest cannot silently drift from the app version');
+assert.equal(/<meta name="focus-hero-version" content="([^"]+)"/.exec(text)?.[1], version, 'Legacy version metadata agrees');
+assert.equal(/<meta name="focus-hero-build" content="([^"]+)"/.exec(text)?.[1], build, 'Legacy build metadata agrees');
+assert.ok(text.includes('<title>Life XP · v' + version + '</title>'), 'Initial page title agrees with the release');
 assert.equal(manifest.start_url, './');
 for (const shortcut of manifest.shortcuts) assert.ok(shortcut.url.startsWith('./?'), 'Shortcuts must use the current root entry point');
 console.log('PASS mirror, page/worker/manifest release identifiers, and shortcut URLs');
