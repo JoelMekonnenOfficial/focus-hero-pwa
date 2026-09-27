@@ -127,7 +127,27 @@ test('new failures on existing runs use fair policy; legacy recorded amounts rem
   const stale = clone(c.state.fhRank);
   stale.events['hcf:four'] = failure('hcf:four','2026-09-26');
   c.state.fhRank = c.FH_RANK.merge(c.state.fhRank,stale);
-  assert.equal(activeEvents(c).filter(e => e.id.startsWith('hcf:four')).length, 1, 'old-client duplicate is suppressed');
+  assert.equal(activeEvents(c).filter(e => e.id.startsWith('hcf:four')).length, 1, 'the same episode never charges twice');
+  assert.equal(activeEvents(c).find(e => e.id.startsWith('hcf:four')).delta, -200, 'ambiguous old-client evidence keeps its exact original amount');
+});
+
+test('a same-run legacy failure survives a stale live run and both merge orders without repricing', async () => {
+  const p = profile([run()], { '2026-09-25':500 });
+  p.fhRank.events['hcf:four'] = failure('hcf:four','2026-09-26',-173);
+  const c = sandbox(p);
+  await c.FH_HARDCORE.evaluateAutomatically();
+  const old = clone(c.state.fhRank);
+  assert.equal(old.events['hcf:four:2026-09-26'],undefined);
+  assert.equal(activeEvents(c).find(e => e.id === 'hcf:four').delta,-173);
+  const unseen = c.FH_RANK.normalize({installedDay:'2026-09-01',events:{}});
+  unseen.events['hcf:four:2026-09-26'] = failure('hcf:four:2026-09-26','2026-09-26',-50,'hardcore_fail_v2');
+  for (const [a,b] of [[old,unseen],[unseen,old]]) {
+    c.state.fhRank=c.FH_RANK.merge(a,b);
+    const failures=activeEvents(c).filter(e=>/^hardcore_fail/.test(e.kind));
+    assert.equal(failures.length,1);
+    assert.equal(failures[0].delta,-173);
+    assert.deepEqual(clone(c.state.fhRank.events['hcf:four']),p.fhRank.events['hcf:four']);
+  }
 });
 
 test('concurrent new misses share one bounded loss; legacy loss calculation stays unchanged', () => {

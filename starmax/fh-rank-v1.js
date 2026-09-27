@@ -491,12 +491,19 @@
     ledger.retractions[id] = dates.concat([day]).sort();
     return true;
   }
+  function recordedLegacyFailure(ledger, event){
+    if (!event || event.kind !== "hardcore_fail_v2") return null;
+    var suffix = ":" + event.day;
+    if (event.id.slice(-suffix.length) !== suffix) return null;
+    var old = ledger.events[event.id.slice(0, -suffix.length)];
+    return old && old.kind === "hardcore_fail" && old.day === event.day && !isRetracted(ledger, old) ? old : null;
+  }
 
   /* -------------------------------------------------------------- the fold */
 
   function sortedEvents(ledger){
     return Object.keys(ledger.events).map(function(k){ return ledger.events[k]; })
-      .filter(function(event){ return !isRetracted(ledger, event); })
+      .filter(function(event){ return !isRetracted(ledger, event) && !recordedLegacyFailure(ledger, event); })
       .sort(function(a,b){
         if (a.day !== b.day) return a.day < b.day ? -1 : 1;
         return a.id < b.id ? -1 : (a.id > b.id ? 1 : 0);
@@ -998,11 +1005,6 @@
           if (markRetraction(ledger, row.id, row.day)) changed = true;
         }
       });
-      /* An old client might charge the legacy id for a new-policy miss. Only
-         that exact day is superseded; earlier recorded penalties stay exact. */
-      if (run.rankFailurePolicy === 2 && isDay(run.missedDay)) {
-        if (markRetraction(ledger, "hcf:" + run.id, run.missedDay)) changed = true;
-      }
     });
     var candidates = deriveAll(s);
     var truncated = false;
@@ -1012,6 +1014,12 @@
       if (!cand) continue;
       derivedIds[cand.id] = cand;
       if (isRetracted(ledger, cand)) continue;
+      /* A stale active copy can re-report an already recorded failure. Never
+         reprice that episode. Legacy event timestamps are deterministic, so
+         an old peer's previously unseen charge cannot safely be classified as
+         historical versus newly derived. Its exact amount takes precedence;
+         the versioned duplicate is excluded in either merge order. */
+      if (recordedLegacyFailure(ledger, cand)) continue;
       if (ledger.events[cand.id]) {
         /* One date owns one daily award. A later stronger qualifying run
            supplies only the difference; duplicate/easier runs supply zero. */
@@ -1714,7 +1722,7 @@
     html.push('<li><b>−24 to −50</b> — new Hardcore misses cost the smaller of 50 RP or twice that run’s daily award. ',
       'Only the largest new Hardcore loss counts each date, even with several runs. ',
       'Ending a run on purpose costs nothing. Recorded past rewards and penalties keep their original amounts; ',
-      'reviving a run withdraws its exact failure episode.</li>');
+      'reviving a run withdraws its exact failure episode. Update every device: a legacy charge from an older app keeps its original cost, counted once.</li>');
     html.push('<li><b>+', HARDCORE_EARLY.map(function(m){ return m.rp; }).join(' / +'),
               '</b> — Hardcore milestones at ',
               HARDCORE_EARLY.map(function(m){ return m.days; }).join(', '),
