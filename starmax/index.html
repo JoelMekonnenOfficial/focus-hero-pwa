@@ -15198,6 +15198,7 @@ async function adoptVerifiedCloudProfile(){
     const recovery=await createVerifiedCloudAdoptionBackup();
     previousMemoryState=state;
     if(JSON.stringify(previousMemoryState)!==recovery.previousRaw)throw syncControlError("FH_SYNC_LOCAL_CHANGED","Newer local activity appeared after the preserved copy was verified. The switch stopped.");
+    if(hasUnfinishedDeviceRun(previousMemoryState))throw syncControlError("FH_SYNC_LOCAL_CHANGED","A clock was saved while the switch was being verified. Finish or log it before switching profiles.");
     if(previousMemoryState.sync?.playerId===pending.candidateSync.playerId){
       assertCloudReadFloor(pulled.remotePayload,pulled.sourceProtocolVersion,previousMemoryState.sync);
     }

@@ -5,7 +5,7 @@ const fs=require('node:fs');
 const vm=require('node:vm');
 const path=require('node:path');
 const html=fs.readFileSync(process.argv[2]||path.join(__dirname,'../starmax/index.html'),'utf8');
-const first=html.indexOf('async function adoptVerifiedCloudProfile(){');
+const first=html.indexOf('function hasSavedDeviceClocks(');
 const last=html.indexOf('\nlet cloudPushInFlight',first);
 assert(first>=0&&last>first);
 const source=html.slice(first,last);
@@ -36,7 +36,10 @@ function fixture(mode){
         remotePayload:{cloud_rev:3}};
     },
     readVerifiedPrimaryUploadBase:async()=>({head:{commitId:'synthetic-head'},raw:c.primaryLastDurableRaw}),
-    async createVerifiedCloudAdoptionBackup(){return {previousRaw:JSON.stringify(c.state),commitId:'synthetic-head'};},
+    async createVerifiedCloudAdoptionBackup(){
+      if(mode==='clock-before-install'){c.state.timer.swAccumulatedMs=50000;c.expected=c.state;}
+      return {previousRaw:JSON.stringify(c.state),commitId:'synthetic-head'};
+    },
     buildAuthoritativeCloudState:(remote,sync,payload,encrypted,timer,clocks,settings)=>({totalFocusMin:69,settings:copy(settings),
       timer:copy(timer),fh11Clocks:copy(clocks),sync:{...copy(sync),enabled:false}}),
     mergeRemoteState:(local)=>({...copy(local),totalFocusMin:69}),
@@ -74,5 +77,9 @@ function fixture(mode){
   assert.equal(await c.adoptVerifiedCloudProfile(),false);
   assert.equal(c.saveCalls,0);assert.equal(c.state,c.expected);assert.equal(c.state.totalFocusMin,73);
   console.log('PASS adoption read failure cannot restore an earlier state before installing anything');checks++;
+  const late=fixture('clock-before-install').c;
+  assert.equal(await late.adoptVerifiedCloudProfile(),false);
+  assert.equal(late.saveCalls,0);assert.equal(late.state,late.expected);assert.equal(late.state.timer.swAccumulatedMs,50000);
+  console.log('PASS clock saved during verification prevents a later profile switch');checks++;
   console.log(checks+'/'+checks+' identity rollback checks passed');
 })().catch(error=>{console.error(error);process.exitCode=1;});
