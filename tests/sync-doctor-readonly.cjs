@@ -8,7 +8,7 @@ const clone = x => JSON.parse(JSON.stringify(x));
 
 function fixture() {
   const output = { innerHTML:'' };
-  const local = { totalFocusMin:120, tasks:[{id:'test',name:'Synthetic task'}], history:{'2026-09-17':120},
+  const local = { totalFocusMin:120, tasks:[{id:'test',name:'Synthetic task'}], history:{'2026-09-17':120}, settings:{e2eEncryption:true},
     sync:{ enabled:true, playerId:'synthetic-identity', syncCode:'synthetic-code', syncSecret:'synthetic-secret',
       userToken:'synthetic-token', tokenExpiresAt:Date.now()+3600000, cloudRev:12, pendingSync:false } };
   const remote = { totalFocusMin:120, tasks:clone(local.tasks), history:clone(local.history) };
@@ -25,8 +25,10 @@ function fixture() {
       assert.notEqual(opts.syncContext,c.state.sync);
       return {ok:true,status:200,json:async()=>[{cloud_rev:12,data:remote}]};
     },
-    async decryptStateBlob(data, sync) {
+    async decryptStateBlob(data, sync, options) {
       assert.notEqual(sync,c.state.sync);
+      assert.equal(options.cloudRev,12,'diagnostic decryption is bound to the downloaded row revision');
+      assert.equal(options.requireEncrypted,true,'diagnostic retains its captured local encryption policy');
       sync.userToken = 'synthetic-local-helper-change';
       return data;
     }
@@ -87,5 +89,16 @@ function fixture() {
   assert.equal(changed.cloud.state,'identity-changed');
   assert.match(changed.verdict,/identity changed/i);
   console.log('PASS identity changes during a probe invalidate its comparison');
-  console.log('5/5 diagnostic integration checks passed');
+  c=fixture();
+  const policyRequest=c.supabaseRequest;
+  c.supabaseRequest=async(...args)=>{
+    const response=await policyRequest(...args);
+    c.state.settings.e2eEncryption=false;
+    return response;
+  };
+  const captured=await c.FH_SYNC_DOCTOR.run();
+  assert.equal(captured.cloud.state,'found');
+  assert.equal(c.state.settings.e2eEncryption,false);
+  console.log('PASS diagnostic captures encryption policy before its asynchronous read');
+  console.log('6/6 diagnostic integration checks passed');
 })();

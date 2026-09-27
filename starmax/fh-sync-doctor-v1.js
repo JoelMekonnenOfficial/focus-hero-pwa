@@ -138,6 +138,7 @@
     /* Auth/decryption helpers receive a detached context. The request uses
        existing auth only; diagnosing must never renew or create an identity. */
     var sy = Object.assign({}, s.sync || {});
+    var requireEncrypted = !s.settings || s.settings.e2eEncryption !== false;
     if (!sy.playerId) return { state:"no-identity" };
     if (typeof window.supabaseRequest !== "function") return { state:"unavailable" };
     if (typeof window.supabaseTokenIsFresh !== "function") return { state:"unavailable" };
@@ -153,12 +154,13 @@
       if (!Array.isArray(rows) || !rows.length) return { state:"missing" };
       var row = rows[0];
       var res = { state:"found", rev: Math.trunc(Number(row.cloud_rev) || 0), at: row.updated_at };
-      /* The blob is a bonus, not the point. If it cannot be opened the
-         revision verdict above still stands, so a decrypt failure is
-         reported as its own small fact rather than failing the report. */
+      /* Matching revision alone is not a verified match. Authentication and
+         the row-bound envelope must pass before content can be compared. */
       try {
         if (row.data != null && typeof window.decryptStateBlob === "function"){
-          var remote = await window.decryptStateBlob(row.data, sy);
+          var remote = await window.decryptStateBlob(row.data, sy, {
+            requireEncrypted:requireEncrypted, cloudRev:Number(row.cloud_rev)
+          });
           if (remote && Array.isArray(remote.tasks)){
             res.skills = remote.tasks.filter(Boolean).map(function(t){
               return { id:String(t.id), name:String(t.name || "(unnamed)") };
