@@ -4530,11 +4530,12 @@ svg{shape-rendering:geometricPrecision}
 <script src="./focus-hero-ui-v11.js" integrity="sha384-6UL9zvj89GRdJLi/aNLl0hbKynoEKvvioGz2ywHPYiPQ0zGBZfTOOD+AID3jpcnM" crossorigin="anonymous"></script>
 <script src="./focus-hero-immersive-v1.js" integrity="sha384-lNLnx/16nDrzfoY2PPlSiYQF1GkyZPCQmb66AQ/YvlRiEgHWrOcSecrriqiI3z9F" crossorigin="anonymous"></script>
 <script src="./fh-identity-v13.js" integrity="sha384-MAYX6ulFH+mHWhf8ukbtrUQeUw3k0ZXH/z46YwvhvU+7XQT37C6kj7QP1f/HCxng" crossorigin="anonymous"></script>
-<script src="./fh-hardcore-v12.js" integrity="sha384-vbS5xVQEeFXFw0fQVRih4KN7Scyoh83XP9IYrVPE9gZrhustvdps82YfyybsS/Rg" crossorigin="anonymous"></script>
+<script src="./fh-calendar-v1.js" integrity="sha384-Bq15GzGnHSne07TLXazlgHXG3vFC77UGG3Z9EwWGjT0t7z9hiYuk1DYLPsZ4MsGg" crossorigin="anonymous"></script>
+<script src="./fh-hardcore-v12.js" integrity="sha384-yUesIqypaxqrL/5X7P/X4Y+/kLPZTf3uOSrRq9Alm/V483pnMuAiwBR2iB8sjwNj" crossorigin="anonymous"></script>
 <script src="./fh-rank-v1.js" integrity="sha384-kxq1jL5hD+Jnd8w5J2mstb4KFf2udyyelvtmqDQeQZ1QdZoqjc2GivcUzz8e7CGP" crossorigin="anonymous"></script>
 <script src="./fh-navigator-v1.js" integrity="sha384-REu9WwBw4h1sZhOauBBL/ZZ73QlELwiTYp0l4f715d1+tpQukrfLere+SqS1Vedy" crossorigin="anonymous"></script>
 <script src="./fh-theater-v1.js" integrity="sha384-sINesCJ+dsaF14OkysPDv+Faume1YDsAlvCrliO6jZK5r1hMw5wiXLC8Ioi5i3BI" crossorigin="anonymous"></script>
-<script src="./fh-sync-doctor-v1.js" integrity="sha384-CUul7H+zW3FVlqcOr5Maqe5M7JYoCmfwE/U5TodvZwTkt92Azef4w+/CmnlzvQ1t" crossorigin="anonymous"></script>
+<script src="./fh-sync-doctor-v1.js" integrity="sha384-UGFPGVbm39cZlXr28xNK2zOpaKD1ls0kSRvFIAw24nIUEubbsp/xPLAw2nfCefhS" crossorigin="anonymous"></script>
 <script src="./shop-rework.js" integrity="sha384-3dGBjMbaVb4tjjmW8RoLRQs5ZTaqKPmqcrNxvJGNHh/xL9UO2l7aI1AjthQtcLFP" crossorigin="anonymous"></script>
 <script src="./character-v86-fix.js" integrity="sha384-//2lVFcbHu4KaDjc2+3ohQpWXmZPzw4heoIptCyhDOmrQML3JDUnqIdJvNxjJR/x" crossorigin="anonymous"></script>
 <script src="./eggs.js" integrity="sha384-WRy85tY5jB73PSsli1gyF/D9Q8WQGRwCScLSHi8k1sHun0n6GJNHY4enlohQM0Ou" crossorigin="anonymous"></script>
@@ -6112,6 +6113,7 @@ function fhDayDiff(fromDay, toDay){
   return Math.round((b - a) / 86400000);
 }
 function fhDayShift(day, n){
+  if(window.FH_CALENDAR)return window.FH_CALENDAR.shift(String(day),n);
   const p = String(day).split("-");
   const d = new Date(+p[0], +p[1]-1, +p[2], 12, 0, 0, 0);
   if (isNaN(d.getTime())) return null;
@@ -6146,6 +6148,7 @@ function fhClockTimeOf(day, minuteOfDay){
 }
 /* THE ONE FUNCTION THAT DEFINES A DAY'S CLOCK WINDOW. */
 function dayWindowFor(day){
+  if(window.FH_CALENDAR){const shared=window.FH_CALENDAR.windowFor(String(day));if(shared)return shared;}
   const key = String(day);
   const midnight = fhMidnightOf(key, 0);
   if (midnight == null) return null;
@@ -6196,9 +6199,18 @@ function dayWindowFor(day){
            startMin: 0, hours: Math.max(0, (ordinaryEnd - midnight) / 3600000) };
 }
 function lateStartInfoFor(day){
+  if(window.FH_CALENDAR?.current()&&String(day)>=window.FH_CALENDAR.current().fromDay){
+    const rec=window.FH_CALENDAR.activeLate(String(day));if(!rec)return null;
+    const w=window.FH_CALENDAR.windowFor(String(day)),parts=window.FH_CALENDAR.clockParts(w.toMs,w.timeZone);
+    return{startMin:rec.startMin,declaredAt:rec.at,label:fmtClock12(rec.startMin),endLabel:fmtClock12(parts.minute),endsDay:parts.day};
+  }
   const rec = validLateStartRecord(lateStartMap()[String(day)]);
   if (!rec) return null;
-  const end = new Date(dayWindowFor(String(day)).toMs);
+  const infoWindow=dayWindowFor(String(day));
+  if(infoWindow?.uncertain)return{startMin:rec.startMin,declaredAt:rec.declaredAt,label:fmtClock12(rec.startMin),endLabel:"timezone review needed",endsDay:fhDayShift(String(day),1)};
+  if(infoWindow?.timeZone&&window.FH_CALENDAR){const p=window.FH_CALENDAR.clockParts(infoWindow.toMs,infoWindow.timeZone);
+    return{startMin:rec.startMin,declaredAt:rec.declaredAt,label:fmtClock12(rec.startMin),endLabel:fmtClock12(p.minute),endsDay:p.day};}
+  const end = new Date(infoWindow.toMs);
   return { startMin: rec.startMin, declaredAt: rec.declaredAt,
            label: fmtClock12(rec.startMin), endLabel: fmtClock12(end.getHours()*60+end.getMinutes()),
            endsDay: todayKey(end) };
@@ -6210,6 +6222,7 @@ function lateStartNextDayPreview(day){
   if (!next) return null;
   const w = dayWindowFor(next);
   if (!w || !w.carried) return null;
+  if(w.timeZone&&window.FH_CALENDAR)return{day:next,from:fmtClock12(window.FH_CALENDAR.clockParts(w.fromMs,w.timeZone).minute),hours:Math.round(w.hours*10)/10};
   const from = new Date(w.fromMs);
   return { day: next, from: fmtClock12(from.getHours()*60+from.getMinutes()), hours: Math.round(w.hours * 10) / 10 };
 }
@@ -6218,13 +6231,19 @@ function lateStartNextDayPreview(day){
 function canDeclareLateStart(startMin, nowMs){
   nowMs = Number(nowMs) || now();
   startMin = Math.round(Number(startMin));
-  const today = todayKey(new Date(nowMs));
+  const today = window.FH_CALENDAR?.calendarDay(nowMs)||todayKey(new Date(nowMs));
+  if(window.FH_CALENDAR){const cal=window.FH_CALENDAR.status();
+    if(!cal.ok)return{ok:false,reason:"calendar",message:cal.reason};
+    if(today<cal.fromDay)return{ok:false,reason:"calendar",message:"The shared calendar starts on "+cal.fromDay+". Earlier late starts are preserved."};
+  }
   if (!Number.isFinite(startMin) || startMin <= 0 || startMin >= 1440)
     return { ok:false, reason:"range", message:"Pick a time later than midnight and before the end of the day." };
   return { ok:true, day:today, startMin:startMin, endsDay: fhDayShift(today, 1),
            replacing: !!validLateStartRecord(lateStartMap()[today]) };
 }
 function declareLateStart(startMin, opts){
+  if(window.FH_CALENDAR){return window.FH_CALENDAR.setLate(Math.round(Number(startMin)),false).then(result=>{
+    if(!result.ok)toast(result.reason,"warn");else window.FH_HARDCORE?.render();return result;});}
   opts = opts || {};
   const nowMs = Number(opts.nowMs) || now();
   const check = canDeclareLateStart(startMin, nowMs);
@@ -6241,6 +6260,8 @@ function declareLateStart(startMin, opts){
   return Object.assign({ ok:true }, check);
 }
 function clearLateStart(opts){
+  if(window.FH_CALENDAR){return window.FH_CALENDAR.setLate(0,true).then(result=>{
+    if(!result.ok)toast(result.reason,"warn");else window.FH_HARDCORE?.render();return result;});}
   opts = opts || {};
   const nowMs = Number(opts.nowMs) || now();
   const today = todayKey(new Date(nowMs));
@@ -8426,6 +8447,9 @@ function blockPrimaryTab(error){
   try{peerPause?showPrimaryTabPauseNotice(primaryTabBlockedError()):showBootError(primaryTabBlockedError());}catch(_){}
 }
 function preparePrimarySnapshot(opts={}){
+  /* Calendar receipts share the same atomic primary commit as their sessions.
+     Keep them before any bounded presentation-log pruning. */
+  const preparedCalendar=window.FH_CALENDAR&&state.fhCalendar?window.FH_CALENDAR.prepared(state):null;
   /* App-uptime ticks are valuable local analytics but contain no gameplay or
      accounting progress. Keep those ticks durable immediately without turning
      a local checkpoint into a full encrypted cloud upload. A later meaningful
@@ -8436,8 +8460,14 @@ function preparePrimarySnapshot(opts={}){
   }
   fhTrimLogs(state,FH_LOG_CAPS);
   const snapshot=deepClone(opts.snapshot||state);
+  if(preparedCalendar&&!opts.snapshot)snapshot.fhCalendar=preparedCalendar;
   const raw=JSON.stringify(snapshot);
   if(typeof raw!=="string"||!isStateSane(snapshot,{skipLegacyMonotonic:true}))throw new Error("State failed durable primary validation; nothing was committed.");
+  if(preparedCalendar&&!opts.snapshot)state.fhCalendar=preparedCalendar;
+  /* An owner transaction may record exactly the synchronous preparation it
+     requested. This callback runs before any save await; newer later changes
+     still fail the existing object-and-bytes rollback guard. */
+  if(typeof opts.onPrepared==="function")opts.onPrepared({state,raw:JSON.stringify(state)});
   return{snapshot,raw};
 }
 function primaryEvidenceRegression(message){
@@ -8452,6 +8482,11 @@ function assertPrimaryEvidenceSuccessor(candidate,priorRaw){
   try{prior=JSON.parse(priorRaw);}catch(_){
     const error=new Error("The verified predecessor could not be parsed; durable evidence was not changed.");
     error.code="FH_PRIMARY_CORRUPT";throw error;
+  }
+  if(prior?.fhCalendar){
+    if(!window.FH_CALENDAR||!candidate?.fhCalendar)throw primaryEvidenceRegression("Durable shared-calendar evidence was removed; the save was rejected.");
+    if(!window.FH_CALENDAR.covers(candidate.fhCalendar,prior.fhCalendar))
+      throw primaryEvidenceRegression("Durable calendar receipts were removed or regressed; the save was rejected.");
   }
   if(prior?.loot){
     if(typeof window.lrRewardReceiptEvidenceMap!=="function")throw primaryEvidenceRegression("The reward-evidence comparator is unavailable; durable evidence was not changed.");
@@ -15173,7 +15208,7 @@ async function adoptVerifiedCloudProfile(){
   const identityOperation=pending.identityOperation;
   if(!identityOperation||syncIdentityOperation!==identityOperation){if($("#claim-error"))$("#claim-error").textContent="The safe cloud check expired. Check the cloud profile again.";return false;}
   identityOperation.kind="adopt-verified-cloud";
-  const previousMemoryState=state;
+  let previousMemoryState=null,installedState=null,installedRaw=null;
   let committed=false;
   setSyncClaimBusy(true,"Re-checking the encrypted cloud profile. Nothing is being uploaded…");
   try{
@@ -15198,13 +15233,24 @@ async function adoptVerifiedCloudProfile(){
       return false;
     }
     const recovery=await createVerifiedCloudAdoptionBackup();
+    previousMemoryState=state;
+    if(JSON.stringify(previousMemoryState)!==recovery.previousRaw)throw syncControlError("FH_SYNC_LOCAL_CHANGED","Newer local activity appeared after the preserved copy was verified. The switch stopped.");
+    if(hasUnfinishedDeviceRun(previousMemoryState))throw syncControlError("FH_SYNC_LOCAL_CHANGED","A clock was saved while the switch was being verified. Finish or log it before switching profiles.");
+    if(previousMemoryState.sync?.playerId===pending.candidateSync.playerId){
+      assertCloudReadFloor(pulled.remotePayload,pulled.sourceProtocolVersion,previousMemoryState.sync);
+    }
     const adopted=buildAuthoritativeCloudState(pulled.remoteState,pending.candidateSync,pulled.remotePayload,pulled.sourceEncrypted,
       previousMemoryState.timer,previousMemoryState.fh11Clocks,previousMemoryState.settings);
     assertSyncOperationCurrent(identityOperation.generation);
     state=adopted;
-    try{await saveStateDurable({fromPull:true,suppressMilestoneAnnouncement:true,identityOperation:true,rotateFence:true,source:"cloud-profile-adopt"});}
+    installedState=adopted;installedRaw=JSON.stringify(adopted);
+    try{
+      const saved=await saveStateDurable({fromPull:true,suppressMilestoneAnnouncement:true,identityOperation:true,rotateFence:true,source:"cloud-profile-adopt",
+        onPrepared:receipt=>{if(receipt.state===adopted)installedRaw=receipt.raw;}});
+      if(saved===false)throw new Error("The verified cloud profile was not saved.");
+    }
     catch(error){
-      state=previousMemoryState;
+      if(state===installedState&&JSON.stringify(state)===installedRaw)state=previousMemoryState;
       throw syncControlError("FH_SYNC_LOCAL_SAVE_FAILED","Verified cloud profile could not be saved on this computer");
     }
     committed=true;
@@ -15216,7 +15262,7 @@ async function adoptVerifiedCloudProfile(){
     toast("Cloud profile saved on this computer. Cloud sync is still off.","good");
     return true;
   }catch(error){
-    if(!committed&&state!==previousMemoryState)state=previousMemoryState;
+    if(!committed&&installedState&&state===installedState&&JSON.stringify(state)===installedRaw)state=previousMemoryState;
     if($("#claim-error"))$("#claim-error").textContent=accountingStorageIndeterminate
       ? "The switch stopped because this computer's storage could not be verified. Sync remains paused; open Recovery Center."
       : safeClaimErrorMessage(error);
@@ -15356,10 +15402,13 @@ async function claimSyncCode(full){
     }
     const previousState=state;
     state = merged;
-    try{await saveStateDurable({fromPull:true,suppressMilestoneAnnouncement:true,identityOperation:true,rotateFence:true,source:"sync-identity-claim"});
+    let installedRaw=JSON.stringify(merged);
+    try{const saved=await saveStateDurable({fromPull:true,suppressMilestoneAnnouncement:true,identityOperation:true,rotateFence:true,source:"sync-identity-claim",
+          onPrepared:receipt=>{if(receipt.state===merged)installedRaw=receipt.raw;}});
+        if(saved===false)throw new Error("The claimed cloud profile was not saved.");
         try{ flushHardcoreMergeNotices(); }catch(_){}}
     catch(error){
-      state=previousState;
+      if(state===merged&&JSON.stringify(state)===installedRaw)state=previousState;
       throw syncControlError("FH_SYNC_LOCAL_SAVE_FAILED","Claimed cloud profile could not be saved on this computer");
     }
     claimCommitted=true;
@@ -16420,8 +16469,9 @@ async function cloudPull(opts){
     state.sync.pendingSync=true;
     if(!(state.sync.pendingSince>0))state.sync.pendingSince=Date.now();
   }
-  const installedRaw=JSON.stringify(merged);
-  try{await saveStateDurable({fromPull:true,suppressMilestoneAnnouncement:true,identityOperation:opts.identityOperation===true,source:"cloud-pull-merge"});
+  let installedRaw=JSON.stringify(merged);
+  try{await saveStateDurable({fromPull:true,suppressMilestoneAnnouncement:true,identityOperation:opts.identityOperation===true,source:"cloud-pull-merge",
+      onPrepared:receipt=>{if(receipt.state===merged)installedRaw=receipt.raw;}});
       try{ flushHardcoreMergeNotices(); }catch(_){}}
   catch(error){
     if(state===merged&&JSON.stringify(merged)===installedRaw)state=previousState;
@@ -17233,6 +17283,10 @@ function mergeRemoteState(local, remote){
       else if (bOk) merged[day] = deepClone(b);
     }
     out.lateStarts = merged;
+  }
+  if(local.fhCalendar||remote.fhCalendar){
+    if(!window.FH_CALENDAR)throw new Error("Update this app before merging the shared Hardcore calendar.");
+    out.fhCalendar=window.FH_CALENDAR.merge(local.fhCalendar,remote.fhCalendar);
   }
   out.timeOnlyReviewV2 = local.timeOnlyReviewV2 === true || remote.timeOnlyReviewV2 === true;
   out.settings = Object.assign({}, local.settings, {

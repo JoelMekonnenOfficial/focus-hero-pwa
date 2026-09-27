@@ -56,12 +56,10 @@ external network: Hardcore, late start, core, merge reductions, and gear/world.
   fields. It also adds parallel `hardcore_fail_v2` penalties instead of applying the
   new daily maximum. Allowing a newer reward policy number alone does not fix this.
   Cross-version transport compatibility is reviewed separately.
-- **Historical late-start dates use each device's local timezone.** A record contains
-  only a date, selected clock minute and declaration timestamp; it cannot establish
-  the original timezone unambiguously. Identical records can assign a session to
-  different windows in Toronto and Los Angeles. This patch does not guess a timezone
-  or migrate historical dates. Consistent local calendar settings are necessary for
-  those records; cross-timezone travel needs a separate calendar protocol.
+- **Historical late-start records do not establish their original timezone.** The
+  shared-calendar follow-up below stops uncertain automatic judgments until that
+  timezone is explicitly confirmed. It does not infer a timezone from the device,
+  declaration timestamp or a historical checkpoint, or rewrite stored dates.
 - Rank events already recorded remain append-only. Later editing/deleting qualifying
   minutes can change a run's audited survival or future outcome, but does not globally
   reprice prior daily rank credit. Explicit revival retractions remain episode-specific.
@@ -99,3 +97,89 @@ rewritten by these pure merge changes.
 The expanded tracked suite passes 29/29, and the independent reviewer's eight exact
 counterexamples all pass. Existing Hardcore-sync 15/15 and rank-fairness 18/18 checks
 remain passing. The integrated release must still pass the full browser suite.
+
+## Shared-calendar follow-up
+
+This follow-up starts from `9dccafca1ca73ba488672f98fac29127a6ee6884` and adds
+`fh-calendar-v1.js`, loaded before Hardcore. All checks still use synthetic state;
+no production profile, identity, cloud row or recovery material was accessed.
+
+The shared `fhCalendar` receipt records an explicit IANA timezone, a prospective
+first date, immutable absolute midnight boundaries and late-start declarations,
+and session receipts keyed by stable session IDs. Those receipts retain each
+session's original recorded date, absolute timestamp, corrected minutes/session
+units, update timestamp and terminal deletion. They survive presentation-log
+retention, so pruning a displayed session cannot erase earned-day evidence. A
+later edit replaces that receipt at a newer update timestamp; a deletion remains
+terminal when a stale peer returns. Unknown schema fields, missing original dates,
+contradictory equal-version receipts and differing immutable boundaries refuse
+the merge/save rather than discard or guess evidence.
+
+A wholly new profile may initialize its displayed device timezone when the first
+run starts. A profile with existing progress asks for one future calendar, beginning
+the next date in that timezone. Choosing never reanchors a run's start or drops
+unevaluated earlier dates. If sync is enabled, a complete ordinary guarded pull
+must succeed first so another device's existing calendar can be adopted. The UI
+says to choose on one device and let normal sync share it before choosing elsewhere.
+
+Earlier ordinary dates keep their recorded date totals. Unconfirmed historical
+late starts and pauses hold only audits that need their ambiguous boundaries;
+saved run progress remains visible. A separate explicit confirmation supplies the
+historical timezone, which may differ from the future calendar. Until confirmation,
+an ordinary legacy date's close is conservatively no earlier than its latest
+possible timezone close. Post-cutover work is subtracted from its original legacy
+date bucket before absolute-window assignment, preventing a Los Angeles device's
+"yesterday" label from counting the same work on two Hardcore dates. An earlier
+confirmed late window can still receive its next-morning portion after the log is
+pruned. No history total or already-recorded rank amount is rewritten.
+
+New ordinary dates use the persisted calendar's 23-, 24- or 25-hour boundaries.
+Late starts keep 24 elapsed hours, shortened successors remain distinct dates,
+and overlapping windows give the later date sole ownership of each session.
+Missing spring-forward clock times refuse; repeated autumn times consistently
+select the first occurrence, as stated in the settings card. There is no per-device
+timezone fallback for these prospective windows.
+
+Calendar preparation is pure until primary snapshot validation succeeds. The
+primary save API can synchronously report its exact prepared object/bytes through
+`onPrepared({state, raw})`; cloud pull uses that receipt for its existing strict
+failure-rollback ownership check. This avoids mistaking its own added calendar
+boundaries for newer user activity, while preserving genuinely newer same-object
+or replacement-object activity. Calendar choice has the corresponding field-level
+durability guard. Identity-claim/adoption integration is reviewed separately.
+
+Validation on the final calendar source:
+
+- `tests/shared-calendar-regressions.cjs`: 20/20 actual-module checks. Toronto,
+  Los Angeles and UTC devices produce identical absolute windows and complete
+  Hardcore/rank outcomes, including 17-/23-/25-hour dates, paused/missed/revived
+  runs, session-count conservation, pruned receipts, edits/deletions, cutoff carry,
+  old earned dates, normal-sync adoption, merge algebra and failed saving.
+- `tests/calendar-persistence-safety.mjs`: 4/4 exact primary-save/cloud-pull
+  checks, including prepared-calendar save refusal and both newer activity forms.
+- `tests/calendar-ui-safety.mjs`: 5/5 full-app Chromium checks. At 390-pixel phone
+  width, the real "Use this calendar" click saves the selected timezone, presents
+  the historical hold explanation, fits the viewport, and survives an actual
+  durable reload while preserving the original run, history and late declaration.
+- Existing core, Hardcore, late-start, sync, clock-save-races and
+  persistence-clock-audit browser suites all pass (6/6 selected suites).
+- Independent review reproduced and verified fixes for remote-only unsupported
+  metadata loss and the prepared-calendar/cloud-pull rollback mismatch.
+
+Remaining explicit limitations:
+
+- Independently selected calendars with different cutover dates **refuse to merge,
+  even when their timezone matches**. Choosing the earlier date automatically
+  could reinterpret formerly legacy dates whose timestamp evidence was pruned.
+  Both copies remain intact; this release does not offer an automatic conflict
+  migration. Ordinary sync adoption before choice and the one-device instruction
+  reduce this risk but cannot rule out simultaneous first choices.
+- If nobody knows an old late-start/pause timezone, those uncertain judgments
+  remain held. No success, failure, excuse or rank credit is invented to hide the
+  missing fact. A confirmed historical timezone is immutable in normal settings.
+- The compatible encrypted protocol is required to protect these new fields from
+  old readers; it is implemented and tested in the separate transport change.
+- These are isolated synthetic browser/timezone checks, not verification against
+  Joel's Chrome, Opera or phone profile. Real mobile service-worker/platform
+  limitations remain documented in the rollout audit. The integrated release
+  still needs the complete suite and independent release boundary.

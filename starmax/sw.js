@@ -117,7 +117,7 @@
  * into cache-served HTML too.
  */
 const BUILD_ID    = "fh-2026-09-27-v10-64-1-audited";
-const BUNDLE_HASH = "caaef9c79d2567798c2b9e6fa58b2c1ca7242548371da58e8fcb8f5919003d54";
+const BUNDLE_HASH = "2a69def757b3e1ce781aebc03859b1b9c2fa460810e47d3201d806a1defc6db6";
 const CACHE_NAME  = `focus-hero-${BUILD_ID}-${BUNDLE_HASH}`;
 /* BEGIN MODULE INTEGRITY */
 const MODULE_INTEGRITY = {
@@ -125,16 +125,17 @@ const MODULE_INTEGRITY = {
   "character-v86-fix.js": "sha384-//2lVFcbHu4KaDjc2+3ohQpWXmZPzw4heoIptCyhDOmrQML3JDUnqIdJvNxjJR/x",
   "data-guard.js": "sha384-gralA8fxCiPEkJzyjElVA+coPMvEhmFsQye4ijOKkNVpt+B/DJ06QLj4/5VbrpBS",
   "eggs.js": "sha384-WRy85tY5jB73PSsli1gyF/D9Q8WQGRwCScLSHi8k1sHun0n6GJNHY4enlohQM0Ou",
+  "fh-calendar-v1.js": "sha384-Bq15GzGnHSne07TLXazlgHXG3vFC77UGG3Z9EwWGjT0t7z9hiYuk1DYLPsZ4MsGg",
   "fh-cosmetic-clothing-v13.js": "sha384-VAApH+AEmm/ZS8QXHyor+UyVxxFj6CKNYqGMqTyPTk7PdH/OS0nZ+lI3WHshMYVS",
   "fh-gameplay-controls-v13.js": "sha384-ik+yeDUaEF9qIHmYfpmUs8VInl0Tm6Je9g7doAXTdSRWoAi5AOxE4ZaKW8cnZqMl",
-  "fh-hardcore-v12.js": "sha384-vbS5xVQEeFXFw0fQVRih4KN7Scyoh83XP9IYrVPE9gZrhustvdps82YfyybsS/Rg",
+  "fh-hardcore-v12.js": "sha384-yUesIqypaxqrL/5X7P/X4Y+/kLPZTf3uOSrRq9Alm/V483pnMuAiwBR2iB8sjwNj",
   "fh-identity-v13.js": "sha384-MAYX6ulFH+mHWhf8ukbtrUQeUw3k0ZXH/z46YwvhvU+7XQT37C6kj7QP1f/HCxng",
   "fh-models-v12.js": "sha384-ogQnT7y+qfJIRv9DEnTuwxUdSBhualSAJmP5XzighgKjeFhBX/I8Ot1Bq01CPeWm",
   "fh-navigator-v1.js": "sha384-REu9WwBw4h1sZhOauBBL/ZZ73QlELwiTYp0l4f715d1+tpQukrfLere+SqS1Vedy",
   "fh-primary-store-v13.js": "sha384-6Izjzvv3OzLlF7j6gaKXEAae6ex5cVmejWMxkMDReJssmkYp2y3Yk7LWYPSHchTo",
   "fh-rank-v1.js": "sha384-kxq1jL5hD+Jnd8w5J2mstb4KFf2udyyelvtmqDQeQZ1QdZoqjc2GivcUzz8e7CGP",
   "fh-storage-relief.js": "sha384-2I6W3SyY4YJeu2zZGO5LpNzdcUOFPVOgy5PS/hcO790y+qhIaQ1A2QD0u8XwHbvw",
-  "fh-sync-doctor-v1.js": "sha384-CUul7H+zW3FVlqcOr5Maqe5M7JYoCmfwE/U5TodvZwTkt92Azef4w+/CmnlzvQ1t",
+  "fh-sync-doctor-v1.js": "sha384-UGFPGVbm39cZlXr28xNK2zOpaKD1ls0kSRvFIAw24nIUEubbsp/xPLAw2nfCefhS",
   "fh-theater-v1.js": "sha384-sINesCJ+dsaF14OkysPDv+Faume1YDsAlvCrliO6jZK5r1hMw5wiXLC8Ioi5i3BI",
   "focus-economy.js": "sha384-R4O/pvD6hqYJ8ZZ0PmqmYAvNAnCHDnr7d0rUZFDqUApBaJoUVPztmz1T8prMnAJQ",
   "focus-hero-immersive-v1.js": "sha384-lNLnx/16nDrzfoY2PPlSiYQF1GkyZPCQmb66AQ/YvlRiEgHWrOcSecrriqiI3z9F",
@@ -189,6 +190,7 @@ const PRECACHE = [
   "./fh-storage-relief.js",
   "./focus-hero-ui-v11.js",
   "./focus-hero-immersive-v1.js",
+  "./fh-calendar-v1.js",
   "./fh-hardcore-v12.js",
   "./fh-rank-v1.js",
   "./fh-navigator-v1.js",

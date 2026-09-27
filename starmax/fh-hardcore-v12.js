@@ -89,6 +89,9 @@
   }
 
   function dayKey(date) {
+    if(window.FH_CALENDAR){
+      try{var sharedDay=window.FH_CALENDAR.calendarDay(date==null?Date.now():+new Date(date));if(sharedDay)return sharedDay;}catch(_){}
+    }
     var candidate = null;
     try {
       if (typeof window.todayKey === "function") candidate = window.todayKey(date);
@@ -231,14 +234,16 @@
     var list = (run && run.pauses) || [];
     if (!list.length) return false;
     for (var i = 0; i < list.length; i++) {
-      var pauseDay = dayKey(new Date(list[i].from));
+      var cal=window.FH_CALENDAR&&window.FH_CALENDAR.current();
+      var zone=cal&&(day<cal.fromDay?cal.legacyTimeZone:cal.timeZone);
+      var pauseDay = zone?window.FH_CALENDAR.dayAt(list[i].from,zone):dayKey(new Date(list[i].from));
       if (!pauseDay) continue;
       if (list[i].to == null) {
         /* still paused - nothing from the pause date onward is judged */
         if (day >= pauseDay) return true;
         continue;
       }
-      var resumeDay = dayKey(new Date(list[i].to));
+      var resumeDay = zone?window.FH_CALENDAR.dayAt(list[i].to,zone):dayKey(new Date(list[i].to));
       if (!resumeDay) continue;
       /* paused and resumed the same date: that date is judged as normal */
       if (resumeDay === pauseDay) continue;
@@ -780,13 +785,18 @@
       /* `extended` is an ordinary day that runs on until the next day is
          declared to start. It has to be treated as a real window here, or the
          minutes in that gap fall back to plain history and the gap reopens. */
-      if (!w || !(w.late || w.carried || w.extended)) return null;
+      if (!w || !(w.late || w.carried || w.extended || w.shared || w.uncertain)) return null;
       /* Which day asked for it - the overlap tie-break needs to know. */
       w.ownerDay = String(day);
       return w;
     } catch (_) { return null; }
   }
-  function midnightOfDay(day, offsetDays) {
+  function midnightOfDay(day, offsetDays, zone) {
+    if(window.FH_CALENDAR){var cal=window.FH_CALENDAR.current();if(cal){
+      var key=window.FH_CALENDAR.shift(String(day),offsetDays||0);
+      if(!zone&&day<cal.fromDay&&!cal.legacyTimeZone)return Date.parse(key+"T12:00:00Z"); // Latest possible legacy midnight (UTC-12).
+      return window.FH_CALENDAR.clockAt(key,0,zone||(day<cal.fromDay&&cal.legacyTimeZone)||cal.timeZone);
+    }}
     var p = String(day).split("-");
     var d = new Date(+p[0], +p[1] - 1, +p[2], 0, 0, 0, 0);
     if (isNaN(d.getTime())) return null;
@@ -866,16 +876,16 @@
     if (!state) return 0;
     var hist = (state && state.history) || {};
     var log = Array.isArray(state.sessionsLog) ? state.sessionsLog : [];
-    var firstDay = dayKey(new Date(w.fromMs));
-    var lastDay = dayKey(new Date(Math.max(w.fromMs, w.toMs - 1)));
+    var firstDay = w.timeZone&&window.FH_CALENDAR?window.FH_CALENDAR.dayAt(w.fromMs,w.timeZone):dayKey(new Date(w.fromMs));
+    var lastDay = w.timeZone&&window.FH_CALENDAR?window.FH_CALENDAR.dayAt(Math.max(w.fromMs,w.toMs-1),w.timeZone):dayKey(new Date(Math.max(w.fromMs, w.toMs - 1)));
     var o1 = dayOrdinal(firstDay), o2 = dayOrdinal(lastDay);
     if (o1 == null || o2 == null) return 0;
     var total = 0;
     for (var o = o1; o <= o2 && o - o1 <= 3; o++) {
       var d = dayFromOrdinal(o);
       if (!d) continue;
-      var dayHist = Math.max(0, Math.floor(Number(hist[d]) || 0));
-      var dayStart = midnightOfDay(d, 0), dayEnd = midnightOfDay(d, 1);
+      var dayHist = window.FH_CALENDAR&&window.FH_CALENDAR.current()?window.FH_CALENDAR.legacyRemainder(d,false):Math.max(0, Math.floor(Number(hist[d]) || 0));
+      var dayStart = midnightOfDay(d, 0, w.timeZone), dayEnd = midnightOfDay(d, 1, w.timeZone);
       if (dayStart == null || dayEnd == null) continue;
       /* A 24h window can contain an entire 23h DST date. Its later window
          still owns overlapping work, so only unsplit dates use this shortcut. */
@@ -888,6 +898,7 @@
         if (!rec || rec.type !== "focus" || !(Number(rec.minutes) > 0)) continue;
         var at = Number(rec.at || rec.completedAt || rec.startedAt);
         if (!Number.isFinite(at) || at < dayStart || at >= dayEnd) continue;
+        if(window.FH_CALENDAR&&at>=window.FH_CALENDAR.cutoff())continue;
         sawTimestamped = true;
         if (at < w.fromMs || at >= w.toMs) continue;
         /* Overlap: the later day owns it. */
@@ -935,6 +946,7 @@
          than shipped wrong. */
       total += dayHist ? Math.min(part, dayHist) : part;
     }
+    if(w.timeZone&&window.FH_CALENDAR){var futurePart=window.FH_CALENDAR.futurePortion(dayKeyOfWindow(w));if(futurePart)total+=futurePart.minutes;}
     return Math.floor(total);
   }
   function sessionsInWindow(w) {
@@ -942,16 +954,16 @@
     if (!state) return 0;
     var sh = (state && state.sessionHistory) || {};
     var log = Array.isArray(state.sessionsLog) ? state.sessionsLog : [];
-    var firstDay = dayKey(new Date(w.fromMs));
-    var lastDay = dayKey(new Date(Math.max(w.fromMs, w.toMs - 1)));
+    var firstDay = w.timeZone&&window.FH_CALENDAR?window.FH_CALENDAR.dayAt(w.fromMs,w.timeZone):dayKey(new Date(w.fromMs));
+    var lastDay = w.timeZone&&window.FH_CALENDAR?window.FH_CALENDAR.dayAt(Math.max(w.fromMs,w.toMs-1),w.timeZone):dayKey(new Date(Math.max(w.fromMs, w.toMs - 1)));
     var o1 = dayOrdinal(firstDay), o2 = dayOrdinal(lastDay);
     if (o1 == null || o2 == null) return 0;
     var total = 0;
     for (var o = o1; o <= o2 && o - o1 <= 3; o++) {
       var d = dayFromOrdinal(o);
       if (!d) continue;
-      var dayCount = Math.max(0, Math.floor(Number(sh[d]) || 0));
-      var dayStart = midnightOfDay(d, 0), dayEnd = midnightOfDay(d, 1);
+      var dayCount = window.FH_CALENDAR&&window.FH_CALENDAR.current()?window.FH_CALENDAR.legacyRemainder(d,true):Math.max(0, Math.floor(Number(sh[d]) || 0));
+      var dayStart = midnightOfDay(d, 0, w.timeZone), dayEnd = midnightOfDay(d, 1, w.timeZone);
       if (dayStart == null || dayEnd == null) continue;
       if (w.fromMs <= dayStart && w.toMs >= dayEnd &&
           !laterWindowOverlaps(dayKeyOfWindow(w), dayStart, dayEnd)) { total += dayCount; continue; }
@@ -961,6 +973,7 @@
         if (!recordSessionCredit(rec)) continue;
         var at = Number(rec.at || rec.completedAt || rec.startedAt);
         if (!Number.isFinite(at) || at < dayStart || at >= dayEnd) continue;
+        if(window.FH_CALENDAR&&at>=window.FH_CALENDAR.cutoff())continue;
         sawTimestamped = true;
         if (at >= w.fromMs && at < w.toMs && !belongsToLaterWindow(dayKeyOfWindow(w), at)) part++;
       }
@@ -977,13 +990,15 @@
       if (!sawTimestamped) { if (o === o1) total += dayCount; continue; }
       total += dayCount ? Math.min(part, dayCount) : part;
     }
+    if(w.timeZone&&window.FH_CALENDAR){var futurePart=window.FH_CALENDAR.futurePortion(dayKeyOfWindow(w));if(futurePart)total+=futurePart.sessions;}
     return total;
   }
   function minutesOn(day) {
+    if(window.FH_CALENDAR){var totals=window.FH_CALENDAR.totals(day);if(totals)return totals.minutes;}
     var w = lateWindow(day);
     if (w) return minutesInWindow(w);
     var state = S();
-    var value = Number(state && state.history && state.history[day]);
+    var value = window.FH_CALENDAR&&window.FH_CALENDAR.current()?window.FH_CALENDAR.legacyRemainder(day,false):Number(state && state.history && state.history[day]);
     return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
   }
 
@@ -1004,10 +1019,11 @@
   }
 
   function sessionsOn(day) {
+    if(window.FH_CALENDAR){var totals=window.FH_CALENDAR.totals(day);if(totals)return totals.sessions;}
     var state = S();
     var w = lateWindow(day);
     if (w) return sessionsInWindow(w);
-    var stored = Number(state && state.sessionHistory && state.sessionHistory[day]);
+    var stored = window.FH_CALENDAR&&window.FH_CALENDAR.current()?window.FH_CALENDAR.legacyRemainder(day,true):Number(state && state.sessionHistory && state.sessionHistory[day]);
     if (Number.isFinite(stored) && stored >= 0) return Math.floor(stored);
     if (!state || !Array.isArray(state.sessionsLog)) return 0;
     var count = 0;
@@ -1031,6 +1047,7 @@
   function draftNow() {
     var d = new Date();
     var h24 = d.getHours(), m = d.getMinutes();
+    if(window.FH_CALENDAR&&window.FH_CALENDAR.current()){var shared=window.FH_CALENDAR.clockParts(+d);h24=Math.floor(shared.minute/60);m=shared.minute%60;}
     var h12 = h24 % 12; if (h12 === 0) h12 = 12;
     return { hour12: h12, min: Math.floor(m / 15) * 15, pm: h24 >= 12 };
   }
@@ -1092,14 +1109,14 @@
      the same tie-break the audit already uses - one minute is never credited
      to two days. */
   function hcActiveDay(nowMs) {
-    var cal = dayKey();
+    var cal = dayKey(Number.isFinite(nowMs)?new Date(nowMs):undefined);
     try {
       nowMs = Number.isFinite(nowMs) ? nowMs : Date.now();
       if (!cal || typeof window.fhDayShift !== "function") return cal;
       var prevKey = window.fhDayShift(cal, -1);
       if (!prevKey) return cal;
       var prevW = lateWindow(prevKey);
-      if (!prevW || !prevW.late) return cal;
+      if (!prevW) return cal;
       if (!Number.isFinite(prevW.fromMs) || !Number.isFinite(prevW.toMs)) return cal;
       if (nowMs < prevW.fromMs || nowMs >= prevW.toMs) return cal;
       /* Yesterday's window is still open. It only keeps the minute while
@@ -1139,6 +1156,9 @@
      edit that moved any prior day below its requirement. UTC ordinals are
      used for calendar arithmetic, so DST cannot create a 23/25-hour day bug. */
   function auditRun(run, today) {
+    if(window.FH_CALENDAR){var calendarStatus=window.FH_CALENDAR.status();if(!calendarStatus.ok)return{ok:false,calendarReview:true,reason:calendarStatus.reason};}
+    if(window.FH_CALENDAR){var sharedCalendar=window.FH_CALENDAR.current();
+      if(sharedCalendar&&!sharedCalendar.legacyTimeZone&&(run.pauses||[]).some(function(p){return p.from<window.FH_CALENDAR.clockAt(sharedCalendar.fromDay,0,sharedCalendar.timeZone);})){return{ok:false,calendarReview:true,reason:"Confirm the timezone used for earlier pause dates before this run is judged."};}}
     var start = dayOrdinal(run && run.startDay);
     var end = dayOrdinal(today);
     if (start == null || end == null) return { ok: false, reason: "invalid calendar day" };
@@ -1189,6 +1209,10 @@
   }
 
   function invalidDayWindow(day) {
+    if(window.FH_CALENDAR){
+      try{var shared=window.FH_CALENDAR.windowFor(day);if(shared&&shared.uncertain)return shared.reason;}
+      catch(error){return error.message||String(error);}
+    }
     var w = lateWindow(day);
     if (w && (!Number.isFinite(w.fromMs) || !Number.isFinite(w.toMs) || !(w.toMs > w.fromMs))) {
       return "The day window for " + day + " has no usable duration. Its late-start calendar needs review; no Hardcore result was recorded.";
@@ -1234,6 +1258,11 @@
     }
     var req = normalizeRequirement(presetOrRequirement);
     if (!req) return { ok: false, reason: "Choose a valid daily requirement." };
+    if(window.FH_CALENDAR&&!window.FH_CALENDAR.current()){
+      var calendarReady=await window.FH_CALENDAR.ensureForNewRun();if(!calendarReady.ok)return calendarReady;
+      // The calendar save yielded: restart from current run state, not a stale copy.
+      return start(presetOrRequirement);
+    }
     var today = hcActiveDay();
     if (!today) return { ok: false, reason: "The device date is invalid." };
     var duplicate = existing.find(function (row) { return row.requirementLock === requirementLock(req); });
@@ -1771,7 +1800,7 @@
        Cache only while all inputs to the archive's re-audit are unchanged. */
     var state = S() || {};
     return JSON.stringify([today, data, state.history || {}, state.sessionHistory || {},
-      state.sessionsLog || [], state.lateStarts || {}]);
+      state.sessionsLog || [], state.lateStarts || {}, state.fhCalendar || null]);
   }
   function mayHaveRevivableRun(data, today) {
     if (!data || !Array.isArray(data.history) || !data.history.length) return false;
@@ -1879,6 +1908,7 @@
   }
 
   async function evaluateAutomaticallyUnderLock(source) {
+    if(window.FH_CALENDAR){var calendarStatus=window.FH_CALENDAR.status();if(!calendarStatus.ok)return{ok:false,calendarReview:true,reason:calendarStatus.reason};}
     var read = readHardcore();
     if (!read.ok) return { ok:false, reason:read.reason };
     var today = hcActiveDay();
@@ -2095,6 +2125,18 @@
     }).join("") + "</div>";
   }
 
+  function calendarCard() {
+    if(!window.FH_CALENDAR)return "";
+    var status=window.FH_CALENDAR.status(),zone=status.ok?status.timeZone:window.FH_CALENDAR.deviceZone();
+    var choices=[zone,"America/Toronto","America/Los_Angeles","UTC"].filter(function(v,i,a){return a.indexOf(v)===i;});
+    var list='<datalist id="fh12-calendar-zones">'+choices.map(function(z){return '<option value="'+esc(z)+'">';}).join("")+'</datalist>';
+    if(!status.ok)return '<div class="fh12-category-card"><h4>One calendar on every device</h4><p>Choose on one device, then let normal sync share it with your others before making another choice. Existing run starts, saved progress and rank events stay intact. Older late-start dates need a separate confirmation.</p>'+list+
+      '<label>Timezone <input id="fh12-calendar-zone" list="fh12-calendar-zones" value="'+esc(zone)+'" aria-label="Shared Hardcore timezone"></label><div class="fh12-category-actions"><button type="button" data-fh12="calendar-choose">Use this calendar</button></div><p>A new profile uses '+esc(zone)+' when its first run starts.</p></div>';
+    var body='<div class="fh12-category-card"><h4>Shared calendar · '+esc(zone)+'</h4><p>New day boundaries apply from '+esc(status.fromDay)+'. They remain the same on your other devices, including while travelling. A repeated autumn clock time uses its first occurrence.</p>';
+    if(!status.legacyConfirmed){body+=list+'<details><summary>Confirm the timezone for earlier dates</summary><p>Only confirm if you know which timezone defined your earlier late starts and pauses. This supplies missing calendar information; it does not replace records or reprice recorded rank events. Automatic review will then use that timezone.</p><label>Earlier timezone <input id="fh12-calendar-legacy-zone" list="fh12-calendar-zones" value="'+esc(zone)+'" aria-label="Earlier Hardcore timezone"></label><div class="fh12-category-actions"><button type="button" data-fh12="calendar-confirm-history">Confirm earlier timezone</button></div></details>';}
+    return body+'</div>';
+  }
+
   function renderCategory() {
   /* THE LATE START CARD.
 
@@ -2230,6 +2272,7 @@
         (paused ? ' <span class="fh12-pausetag">Paused</span>' : '') + '</h4><p><b>' +
         days + ' day' + (days === 1 ? "" : "s") + ' survived</b> · started ' + esc(run.startDay) + '</p>' +
         '<p>' + have + " of " + need + ' today</p>' + lateNote + pausedNote +
+        (audits[i]&&!audits[i].ok?'<p class="fh12-latenote fh12-blocked">Calendar review held: '+esc(audits[i].reason)+'. Saved progress is preserved.</p>':"")+
         '<div class="fh12-progress"><i style="width:' + progress.pct + '%"></i></div>' +
         '<div class="fh12-category-actions">' +
         '<button type="button" data-fh12="' + (paused ? "resume" : "pause") + '" data-run="' + esc(run.id) + '">' +
@@ -2241,9 +2284,9 @@
     /* Always offered. The old version only drew this when a run was already
        going, which meant the morning you woke late - before starting anything -
        was exactly when you could not reach it. */
-    body += lateStartCard(today);
+    body = calendarCard() + body + lateStartCard(today);
     if (live.length) {
-      body += '<div class="fh12-category-card"><p>Automatic calendar review is on. Life XP checks once when a new local day begins or when you return to the app. Each run is judged on its own requirement; missing one ends only that run.</p></div>';
+      body += '<div class="fh12-category-card"><p>Life XP checks the shared Hardcore calendar when a day closes or you return. Dates needing timezone confirmation are held for review. Each run keeps its own requirement.</p></div>';
     }
     if (live.length < MAX_CONCURRENT_RUNS) {
       var available = PRESETS.filter(function (preset) {
@@ -2323,6 +2366,15 @@
         var rv = await reviveRun(rid);
         if (!rv.ok) toast(rv.reason, "bad");
       } finally { button.disabled = false; }
+    } else if (action === "calendar-choose" || action === "calendar-confirm-history") {
+      var historical=action==="calendar-confirm-history";
+      var input=document.getElementById(historical?"fh12-calendar-legacy-zone":"fh12-calendar-zone");
+      var zone=input&&input.value.trim();if(!zone)return;
+      if(historical&&!window.confirm("Confirm that earlier late-start and pause dates used "+zone+"? Existing records stay intact. Automatic Hardcore review can resume using these boundaries."))return;
+      button.disabled=true;
+      try{var choice=historical?await window.FH_CALENDAR.confirmLegacy(zone):await window.FH_CALENDAR.choose(zone);
+        if(!choice.ok)toast(choice.reason,"warn");else{render();scheduleBoundaryEvaluation();}}
+      finally{button.disabled=false;}
     } else if (action === "ls-hour" || action === "ls-min" || action === "ls-ampm" || action === "ls-now") {
       var dr = ensureDraft();
       var v = button.getAttribute("data-v");
@@ -2345,11 +2397,11 @@
       if (!window.confirm("Count today as starting " + raw + "?\n\nToday runs for a full 24 elapsed hours from " + raw +
                           ", with the same requirement. The ending clock time may differ when daylight saving changes.\n\nTomorrow begins when that window closes and runs to midnight; it still counts as its own day.")) return;
       button.disabled = true;
-      try { window.declareLateStart(mins); } finally { button.disabled = false; }
+      try { await window.declareLateStart(mins); } finally { button.disabled = false; }
     } else if (action === "latestart-clear") {
       lateDraft = null;
       if (!window.confirm("Clear today's late start?\n\nToday goes back to a normal midnight-to-midnight day.")) return;
-      try { window.clearLateStart(); } catch (_) {}
+      try { await window.clearLateStart(); } catch (_) {}
     } else if (action === "conflict-keep-local" || action === "conflict-keep-peer") {
       var keepPeer = action === "conflict-keep-peer";
       if (!window.confirm(keepPeer
