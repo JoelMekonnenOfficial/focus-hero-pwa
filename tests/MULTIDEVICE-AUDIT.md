@@ -30,9 +30,11 @@ Initial source under review: candidate `4176f7d`, followed by the authenticated-
 - Explicit encryption-off writes use the incompatible wrapper; old readers retain their revision and cannot overwrite it. Requiring encryption then refuses that same plaintext without changing totals, salt or identity.
 - Legacy first-create and lost-create retry preflights stop after read-only requests when the row is already protocol 2.
 - Requiring encryption while a plaintext GET is held refuses that response without undoing the newer local choice.
+- Authenticated older full rows are refused even when their ciphertext is valid. A revision or protocol minimum committed while another response is held is rechecked against the latest verified local state before merging.
+- Re-entering the same identity retains its protocol minimum and confirmed revision; it cannot authorize a downgrade. Different target identities keep their own separate floor.
 - Verified protocol pins survive browser reload and reject revision-increasing encrypted downgrades.
 
-All 15 end-to-end scenarios pass, including preserved offline work, expected mixed-version refusals and safe catch-up after updating. **A green test run is not deployment approval.**
+All 19 end-to-end scenarios pass, including preserved offline work, expected mixed-version refusals and safe catch-up after updating. **A green test run is not deployment approval.**
 
 ## Rollout boundary and limitations
 

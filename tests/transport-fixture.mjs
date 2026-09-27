@@ -29,7 +29,7 @@ function fresh(){
     assertAccountingStorageDeterminate(){},assertSyncOperationCurrent(){},assertCloudPushPayloadSafe(){},
     readVerifiedPrimaryUploadBase:async expected=>{if(expected)assert.equal(expected.raw,c.primaryLastDurableRaw);return{raw:c.primaryLastDurableRaw,head:{...c.primaryHead}};},
     saveStateDurable:async()=>{c.primaryLastDurableRaw=JSON.stringify(c.state);c.primaryHead={commitId:'c'+(++seq)};},
-    CLOUD_PROTOCOL_VERSION:2,noteCloudProtocol(){},cloudEnvelopeVersion:()=>1,
+    CLOUD_PROTOCOL_VERSION:2,noteCloudProtocol(){},cloudEnvelopeVersion:()=>1,cloudProtocolMinimum:()=>1,cloudProtocolError:message=>Object.assign(new Error(message),{code:'FH_SYNC_UPDATE_REQUIRED'}),
     syncControlError:(code,message)=>Object.assign(new Error(message),{code}),isSyncControlError:()=>false,
     markCloudPending:async e=>{c.state.sync.pendingSync=true;c.state.sync.lastSyncError=e.message;},
     markCloudSynced:async()=>{c.state.sync.pendingSync=false;return true;},

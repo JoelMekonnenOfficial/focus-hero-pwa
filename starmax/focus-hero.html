@@ -14992,6 +14992,8 @@ function clearPendingCloudAdoption(opts={}){
 }
 function safeClaimErrorMessage(error){
   const text=String(error&&error.message||error||"");
+  if(error&&error.code==="FH_SYNC_UPDATE_REQUIRED")return "Update Life XP on every device before joining this cloud profile. Its sync format cannot be used safely by this copy. Offline work stays on this device; nothing was merged or uploaded.";
+  if(error&&error.code==="FH_SYNC_ENCRYPTION_REQUIRED")return "This cloud profile is unencrypted, but this device requires encryption. Check the other device's setting. Plaintext needs an explicit local choice; nothing was merged or uploaded.";
   if(/decrypt|secret hash|unlock/i.test(text))return "That code did not unlock the cloud profile. Check the code and try again. Nothing changed or uploaded.";
   if(/no cloud state|no matching|no state payload|missing row/i.test(text))return "No matching cloud profile was found. Nothing changed or uploaded.";
   if(/authentication|401|403/i.test(text))return "Cloud authentication could not be confirmed. Nothing changed or uploaded.";
@@ -15261,16 +15263,17 @@ async function claimSyncCode(full){
      the row the GENERATING device created. The previous `sc_${code}` form
      used a different namespace AND was guessable (squatting risk). */
   candidateSync.playerId = await derivePlayerId(code, secret);
+  if(candidateSync.playerId===existingSync.playerId)noteCloudProtocol(candidateSync,cloudProtocolMinimum(existingSync));
   crossIdentityReunion = !!existingSync.playerId && (existingSync.cloudRev|0) > 0 &&
     existingSync.playerId !== candidateSync.playerId;
   const codeInput=$("#enter-code");if(codeInput){codeInput.value="";codeInput.type="password";}
   const showCode=$("#btn-show-sync-code");if(showCode){showCode.textContent="Show";showCode.setAttribute("aria-pressed","false");}
-  /* v4.2: reset cloudRev so the first push after claim takes the INSERT
-     path (rev=0 → POST). cloudPull will overwrite it with the remote rev
-     if the row already exists. Without this reset, a device that previously
-     had its own sync (cloudRev>0) would push under the new code with a
-     stale rev, hitting the conflict branch and failing 3x. */
-  candidateSync.cloudRev = 0;
+  /* A different identity starts without a confirmed revision. Re-entering
+     the same identity retains its confirmed floor; doing so must never grant
+     permission to accept an older row or sync format. The verified pull sets
+     the target revision before any upload. */
+  candidateSync.cloudRev = candidateSync.playerId===existingSync.playerId
+    ? Math.max(0,Math.trunc(Number(existingSync.cloudRev)||0)) : 0;
   candidateSync.lastPushedAt = 0;
   candidateSync.lastPulledAt = 0;
   candidateSync.lastSuccessfulSyncAt = 0;
@@ -15324,6 +15327,7 @@ async function claimSyncCode(full){
     if(["playerId","syncCode","syncSecretHash","backend","jsonstorageUrl"].some(key=>(preClaimLocal.sync&&preClaimLocal.sync[key]||null)!==(existingSync[key]||null))){
       throw syncControlError("FH_SYNC_LOCAL_CHANGED","Claim paused because this device's cloud identity changed during verification. Retry from the current profile.");
     }
+    if(candidateSync.playerId===preClaimLocal.sync?.playerId)assertCloudReadFloor(pulled.remotePayload,pulled.sourceProtocolVersion,preClaimLocal.sync);
     const merged = mergeRemoteState(preClaimLocal, pulled.remoteState);
     if (pulled.sourceEncrypted) merged.settings.e2eEncryption = true;
     merged.sync = deepClone(candidateSync);
@@ -16230,6 +16234,13 @@ function assertCloudMetadataAuthorized(remotePayload,sync){
   }
   return revision;
 }
+function assertCloudReadFloor(remotePayload, protocolVersion, sync){
+  const knownRev=Math.max(0,Math.trunc(Number(sync&&sync.cloudRev)||0));
+  if(Number(remotePayload&&remotePayload.cloud_rev)<knownRev)throw syncControlError("FH_SYNC_REMOTE_REV_ROLLBACK",
+    "Cloud revision moved backwards. Sync stopped before changing local or cloud data.");
+  if(Math.max(1,Number(protocolVersion)||1)<cloudProtocolMinimum(sync))throw cloudProtocolError(
+    "Cloud sync protocol moved backwards. A newer verified protocol is already saved on this device.");
+}
 
 async function fetchCloudRemote(opts){
   opts = opts||{};
@@ -16327,6 +16338,7 @@ async function fetchCloudRemote(opts){
       !Array.isArray(normalizedData) && !!normalizedData.e2e;
     remoteState = await decryptStateBlob(normalizedData, sync,{requireEncrypted,cloudRev:Number(remotePayload.cloud_rev)});
     sourceProtocolVersion=cloudEnvelopeVersion(normalizedData);
+    assertCloudReadFloor(remotePayload,sourceProtocolVersion,sync);
   }
   catch(e){ throw syncControlError(e.code||"FH_SYNC_DECRYPT_FAILED","Decrypt failed: "+(e.message||e)); }
   if(!sourceEncrypted&&state.settings?.e2eEncryption!==false)throw syncControlError("FH_SYNC_ENCRYPTION_REQUIRED","Encryption became required while the cloud request was pending; nothing was merged or uploaded.");
@@ -16380,6 +16392,7 @@ async function cloudPull(opts){
     throw syncControlError("FH_SYNC_LOCAL_CHANGED","Cloud merge paused because newer local activity is not durable yet.");
   }
   const prePullLocal=JSON.parse(prePullBase.raw);
+  assertCloudReadFloor(remotePayload,pulled.sourceProtocolVersion,prePullLocal.sync);
   if(!pulled.sourceEncrypted&&prePullLocal.settings?.e2eEncryption!==false)throw syncControlError("FH_SYNC_ENCRYPTION_REQUIRED","Encryption became required before the cloud merge; nothing was merged or uploaded.");
   const merged = mergeRemoteState(prePullLocal, remoteState);
   /* Ask the same merger what the cloud row would absorb from this union while

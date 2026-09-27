@@ -35,8 +35,10 @@ malformed/ambiguous envelopes, unknown parameters, an incorrect row binding, and
 unrecognizable decrypted profiles before merge. Existing encrypted protocol 1
 remains readable until a verified protocol-2 pull/upload receipt is saved. The
 per-identity minimum is durable and monotonic; a higher cloud revision cannot
-make the same identity accept older encrypted or plaintext formats. Read-only
-inspection does not persist a pin or modify profile state.
+make the same identity accept older encrypted or plaintext formats. Re-entering the same identity preserves that minimum and confirmed revision. Full
+reads refuse older revisions, and a second check against the latest durable state
+prevents a held response from bypassing a pin or revision committed concurrently.
+Read-only inspection does not persist a pin or modify profile state.
 
 The actual 10.63.4 reader omits AAD and therefore cannot authenticate protocol 2.
 It fails before parsing any shared fields, including when there are no new reward

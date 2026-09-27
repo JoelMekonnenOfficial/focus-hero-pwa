@@ -257,6 +257,45 @@ try{
     assert.equal(await a.page.evaluate(()=>state.settings.e2eEncryption),true);
     evidence.push({detail:'inflight-encryption-choice',result,requests:c.requests});
   });
+  await scenario('authenticated older cloud revision cannot replace a newer verified revision',async()=>{
+    const {c,devices}=await setup([false]);const[a]=devices,prior=structuredClone(c.row);
+    assert.equal((await invoke(a,'cloudPush')).ok,true);const before=await snapshot(a);c.row=prior;
+    const result=await invoke(a,'cloudPull');assert.equal(result.code,'FH_SYNC_REMOTE_REV_ROLLBACK');assert.deepEqual(await snapshot(a),before);
+    evidence.push({detail:'authenticated-older-row',result,requests:c.requests});
+  });
+  await scenario('revision advancing during a held cloud read is checked at the merge boundary',async()=>{
+    const {c,devices}=await setup([false]);const[a]=devices;
+    let seen,release;const reached=new Promise(r=>seen=r),held=new Promise(r=>release=r);
+    c.beforeReadReply=async()=>{seen();await held;};const pulling=invoke(a,'cloudPull');await reached;
+    assert.equal((await invoke(a,'cloudPush')).ok,true);const before=await snapshot(a);release();const result=await pulling;
+    assert.equal(result.code,'FH_SYNC_REMOTE_REV_ROLLBACK');assert.deepEqual(await snapshot(a),before);
+    evidence.push({detail:'inflight-revision-floor',result,requests:c.requests});
+  });
+  await scenario('protocol minimum advancing during a held older-format read is checked before merge',async()=>{
+    const {c,devices}=await setup([true,false]);const[,b]=devices;
+    c.row={...c.row,cloud_rev:102};
+    let seen,release;const reached=new Promise(r=>seen=r),held=new Promise(r=>release=r);
+    c.beforeReadReply=async()=>{seen();await held;};const pending=invoke(b,'cloudPull');await reached;
+    c.row={...c.row,cloud_rev:101,data:await b.page.evaluate(()=>encryptStateBlob(state))};
+    assert.equal((await invoke(b,'cloudPull')).ok,true);const committed=await snapshot(b);assert.equal(committed.protocol,2);
+    release();const result=await pending;assert.equal(result.code,'FH_SYNC_UPDATE_REQUIRED');assert.deepEqual(await snapshot(b),committed);
+    evidence.push({detail:'inflight-protocol-floor',result,requests:c.requests});
+  });
+  await scenario('reclaiming the same identity retains its authenticated protocol minimum',async()=>{
+    const {c,devices}=await setup([true,false]);const[a,b]=devices;
+    const identity=await b.page.evaluate(async()=>({syncCode:'SYNTHETICCODE',syncSecret:'SYNTHETICSECRETNOTACREDENTIAL',playerId:await derivePlayerId('SYNTHETICCODE','SYNTHETICSECRETNOTACREDENTIAL'),syncSecretHash:await sha256('SYNTHETICCODE:SYNTHETICSECRETNOTACREDENTIAL')}));
+    for(const x of devices)await x.page.evaluate(async identity=>{Object.assign(state.sync,identity);await saveStateDurable({fromPull:true,source:'synthetic-matching-claim-identity'});},identity);
+    const legacy=await a.page.evaluate(()=>encryptStateBlob(state));
+    c.row={...c.row,id:identity.playerId,sync_secret_hash:identity.syncSecretHash,data:legacy};
+    assert.equal((await invoke(b,'cloudPush')).ok,true);assert.equal((await snapshot(b)).protocol,2);
+    c.row={...c.row,cloud_rev:c.row.cloud_rev+1,data:legacy};const before=JSON.stringify(c.row),requests=c.requests.length;
+    const claimed=await b.page.evaluate(identity=>claimSyncCode(identity.syncCode+'-'+identity.syncSecret),identity);
+    assert.equal(claimed,false,'re-entering the same code is not protocol downgrade permission');
+    assert.match(await b.page.locator('#claim-error').innerText(),/Update Life XP on every device/);
+    assert.equal(JSON.stringify(c.row),before);assert.equal((await snapshot(b)).protocol,2);assert.equal((await snapshot(b)).rev,101);
+    assert(c.requests.slice(requests).every(r=>r.method==='GET'),'refused reclaim never uploads');
+    evidence.push({detail:'same-identity-reclaim-pin',requests:c.requests});
+  });
   await scenario('confirmed protocol pin survives reload and rejects a higher-revision downgrade',async()=>{
     const {c,devices}=await setup([true,false,false]);const[a,b,d]=devices;
     const oldEnvelope=structuredClone(c.row.data);
