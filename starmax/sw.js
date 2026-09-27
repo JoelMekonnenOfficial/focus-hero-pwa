@@ -3,10 +3,10 @@
  * Update strategy:
  *   - App HTML and executable modules: one verified, immutable build bundle.
  *   - Static assets (icons, manifest): cache-first.
- *   - On install (v10.12.1+): precache, then skipWaiting() immediately. The old
- *     FH_ACTIVATE_SAFE handshake could never succeed across a version change and
- *     parked every update in "waiting" forever; the page - not the worker - owns
- *     the decision to reload, so taking control here is safe.
+ *   - On install: precache, then require fresh readiness from every open page.
+ *     Legacy or busy pages keep the complete update waiting. Fixed pages retry
+ *     after work finishes; unknown pages must close naturally before activation.
+ *     No page is force-closed and no cache is removed to deliver an update.
  *   - Every executable and app document is required before activation. Missing
  *     or mismatched code leaves the previous complete worker active.
  *   - On activate: preserve all prior caches, claim clients, broadcast the build.
@@ -247,6 +247,42 @@ async function withDataGuard(resp){
 }
 /* -------------------------------------------------------------------------- */
 
+/* A legacy page cannot prove that its paused clock or pending save is safe.
+   Activation requires fresh acknowledgements from every still-open client. */
+let safeActivationInFlight = null;
+let completeBundleInMemory = false;
+async function bundleIsComplete(){
+  if(completeBundleInMemory)return true;
+  const cache=await caches.open(CACHE_NAME);
+  const rows=await Promise.all(Array.from(PRECACHE_CRITICAL).map(asset=>cache.match(new URL(asset,self.registration.scope).href)));
+  return rows.every(Boolean);
+}
+function askClientReadiness(client){
+  return new Promise(resolve=>{
+    const channel=new MessageChannel();let finished=false;
+    const finish=value=>{if(finished)return;finished=true;clearTimeout(timeout);channel.port1.close();resolve(value);};
+    const timeout=setTimeout(()=>finish(false),1800);
+    channel.port1.onmessage=event=>finish(event.data?.type==="FH_UPDATE_READY"&&event.data.protocol===1&&event.data.ready===true);
+    try{client.postMessage({type:"FH_UPDATE_PREPARE",protocol:1,buildId:BUILD_ID},[channel.port2]);}catch(_){finish(false);}
+  });
+}
+async function activateWhenClientsReady(){
+  if(safeActivationInFlight)return safeActivationInFlight;
+  safeActivationInFlight=(async()=>{
+    if(!await bundleIsComplete())return false;
+    const before=await self.clients.matchAll({type:"window",includeUncontrolled:true});
+    const answers=await Promise.all(before.map(askClientReadiness));
+    const after=await self.clients.matchAll({type:"window",includeUncontrolled:true});
+    const readyIds=new Set(before.filter((_,index)=>answers[index]).map(client=>client.id));
+    if(after.some(client=>!readyIds.has(client.id))){
+      for(const client of after){try{client.postMessage({type:"FH_UPDATE_WAITING",protocol:1,buildId:BUILD_ID});}catch(_){}}
+      return false;
+    }
+    await self.skipWaiting();return true;
+  })().finally(()=>{safeActivationInFlight=null;});
+  return safeActivationInFlight;
+}
+
 self.addEventListener("install", event => {
   event.waitUntil((async () => {
     try {
@@ -290,23 +326,8 @@ self.addEventListener("install", event => {
         console.warn("[fh-sw] install continuing without", skipped.join(", "));
       }
       await Promise.all(fetched.map(([request, response]) => cache.put(request, response)));
-      /* v10.12.1: take over as soon as the new cache is complete.
-         The previous release waited for an explicit FH_ACTIVATE_SAFE
-         handshake from the page instead. That handshake could never
-         succeed: the page can only send its OWN build id, the waiting
-         worker only accepted its own, and across an update those two
-         are different by definition. Every update therefore installed,
-         parked in "waiting" forever, and never took control - which is
-         exactly what stranded v10.12.0 on every device.
-
-         Activating here is safe because the page, not the worker, owns
-         the decision to reload. On controllerchange a page with a live
-         session shows "Update ready - refresh after your session" and
-         stays put; only an idle page reloads itself. The original
-         concern was the v10.10.2 page, which misread a running
-         stopwatch as idle - that build is long superseded, and leaving
-         updates permanently undeliverable is the larger hazard. */
-      await self.skipWaiting();
+      completeBundleInMemory=true;
+      await activateWhenClientsReady();
     } catch (error) {
       // Keep any prior complete cache intact. A failed new install never clears recovery/offline assets.
       throw error;
@@ -437,23 +458,10 @@ self.addEventListener("message", event => {
     return;
   }
 
-  /* Only fixed page code sends this build-bound structured request after its
-     active-session guard passes. Never honor the legacy bare string: an older
-     page can send it while a stopwatch is running. */
-  /* Accept the structured request from any page build, not just a page
-     whose build id equals this worker's - that equality is what deadlocked
-     updates. The legacy bare-string message is still ignored, so only page
-     code that has already cleared its own active-session guard can ask. */
-  if (event.data && event.data.type === "FH_ACTIVATE_SAFE" && typeof event.data.buildId === "string" && event.data.buildId) {
-    event.waitUntil((async()=>{
-      /* A second window may still be running the old v10.10.2 stopwatch guard,
-         which cannot identify its own active stopwatch. Unknown/extra clients
-         therefore make activation wait. Once only the fixed requesting window
-         remains, taking control cannot reload a hidden legacy session. */
-      const windows = await self.clients.matchAll({ type:"window", includeUncontrolled:true });
-      if (windows.length !== 1) return;
-      await self.skipWaiting();
-    })());
+  /* Requests only trigger a new all-client probe. Neither a bare legacy
+     message nor its obsolete weak page guard authorizes taking control. */
+  if(event.data?.type==="FH_UPDATE_CHECK"&&event.data.protocol===1){
+    event.waitUntil(activateWhenClientsReady());
   }
   if (event.data && event.data.type === "SHOW_NOTIFICATION") {
     const { title, body } = event.data;

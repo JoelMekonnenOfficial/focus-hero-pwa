@@ -7,11 +7,12 @@ import {resolve,extname} from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
-import {chromium} from 'playwright';
+import {launch} from './harness.mjs';
 const root=fileURLToPath(new URL('../',import.meta.url));
 const base='d9d8d6c0a24a6d4cdd84cd3f97a178b33f197265';
 const files=readdirSync(resolve(root,'starmax'));
-const previous=Object.fromEntries(files.map(name=>[name,execFileSync('git',['show',base+':starmax/'+name],{cwd:root,maxBuffer:5e6})]));
+const previousNames=execFileSync('git',['ls-tree','--name-only',base+':starmax'],{cwd:root}).toString().trim().split('\n');
+const previous=Object.fromEntries(previousNames.map(name=>[name,execFileSync('git',['show',base+':starmax/'+name],{cwd:root,maxBuffer:5e6})]));
 const next=Object.fromEntries(files.map(name=>[name,readFileSync(resolve(root,'starmax',name))]));
 const sha=body=>createHash('sha256').update(body).digest('hex');
 const mime={'.js':'application/javascript','.html':'text/html','.svg':'image/svg+xml','.png':'image/png','.webmanifest':'application/manifest+json'};
@@ -28,7 +29,7 @@ const server=createServer((req,res)=>{
 });
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const origin='http://127.0.0.1:'+server.address().port;
-const browser=await chromium.launch({args:['--no-sandbox']});
+const browser=await launch();
 const ctx=await browser.newContext({serviceWorkers:'allow'});
 await ctx.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort('blockedbyclient'));
 const page=await ctx.newPage();
@@ -72,6 +73,12 @@ try{
   await updateCtx.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort('blockedbyclient'));
   const updatePage=await updateCtx.newPage();
   await updatePage.goto(origin+'/__audit_harness');
+  // This empty metadata-only page has never opened a profile. Explicitly join
+  // the new readiness protocol; an unknown legacy app must remain blocked.
+  await updatePage.evaluate(()=>navigator.serviceWorker.addEventListener('message',event=>{
+    if(event.data?.type==='FH_UPDATE_PREPARE'&&event.data.protocol===1&&event.ports?.[0])
+      event.ports[0].postMessage({type:'FH_UPDATE_READY',protocol:1,ready:true});
+  }));
   await updatePage.evaluate(async()=>{await navigator.serviceWorker.register('/sw.js');await navigator.serviceWorker.ready;});
   await updatePage.waitForFunction(()=>!!navigator.serviceWorker.controller);
   const oldCaches=await updatePage.evaluate(()=>caches.keys());

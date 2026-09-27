@@ -40,6 +40,15 @@ function fixture() {
   return { c, callbacks, first, report };
 }
 const nextTurn = () => new Promise(resolve => setImmediate(resolve));
+const readinessStart=html.indexOf('window.__FH_PROFILE_OPEN_STARTED__ = false;');
+const readinessEnd=html.indexOf('function fhShowIncompleteUpdate(){',readinessStart);
+assert(readinessStart>=0&&readinessEnd>readinessStart);
+function readinessFixture(){
+  const item=fixture();item.c.document.getElementById=()=>null;
+  vm.runInContext(html.slice(readinessStart,readinessEnd),item.c);
+  item.ask=()=>{const answers=[];const pending=item.callbacks.message({data:{type:'FH_UPDATE_PREPARE',protocol:1},ports:[{postMessage(answer){answers.push(answer);}}]});return {answers,pending};};
+  return item;
+}
 
 (async () => {
   const current = fixture();
@@ -76,5 +85,22 @@ const nextTurn = () => new Promise(resolve => setImmediate(resolve));
   assert.equal(busy.report.reloads, 0);
   assert.equal(busy.report.networkChecks, 0);
   console.log('PASS accounting and identity operations prevent manual refresh');
-  console.log('3/3 passed');
+  const gate=readinessFixture();
+  await gate.ask().pending;
+  assert.equal((await (async()=>{const a=gate.ask();await a.pending;return a.answers[0];})()).ready,false);
+  gate.c.document.getElementById=id=>id==='fh-asset-update-blocked'?{}:null;
+  let answer=gate.ask();await answer.pending;assert.equal(answer.answers[0].ready,true);
+  gate.c.__FH_PROFILE_OPEN_STARTED__=true;answer=gate.ask();await answer.pending;assert.equal(answer.answers[0].ready,false);
+  console.log('PASS only a blocked gate that has never begun opening a profile acknowledges readiness');
+
+  const ready=readinessFixture();ready.c.__FH_PRIMARY_READY__=true;
+  const pending=ready.ask();await nextTurn();assert.equal(pending.answers.length,0);
+  const queued=deferred();ready.c.primarySaveTail=queued.promise;ready.first.resolve();await nextTurn();assert.equal(pending.answers.length,0);
+  queued.resolve();await pending.pending;assert.equal(pending.answers[0].ready,true);
+  console.log('PASS readiness waits for current and newly queued durable saves');
+
+  const refused=readinessFixture();refused.c.__FH_PRIMARY_READY__=true;
+  const awaiting=refused.ask();await nextTurn();refused.c.saveState._lastPrimarySave={ok:false};refused.first.resolve();await awaiting.pending;assert.equal(awaiting.answers[0].ready,false);
+  console.log('PASS a failed save cannot acknowledge safe activation');
+  console.log('6/6 passed');
 })().catch(error => { console.error(error); process.exitCode = 1; });

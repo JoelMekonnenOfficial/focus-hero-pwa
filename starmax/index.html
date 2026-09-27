@@ -25,6 +25,33 @@ window.addEventListener("error", function(event){
   }
 },true);
 window.__FH_ASSET_READY__ = Promise.resolve();
+window.__FH_PROFILE_OPEN_STARTED__ = false;
+function fhRequestWaitingUpdate(registration){
+  const worker=registration&&(registration.waiting||registration.installing);
+  if(worker)try{worker.postMessage({type:"FH_UPDATE_CHECK",protocol:1});}catch(_){}
+}
+function fhExplainUpdateWaiting(){
+  const panel=document.getElementById("fh-asset-update-blocked");
+  if(panel&&!document.getElementById("fh-update-waiting")){
+    const note=document.createElement("p");note.id="fh-update-waiting";
+    note.textContent="The update is waiting for another open Life XP window or unfinished work. Keep those windows open while saving; close them normally when ready, then retry here.";panel.appendChild(note);
+  }
+}
+try{navigator.serviceWorker.addEventListener("message",async function(event){
+  const data=event.data||{};
+  if(data.type==="FH_UPDATE_WAITING"&&data.protocol===1){fhExplainUpdateWaiting();return;}
+  if(data.type!=="FH_UPDATE_PREPARE"||data.protocol!==1||!event.ports?.[0])return;
+  let ready=false;
+  try{
+    if(window.__FH_PRIMARY_READY__===true){
+      if(!fhUpdateHasUnfinishedWork()){
+        let tail;do{tail=primarySaveTail;await tail;}while(tail!==primarySaveTail);
+        ready=!fhUpdateHasUnfinishedWork();
+      }
+    }else ready=window.__FH_PROFILE_OPEN_STARTED__===false&&!!document.getElementById("fh-asset-update-blocked");
+  }catch(_){}
+  try{event.ports[0].postMessage({type:"FH_UPDATE_READY",protocol:1,ready});}catch(_){}
+});}catch(_){}
 function fhShowIncompleteUpdate(){
   if(document.getElementById("fh-asset-update-blocked"))return;
   var panel=document.createElement("div");panel.id="fh-asset-update-blocked";
@@ -32,13 +59,14 @@ function fhShowIncompleteUpdate(){
   panel.style.cssText="position:fixed;inset:0;z-index:2147483647;background:#101526;color:#f2f5ff;padding:32px;font:17px/1.6 system-ui;overflow:auto";
   panel.innerHTML="<h1>Life XP is waiting for a complete update</h1><p>Some app files are missing or from another version. Your saved progress has not been opened or changed.</p><p>Connect to the internet, wait a moment, then retry.</p><button type='button'>Retry update</button>";
   panel.querySelector("button").onclick=async function(){
-    try{var registration=await navigator.serviceWorker.getRegistration();if(registration)await registration.update();}catch(_){}
+    try{var registration=await navigator.serviceWorker.getRegistration();if(registration){await registration.update();fhRequestWaitingUpdate(registration);}}catch(_){}
     location.reload();
   };
   document.body.appendChild(panel);
   try{
     navigator.serviceWorker.addEventListener("controllerchange",function(){location.reload();},{once:true});
-    navigator.serviceWorker.getRegistration().then(function(registration){if(registration)return registration.update();}).catch(function(){});
+    const check=async function(){try{const registration=await navigator.serviceWorker.getRegistration();if(registration){await registration.update();fhRequestWaitingUpdate(registration);}}catch(_){}};
+    void check();setInterval(check,5000);
   }catch(_){}
 }
 </script>
@@ -22828,13 +22856,12 @@ function registerSW(){
   };
   const requestSafeWorkerActivation = worker=>{
     if(!worker || sessionActive())return false;
-    try{worker.postMessage({type:"FH_ACTIVATE_SAFE",buildId:pageBuildId});return true;}
+    try{worker.postMessage({type:"FH_UPDATE_CHECK",protocol:1});return true;}
     catch(_){return false;}
   };
 
-  // When a new SW takes control, do a quiet reload if it's safe. The SW is
-  // network-first for HTML so this just guarantees the page object matches the
-  // newly-cached code path.
+  // Recheck this page after coordinated activation: work may have started
+  // since its readiness reply. Reload only after the save tail is drained.
   let reloadedOnUpdate = false;
   navigator.serviceWorker.addEventListener("controllerchange", ()=>{
     if (reloadedOnUpdate) return;
@@ -22849,6 +22876,9 @@ function registerSW(){
   // New SW activates and posts SW_UPDATED. We surface a non-blocking toast if
   // controllerchange hasn't fired yet (some browsers delay it).
   navigator.serviceWorker.addEventListener("message", (ev)=>{
+    if(ev.data?.type==="FH_UPDATE_WAITING"&&ev.data.protocol===1){
+      announceUpdateReady("Update ready — waiting for unfinished work or another open Life XP window");
+    }
     if (ev.data && ev.data.type === "SW_UPDATED"){
       if (sessionActive()){
         announceUpdateReady();
@@ -22972,11 +23002,11 @@ function registerSW(){
       });
       window.addEventListener("pageshow", (ev)=>{ if (ev.persisted){ checkForUpdate(); verifyRunningBuild(); } });
       verifyRunningBuild();
-      /* v10.16.0: the 5s "activate the waiting worker" poll is gone. Since
-         v10.12.1 the worker calls skipWaiting() inside install, so reg.waiting is
-         essentially always null and the poll spun forever doing nothing. One
-         nudge remains for the rare worker installed by a pre-v10.12.1 page. */
+      /* A ready page retries the all-client handshake after another window
+         finishes saving or closes naturally. Requests never authorize takeover
+         by themselves; the waiting worker gathers fresh replies each time. */
       if(reg.waiting) requestSafeWorkerActivation(reg.waiting);
+      setInterval(()=>{if(reg.waiting)requestSafeWorkerActivation(reg.waiting);},5000);
 
       reg.addEventListener("updatefound", ()=>{
         const nw = reg.installing; if (!nw) return;
@@ -23700,6 +23730,7 @@ async function boot(){
       document.body.prepend(banner);
       return;
     }
+    window.__FH_PROFILE_OPEN_STARTED__ = true;
     try { await initializePrimaryState(); }
     catch(error){
       console.error("[Life XP] durable primary boot stopped safely",error);
