@@ -1,6 +1,6 @@
 # Source security review — September 27, 2026
 
-Scope: candidate source for `10.64.1` / `fh-2026-09-27-v10-64-1-audited`, isolated
+Scope: candidate source for `10.64.2` / `fh-2026-09-27-v10-64-2-compatible`, isolated
 synthetic tests, and public repository metadata reported by the coordinating
 reviewer. Line references identify the reviewed candidate and may move after
 integration. No signed-in profile, real cloud row, sync code, browser credential,
@@ -115,7 +115,7 @@ enforce remote branch protection merely by existing in this checkout.
 Public metadata checked by the coordinating reviewer identifies
 `JoelMekonnenOfficial/focus-hero-pwa`, historical main commit
 `98f92700d8779212412fcf4417ef9b747e4bda15`. Main is marked protected, but protection
-details were unavailable (HTTP 401), so independent required reviews, checks and
+details were unavailable to the connected integration (HTTP 403), so independent required reviews, checks and
 bypass permissions are not confirmed. The historical deploy workflow would deploy
 on a main push and the heartbeat workflow references a service-role environment
 secret; **both were `disabled_manually` on September 27**. No workflow was enabled,
