@@ -30,6 +30,8 @@ The additional calendar review reproduced a failed-pull rollback error caused by
 
 ## Verification and limits
 
+Separate Linux CI exposed a 320px WebKit theme-panel overflow that Windows WebKit did not show. Measurements identified a background-control row extending beyond its available width; narrow theme panels now stack their labels and controls without clipping them. The mobile test checks both the panel and individual control bounds and saves failure geometry. CI also exposed a historical-fixture path assumption when the candidate lives below the repository root; the test now enumerates that source independently of its working directory. Neither correction changes player records.
+
 The combined suite covers real encrypted three-device CAS exchanges, legacy refusal and in-place upgrade, lost replies, malformed receipts, edits during uploads, storage failures, calendar algebra, DST and timestamp ownership, ranking, world progression, clock races, task rendering, worker transitions and offline startup. WebKit coverage checks durable sessions, clock controls, mobile layouts, encryption and Toronto/Los Angeles/UTC boundaries, including 23- and 25-hour days.
 
 Focused evidence is in SECURITY-AUDIT.md, DOMAIN-AUDIT.md, tests/MULTIDEVICE-AUDIT.md and the update-rollout report. Packaged and CI results identify the source commit. Passing tests that expect safe refusal do not mean older clients can keep sharing new-format progress without updating.

@@ -155,7 +155,7 @@ Validation on the final calendar source:
   Hardcore/rank outcomes, including 17-/23-/25-hour dates, paused/missed/revived
   runs, session-count conservation, pruned receipts, edits/deletions, cutoff carry,
   old earned dates, normal-sync adoption, merge algebra and failed saving.
-- `tests/calendar-persistence-safety.mjs`: 4/4 exact primary-save/cloud-pull
+- `tests/calendar-persistence-safety.mjs`: 5/5 exact primary-save/cloud-pull
   checks, including prepared-calendar save refusal and both newer activity forms.
 - `tests/calendar-ui-safety.mjs`: 5/5 full-app Chromium checks. At 390-pixel phone
   width, the real "Use this calendar" click saves the selected timezone, presents
