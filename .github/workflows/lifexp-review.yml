@@ -1,0 +1,48 @@
+name: Life XP candidate review
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: review/lifexp
+
+jobs:
+  synthetic-tests:
+    name: Synthetic source and browser checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TZ: America/Toronto
+      LIFEXP_TEST_WORKERS: '1'
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/review/lifexp/.playwright-browsers
+      PLAYWRIGHT_SKIP_BROWSER_GC: '1'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          clean: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /review/lifexp/
+            /.github/workflows/lifexp-review.yml
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22'
+      - name: Install pinned test dependency
+        run: npm ci --ignore-scripts
+      - name: Install disposable test browser
+        run: npx playwright install --with-deps chromium webkit
+      - name: Run isolated synthetic tests
+        run: npm test
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        if: always()
+        with:
+          name: synthetic-test-results
+          path: review/lifexp/test-results/
+          retention-days: 30

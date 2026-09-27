@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Focus Hero convergence mark</title>
+  <desc id="desc">A luminous focus lens converging on a central hero beacon.</desc>
+  <defs>
+    <radialGradient id="field" cx="50%" cy="44%" r="72%">
+      <stop offset="0" stop-color="#12313b"/>
+      <stop offset="0.58" stop-color="#091b24"/>
+      <stop offset="1" stop-color="#050e15"/>
+    </radialGradient>
+    <linearGradient id="aqua" x1="94" y1="84" x2="418" y2="428" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#a4ffec"/>
+      <stop offset="0.46" stop-color="#55dfc1"/>
+      <stop offset="1" stop-color="#28a89a"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="186" y1="164" x2="330" y2="356" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fff1b8"/>
+      <stop offset="0.52" stop-color="#f2c968"/>
+      <stop offset="1" stop-color="#d79538"/>
+    </linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="11" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Full-bleed field and a generous safe zone keep the mark maskable. -->
+  <rect width="512" height="512" fill="url(#field)"/>
+  <rect x="18" y="18" width="476" height="476" rx="98" fill="none" stroke="#173541" stroke-width="4"/>
+
+  <!-- Four framing strokes make the symbol read as focus, not a lettermark. -->
+  <g fill="none" stroke="url(#aqua)" stroke-width="18" stroke-linecap="round">
+    <path d="M164 92h-35c-20 0-37 17-37 37v35"/>
+    <path d="M348 92h35c20 0 37 17 37 37v35"/>
+    <path d="M164 420h-35c-20 0-37-17-37-37v-35"/>
+    <path d="M348 420h35c20 0 37-17 37-37v-35"/>
+  </g>
+
+  <!-- The original convergence lens: attention comes inward, progress rises. -->
+  <path d="M84 256c47-82 104-123 172-123s125 41 172 123c-47 82-104 123-172 123S131 338 84 256Z" fill="#0a2029" stroke="#29505a" stroke-width="16"/>
+  <path d="M105 256c41-65 91-98 151-98s110 33 151 98c-41 65-91 98-151 98s-110-33-151-98Z" fill="none" stroke="url(#aqua)" stroke-width="18" stroke-linecap="round"/>
+  <circle cx="256" cy="256" r="78" fill="#07161e" stroke="#163944" stroke-width="12"/>
+
+  <!-- A faceted beacon replaces the old FH initials and remains clear at 32 px. -->
+  <path d="M256 166 319 256 256 346 193 256Z" fill="url(#gold)" filter="url(#glow)"/>
+  <path d="M256 199 292 256 256 313 220 256Z" fill="#0a2029"/>
+  <path d="M256 216 277 256 256 296 235 256Z" fill="url(#aqua)"/>
+  <circle cx="256" cy="256" r="13" fill="#fff5c8"/>
+</svg>

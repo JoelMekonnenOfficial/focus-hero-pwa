@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="lifexp-icon-title" width="512" height="512">
+  <title id="lifexp-icon-title">Life XP</title>
+  <!--
+    App icon. The wordmark stacks to two lines so it stays legible at 48px,
+    where a single seven-glyph line would be a smear. Same spectrum in the same
+    order, so the icon reads as the same object as the wordmark rather than a
+    different logo that happens to share its colours.
+
+    The orb is deliberately dropped here: between X and P on one line it reads
+    as punctuation inside a word rather than as the space it stands for in the
+    full mark. An icon has to survive being 48 pixels wide, so anything that
+    can be misread gets cut.
+
+    Everything that carries meaning sits inside the middle 70%, because a
+    maskable icon is cropped to a circle on Android.
+  -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#171D38"/><stop offset="1" stop-color="#0A0C18"/>
+    </linearGradient>
+    <linearGradient id="i-l" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FF7A6B"/><stop offset="1" stop-color="#F2483F"/>
+    </linearGradient>
+    <linearGradient id="i-i" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFB13D"/><stop offset="1" stop-color="#F38A00"/>
+    </linearGradient>
+    <linearGradient id="i-f" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6ED77F"/><stop offset="1" stop-color="#34AF52"/>
+    </linearGradient>
+    <linearGradient id="i-e" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#36C9DC"/><stop offset="1" stop-color="#119FB5"/>
+    </linearGradient>
+    <linearGradient id="i-x" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0"    stop-color="#FFFFFF"/><stop offset="0.26" stop-color="#E7EEF7"/>
+      <stop offset="0.48" stop-color="#A3B1C5"/><stop offset="0.56" stop-color="#FFFFFF"/>
+      <stop offset="0.80" stop-color="#8B9AB0"/><stop offset="1"    stop-color="#C9D3E1"/>
+    </linearGradient>
+    <linearGradient id="i-p" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0"    stop-color="#FFFFFF"/><stop offset="0.26" stop-color="#E7EEF7"/>
+      <stop offset="0.48" stop-color="#A3B1C5"/><stop offset="0.56" stop-color="#FFFFFF"/>
+      <stop offset="0.80" stop-color="#8B9AB0"/><stop offset="1"    stop-color="#C9D3E1"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+
+  <!-- LIFE: stem 22, cap 96, block width 242, so x starts at 135 -->
+  <g transform="translate(135 146)">
+    <g fill="url(#i-l)">
+      <rect x="0" y="0" width="22" height="96" rx="6"/>
+      <rect x="0" y="74" width="58" height="22" rx="6"/>
+    </g>
+    <rect x="76" y="0" width="22" height="96" rx="6" fill="url(#i-i)"/>
+    <g fill="url(#i-f)">
+      <rect x="116" y="0" width="22" height="96" rx="6"/>
+      <rect x="116" y="0" width="54" height="22" rx="6"/>
+      <rect x="116" y="37" width="44" height="22" rx="6"/>
+    </g>
+    <g fill="url(#i-e)">
+      <rect x="188" y="0" width="22" height="96" rx="6"/>
+      <rect x="188" y="0" width="54" height="22" rx="6"/>
+      <rect x="188" y="37" width="44" height="22" rx="6"/>
+      <rect x="188" y="74" width="54" height="22" rx="6"/>
+    </g>
+  </g>
+
+  <!-- XP: X is 64 wide, gap 20, P reaches 55, block width 139, x starts at 186 -->
+  <g transform="translate(186 276)">
+    <g fill="none" stroke-linecap="round">
+      <g stroke="#7D8DA6" stroke-width="26">
+        <path d="M11 11 L53 85"/>
+        <path d="M53 11 L11 85"/>
+      </g>
+      <g stroke="url(#i-x)" stroke-width="22">
+        <path d="M11 11 L53 85"/>
+        <path d="M53 11 L11 85"/>
+      </g>
+    </g>
+    <rect x="82" y="-2" width="26" height="100" rx="8" fill="#7D8DA6"/>
+    <path d="M104 11 A23 23 0 0 1 104 57" fill="none" stroke="#7D8DA6" stroke-width="25"/>
+    <rect x="84" y="0" width="22" height="96" rx="6" fill="url(#i-p)"/>
+    <path d="M104 11 A23 23 0 0 1 104 57" fill="none" stroke="url(#i-p)" stroke-width="21"/>
+  </g>
+</svg>

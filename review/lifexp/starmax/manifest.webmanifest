@@ -1,0 +1,66 @@
+{
+  "name": "Life XP",
+  "short_name": "Life XP",
+  "description": "Life XP - a private offline-first life RPG: focus timers, skills, a pixel hero with visible customization, pets, mounts, equippable gear, analytics, and encrypted cloud sync.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0b0d1a",
+  "theme_color": "#0b0d1a",
+  "categories": [
+    "productivity",
+    "lifestyle",
+    "games"
+  ],
+  "icons": [
+    {
+      "src": "lifexp-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-192-lifexp.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512-lifexp.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-192-lifexp.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icon-512-lifexp.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Start focus",
+      "url": "./?start=focus",
+      "short_name": "Focus"
+    },
+    {
+      "name": "Open settings",
+      "url": "./?open=settings",
+      "short_name": "Settings"
+    },
+    {
+      "name": "Back up all data",
+      "url": "./?action=backup",
+      "short_name": "Backup"
+    }
+  ],
+  "version": "10.64.2"
+}

@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="lm-title lm-desc">
+  <title id="lm-title">LifeMax ascent mark</title>
+  <desc id="lm-desc">A rising ridgeline climbing to a lit summit inside a rounded crest.</desc>
+  <defs>
+    <linearGradient id="lm-field" x1="0" y1="0" x2="0" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#241B4B"/>
+      <stop offset="0.55" stop-color="#141033"/>
+      <stop offset="1" stop-color="#0B0D1A"/>
+    </linearGradient>
+    <linearGradient id="lm-ridge" x1="96" y1="392" x2="416" y2="128" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6E63FF"/>
+      <stop offset="0.5" stop-color="#9B8CFF"/>
+      <stop offset="1" stop-color="#FFD489"/>
+    </linearGradient>
+    <linearGradient id="lm-summit" x1="300" y1="96" x2="392" y2="208" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFF3C4"/>
+      <stop offset="0.55" stop-color="#FFC95C"/>
+      <stop offset="1" stop-color="#F0982F"/>
+    </linearGradient>
+    <linearGradient id="lm-rim" x1="80" y1="60" x2="440" y2="470" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#A99CFF" stop-opacity="0.95"/>
+      <stop offset="0.55" stop-color="#5D51C9" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#FFD489" stop-opacity="0.85"/>
+    </linearGradient>
+    <radialGradient id="lm-halo" cx="68%" cy="27%" r="46%">
+      <stop offset="0" stop-color="#FFD489" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#FFD489" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="lm-glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="13" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <clipPath id="lm-clip">
+      <rect x="36" y="36" width="440" height="440" rx="112"/>
+    </clipPath>
+  </defs>
+
+  <rect x="36" y="36" width="440" height="440" rx="112" fill="url(#lm-field)"/>
+
+  <g clip-path="url(#lm-clip)">
+    <rect x="36" y="36" width="440" height="440" fill="url(#lm-halo)"/>
+
+    <!-- horizon guides: the four rungs of a meter -->
+    <g stroke="#8B7BFF" stroke-opacity="0.14" stroke-width="6" stroke-linecap="round">
+      <path d="M96 392H416"/>
+      <path d="M96 330H416"/>
+      <path d="M96 268H416"/>
+      <path d="M96 206H416"/>
+    </g>
+
+    <!-- the ascent -->
+    <path d="M96 392 L184 304 L248 344 L360 152"
+          fill="none" stroke="url(#lm-ridge)" stroke-width="46"
+          stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M96 392 L184 304 L248 344 L360 152"
+          fill="none" stroke="#FFFFFF" stroke-opacity="0.22" stroke-width="12"
+          stroke-linecap="round" stroke-linejoin="round"/>
+
+    <!-- summit -->
+    <g filter="url(#lm-glow)">
+      <path d="M360 96 L392 168 L360 214 L328 168 Z" fill="url(#lm-summit)"/>
+    </g>
+    <circle cx="360" cy="152" r="15" fill="#FFF8DC"/>
+  </g>
+
+  <rect x="36" y="36" width="440" height="440" rx="112"
+        fill="none" stroke="url(#lm-rim)" stroke-width="12"/>
+</svg>

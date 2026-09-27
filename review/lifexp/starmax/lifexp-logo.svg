@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 515 160" role="img" aria-labelledby="lifexp-title" width="515" height="160">
+  <title id="lifexp-title">Life XP</title>
+  <!--
+    LIFE XP wordmark.
+
+    The idea: the six letters walk the spectrum from warm to cool, coral through
+    violet, in the order you meet them. That ordering is the whole point - it is
+    the direction the game moves you, so the name reads as progress rather than
+    as decoration. The diamond standing in for the space is an XP orb, the thing
+    the app actually hands out, which is why the two halves of the name are
+    joined by one instead of by empty air.
+
+    Letterforms are drawn as geometry, not set in a font, so the mark renders
+    identically on a phone that has none of the fonts a stack would ask for.
+    Every stem is 24 units wide and every corner takes the same 6-unit radius,
+    which is what keeps six differently coloured shapes reading as one object.
+
+    The P's bowl is a stroked arc rather than a filled one so it keeps a real
+    counter - a solid bowl at this weight turns the letter into a blob and the
+    word stops being readable at icon sizes.
+
+    Each letter carries a two-stop vertical gradient, a few percent lighter at
+    the top and deeper at the foot. It is not meant to be noticed; it is there
+    so the letters sit on the page instead of floating flat on it.
+  -->
+  <defs>
+    <linearGradient id="lx-l" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FF7A6B"/><stop offset="1" stop-color="#F2483F"/>
+    </linearGradient>
+    <linearGradient id="lx-i" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFB13D"/><stop offset="1" stop-color="#F38A00"/>
+    </linearGradient>
+    <linearGradient id="lx-f" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6ED77F"/><stop offset="1" stop-color="#34AF52"/>
+    </linearGradient>
+    <linearGradient id="lx-e" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#36C9DC"/><stop offset="1" stop-color="#119FB5"/>
+    </linearGradient>
+    <linearGradient id="lx-orb" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7FA0FF"/><stop offset="1" stop-color="#3B5BDB"/>
+    </linearGradient>
+    <linearGradient id="lx-x" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0"    stop-color="#FFFFFF"/><stop offset="0.26" stop-color="#E7EEF7"/>
+      <stop offset="0.48" stop-color="#A3B1C5"/><stop offset="0.56" stop-color="#FFFFFF"/>
+      <stop offset="0.80" stop-color="#8B9AB0"/><stop offset="1"    stop-color="#C9D3E1"/>
+    </linearGradient>
+    <linearGradient id="lx-p" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0"    stop-color="#FFFFFF"/><stop offset="0.26" stop-color="#E7EEF7"/>
+      <stop offset="0.48" stop-color="#A3B1C5"/><stop offset="0.56" stop-color="#FFFFFF"/>
+      <stop offset="0.80" stop-color="#8B9AB0"/><stop offset="1"    stop-color="#C9D3E1"/>
+    </linearGradient>
+  </defs>
+
+  <!-- L -->
+  <g fill="url(#lx-l)">
+    <rect x="20" y="30" width="24" height="100" rx="6"/>
+    <rect x="20" y="106" width="64" height="24" rx="6"/>
+  </g>
+  <!-- I -->
+  <rect x="104" y="30" width="24" height="100" rx="6" fill="url(#lx-i)"/>
+  <!-- F -->
+  <g fill="url(#lx-f)">
+    <rect x="148" y="30" width="24" height="100" rx="6"/>
+    <rect x="148" y="30" width="60" height="24" rx="6"/>
+    <rect x="148" y="68" width="48" height="24" rx="6"/>
+  </g>
+  <!-- E -->
+  <g fill="url(#lx-e)">
+    <rect x="228" y="30" width="24" height="100" rx="6"/>
+    <rect x="228" y="30" width="60" height="24" rx="6"/>
+    <rect x="228" y="68" width="48" height="24" rx="6"/>
+    <rect x="228" y="106" width="60" height="24" rx="6"/>
+  </g>
+  <!-- the XP orb, standing in for the space -->
+  <path d="M318 65 L333 80 L318 95 L303 80 Z" fill="url(#lx-orb)"/>
+  <!-- XP is platinum. A metal is a reflection, so the
+       ramp runs light-dark-light rather than one grey fading to another; that
+       is what makes it read as a surface instead of grey plastic. The shadow
+       bands are deliberately deeper than a true platinum would be: the bright
+       version looks superb on the dark shell and all but vanishes on a light
+       theme, and this app has light themes, so the darks carry the contrast
+       while the highlights keep the metal. -->
+  <!-- Each metal glyph sits on a slightly larger slate copy of itself. On the
+       dark shell it reads as a rim light; on a light theme it is the only
+       reason the near-white top half of the gradient does not disappear into
+       the page. Two shapes, not a filter: SVG filters are the first thing to
+       go wrong across browsers, and a logo has to render everywhere. -->
+  <!-- X -->
+  <g fill="none" stroke-linecap="round">
+    <g stroke="#7D8DA6" stroke-width="28">
+      <path d="M362 42 L406 118"/>
+      <path d="M406 42 L362 118"/>
+    </g>
+    <g stroke="url(#lx-x)" stroke-width="24">
+      <path d="M362 42 L406 118"/>
+      <path d="M406 42 L362 118"/>
+    </g>
+  </g>
+  <!-- P: stem plus an open bowl -->
+  <g>
+    <rect x="436" y="28" width="28" height="104" rx="8" fill="#7D8DA6"/>
+    <path d="M460 41 A24 24 0 0 1 460 89" fill="none" stroke="#7D8DA6" stroke-width="26"/>
+    <rect x="438" y="30" width="24" height="100" rx="6" fill="url(#lx-p)"/>
+    <path d="M460 41 A24 24 0 0 1 460 89" fill="none" stroke="url(#lx-p)" stroke-width="22"/>
+  </g>
+</svg>
