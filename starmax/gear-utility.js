@@ -10,16 +10,16 @@
  * - never creates passive/idle rewards;
  * - all derived bonuses are capped and deterministic;
  * - optional consumers apply bonuses only at an actual session, encounter,
- *   loot roll, or harvest boundary.
+ *   encounter or Travel route boundary.
  */
 (function (global) {
   "use strict";
 
-  var VERSION = 1;
+  var VERSION = 2;
   var RANK = { common:1, uncommon:2, rare:3, epic:4, legendary:5, mythic:6, cursed:6, artifact:7 };
   var RARITIES = ["common","uncommon","rare","epic","legendary","mythic"];
   var STAT_KEYS = [
-    "xpPct","coinPct","energySave","critPct","dmgPhys","dmgFire","dmgFrost",
+    "travelSpeedPct","critPct","dmgPhys","dmgFire","dmgFrost",
     "dmgPoison","dmgArcane","resPhys","resElem","dodgePct","lifesteal"
   ];
   var CAPS = Object.freeze({
@@ -40,16 +40,10 @@
   });
   var SLOT_ROLES = Object.freeze({
     weapon:{ name:"Vanguard", actions:["Fight","Craft"], description:"Adds reliable physical power in Fight sessions." },
-    helmet:{ name:"Tactician", actions:["Meditate","Craft"], description:"Adds protection and planning utility." },
+    helmet:{ name:"Tactician", actions:["Meditate","Craft"], description:"Protects against elemental attacks." },
     armor:{ name:"Bulwark", actions:["Fight","Rest"], description:"Adds reliable physical and elemental protection." },
-    mount:{ name:"Pathfinder", actions:["Travel","Hunt"], description:"Adds travel utility plus a family specialty." },
-    pet:{ name:"Scout", actions:["Loot","Meditate"], description:"Improves loot-quality bias and combat support." }
-  });
-  var FARM_FAMILY = Object.freeze({
-    cattle:7, forest:6, small:5, elemental:5, insect:5, horse:4, bear:4, aquatic:3
-  });
-  var SCOUT_FAMILY = Object.freeze({
-    bird:5, insect:5, wolf:4, cat:4, reptile:3, aquatic:4, mythical:5, dragon:4, undead:3
+    mount:{ name:"Pathfinder", actions:["Travel","Hunt"], description:"Covers world routes faster, with combat support." },
+    pet:{ name:"Scout", actions:["Loot","Meditate"], description:"Supports critical attacks and evasive combat." }
   });
   var COMBAT_FAMILY = Object.freeze({
     dragon:6, mythical:5, undead:5, cat:4, wolf:4, reptile:4, bear:4, elemental:4
@@ -253,9 +247,7 @@
   function statPieces(stats) {
     stats = stats || {};
     var labels = {
-      xpPct:"% XP",
-      coinPct:"% coins",
-      energySave:" energy cost",
+      travelSpeedPct:"% Travel route speed",
       critPct:"% critical chance",
       dmgPhys:" physical damage",
       dmgFire:" fire damage",
@@ -276,240 +268,65 @@
     });
   }
 
-  function activeItemStatPieces(item) {
-    var active = {};
-    var established = legacyEffectFor(item.id) || {};
-    ["xpPct","coinPct","energySave"].forEach(function (key) {
-      if (number(established[key])) active[key] = number(established[key]);
-    });
-    ["critPct","dmgPhys","dmgFire","dmgFrost","dmgPoison","dmgArcane","resPhys","resElem","dodgePct","lifesteal"].forEach(function (key) {
-      if (number(item.stats && item.stats[key])) active[key] = number(item.stats[key]);
-    });
-    return statPieces(active);
-  }
-
-  function activeSessionStats(state, fallback) {
-    try {
-      if (typeof global.equippedStats === "function") {
-        var engine = global.equippedStats(state && state.hero);
-        if (engine && typeof engine === "object") {
-          return {
-            xpPct:Math.max(0, number(engine.xpPct)),
-            coinPct:Math.max(0, number(engine.coinPct)),
-            energySave:Math.max(0, number(engine.energySave))
-          };
-        }
-      }
-    } catch (_) {}
-    return fallback;
-  }
-
   function compute(state, context) {
     state = state && typeof state === "object" ? state : {};
     context = context || {};
-    var equipped = state.hero && state.hero.equipped && typeof state.hero.equipped === "object"
-      ? state.hero.equipped
-      : {};
-    var items = [];
-    Object.keys(SLOT_ROLES).forEach(function (slot) {
-      var item = itemFor(state, slot, equipped[slot]);
-      if (item) items.push(item);
-    });
-
-    var raw = {};
-    STAT_KEYS.forEach(function (key) { raw[key] = 0; });
-    var weaponPower = 0;
-    var baselinePhys = 0;
-    var baselineElem = 0;
-    var baselineDodge = 0;
-    var lootFind = 0;
-    var farmYield = 0;
-    var travel = 0;
-    var actionXp = 0;
-    var action = cleanId(context.action);
-    var sources = [];
-
-    items.forEach(function (item) {
+    var equipped = state.hero && state.hero.equipped || {};
+    var items = Object.keys(SLOT_ROLES).map(function(slot){ return itemFor(state, slot, equipped[slot]); }).filter(Boolean);
+    var raw = {}, sources = [], travel = 0;
+    items.forEach(function(item){
       addStats(raw, item.stats);
-      var pieces = activeItemStatPieces(item);
-      var plannedPieces = [];
-      var roleBoost = Math.min(4, 1 + Math.floor(item.rank / 2));
-      if (action && item.role.actions.indexOf(action) >= 0) {
-        actionXp += roleBoost;
-        plannedPieces.push("Planned: +" + roleBoost + "% " + action + " role XP (not active)");
+      var pieces = statPieces(item.stats);
+      /* Slot foundations make old items useful without rewriting their saved
+         affixes. New catalog stats and rolled combat affixes remain bounded. */
+      var base = {};
+      if (item.slot === "weapon") base.dmgPhys = 2 + item.rank * 3 + item.level * 2;
+      if (item.slot === "helmet") base.resElem = 1 + item.rank + Math.floor(item.level / 2);
+      if (item.slot === "armor") {
+        base.resPhys = 2 + item.rank * 2 + item.level;
+        base.resElem = Math.max(1, Math.floor(base.resPhys / 2));
       }
-      if (item.slot === "weapon") {
-        var power = 2 + item.rank * 3 + item.level * 2;
-        weaponPower += power;
-        pieces.push("+" + power + " Fight power");
-      } else if (item.slot === "helmet") {
-        var helmGuard = 1 + item.rank + Math.floor(item.level / 2);
-        baselinePhys += helmGuard;
-        lootFind += Math.max(1, Math.floor(item.rank / 2));
-        pieces.push("+" + helmGuard + " guard", "+" + Math.max(1, Math.floor(item.rank / 2)) + "% loot insight");
-      } else if (item.slot === "armor") {
-        var armorGuard = 2 + item.rank * 2 + item.level;
-        baselinePhys += armorGuard;
-        baselineElem += Math.max(1, Math.floor(armorGuard / 2));
-        pieces.push("+" + armorGuard + " physical guard", "+" + Math.max(1, Math.floor(armorGuard / 2)) + " elemental guard");
-      } else if (item.slot === "pet") {
-        var scout = 1 + item.rank;
-        lootFind += scout;
-        baselineDodge += Math.floor(item.rank / 2);
-        pieces.push("+" + scout + "% loot scouting");
-      } else if (item.slot === "mount") {
-        var family = item.family || "legacy";
-        var route = 4 + item.rank * 3;
-        /* Family specialty scales with the mount tier so even the normal
-           four-unit crop yields can visibly gain one unit from a strong farm
-           mount; the global 25% cap still bounds every harvest. */
-        var farm = number(FARM_FAMILY[family])
-          ? number(FARM_FAMILY[family]) + item.rank * 2
-          : 0;
-        var scoutMount = number(SCOUT_FAMILY[family]);
-        var combatMount = number(COMBAT_FAMILY[family]);
-        travel += route;
-        farmYield += farm;
-        lootFind += scoutMount;
-        baselineDodge += Math.floor(combatMount / 2);
-        weaponPower += combatMount;
-        plannedPieces.push("Planned: +" + route + "% Travel route bonus (not active)");
-        if (farm) pieces.push("+" + farm + "% " + family + " farm specialty");
-        if (scoutMount) pieces.push("+" + scoutMount + "% " + family + " scouting");
-        if (combatMount) pieces.push("+" + combatMount + " " + family + " combat support");
+      if (item.slot === "pet") base.dodgePct = 1 + item.rank;
+      if (item.slot === "mount") {
+        travel = Math.max(travel, 4 + item.rank * 3);
+        base.dmgPhys = number(COMBAT_FAMILY[item.family]);
+        base.dodgePct = Math.floor(base.dmgPhys / 2);
+        pieces = pieces.filter(function(piece){ return !/Travel/.test(piece); });
+        pieces.push("+" + travel + "% Travel route speed");
       }
-      sources.push(sourceLine(item, pieces, plannedPieces));
+      addStats(raw, base);
+      sources.push(sourceLine(item, pieces.concat(statPieces(base)), []));
     });
-
-    var ignoredMinuteEffects = [];
-    var sets = setBonuses(items.map(function (item) { return item.id; }));
-    sets.forEach(function (set) {
+    var sets = setBonuses(items.map(function(item){ return item.id; }));
+    sets.forEach(function(set){
       var bonus = set.bonus || {};
-      /* Only explicitly safe effects are routed. timeScalePct and
-         sessionFloorOverride are intentionally ignored. */
-      addStats(raw, {
-        xpPct:number(bonus.xpPct),
-        coinPct:number(bonus.coinPct),
-        energySave:number(bonus.energySave),
-        resPhys:number(bonus.resPhys),
-        resElem:number(bonus.resElem)
+      var stats = copyStats(bonus);
+      addStats(raw, stats);
+      if (bonus.elemDmgPct) ["dmgFire","dmgFrost","dmgPoison","dmgArcane"].forEach(function(key){
+        raw[key] = number(raw[key]) * (1 + Math.max(0, number(bonus.elemDmgPct)) / 100);
       });
-      if (bonus.rareDropBonusPct) lootFind += number(bonus.rareDropBonusPct);
-      if (bonus.mountDropPct) lootFind += number(bonus.mountDropPct) * 0.5;
-      if (bonus.elemDmgPct) {
-        raw.dmgFire += number(raw.dmgFire) * number(bonus.elemDmgPct) / 100;
-        raw.dmgFrost += number(raw.dmgFrost) * number(bonus.elemDmgPct) / 100;
-        raw.dmgPoison += number(raw.dmgPoison) * number(bonus.elemDmgPct) / 100;
-        raw.dmgArcane += number(raw.dmgArcane) * number(bonus.elemDmgPct) / 100;
-      }
-      if (bonus.meditateBonusPct && action === "Meditate") actionXp += number(bonus.meditateBonusPct);
-      if (bonus.timeScalePct || bonus.sessionFloorOverride != null) {
-        ignoredMinuteEffects.push(set.name);
-      }
-      var coreSet = set.id.indexOf("core:") === 0;
-      var activeSetPieces = [set.count + "-piece set"];
-      var plannedSetPieces = [];
-      if (coreSet) {
-        activeSetPieces.push(bonus.label || "Core set utility active");
-      } else {
-        if (bonus.resPhys) activeSetPieces.push("+" + number(bonus.resPhys) + " physical resistance");
-        if (bonus.resElem) activeSetPieces.push("+" + number(bonus.resElem) + " elemental resistance");
-        if (bonus.elemDmgPct) activeSetPieces.push("+" + number(bonus.elemDmgPct) + "% elemental combat scaling");
-        if (bonus.rareDropBonusPct) activeSetPieces.push("+" + number(bonus.rareDropBonusPct) + "% loot-quality routing");
-        if (bonus.mountDropPct) activeSetPieces.push("+" + number(bonus.mountDropPct) * 0.5 + "% loot-quality routing");
-        if (bonus.xpPct || bonus.coinPct || bonus.energySave || bonus.meditateBonusPct || bonus.meditateDoubleXp) {
-          plannedSetPieces.push("Declared session perk is not active in the current reward engine");
-        }
-      }
-      sources.push({
-        kind:"set",
-        id:set.id,
-        name:set.name,
-        pieces:activeSetPieces,
-        plannedPieces:plannedSetPieces
-      });
+      var pieces = statPieces(stats);
+      if (bonus.elemDmgPct) pieces.push("+" + bonus.elemDmgPct + "% elemental combat power");
+      sources.push({kind:"set",id:set.id,name:set.name,pieces:pieces,plannedPieces:[]});
     });
-
-    /*
-     * Utility charms/relics are opt-in loadout choices. Ownership alone never
-     * contributes a stat. The purpose module exposes only bounded combat,
-     * existing-roll quality, and explicit-harvest effects; it cannot alter
-     * minutes, historical XP/coins, or create passive rewards.
-     */
-    var utility = null;
-    if (typeof global.fhLootPurposeComputeUtility === "function") {
-      try { utility = global.fhLootPurposeComputeUtility(state); } catch (_) { utility = null; }
-    }
+    var utility = typeof global.fhLootPurposeComputeUtility === "function" ? global.fhLootPurposeComputeUtility(state) : null;
     if (utility && utility.combat) addStats(raw, utility.combat);
-    if (utility && utility.loot) lootFind += number(utility.loot.qualityBiasPct);
-    if (utility && utility.farm) farmYield += number(utility.farm.harvestYieldPct);
-    (utility && Array.isArray(utility.sources) ? utility.sources : []).forEach(function (source) {
-      var pieces = statPieces(source.effect && source.effect.combat);
-      if (number(source.effect && source.effect.loot && source.effect.loot.qualityBiasPct)) {
-        pieces.push("+" + number(source.effect.loot.qualityBiasPct) + "% existing-roll quality bias");
-      }
-      if (number(source.effect && source.effect.farm && source.effect.farm.harvestYieldPct)) {
-        pieces.push("+" + number(source.effect.farm.harvestYieldPct) + "% explicit harvest yield");
-      }
-      sources.push({
-        kind:"utility",
-        slot:source.slot,
-        id:source.id,
-        name:source.name || titleFromId(source.id),
-        role:"Utility loadout",
-        pieces:pieces,
-        plannedPieces:[]
-      });
+    (utility && utility.sources || []).forEach(function(source){
+      sources.push({kind:"utility",slot:source.slot,id:source.id,name:source.name,role:"Combat support",pieces:statPieces(source.effect.combat),plannedPieces:[]});
     });
-
-    var physical = number(raw.dmgPhys) + weaponPower;
-    var resPhys = number(raw.resPhys) + baselinePhys;
-    var resElem = number(raw.resElem) + baselineElem;
-    var combat = {
-      dmgPhys:Math.round(clamp(physical, 0, CAPS.weaponPower)),
-      dmgFire:Math.round(clamp(raw.dmgFire, 0, CAPS.elementalDamage)),
-      dmgFrost:Math.round(clamp(raw.dmgFrost, 0, CAPS.elementalDamage)),
-      dmgPoison:Math.round(clamp(raw.dmgPoison, 0, CAPS.elementalDamage)),
-      dmgArcane:Math.round(clamp(raw.dmgArcane, 0, CAPS.elementalDamage)),
-      resPhys:Math.round(clamp(resPhys, 0, CAPS.resPhys)),
-      resElem:Math.round(clamp(resElem, 0, CAPS.resElem)),
-      critPct:Math.round(clamp(raw.critPct, 0, CAPS.critPct)),
-      dodgePct:Math.round(clamp(number(raw.dodgePct) + baselineDodge, 0, CAPS.dodgePct)),
-      lifesteal:Math.round(clamp(raw.lifesteal, 0, CAPS.lifesteal))
-    };
-    var session = activeSessionStats(state, {
-      xpPct:Math.round(clamp(raw.xpPct, 0, CAPS.xpPct)),
-      coinPct:Math.round(clamp(raw.coinPct, 0, CAPS.coinPct)),
-      energySave:Math.round(clamp(raw.energySave, 0, CAPS.energySave))
+    var combat = {};
+    ["dmgPhys","dmgFire","dmgFrost","dmgPoison","dmgArcane","resPhys","resElem","critPct","dodgePct","lifesteal"].forEach(function(key){
+      var cap = key === "dmgPhys" ? CAPS.weaponPower : /^dmg/.test(key) ? CAPS.elementalDamage : CAPS[key];
+      combat[key] = Math.round(clamp(raw[key], 0, cap));
     });
-    var loot = { qualityBiasPct:Math.round(clamp(lootFind, 0, CAPS.lootFindPct)) };
-    var farm = { harvestYieldPct:Math.round(clamp(farmYield, 0, CAPS.farmYieldPct)) };
-    /* These two ideas are useful loadout directions, but they are not active
-       rewards until a session snapshot/receipt consumer preserves live/edit
-       parity. Keep them explicitly planned instead of presenting fiction. */
-    var planned = {
-      actionRoleXpPct:Math.round(clamp(actionXp, 0, CAPS.actionXpPct)),
-      travelEfficiencyPct:Math.round(clamp(travel, 0, CAPS.travelEfficiencyPct))
-    };
-
     return {
-      version:VERSION,
-      action:action || null,
-      equippedCount:items.length,
-      utilityCount:utility && Array.isArray(utility.sources) ? utility.sources.length : 0,
-      items:items,
-      sets:sets,
-      session:session,
-      combat:combat,
-      loot:loot,
-      farm:farm,
-      planned:planned,
-      sources:sources,
-      safety:{
-        changesMinutes:false,
-        passiveRewards:false,
-        ignoredAuthoritativeMinuteEffects:ignoredMinuteEffects
-      }
+      version:VERSION,action:cleanId(context.action)||null,equippedCount:items.length,
+      utilityCount:utility && utility.sources ? utility.sources.length : 0,items:items,sets:sets,
+      session:{xpPct:0,coinPct:0,energySave:0},combat:combat,
+      loot:{qualityBiasPct:0},farm:{harvestYieldPct:0},
+      travel:{speedPct:Math.round(clamp(travel,0,CAPS.travelEfficiencyPct))},
+      planned:{actionRoleXpPct:0,travelEfficiencyPct:0},sources:sources,
+      safety:{changesMinutes:false,passiveRewards:false,ignoredAuthoritativeMinuteEffects:[]}
     };
   }
 
@@ -615,9 +432,9 @@
   var PURPOSES = Object.freeze({
     map:{
       label:"World Map",
-      purpose:"Matching maps can unlock a World zone, but the dormant map catalog is not distributed yet.",
+      purpose:"Legacy maps remain collectible. Clear enemies and the boss, then Travel to open the next world.",
       destination:"World",
-      plannedAction:"Use while unlocking the matching zone."
+      plannedAction:"View the world route requirements."
     },
     key:{
       label:"Chest Key",
@@ -884,7 +701,7 @@
     var rows = [];
     if (profile.session.xpPct) rows.push("+" + profile.session.xpPct + "% XP");
     if (profile.session.coinPct) rows.push("+" + profile.session.coinPct + "% coins");
-    if (profile.session.energySave) rows.push("-" + profile.session.energySave + " energy");
+    if (profile.travel.speedPct) rows.push("+" + profile.travel.speedPct + "% Travel route speed");
     if (profile.combat.dmgPhys) rows.push("+" + profile.combat.dmgPhys + " Fight power");
     if (profile.combat.resPhys || profile.combat.resElem) rows.push("+" + (profile.combat.resPhys + profile.combat.resElem) + " total guard");
     if (profile.loot.qualityBiasPct) rows.push("+" + profile.loot.qualityBiasPct + "% loot-quality bias");

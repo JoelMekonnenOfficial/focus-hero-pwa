@@ -28,14 +28,14 @@
  *
  *   7. CRYSTAL SHARDS - new premium-grind currency (state.crystalShards).
  *      Gained from boss kills, mythic drops, long streak rewards.
- *      Spent on Mystery Box, premium rerolls, zone unlocks.
+ *      Spent on Mystery Box and premium rerolls.
  *
  *   8. QUESTS - 12 daily / 10 weekly / 6 seasonal templates with
  *      auto-rolling on date rollover. Tracked under state.questSystem.
  *
  *   9. WORLD ZONES - 6 zones (Verdant Vale, Frostpeak, Ember Wastes,
  *      Sunken Reef, Shadowmoor, Astral Plains) with biome enemies,
- *      mount bias, loot bias. Unlock by keys.
+ *      regional gear and mount families. Advance by victories and Travel.
  *
  *  10. ENEMY EXPANSION - 45+ new enemies across biomes, taking the
  *      total bestiary past 60.
@@ -298,8 +298,8 @@
       label: "Dragon Hunter's Set",
       pieces: ["whetstone_blade","trail_boots","tome_of_tomorrow","amulet_of_drive","crown_of_flow"],
       bonuses: {
-        3: { label:"+10% mount drop chance", mountDropPct:10 },
-        5: { label:"Summons Mini Dragon companion", summonCompanion:"mini_dragon" }
+        3: { label:"+8 fire damage", dmgFire:8 },
+        5: { label:"+16 fire damage", dmgFire:16 }
       },
       lore:"Wear three, and dragons notice. Wear five, and one starts to follow you."
     },
@@ -307,8 +307,8 @@
       label: "Voidwalker's Set",
       pieces: ["cosmic_fragment","void_skiff","key_of_worlds","star_mote","timekeeper_s_spark"],
       bonuses: {
-        3: { label:"+5% World Shards from boss kills", shardBonusPct:5 },
-        5: { label:"+15% rare-drop chance", rareDropBonusPct:15 }
+        3: { label:"+8 arcane damage", dmgArcane:8 },
+        5: { label:"+12 arcane damage and elemental guard", dmgArcane:12, resElem:12 }
       },
       lore:"Three pieces tilt the void toward you; five and it leans."
     },
@@ -316,8 +316,8 @@
       label: "Scholar's Vestments",
       pieces: ["tome_of_tomorrow","seer_s_orb","amulet_of_drive","scroll_of_focus","candle_of_clarity"],
       bonuses: {
-        3: { label:"+8% XP", xpPct:8 },
-        5: { label:"+15% XP, sessions <25m still grant XP", xpPct:15, sessionFloorOverride:0 }
+        3: { label:"+8 arcane damage", dmgArcane:8 },
+        5: { label:"+15 arcane damage", dmgArcane:15 }
       },
       lore:"Knowledge accumulates faster when it doesn't have to fight your gear."
     },
@@ -325,8 +325,8 @@
       label: "Treasurer's Regalia",
       pieces: ["wolf_reins","unicorn_sigil","griffin_saddle","clockwork_fox","copper_coin"],
       bonuses: {
-        3: { label:"+10% coins", coinPct:10 },
-        5: { label:"+20% coins, +1 free reroll per session", coinPct:20, freeRerollPerSession:1 }
+        3: { label:"+6% critical chance", critPct:6 },
+        5: { label:"+10% critical chance", critPct:10 }
       },
       lore:"Coins clink louder when they recognize their own kind."
     },
@@ -335,7 +335,7 @@
       pieces: ["ember_wyrmling","seer_s_orb","amulet_of_drive","moonplate_vest","whetstone_blade"],
       bonuses: {
         3: { label:"All elemental damage +20%", elemDmgPct:20 },
-        5: { label:"Elemental crits restore HP", elemCritLifesteal:true }
+        5: { label:"+6% lifesteal", lifesteal:6 }
       },
       lore:"The elements aren't separate; they were broken into four for our convenience."
     },
@@ -343,8 +343,8 @@
       label: "Sage of the Quiet Hour",
       pieces: ["candle_of_clarity","scroll_of_focus","tome_of_tomorrow","calming_herb","study_owl"],
       bonuses: {
-        3: { label:"Meditate sessions grant double XP", meditateDoubleXp:true },
-        5: { label:"+5% XP on every session, +10% on Meditate", xpPct:5, meditateBonusPct:10 }
+        3: { label:"+8 elemental guard", resElem:8 },
+        5: { label:"+15 elemental guard", resElem:15 }
       },
       lore:"Some doors only open when no one is listening for them."
     },
@@ -352,8 +352,8 @@
       label: "Iron Order",
       pieces: ["moonplate_vest","whetstone_blade","crown_of_flow","trail_boots","dualblade"],
       bonuses: {
-        3: { label:"+15 phys resist, +5% energy save", resPhys:15, energySave:1 },
-        5: { label:"Boss kills grant +50% World Shards", bossShardPct:50 }
+        3: { label:"+15 physical guard", resPhys:15 },
+        5: { label:"+20 physical guard", resPhys:20 }
       },
       lore:"Order before flourish. Plate before silk."
     },
@@ -361,8 +361,8 @@
       label: "Timekeeper's Vigil",
       pieces: ["timekeeper_s_spark","cosmic_fragment","key_of_worlds","crown_of_flow","seer_s_orb"],
       bonuses: {
-        3: { label:"All session minutes count 1.05x", timeScalePct:5 },
-        5: { label:"Session minutes 1.1x, daily quests 2x reward", timeScalePct:10, dailyQuestBonus:2 }
+        3: { label:"+5% dodge", dodgePct:5 },
+        5: { label:"+10% dodge", dodgePct:10 }
       },
       lore:"Time treats those well who treat it well."
     }
@@ -487,6 +487,72 @@
       lore:"Beyond the last cloud. The air tastes of decision."
     }
   };
+
+  /* Regional equipment uses the existing item identities. Previously owned
+     items and unlocked worlds remain valid; no inventory migration occurs. */
+  var WD_STARTER_GEAR = ["rusty_dagger","oak_cudgel","cloth_cap","padded_tunic","worn_sandals","field_mouse","pond_turtle","iron_shortsword","apprentice_hammer","bard_s_lute","leather_helm","hide_helm","studded_vest","alley_cat","faithful_hound"];
+  var WD_ZONE_GEAR = {
+    verdant_vale:["whetstone_blade","scholar_s_quill","scholar_s_spectacles","scholar_s_robe","prospector_s_pick","lucky_hood","pacer_s_drum","trail_boots","trash_panda","boomerang_blade","climber_s_harness","badger_kit","monk_s_wraps","sentinel_buckler"],
+    frostpeak:["whetstone_blade","tome_of_tomorrow","trail_boots","runed_warhammer","helm_of_resolve","endurance_crown","trailguard_greaves","study_owl","falcon_companion","frost_wyrmling","aegis_of_flow","crown_of_flow"],
+    ember_wastes:["catalyst_flask","sentinel_buckler","prism_parrot","dualblade","berserker_s_axe","warhelm","bloodplate","guardian_pauldron","ember_wyrmling","scorpion_familiar","sword_of_momentum","phoenix_chick"],
+    sunken_reef:["golden_scepter","tome_of_tomorrow","climber_s_harness","moonplate_vest","coinweave_vest","crown_of_coins","velvet_mantle","clockwork_fox","glass_jelly_wisp","midas_gauntlet","trident_of_tides","wind_familiar"],
+    shadowmoor:["monk_s_wraps","lucky_hood","scholar_s_robe","shadowglass_hood","transmuter_s_mantle","offline_runner_coat","pitymeter_wand","little_watcher","no_signal_saber","voidblade","bulwark_eternal","eclipse_blade"],
+    astral_plains:["catalyst_flask","scholar_s_spectacles","sentinel_buckler","starcaller_staff","crown_of_deep_work","battery_ward","archive_owl","chronoblade","eye_of_eternity","halo_of_mastery","star_mote","orbit_sprite","celestial_phoenix","solar_phoenix"]
+  };
+  function wdGearForZone(zoneId){
+    return WD_STARTER_GEAR.concat(WD_ZONE_GEAR[zoneId] || WD_ZONE_GEAR.verdant_vale);
+  }
+
+  /* Route receipts are earned only at a new session's reward boundary. They
+     store game distance, never extra focus minutes or an earnings multiplier. */
+  function wdJourneyStatus(s, zoneId){
+    var world = s && s.world || {};
+    zoneId = WD_ZONES[zoneId] ? zoneId : (world.currentZone || "verdant_vale");
+    var order = Object.keys(WD_ZONES), index = order.indexOf(zoneId);
+    var result = {zoneId:zoneId,nextZone:order[index+1]||null,enemyWins:0,enemyTarget:5,bossDefeated:false,distance:0,distanceTarget:60};
+    var receipts = world.journeySessionRewards || {};
+    Object.keys(receipts).forEach(function(key){
+      var row = receipts[key];
+      if (!row || row.zoneId !== zoneId || row.version !== 1) return;
+      if (row.action === "Fight") {
+        result.enemyWins += Math.max(0, Math.min(5, Number(row.enemyWins)||0));
+        result.bossDefeated = result.bossDefeated || row.bossDefeated === true;
+      }
+      if (row.action === "Travel") result.distance += Math.max(0, Number(row.distance)||0);
+    });
+    result.routeCleared = result.enemyWins >= result.enemyTarget && result.bossDefeated;
+    result.ready = result.routeCleared && result.distance >= result.distanceTarget;
+    result.nextUnlocked = !!(result.nextZone && world.unlockedZones && world.unlockedZones[result.nextZone]);
+    return result;
+  }
+
+  function wdRecordJourneySession(s, opts){
+    opts = opts || {};
+    if (!s || !String(opts.sessionId || "").trim()) return {ok:false,reason:"missing_session"};
+    if (["Fight","Travel"].indexOf(opts.action) < 0 || !(Number(opts.minutes) > 0)) return {ok:false,reason:"not_eligible"};
+    var zoneId = String(opts.zoneId || (s.world && s.world.currentZone) || "verdant_vale");
+    if (!WD_ZONES[zoneId]) return {ok:false,reason:"unknown_zone"};
+    var world = wdEnsureWorld(s), key = "session:" + String(opts.sessionId);
+    if (!world.journeySessionRewards) world.journeySessionRewards = {};
+    if (Object.prototype.hasOwnProperty.call(world.journeySessionRewards,key)) return {ok:true,duplicate:true,receipt:world.journeySessionRewards[key]};
+    var status = wdJourneyStatus(s,zoneId), roster = wdEnemiesForZone(zoneId);
+    var wins = (opts.encounters || []).filter(function(enc){
+      return enc && enc.killed === true && enc.enemy && roster.some(function(enemy){ return enemy.id === enc.enemy.id; });
+    });
+    var speed = 0;
+    if (opts.action === "Travel" && typeof window.fhGearUtilityCompute === "function") speed = window.fhGearUtilityCompute(s,{action:"Travel"}).travel.speedPct;
+    var receipt = {version:1,sessionId:String(opts.sessionId),zoneId:zoneId,action:opts.action,
+      enemyWins:opts.action === "Fight" ? wins.filter(function(enc){return !enc.enemy.boss;}).length : 0,
+      bossDefeated:opts.action === "Fight" && wins.some(function(enc){return enc.enemy.boss;}),
+      speedPct:Math.max(0,Math.min(30,Number(speed)||0)),distance:0};
+    if (opts.action === "Travel" && status.routeCleared && status.nextZone && !status.nextUnlocked) {
+      receipt.distance = Math.min(Math.max(0,status.distanceTarget-status.distance), Math.floor(Number(opts.minutes) * (1+receipt.speedPct/100)*100)/100);
+    }
+    world.journeySessionRewards[key] = receipt;
+    status = wdJourneyStatus(s,zoneId);
+    if (status.ready && status.nextZone && !status.nextUnlocked) world.unlockedZones[status.nextZone] = true;
+    return {ok:true,duplicate:false,receipt:receipt,status:status,unlockedZone:status.ready && !status.nextUnlocked ? status.nextZone : null};
+  }
 
   /* ---------- ENEMY BESTIARY EXPANSION ---------- */
 
@@ -1488,26 +1554,11 @@
     var zone = WD_ZONES[zoneId];
     if (!zone) return { ok:false, reason:"unknown_zone" };
     if (world.unlockedZones[zoneId]) return { ok:false, reason:"already_unlocked" };
-    // Two unlock paths: spend a matching map OR spend shards
-    var mapId = zone.unlockMap;
-    if (mapId && s.lootOwned && (s.lootOwned[mapId]|0) > 0){
-      s.lootOwned[mapId]--;
-      world.unlockedZones[zoneId] = true;
-      return { ok:true, via:"map" };
-    }
-    if (zone.unlockShards){
-      var unlockCost = Math.max(0, zone.unlockShards|0);
-      var available = Math.max(0, s.crystalShards|0);
-      if (available < unlockCost){
-        return { ok:false, reason:"insufficient_shards", need:unlockCost, have:available };
-      }
-      /* Exact, atomic charge. The old generic 250-shard spend could overcharge
-         Frostpeak, undercharge late zones, or unlock without deducting. */
-      s.crystalShards = available - unlockCost;
-      s.crystalShardsSpent = (s.crystalShardsSpent|0) + unlockCost;
-    }
+    var order = Object.keys(WD_ZONES), previous = order[order.indexOf(zoneId)-1];
+    var journey = previous ? wdJourneyStatus(s,previous) : null;
+    if (!journey || !journey.ready) return {ok:false,reason:"route_incomplete",journey:journey};
     world.unlockedZones[zoneId] = true;
-    return { ok:true, via:"shards", spent:Math.max(0, zone.unlockShards|0) };
+    return {ok:true,via:"victory_and_travel",spent:0};
   }
 
   /* Merge the v8.5+ progression branch without letting a fresh device erase
@@ -1570,6 +1621,7 @@
     if (!out.world.zonesVisited.verdant_vale) out.world.zonesVisited.verdant_vale = 1;
     out.world.bossesDefeated = Math.max(nn(lw.bossesDefeated), nn(rw.bossesDefeated));
     out.world.bossSessionRewards = unionMap(lw.bossSessionRewards, rw.bossSessionRewards);
+    out.world.journeySessionRewards = unionMap(lw.journeySessionRewards, rw.journeySessionRewards);
     out.world.mysteryBoxesOpened = Math.max(nn(lw.mysteryBoxesOpened), nn(rw.mysteryBoxesOpened));
     out.world.artifactsFound = unionMap(lw.artifactsFound, rw.artifactsFound);
     out.world.questCounters = maxNumberMap(lw.questCounters, rw.questCounters);
@@ -1766,6 +1818,9 @@
     WD_GEAR_SETS: WD_GEAR_SETS,
     WD_SHARD_REWARDS: WD_SHARD_REWARDS, WD_SHARD_COSTS: WD_SHARD_COSTS,
     WD_ZONES: WD_ZONES,
+    wdGearForZone:wdGearForZone,
+    wdJourneyStatus:wdJourneyStatus,
+    wdRecordJourneySession:wdRecordJourneySession,
     WD_ENEMIES_EXT: WD_ENEMIES_EXT,
     WD_QUEST_DAILY: WD_QUEST_DAILY,
     WD_QUEST_WEEKLY: WD_QUEST_WEEKLY,

@@ -4426,7 +4426,7 @@ svg{shape-rendering:geometricPrecision}
       <div id="tab-mounts" class="tab-panel" hidden><div id="mount-grid" class="loot-grid companion-grid"></div></div>
       <div id="tab-pets" class="tab-panel" hidden><div id="pet-grid" class="loot-grid companion-grid"></div></div>
       <div id="tab-quests-v85" class="tab-panel" hidden><div id="quests-v85-panel"><div class="muted" style="font-size:.85rem;margin-bottom:6px">Daily, weekly, and seasonal quests. Claim rewards when complete.</div></div></div>
-      <div id="tab-world" class="tab-panel" hidden><div id="world-panel"><div class="muted" style="font-size:.85rem;margin-bottom:6px">Choose the zone used by optional Fight sessions. Each zone has its own enemies, boss, mounts, and loot bias. Use maps or World Shards to unlock.</div></div></div>
+      <div id="tab-world" class="tab-panel" hidden><div id="world-panel"><div class="muted" style="font-size:.85rem;margin-bottom:6px">Win fights to earn regional gear and clear a route. Defeat five enemies and the regional boss, then Travel to the next world. Mounts cover the route faster.</div></div></div>
       <div id="tab-vault" class="tab-panel" hidden><div id="vault-panel"><div class="muted" style="font-size:.85rem;margin-bottom:6px">Long-term storage for loot instances. 100-slot cap.</div></div></div>
       <div id="tab-stable" class="tab-panel" hidden><div id="stable-panel"><div class="muted" style="font-size:.85rem;margin-bottom:6px">Mount ecosystem. Complete a full family to earn a "Master of" title.</div></div></div>
       <div id="tab-drops" class="tab-panel" hidden><div id="drops-panel"><div class="muted" style="font-size:.8rem;margin-bottom:6px">Every drop you've earned, with the odds at the moment it rolled.</div><div id="drops-list" class="drops-list"></div></div></div>
@@ -5773,125 +5773,25 @@ const APPEARANCE_OPTIONS = {
     { id:"warpaint", label:"Warpaint" }
   ]
 };
-const GEAR_EFFECTS = {
-  whetstone_blade:    { xpPct:5, label:"+5% XP" },
-  dualblade:           { xpPct:12, label:"+12% XP" },
-  tome_of_tomorrow:    { xpPct:7, label:"+7% XP" },
-  crown_of_flow:       { xpPct:15, label:"+15% XP" },
-  trail_boots:         { energySave:1, label:"-1 energy cost" },
-  moonplate_vest:      { energySave:3, label:"-3 energy cost" },
-  wolf_reins:          { coinPct:8, label:"+8% coins" },
-  unicorn_sigil:       { coinPct:15, label:"+15% coins" },
-  griffin_saddle:      { coinPct:16, label:"+16% coins" },
-  astral_stag_tack:    { coinPct:18, label:"+18% coins" },
-  void_skiff:          { coinPct:25, label:"+25% coins" },
-  phase_panther_reins: { coinPct:25, label:"+25% coins" },
-  study_owl:           { xpPct:5, label:"+5% XP" },
-  clockwork_fox:       { coinPct:6, label:"+6% coins" },
-  ember_wyrmling:      { xpPct:10, label:"+10% XP" },
-  wind_familiar:       { energySave:2, label:"-2 energy cost" },
-  star_mote:           { xpPct:12, label:"+12% XP" },
-  orbit_sprite:        { coinPct:12, label:"+12% coins" },
-  rusty_dagger:        { xpPct:2,  label:"+2% XP" },
-  cloth_cap:           { xpPct:1,  label:"+1% XP" },
-  padded_tunic:        { energySave:1, label:"-1 energy cost" },
-  old_pony:            { coinPct:2, label:"+2% coins" },
-  field_mouse:         { coinPct:2, label:"+2% coins" },
-  iron_shortsword:     { xpPct:3,  label:"+3% XP" },
-  leather_helm:        { xpPct:2,  label:"+2% XP" },
-  studded_vest:        { energySave:2, label:"-2 energy cost" },
-  pack_mule:           { coinPct:4, label:"+4% coins" },
-  alley_cat:           { coinPct:3, label:"+3% coins" },
-  scholar_s_quill:     { xpPct:6,  label:"+6% XP" },
-  scholar_s_spectacles:{ xpPct:5,  label:"+5% XP" },
-  scholar_s_robe:      { xpPct:5,  label:"+5% XP" },
-  prospector_s_pick:   { coinPct:7, label:"+7% coins" },
-  lucky_hood:          { coinPct:6, label:"+6% coins" },
-  pacer_s_drum:        { energySave:2, label:"-2 energy cost" },
-  sure_foot_ram:       { coinPct:6, label:"+6% coins" },
-  trash_panda:         { coinPct:5, label:"+5% coins" },
-  runed_warhammer:     { xpPct:10, label:"+10% XP" },
-  helm_of_resolve:     { xpPct:9,  label:"+9% XP" },
-  coinweave_vest:      { coinPct:12, label:"+12% coins" },
-  endurance_crown:     { energySave:3, label:"-3 energy cost" },
-  trailguard_greaves:  { energySave:3, label:"-3 energy cost" },
-  tiger_mount:         { coinPct:10, label:"+10% coins" },
-  falcon_companion:    { xpPct:8,  label:"+8% XP" },
-  sword_of_momentum:   { xpPct:16, label:"+16% XP" },
-  midas_gauntlet:      { coinPct:18, label:"+18% coins" },
-  aegis_of_flow:       { energySave:4, xpPct:6, label:"-4 energy, +6% XP" },
-  lion_of_resolve:     { xpPct:12, coinPct:6, label:"+12% XP, +6% coins" },
-  phoenix_chick:       { xpPct:14, label:"+14% XP" },
-  chronoblade:         { xpPct:22, label:"+22% XP" },
-  eye_of_eternity:     { xpPct:20, label:"+20% XP" },
-  astral_dragon:       { coinPct:28, label:"+28% coins" },
-  celestial_phoenix:   { xpPct:18, coinPct:10, label:"+18% XP, +10% coins" },
-  halo_of_mastery:     { xpPct:25, label:"+25% XP" },
-  oak_cudgel:          { xpPct:2, label:"+2% XP" },
-  worn_sandals:        { energySave:1, label:"-1 energy cost" },
-  pond_turtle:         { coinPct:2, label:"+2% coins" },
-  apprentice_hammer:   { xpPct:3, label:"+3% XP" },
-  bard_s_lute:         { xpPct:3, label:"+3% XP" },
-  hide_helm:           { xpPct:2, label:"+2% XP" },
-  faithful_hound:      { xpPct:3, label:"+3% XP" },
-  boomerang_blade:     { xpPct:6, label:"+6% XP" },
-  climber_s_harness:   { energySave:2, label:"-2 energy cost" },
-  badger_kit:          { coinPct:5, label:"+5% coins" },
-  steppe_horse:        { coinPct:6, label:"+6% coins" },
-  golden_scepter:      { coinPct:7, label:"+7% coins" },
-  berserker_s_axe:     { xpPct:11, label:"+11% XP" },
-  warhelm:             { xpPct:9, label:"+9% XP" },
-  crown_of_coins:      { coinPct:11, label:"+11% coins" },
-  velvet_mantle:       { coinPct:11, label:"+11% coins" },
-  war_croc:            { coinPct:10, label:"+10% coins" },
-  scorpion_familiar:   { xpPct:8, label:"+8% XP" },
-  bloodplate:          { xpPct:8, energySave:2, label:"+8% XP, -2 energy" },
-  starcaller_staff:    { xpPct:16, label:"+16% XP" },
-  seraph_wings:        { xpPct:10, coinPct:8, label:"+10% XP, +8% coins" },
-  frost_wyrmling:      { coinPct:14, label:"+14% coins" },
-  voidblade:           { xpPct:24, label:"+24% XP" },
-  bulwark_eternal:     { energySave:5, xpPct:8, label:"-5 energy, +8% XP" },
-  eternal_stag:        { coinPct:30, label:"+30% coins" },
-  trident_of_tides:    { coinPct:26, label:"+26% coins" },
-  solar_phoenix:       { xpPct:20, label:"+20% XP" },
-  monk_s_wraps:        { xpPct:7, energySave:1, label:"+7% XP, -1 energy" },
-  catalyst_flask:      { xpPct:6, coinPct:4, label:"+6% XP, +4% coins" },
-  sentinel_buckler:    { energySave:3, label:"-3 energy cost" },
-  shadowglass_hood:    { xpPct:10, label:"+10% XP" },
-  transmuter_s_mantle: { coinPct:12, label:"+12% coins" },
-  guardian_pauldron:   { energySave:4, label:"-4 energy cost" },
-  jade_cloud_drake:    { xpPct:14, coinPct:10, label:"+14% XP, +10% coins" },
-  neon_kitsune:        { xpPct:12, coinPct:12, label:"+12% XP, +12% coins" },
-  chrome_rhino:        { energySave:3, coinPct:8, label:"-3 energy, +8% coins" },
-  moon_moth_glider:    { xpPct:7, label:"+7% XP" },
-  reef_shark_saddle:   { coinPct:11, label:"+11% coins" },
-  amber_raptor:        { xpPct:8, label:"+8% XP" },
-  glass_jelly_wisp:    { energySave:3, label:"-3 energy cost" },
-  prism_parrot:        { xpPct:6, label:"+6% XP" },
-  little_watcher:      { xpPct:13, label:"+13% XP" },
-  focus_reliquary:     { xpPct:15, energySave:2, label:"+15% XP, -2 energy" },
-  luck_prism:          { coinPct:24, label:"+24% coins" },
-  eclipse_blade:       { xpPct:24, coinPct:8, label:"+24% XP, +8% coins" },
-  session_archivist_s_codex: { xpPct:7, label:"+7% XP" },
-  offline_runner_coat: { energySave:3, label:"-3 energy cost" },
-  pitymeter_wand:      { xpPct:11, label:"+11% XP" },
-  syncfinder_compass:  { coinPct:13, label:"+13% coins" },
-  highland_ibex:       { energySave:2, coinPct:6, label:"-2 energy, +6% coins" },
-  river_otter_squire:  { coinPct:7, label:"+7% coins" },
-  battery_ward:        { energySave:5, label:"-5 energy cost" },
-  crown_of_deep_work:  { xpPct:18, label:"+18% XP" },
-  azure_focus_drake:   { xpPct:16, coinPct:8, label:"+16% XP, +8% coins" },
-  archive_owl:         { xpPct:14, label:"+14% XP" },
-  no_signal_saber:     { xpPct:26, energySave:2, label:"+26% XP, -2 energy" },
-  aurora_kitsune:      { xpPct:20, coinPct:14, label:"+20% XP, +14% coins" }
-};
+/* Equipment changes combat and route speed only. Catalog derivation leaves
+   owned items, stored affixes and all historical rewards untouched. */
+const GEAR_EFFECTS = Object.fromEntries(LOOT_TABLE.filter(item=>EQUIP_SLOTS.includes(item[4])).map(item=>{
+  const rank=({common:1,uncommon:2,rare:3,epic:4,legendary:5,mythic:6})[item[2]]||1;
+  const slot=item[4], value=2+rank*2;
+  const fx=slot==="weapon"?{dmgPhys:value,label:`+${value} physical damage`}
+    :slot==="helmet"?{resElem:value,label:`+${value} elemental guard`}
+    :slot==="armor"?{resPhys:value,label:`+${value} physical guard`}
+    :slot==="pet"?{critPct:rank+1,label:`+${rank+1}% critical chance`}
+    :{travelSpeedPct:4+rank*3,label:`+${4+rank*3}% Travel route speed`};
+  return [lootId(item),fx];
+}));
 /* v9.5: item sets — equip multiple pieces for escalating bonuses (RPG-standard). */
 const ITEM_SETS = {
-  scholar:  { name:"Scholar's Regalia", items:["scholar_s_quill","scholar_s_spectacles","scholar_s_robe"], bonuses:{2:{xpPct:4,label:"+4% XP"},3:{xpPct:10,label:"+10% XP"}} },
-  treasure: { name:"Treasure Hunter",   items:["prospector_s_pick","lucky_hood","coinweave_vest"],       bonuses:{2:{coinPct:6,label:"+6% coins"},3:{coinPct:14,label:"+14% coins"}} },
-  marathon: { name:"Marathoner's Kit",  items:["pacer_s_drum","endurance_crown","trailguard_greaves"],   bonuses:{2:{energySave:2,label:"-2 energy"},3:{energySave:4,xpPct:5,label:"-4 energy, +5% XP"}} },
-  berserker:{ name:"Berserker's Wrath", items:["berserker_s_axe","warhelm","bloodplate"], bonuses:{2:{xpPct:5,label:"+5% XP"},3:{xpPct:12,energySave:2,label:"+12% XP, -2 energy"}} },
-  tycoon:   { name:"Tycoon's Hoard",    items:["golden_scepter","crown_of_coins","velvet_mantle"], bonuses:{2:{coinPct:7,label:"+7% coins"},3:{coinPct:16,label:"+16% coins"}} }
+  scholar:  { name:"Scholar's Regalia", items:["scholar_s_quill","scholar_s_spectacles","scholar_s_robe"], bonuses:{2:{dmgPhys:4,label:"+4 physical damage"},3:{resPhys:8,dmgPhys:6,label:"+8 guard, +6 physical damage"}} },
+  treasure: { name:"Treasure Hunter",   items:["prospector_s_pick","lucky_hood","coinweave_vest"],       bonuses:{2:{dmgPhys:4,label:"+4 physical damage"},3:{resPhys:8,dmgPhys:6,label:"+8 guard, +6 physical damage"}} },
+  marathon: { name:"Marathoner's Kit",  items:["pacer_s_drum","endurance_crown","trailguard_greaves"],   bonuses:{2:{dmgPhys:4,label:"+4 physical damage"},3:{resPhys:8,dmgPhys:6,label:"+8 guard, +6 physical damage"}} },
+  berserker:{ name:"Berserker's Wrath", items:["berserker_s_axe","warhelm","bloodplate"], bonuses:{2:{dmgPhys:4,label:"+4 physical damage"},3:{resPhys:8,dmgPhys:6,label:"+8 guard, +6 physical damage"}} },
+  tycoon:   { name:"Tycoon's Hoard",    items:["golden_scepter","crown_of_coins","velvet_mantle"], bonuses:{2:{dmgPhys:4,label:"+4 physical damage"},3:{resPhys:8,dmgPhys:6,label:"+8 guard, +6 physical damage"}} }
 };
 const ACHIEVEMENTS = [
   ["first_focus","First Focus","Complete 1 focus session","🥇",{sessions:1}],
@@ -11015,59 +10915,12 @@ function characterItemModelSvg(slot,descriptor){
   return art?`<svg class="character-item-model" viewBox="0 0 216 216" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${escapeHtml(descriptor.name||slot)} model">${art}</svg>`:"";
 }
 function equippedStats(hero=state?.hero){
-  const totals = { xpPct:0, coinPct:0, energySave:0, effects:[] };
-  const equipped = (hero && hero.equipped) || {};
-  for (const slot of EQUIP_SLOTS){
-    const row=equipped[slot],id=row?.lootId;
-    const resolvedMount=slot==="mount"?resolveCharacterMount(row):null;
-    /* A Stable mount owns one authoritative effect. Prefer that effect over a
-       same-id legacy registry entry so it can never be counted twice. */
-    const fx=slot==="mount"?(resolvedMount?.effect||row?.effect||(id&&GEAR_EFFECTS[id])):(id&&GEAR_EFFECTS[id]);
-    if (!fx) continue;
-    totals.xpPct += fx.xpPct || 0;
-    totals.coinPct += fx.coinPct || 0;
-    totals.energySave += fx.energySave || 0;
-    totals.effects.push(fx.label);
-  }
-  /* v9.5: item-set bonuses */
-  totals.sets = [];
-  try {
-    const equippedIds = EQUIP_SLOTS.map(sl=>equipped[sl]&&equipped[sl].lootId).filter(Boolean);
-    for (const key in ITEM_SETS){
-      const set = ITEM_SETS[key];
-      const n = set.items.filter(id=>equippedIds.includes(id)).length;
-      let applied=null;
-      Object.keys(set.bonuses).map(Number).sort((a,b)=>a-b).forEach(tier=>{ if(n>=tier) applied=set.bonuses[tier]; });
-      if (applied){
-        totals.xpPct += applied.xpPct||0;
-        totals.coinPct += applied.coinPct||0;
-        totals.energySave += applied.energySave||0;
-        totals.effects.push(set.name+": "+applied.label);
-      }
-      if (n>0) totals.sets.push({ key, name:set.name, count:n, max:set.items.length, bonus:applied?applied.label:null });
-    }
-  } catch(_){}
-  totals.energySave = Math.min(9, totals.energySave);
-  /* v10.45: GEAR DOES NOT PAY XP OR COINS.
-
-     Equipped gear was quietly multiplying every XP and coin reward. That was
-     never the intent: gear is meant to help you fight - you earn it in a world
-     by beating enemies and bosses, and it is what lets you push further into
-     the next one. Mounts make you travel faster. None of that should touch the
-     rate at which focused time converts into progress, because the hours are
-     supposed to be the thing that earns.
-
-     Zeroed at the source rather than at each consumer, so the number shown on
-     an item and the number actually applied can never drift apart. The raw
-     per-item data in GEAR_EFFECTS is untouched, so combat can read it and this
-     is one line to reverse. */
-  totals.rewardPerksRetired = { xpPct: totals.xpPct, coinPct: totals.coinPct };
-  totals.xpPct = 0;
-  totals.coinPct = 0;
-  return totals;
+  /* Kept as the reward-engine contract: equipment cannot multiply earnings or
+     discount session energy. Combat reads its own bounded loadout profile. */
+  return {xpPct:0,coinPct:0,energySave:0,effects:[],sets:[]};
 }
 function gearEffectText(id){
-  return resolveCharacterMount(id)?.effect?.label || GEAR_EFFECTS[id]?.label || "Cosmetic";
+  return resolveCharacterMount(id)?.effect?.label || GEAR_EFFECTS[id]?.label || window.fhLootPurposeClassify?.(id)?.effectSummary || "Collection item";
 }
 function ensureEquippedShape(){
   if (!state.hero.equipped || typeof state.hero.equipped !== "object" || Array.isArray(state.hero.equipped)){
@@ -23625,7 +23478,7 @@ async function runSmokeTests(){
     renderAvatar();
     const mounted = document.querySelector("#avatar svg.fh-pixel-avatar[data-avatar-version='pixel-v1'][data-weapon='dualblade'][data-mount='wolf_reins'][data-mounted='1']");
     add("v10.45: gear equips and displays, and pays no XP or coins",
-        stats.xpPct === 0 && stats.coinPct === 0 && rewardsUnaffected && !!mounted);
+        stats.xpPct === 0 && stats.coinPct === 0 && stats.energySave === 0 && rewardsUnaffected && !!mounted);
     state = snap; saveState(); renderAll();
   }
   {

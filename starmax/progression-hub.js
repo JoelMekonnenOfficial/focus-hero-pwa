@@ -136,6 +136,12 @@
     var selectedUnlocked = !!world.unlockedZones[selectedId];
     var selectedActive = world.currentZone === selectedId;
     var shardCount = Math.max(0, s().crystalShards|0);
+    var journey = window.wdJourneyStatus(s(),world.currentZone);
+    var nextZone = journey.nextZone && zones[journey.nextZone];
+    var speed = window.fhGearUtilityCompute ? window.fhGearUtilityCompute(s(),{action:"Travel"}).travel.speedPct : 0;
+    var routeCopy = !nextZone ? "Final world reached. Keep challenging its enemies and bosses."
+      : journey.nextUnlocked ? nextZone.label + " is open. Select it below to continue."
+      : "Route to " + nextZone.label + ": " + Math.min(journey.enemyTarget,journey.enemyWins) + "/" + journey.enemyTarget + " enemy victories · boss " + (journey.bossDefeated ? "defeated" : "waiting") + " · " + Math.min(journey.distanceTarget,journey.distance).toFixed(1) + "/" + journey.distanceTarget + " Travel distance.";
     var unlockedCount = zoneIds.filter(function(id){ return !!world.unlockedZones[id]; }).length;
     var roster = typeof window.wdEnemiesForZone === "function" ? window.wdEnemiesForZone(selectedId) : [];
     var bosses = roster.filter(function(enemy){ return !!enemy.boss; });
@@ -143,13 +149,14 @@
     var bossName = bosses.length ? bosses[0].name : "Regional apex";
     var mark = String(current && current.label || "World").split(/\s+/).map(function(word){ return word.charAt(0); }).join("").slice(0,2).toUpperCase();
     root.innerHTML = '<div class="world-command">'+
-      '<div><div class="hub-kicker">Adventure command</div><h3 class="hub-title">World</h3><p class="hub-copy">The selected zone controls optional Fight encounters. Travel, Hunt, Craft, Loot, Meditate, and every other action remain peaceful.</p></div>'+
+      '<div><div class="hub-kicker">Adventure command</div><h3 class="hub-title">World</h3><p class="hub-copy">Fight earns regional gear and clears the next route. Defeat five enemies and the regional boss, then complete the route with Travel. Other actions remain peaceful.</p></div>'+
       '<section class="world-command-hero" style="--zone:'+esc(current && current.tint || "#64748b")+'" aria-label="'+esc(current && current.label || "Current zone")+' briefing">'+
         '<div class="world-command-top"><div class="world-command-title"><span class="world-zone-mark" aria-hidden="true">'+esc(mark)+'</span><div><h3>'+esc(current && current.label || "Verdant Vale")+'</h3><p>'+esc(current && current.lore || "")+'</p></div></div>'+
         '<div class="world-command-status"><b>'+(selectedActive ? "Active Fight zone" : selectedUnlocked ? "Unlocked preview" : "Locked preview")+'</b><span>'+shardCount.toLocaleString()+' World Shards available</span></div></div>'+
         '<div class="world-command-metrics"><div><b>'+unlockedCount+' / '+zoneIds.length+'</b><span>Zones unlocked</span></div><div><b>'+regular.length+'</b><span>Encounter types</span></div><div><b>'+esc(bossName)+'</b><span>90m Fight boss</span></div><div><b>'+Math.max(0,world.bossesDefeated|0)+'</b><span>Bosses defeated</span></div></div>'+
       '</section>'+
-      '<div class="world-loop" aria-label="World gameplay loop"><div class="world-loop-step"><b>1 · Choose a zone</b><span>Preview its roster, boss, mounts, and loot signals.</span></div><div class="world-loop-step"><b>2 · Start Fight</b><span>Only the explicit Fight action activates combat.</span></div><div class="world-loop-step"><b>3 · Build your loadout</b><span>Gear and mount utility shape the encounter outcome.</span></div><div class="world-loop-step"><b>4 · Claim progression</b><span>Earn drops and one-time boss World Shards.</span></div></div>'+
+      '<div class="world-command-hero" aria-label="Current world route"><h3>'+esc(routeCopy)+'</h3><p>Travel adds one distance per focused minute after the route is cleared. '+(speed ? 'Your mount adds '+speed+'% route speed.' : 'Equip a mount to cover the route faster.')+' Focus minutes, XP and coins stay the same.</p></div>'+
+      '<div class="world-loop" aria-label="World gameplay loop"><div class="world-loop-step"><b>1 · Choose a zone</b><span>Preview its roster, boss, mounts, and loot signals.</span></div><div class="world-loop-step"><b>2 · Start Fight</b><span>Only the explicit Fight action activates combat.</span></div><div class="world-loop-step"><b>3 · Build your loadout</b><span>Win equipment from this world and use its combat stats.</span></div><div class="world-loop-step"><b>4 · Claim progression</b><span>Five enemy victories and a boss clear the next Travel route.</span></div></div>'+
       '<nav class="world-route" aria-label="Zone route">'+zoneIds.map(function(id, index){
         var zone = zones[id], unlocked = !!world.unlockedZones[id], preview = selectedId === id;
         return '<button type="button" class="world-route-node'+(unlocked?" unlocked":" locked")+(preview?" preview":"")+'" data-zone-preview="'+esc(id)+'" style="--zone:'+esc(zone.tint || "#64748b")+'" aria-pressed="'+(preview?"true":"false")+'"><span>'+(index+1)+'</span><b>'+esc(zone.label)+'</b></button>';
@@ -162,11 +169,14 @@
         var zoneBoss = zoneRoster.filter(function(enemy){ return !!enemy.boss; })[0];
         var zoneEnemies = zoneRoster.filter(function(enemy){ return !enemy.boss; }).slice(0,3).map(function(enemy){ return enemy.name; });
         var zoneMounts = (zone.mountBias || []).map(prettyId);
-        var zoneLoot = (zone.lootBias || []).map(prettyId);
-        var action = active ? '<button class="w85-zone-btn" disabled>Active Fight zone</button>'
-          : unlocked ? '<button class="w85-zone-btn" data-zone-switch="'+esc(id)+'">Set as Fight zone</button>'
-          : '<button class="w85-zone-btn" data-zone-unlock="'+esc(id)+'"'+(!hasMap && shardCount < cost ? ' disabled title="Need '+cost+' World Shards"' : '')+'>'+(hasMap ? "Use map to unlock" : "Unlock · "+cost+" World Shards")+'</button>';
-        return '<article class="w85-zone-card'+(unlocked?"":" locked")+(active?" current":"")+'" style="--zone:'+esc(zone.tint || "#64748b")+'"><div class="w85-zone-head"><div class="w85-zone-title"><span class="w85-zone-dot" aria-hidden="true"></span><span class="w85-zone-name">'+esc(zone.label)+'</span></div><span class="w85-zone-state">'+(active?"Active":unlocked?"Unlocked":"Locked")+'</span></div><div class="w85-zone-lore">'+esc(zone.lore)+'</div><div class="w85-zone-intel"><div><b>Fight roster</b><span>'+esc(zoneEnemies.join(" · ") || "Regional encounters")+'</span></div><div><b>Regional boss</b><span>'+esc(zoneBoss && zoneBoss.name || "90-minute apex")+'</span></div><div><b>Mount families</b><span>'+esc(zoneMounts.join(" · ") || "Regional")+'</span></div><div><b>Loot signals</b><span>'+esc(zoneLoot.join(" · ") || "Mixed drops")+'</span></div></div><div class="w85-zone-meta"><span>'+(unlocked?"Ready for travel":hasMap?"Map owned":cost+" World Shards")+'</span><span>'+zoneRoster.length+' total encounters</span></div><div class="w85-zone-actions"><button type="button" class="w85-zone-preview" data-zone-preview="'+esc(id)+'">Briefing</button>'+action+'</div></article>';
+        var zoneLoot = window.wdGearForZone(id).slice(-4).map(prettyId);
+        var previous = zoneIds[zoneIds.indexOf(id)-1];
+        var incoming = previous ? window.wdJourneyStatus(s(),previous) : null;
+        var requirement = incoming ? "From " + zones[previous].label + ": 5 enemy wins, a boss win, then 60 Travel distance" : "Starting world";
+        var action = active ? '<button class="w85-zone-btn" disabled>Current world</button>'
+          : unlocked ? '<button class="w85-zone-btn" data-zone-switch="'+esc(id)+'">Enter world</button>'
+          : '<button class="w85-zone-btn" data-zone-unlock="'+esc(id)+'"'+(!incoming || !incoming.ready ? ' disabled' : '')+'>Complete the route</button>';
+        return '<article class="w85-zone-card'+(unlocked?"":" locked")+(active?" current":"")+'" style="--zone:'+esc(zone.tint || "#64748b")+'"><div class="w85-zone-head"><div class="w85-zone-title"><span class="w85-zone-dot" aria-hidden="true"></span><span class="w85-zone-name">'+esc(zone.label)+'</span></div><span class="w85-zone-state">'+(active?"Active":unlocked?"Unlocked":"Locked")+'</span></div><div class="w85-zone-lore">'+esc(zone.lore)+'</div><div class="w85-zone-intel"><div><b>Fight roster</b><span>'+esc(zoneEnemies.join(" · ") || "Regional encounters")+'</span></div><div><b>Regional boss</b><span>'+esc(zoneBoss && zoneBoss.name || "90-minute apex")+'</span></div><div><b>Mount families</b><span>'+esc(zoneMounts.join(" · ") || "Regional")+'</span></div><div><b>Loot signals</b><span>'+esc(zoneLoot.join(" · ") || "Mixed drops")+'</span></div></div><div class="w85-zone-meta"><span>'+(unlocked?"Route open":esc(requirement))+'</span><span>'+zoneRoster.length+' total encounters</span></div><div class="w85-zone-actions"><button type="button" class="w85-zone-preview" data-zone-preview="'+esc(id)+'">Briefing</button>'+action+'</div></article>';
       }).join("")+'</div></div>';
     root.onclick = function(event){
       var unlock = event.target.closest("[data-zone-unlock]");
@@ -177,11 +187,11 @@
         renderWorld();
       } else if (unlock){
         var result = window.wdUnlockZone(s(), unlock.dataset.zoneUnlock);
-        if (result && result.ok){ worldPreviewZone = unlock.dataset.zoneUnlock; save(); say("Zone unlocked"+(result.spent ? " · "+result.spent+" World Shards" : " with your map"), "good"); refresh(); }
-        else say(result && result.reason === "insufficient_shards" ? "Not enough World Shards yet." : "That zone could not be unlocked.", "warn");
+        if (result && result.ok){ worldPreviewZone = unlock.dataset.zoneUnlock; save(); say("World unlocked", "good"); refresh(); }
+        else say("Clear the previous world and complete its Travel route first.", "warn");
       } else if (change){
         var moved = window.wdSwitchZone(s(), change.dataset.zoneSwitch);
-        if (moved && moved.ok){ worldPreviewZone = change.dataset.zoneSwitch; save(); say("Fight zone changed.", "good"); refresh(); }
+        if (moved && moved.ok){ worldPreviewZone = change.dataset.zoneSwitch; save(); say("Current world changed.", "good"); refresh(); }
       }
     };
   }

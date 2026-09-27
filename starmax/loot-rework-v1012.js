@@ -29,7 +29,7 @@
   var LR_RARITIES = ["common","uncommon","rare","epic","legendary","mythic"];
   var LR_DROP_LOG_CAP = 200;
   var LR_BATTLE_REPORT_CAP = 30;
-  var LR_SESSION_REWARD_POLICY_VERSION = 3;
+  var LR_SESSION_REWARD_POLICY_VERSION = 4;
   var LR_SESSION_REWARD_DETAIL_CAP = 64;
   var LR_SESSION_REWARD_TOMBSTONE_CAP = 2048;
   var LR_SESSION_REWARD_STORAGE_BYTE_CAP = 512 * 1024;
@@ -105,9 +105,11 @@
 
   /* Affix definitions — 12 stat lines that can roll on gear. */
   var LR_AFFIX_DEFS = {
-    xpPct:      { label:"+{n}% XP",           minor:[2,4],  major:[5,9],  grand:[10,15], kind:"util" },
-    coinPct:    { label:"+{n}% Coins",        minor:[2,4],  major:[5,9],  grand:[10,15], kind:"util" },
-    energySave: { label:"-{n} Energy Cost",   minor:[1,1],  major:[2,2],  grand:[3,3],   kind:"util" },
+    xpPct:      { retired:true, label:"Retired XP perk (inactive)",           minor:[2,4],  major:[5,9],  grand:[10,15], kind:"util" },
+    coinPct:    { retired:true, label:"Retired coin perk (inactive)",        minor:[2,4],  major:[5,9],  grand:[10,15], kind:"util" },
+    energySave: { retired:true, label:"Retired energy perk (inactive)",   minor:[1,1],  major:[2,2],  grand:[3,3],   kind:"util" },
+    dmgPhys:    { label:"+{n} Physical Damage", minor:[3,5], major:[6,10], grand:[11,16], kind:"offense" },
+    travelSpeedPct:{ label:"+{n}% Travel route speed", fixedOnly:true },
     critPct:    { label:"+{n}% Crit",         minor:[3,5],  major:[6,10], grand:[11,16], kind:"offense" },
     dmgFire:    { label:"+{n} Fire Damage",   minor:[4,7],  major:[8,14], grand:[15,22], kind:"elem" },
     dmgFrost:   { label:"+{n} Frost Damage",  minor:[4,7],  major:[8,14], grand:[15,22], kind:"elem" },
@@ -146,8 +148,8 @@
     gem_poison:  { name:"Emerald",  sym:"🟢", affixId:"dmgPoison", value:6 },
     gem_resPhys: { name:"Onyx",     sym:"⬛", affixId:"resPhys",   value:6 },
     gem_resElem: { name:"Pearl",    sym:"⚪", affixId:"resElem",   value:6 },
-    gem_xp:      { name:"Citrine",  sym:"🟡", affixId:"xpPct",     value:3 },
-    gem_coin:    { name:"Sunstone", sym:"🟠", affixId:"coinPct",   value:3 }
+    gem_xp:      { name:"Citrine",  sym:"🟡", affixId:"critPct",   value:3 },
+    gem_coin:    { name:"Sunstone", sym:"🟠", affixId:"resPhys",   value:3 }
   };
 
   var LR_DYE_DEFS = {
@@ -225,9 +227,8 @@
   function lrBaselineAffix(templateId){
     var fx = window.GEAR_EFFECTS && window.GEAR_EFFECTS[templateId];
     if (!fx) return null;
-    if (fx.xpPct)      return { id:"xpPct",      tier:"major", value:fx.xpPct,      fixed:true };
-    if (fx.coinPct)    return { id:"coinPct",    tier:"major", value:fx.coinPct,    fixed:true };
-    if (fx.energySave) return { id:"energySave", tier:"major", value:fx.energySave, fixed:true };
+    var keys = ["dmgPhys","resPhys","resElem","critPct","travelSpeedPct"];
+    for (var i=0;i<keys.length;i++) if (fx[keys[i]]) return {id:keys[i],tier:"major",value:fx[keys[i]],fixed:true};
     return null;
   }
 
@@ -639,7 +640,7 @@
   }
 
   function lrValidateRewardSnapshotSchema(sessionId, snapshot, policyVersion){
-    if (policyVersion !== LR_SESSION_REWARD_POLICY_VERSION) return;
+    if (policyVersion < 3) return;
     if (Object.prototype.hasOwnProperty.call(snapshot, "encounters")){
       throw new Error("Verbose encounter history is forbidden in session reward receipt " + sessionId);
     }
@@ -682,7 +683,7 @@
       throw new Error("Invalid session reward receipt for " + sessionId);
     }
     var policyVersion = Number(raw.policyVersion);
-    if (!Number.isInteger(policyVersion) || (policyVersion !== 1 && policyVersion !== 2 && policyVersion !== LR_SESSION_REWARD_POLICY_VERSION)){
+    if (!Number.isInteger(policyVersion) || (policyVersion !== 1 && policyVersion !== 2 && policyVersion !== 3 && policyVersion !== LR_SESSION_REWARD_POLICY_VERSION)){
       throw new Error("Unsupported session reward receipt policy for " + sessionId);
     }
     if (!raw.rewardSnapshot || typeof raw.rewardSnapshot !== "object" || Array.isArray(raw.rewardSnapshot)){
@@ -713,7 +714,7 @@
       throw new Error("Session reward receipt content mismatch for " + sessionId);
     }
     var expectedSemantic = lrRewardSemanticCommitment(sessionId, action, minutes, policyVersion);
-    if (policyVersion === LR_SESSION_REWARD_POLICY_VERSION &&
+    if (policyVersion >= 3 &&
         (typeof raw.semanticCommitment !== "string" || raw.semanticCommitment !== expectedSemantic)){
       throw new Error("Session reward receipt semantic commitment mismatch for " + sessionId);
     }
@@ -735,7 +736,7 @@
       throw new Error("Invalid session reward tombstone for " + sessionId);
     }
     var policyVersion = Number(raw.policyVersion);
-    if (!Number.isInteger(policyVersion) || (policyVersion !== 1 && policyVersion !== 2 && policyVersion !== LR_SESSION_REWARD_POLICY_VERSION)){
+    if (!Number.isInteger(policyVersion) || (policyVersion !== 1 && policyVersion !== 2 && policyVersion !== 3 && policyVersion !== LR_SESSION_REWARD_POLICY_VERSION)){
       throw new Error("Unsupported session reward tombstone policy for " + sessionId);
     }
     if (typeof raw.semanticCommitment !== "string" || !/^sha256:[0-9a-f]{64}$/.test(raw.semanticCommitment)){
@@ -1011,27 +1012,34 @@
     return out;
   }
 
-  function lrEligibleTemplates(action, minutes){
+  function lrEligibleTemplates(action, minutes, sourceState, zoneId){
     action = (window.FH_GAMEPLAY_CONTROLS && typeof window.FH_GAMEPLAY_CONTROLS.rewardSourceForAction === "function")
       ? window.FH_GAMEPLAY_CONTROLS.rewardSourceForAction(action)
       : action;
     var allowed = _allowedRaritiesForMinutes(minutes);
     var TABLE = _LOOT_TABLE() || [];
+    var source = sourceState || _state() || {};
+    var region = typeof window.wdGearForZone === "function" ? window.wdGearForZone(zoneId || source.world && source.world.currentZone) : null;
     return TABLE.filter(function(it){
       if (!allowed.has(it[2])) return false;
+      if (_isEquippableSlot(_lootSlot(it))) {
+        if (action !== "Fight") return false;
+        return !region || region.indexOf(_lootId(it)) >= 0;
+      }
+      if (action === "Fight") return false;
       var sources = lrTemplateSources(_lootId(it));
       return sources.indexOf(action) >= 0;
     });
   }
 
-  function lrPickTemplateInRarity(action, rarity, minutes, rng){
-    var eligible = lrEligibleTemplates(action, minutes).filter(function(it){ return it[2] === rarity; });
+  function lrPickTemplateInRarity(action, rarity, minutes, rng, sourceState, zoneId){
+    var eligible = lrEligibleTemplates(action, minutes, sourceState, zoneId).filter(function(it){ return it[2] === rarity; });
     if (!eligible.length) return null;
     /* v9 dedup: don't hand back an item you already own until the rarity pool is
        exhausted. Draw only from UNOWNED eligible templates; once you own them all,
        fall back to the full pool (those dupes get auto-converted to materials in
        lrCommitDrop). Hearthstone-style "no dupes until the set is complete". */
-    var owned = (_state() && _state().lootOwned) || {};
+    var owned = ((sourceState || _state() || {}).lootOwned) || {};
     var unowned = eligible.filter(function(it){ return !((owned[_lootId(it)]|0) > 0); });
     var pool = unowned.length ? unowned : eligible;
     var total = 0;
@@ -1046,7 +1054,7 @@
 
   function lrRollAffix(rng, excludeIds){
     rng = rng || Math.random;
-    var candidates = Object.keys(LR_AFFIX_DEFS).filter(function(k){ return !excludeIds || !excludeIds.has(k); });
+    var candidates = Object.keys(LR_AFFIX_DEFS).filter(function(k){ return !LR_AFFIX_DEFS[k].retired && !LR_AFFIX_DEFS[k].fixedOnly && (!excludeIds || !excludeIds.has(k)); });
     if (!candidates.length) return null;
     var id = candidates[Math.floor(rng() * candidates.length)];
     var def = LR_AFFIX_DEFS[id];
@@ -1098,6 +1106,7 @@
     var affs = instance.affixes || [];
     for (var i=0; i<affs.length; i++){
       var a = affs[i];
+      if (!a || (LR_AFFIX_DEFS[a.id] && LR_AFFIX_DEFS[a.id].retired)) continue;
       out[a.id] = (out[a.id] || 0) + Math.max(1, Math.floor(a.value * mult));
     }
     var socks = instance.sockets || [];
@@ -1111,8 +1120,8 @@
     return out;
   }
 
-  function lrEquippedStats(hero){
-    var s = _state();
+  function lrEquippedStats(hero, sourceState){
+    var s = sourceState || _state();
     hero = hero || (s && s.hero);
     var totals = {};
     if (!hero || !hero.equipped) return totals;
@@ -1437,6 +1446,7 @@
   function lrRollDropForEncounter(s, action, minutes, enemyRow, outcome, rng, utilityCtx){
     s = lrEnsureShape(s || _state());
     rng = rng || Math.random;
+    var zoneId = utilityCtx && utilityCtx.zoneId || (s.world && s.world.currentZone) || "verdant_vale";
     var bias = LR_OUTCOME_BIAS[outcome] || 1.0;
     if (bias <= 0) return null;
     var weights = lrRarityWeightsForAction(action, s.loot.pity);
@@ -1463,10 +1473,11 @@
     for (var gi=0; gi<LR_RARITIES.length; gi++) sum += Math.max(0, biased[LR_RARITIES[gi]] || 0);
     if (sum > 0) for (var j=0; j<LR_RARITIES.length; j++) biased[LR_RARITIES[j]] /= sum;
     var allowed = _allowedRaritiesForMinutes(minutes);
+    var regional = action === "Fight" ? lrEligibleTemplates(action, minutes, s, zoneId) : null;
     var sum2 = 0;
     for (var k=0; k<LR_RARITIES.length; k++){
       var rr = LR_RARITIES[k];
-      if (!allowed.has(rr)) biased[rr] = 0;
+      if (!allowed.has(rr) || (regional && !regional.some(function(item){ return item[2] === rr; }))) biased[rr] = 0;
       sum2 += biased[rr];
     }
     if (sum2 <= 0) return null;
@@ -1486,7 +1497,7 @@
       var pool = LR_MONSTER_DROPS[enemyRow[1]];
       var matching = Object.keys(pool).filter(function(id){
         var t = _lootById(id);
-        return t && t[2] === rarity;
+        return t && t[2] === rarity && lrEligibleTemplates(action, minutes, s, zoneId).indexOf(t) >= 0;
       });
       var ownedMap = (s.lootOwned) || {};
       var matchingUnowned = matching.filter(function(id){ return !((ownedMap[id]|0) > 0); });
@@ -1501,7 +1512,7 @@
         }
       }
     }
-    if (!template) template = lrPickTemplateInRarity(action, rarity, minutes, rng);
+    if (!template) template = lrPickTemplateInRarity(action, rarity, minutes, rng, s, zoneId);
     if (!template) return null;
     return {
       rarity: rarity, template: template,
@@ -1525,7 +1536,7 @@
     var instance = lrMintInstance(template, {
       rng:ctx.rng,
       iid:ctx.instanceId || null,
-      source:{ kind:ctx.sourceKind||"drop", action:ctx.action, enemyId:ctx.enemyId }
+      source:{ kind:ctx.sourceKind||"drop", action:ctx.action, enemyId:ctx.enemyId, zoneId:ctx.zoneId || null }
     });
     s.lootInstances[instance.iid] = instance;
     s.lootOwned[templateId] = (s.lootOwned[templateId]|0) + 1;
@@ -1552,6 +1563,7 @@
       rarity: drop.rarity,
       sourceAction: ctx.action,
       enemyId: ctx.enemyId || null,
+      zoneId: ctx.zoneId || null,
       odds: {
         rolled: drop.odds.rolled,
         total: 1,
@@ -1639,7 +1651,7 @@
         minutes:minutes, eligibleRarities:allowed, entry:null, instance:null };
     }
     var entry = lrCommitDrop(s, drop, {
-      sessionId:sessionId, action:action, enemyId:null, outcome:"solid", rng:rng,
+      sessionId:sessionId, action:action, enemyId:null, zoneId:zoneId, outcome:"solid", rng:rng,
       sourceKind:"session-edit-threshold", editEntitlementId:entitlementId,
       editThreshold:threshold, earnedAtMinutes:threshold, rewardOrdinal:Math.max(0,[5,25,50,90,120].indexOf(threshold)), disableAutoSalvage:true,
       instanceId:lrStableId("iid", entitlementId + "|instance"),
@@ -1658,7 +1670,7 @@
     var minutes = Math.max(0, opts.minutes|0);
     var sessionId = opts.sessionId || ("sess_" + _now());
     var rng = opts.rng || lrSeededRng(lrHashStr(sessionId));
-    var heroStats = lrEquippedStats(s.hero);
+    var heroStats = lrEquippedStats(s.hero, s);
     if (typeof window.fhGearUtilityCombatStats === "function"){
       try {
         heroStats = window.fhGearUtilityCombatStats(heroStats, s, {
@@ -1674,7 +1686,12 @@
        quiet tracking source for hunt-tagged loot, not a mandatory animal fight. */
     var combatActions = { Fight:true };
     var isCombat = !!combatActions[action];
-    var zoneId = String((s.world && s.world.currentZone) || "verdant_vale");
+    var zoneId = String(opts.zoneId || (s.world && s.world.currentZone) || "verdant_vale");
+    if (window.WD_ZONES && !window.WD_ZONES[zoneId]) throw new Error("Unknown session world");
+    var journeyKey = "session:" + String(sessionId);
+    if (s.world && s.world.journeySessionRewards && Object.prototype.hasOwnProperty.call(s.world.journeySessionRewards, journeyKey)) {
+      return {encounters:[],drops:[],consumed:[],zoneId:zoneId,duplicate:true,boss:null};
+    }
     var bossEligible = isCombat && (
       typeof window.wdShouldSpawnBoss === "function"
         ? window.wdShouldSpawnBoss(minutes, action)
@@ -1767,20 +1784,21 @@
       runningHP = enc.heroHPEnd;
       encounters.push(enc);
       _recordEncounter(enc.enemy.id);
-      if (enc.outcome !== "whiff"){
+      if (enc.killed){
         (function tryRoll(rerollsLeft){
           var MS = _MONSTERS() || [];
           var enemyRow = null;
           for (var mi=0; mi<MS.length; mi++) if (MS[mi][1] === enc.enemy.id) { enemyRow = MS[mi]; break; }
           var d = lrRollDropForEncounter(s, action, minutes, enemyRow, enc.outcome, rng, {
             enabled:true,
+            zoneId:zoneId,
             sessionId:sessionId
           });
           if (d){
             var ordinal = drops.length;
             var idBase = String(sessionId) + "|drop|" + ordinal;
             var e = lrCommitDrop(s, d, {
-              sessionId:sessionId, action:action, enemyId:enc.enemy.id,
+              sessionId:sessionId, action:action, enemyId:enc.enemy.id, zoneId:zoneId,
               outcome:enc.outcome, rng:rng,
               instanceId:lrStableId("iid", idBase + "|instance"),
               dropId:lrStableId("drop", idBase + "|entry"),
@@ -1797,6 +1815,7 @@
     if (!isCombat && minutes > 0){
       var d = lrRollDropForEncounter(s, action, minutes, null, "solid", rng, {
         enabled:true,
+        zoneId:zoneId,
         sessionId:sessionId
       });
       if (d){
@@ -1840,7 +1859,11 @@
         bossResult = { eligible:true, duplicate:false, receipt:null, encounter:bossEncounter };
       }
     }
-    return { encounters:encounters, drops:drops, consumed:consumedLog, zoneId:zoneId, boss:bossResult, duplicate:false };
+    var journey = typeof window.wdRecordJourneySession === "function" ? window.wdRecordJourneySession(s,{
+      sessionId:sessionId,action:action,minutes:minutes,zoneId:zoneId,encounters:encounters
+    }) : null;
+    if (journey && journey.unlockedZone) _toast("Route complete: " + window.WD_ZONES[journey.unlockedZone].label + " unlocked", "good");
+    return { encounters:encounters, drops:drops, consumed:consumedLog, zoneId:zoneId, boss:bossResult, journey:journey, duplicate:false };
   }
 
   /* ---------- audio + visual ---------- */
@@ -1896,7 +1919,8 @@
 
   /* ---------- session-end loot pipeline ---------- */
 
-  function lrSessionEndLootPipeline(action, minutes, sessionId){
+  function lrSessionEndLootPipeline(action, minutes, sessionId, options){
+    options = options || {};
     var s = lrEnsureShape(_state());
     if (!s || !s.loot || !s.loot.drops){
       var legacy = window.rollLoot ? window.rollLoot(minutes) : null;
@@ -1942,7 +1966,7 @@
     }
     if (receiptKey) lrAssertSessionRewardCapacity(s, receiptKey, action, minutes);
     var rewardBefore = lrRewardCounterSnapshot(s);
-    var out = lrRunSessionCombat(s, { action:action, minutes:minutes, sessionId:sessionId });
+    var out = lrRunSessionCombat(s, { action:action, minutes:minutes, sessionId:sessionId, zoneId:options.zoneId });
     if (out.duplicate){
       return {
         legacyItem:null, drops:[], encounters:[], consumed:[],
@@ -2185,7 +2209,7 @@
       }).join("");
       return '<section class="forge-resource-guide" aria-label="Active loadout utility" style="gap:8px">' +
         '<b>Loadout utility / ' + _escapeHtml(summary.headline) + '</b>' +
-        '<span>Current action: <strong>' + _escapeHtml(action) + '</strong>. Totals below are active now. New combat, loot, and farm utility is hard-capped; existing XP, coin, and energy totals are reported exactly as the reward engine computes them. Recorded focus minutes never change.</span>' +
+        '<span>Current action: <strong>' + _escapeHtml(action) + '</strong>. Totals below are active now. Equipment improves combat and mounted Travel speed. It never changes XP, coins, session energy cost, loot quality, harvest yields, or recorded focus minutes.</span>' +
         '<div style="display:flex;flex-wrap:wrap;gap:5px">' + (rows || '<span class="muted">Equip gameplay gear to activate utility.</span>') + '</div>' +
         (planned ? '<div style="padding:6px 7px;border-left:3px solid #f59e0b;background:rgba(245,158,11,.08)"><b style="display:block;font-size:.68rem;color:#fde68a">Planned - not active</b>' + planned + '</div>' : '') +
         '<details' + (sources ? ' open' : '') + ' style="width:100%"><summary style="cursor:pointer;font-size:.74rem;font-weight:800;color:#e2e8f0">Exact item, mount, and set sources</summary>' +
@@ -2279,7 +2303,7 @@
         '<label style="display:grid;gap:4px;font-size:.72rem"><b>Relic I</b><select data-fh-utility-slot="relic1">' + lrUtilityOptionsHtml(s, "relic1", entries) + '</select></label>' +
         '<label style="display:grid;gap:4px;font-size:.72rem"><b>Relic II</b><select data-fh-utility-slot="relic2">' + lrUtilityOptionsHtml(s, "relic2", entries) + '</select></label>' +
       '</div>' +
-      '<div class="muted" style="font-size:.72rem;margin-top:6px">Only selected items apply. Effects are capped to optional Fight encounters, existing loot-roll quality, or explicit harvest yield; they never rewrite minutes, XP, or coins.</div>';
+      '<div class="muted" style="font-size:.72rem;margin-top:6px">Only selected items apply. Effects support optional Fight encounters. They never increase earnings, loot quality, harvest yields, or recorded minutes.</div>';
 
     var keyRows = entries.filter(function(entry){
       return entry && entry.kind === "key" && entry.action === "open_key_chest" &&
@@ -3045,7 +3069,7 @@
     // 5) Gate
     var elig30 = lrEligibleTemplates("Fight", 30);
     add("loot.gate: 30-min Fight has no legendary", !elig30.some(function(it){ return it[2] === "legendary"; }));
-    var elig120 = lrEligibleTemplates("Fight", 120);
+    var elig120 = lrEligibleTemplates("Fight", 120, {world:{currentZone:"astral_plains"}});
     add("loot.gate: 120-min Fight allows legendary+mythic",
         elig120.some(function(it){ return it[2] === "legendary"; }) &&
         elig120.some(function(it){ return it[2] === "mythic"; }));
@@ -3053,8 +3077,8 @@
     if (window.lootById){
       var inst = lrMintInstance(window.lootById("whetstone_blade"), { rng: lrSeededRng(42) });
       var baseline = inst.affixes.filter(function(a){ return a.fixed; })[0];
-      add("loot.mint: whetstone baseline is +5 xpPct fixed",
-          !!baseline && baseline.id === "xpPct" && baseline.value === 5);
+      add("loot.mint: whetstone baseline is +8 physical damage fixed",
+          !!baseline && baseline.id === "dmgPhys" && baseline.value === 8);
       // 7) Affix rarity caps
       var crown = lrMintInstance(window.lootById("crown_of_flow"), { rng: lrSeededRng(7) });
       add("loot.mint: legendary has 2 sockets", crown.sockets.length === 2);

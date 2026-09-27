@@ -291,14 +291,12 @@
         out.combat[key] = clamp(combat[key], 0, UTILITY_CAPS.combat[key]);
       }
     });
-    var loot = isObject(effect.loot) ? effect.loot : {};
-    if (Number(loot.qualityBiasPct) > 0) {
-      out.loot.qualityBiasPct = clamp(loot.qualityBiasPct, 0, UTILITY_CAPS.loot.qualityBiasPct);
-    }
-    var farm = isObject(effect.farm) ? effect.farm : {};
-    if (Number(farm.harvestYieldPct) > 0) {
-      out.farm.harvestYieldPct = clamp(farm.harvestYieldPct, 0, UTILITY_CAPS.farm.harvestYieldPct);
-    }
+    /* Carried charms/relics are equipment too. Retire their yield/rarity
+       perks prospectively and derive combat support without changing items. */
+    var quality = Number(effect.loot && effect.loot.qualityBiasPct) || 0;
+    var harvest = Number(effect.farm && effect.farm.harvestYieldPct) || 0;
+    if (quality > 0) out.combat.critPct = clamp((out.combat.critPct || 0) + quality, 0, UTILITY_CAPS.combat.critPct);
+    if (harvest > 0) out.combat.resPhys = clamp((out.combat.resPhys || 0) + harvest, 0, UTILITY_CAPS.combat.resPhys);
     return out;
   }
 
@@ -378,16 +376,10 @@
       status: "active",
       action: "utility_loadout",
       loadoutKind: loadoutKind,
-      role: generated.role,
+      role: "combat",
       effect: generated.effect,
       effectSummary: effectSummary(generated.effect),
-      purpose: (override && override.purpose) || (
-        generated.role === "loot"
-          ? "Biases an existing loot roll toward quality without adding a roll."
-          : generated.role === "farm"
-            ? "Improves yields when a planted crop is explicitly harvested."
-            : "Adds bounded utility during optional Fight encounters."
-      )
+      purpose: "Supports optional Fight encounters while equipped; no earnings or harvest bonus."
     };
   }
 
