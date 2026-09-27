@@ -104,7 +104,7 @@
   var PER_DAY_KIND_LIMIT = {
     quest_hit: 3, quest_late: 3,
     daily_hit: 3, weekly_hit: 3, seasonal_hit: 1, active_day: 1,
-    hardcore_milestone: 2
+    hardcore_milestone: 2, hardcore_day: 1
   };
   var MIN_COMMITMENT_MS = 4 * 3600 * 1000;
 
@@ -187,6 +187,8 @@
     weeklyHit:      70,
     seasonHit:     200,
     hardcoreFail: -200,
+    hardcoreDay:    20,
+    hardcoreFailMax: 50,
     idleDay:        -8
   };
   /* NO HARD CAP ON A DAY'S FOCUS. Asked directly why one existed, the honest
@@ -315,9 +317,8 @@
      Sessions are converted at 45 minutes each so the two requirement types sit
      on one scale instead of being judged by different rulers.
 
-     Only the reward is weighted. Losing a run costs the same whatever bar you
-     set, because the penalty is for breaking a promise, and a promise you made
-     harder for yourself should not also be more expensive to break. */
+     New daily rewards use the same weight. New failure costs are bounded at
+     twice a run's daily reward and at 50 RP, including for ongoing runs. */
   var HARDCORE_BASELINE_MIN   = 60;
   var MINUTES_PER_SESSION     = 45;
   var HARDCORE_WEIGHT_MIN     = 0.6;
@@ -334,6 +335,9 @@
     var raw = Math.sqrt(mins / HARDCORE_BASELINE_MIN);
     return clamp(Math.round(raw * 100) / 100, HARDCORE_WEIGHT_MIN, HARDCORE_WEIGHT_MAX);
   }
+
+  function hardcoreDailyRP(req){ return Math.round(RP.hardcoreDay * hardcoreWeight(req)); }
+  function hardcoreFailureRP(req){ return -Math.min(RP.hardcoreFailMax, 2 * hardcoreDailyRP(req)); }
 
   var HARDCORE_RECURRING_EVERY = 30;   /* after 100 days, one every month */
   var HARDCORE_RECURRING_RP    = 420;
@@ -427,7 +431,7 @@
   /* ------------------------------------------------------------- the store */
 
   function emptyLedger(){
-    return { version: VERSION, installedDay: null, installedAt: 0, events: {} };
+    return { version: VERSION, installedDay: null, installedAt: 0, events: {}, retractions: {} };
   }
 
   function normalizeEvent(raw){
@@ -467,13 +471,32 @@
          and an id that does not match its slot is no guarantee at all. */
       if (ev && ev.id === key) out.events[key] = ev;
     });
+    var retractions = raw.retractions;
+    if (retractions && typeof retractions === "object" && !Array.isArray(retractions)) {
+      Object.keys(retractions).forEach(function(id){
+        if (!/^hcf:/.test(id) || id.length > 120 || !Array.isArray(retractions[id])) return;
+        retractions[id].forEach(function(day){ if (isDay(day)) markRetraction(out, id, day); });
+      });
+    }
     return out;
+  }
+
+  function isRetracted(ledger, event){
+    return !!(ledger.retractions && ledger.retractions[event.id] && ledger.retractions[event.id].indexOf(event.day) !== -1);
+  }
+  function markRetraction(ledger, id, day){
+    if (!/^hcf:/.test(id) || !isDay(day)) return false;
+    var dates = ledger.retractions[id] || [];
+    if (dates.indexOf(day) !== -1) return false;
+    ledger.retractions[id] = dates.concat([day]).sort();
+    return true;
   }
 
   /* -------------------------------------------------------------- the fold */
 
   function sortedEvents(ledger){
     return Object.keys(ledger.events).map(function(k){ return ledger.events[k]; })
+      .filter(function(event){ return !isRetracted(ledger, event); })
       .sort(function(a,b){
         if (a.day !== b.day) return a.day < b.day ? -1 : 1;
         return a.id < b.id ? -1 : (a.id > b.id ? 1 : 0);
@@ -507,7 +530,7 @@
       while (i < events.length && events[i].day === day){ group.push(events[i]); i++; }
 
       var placement = scoredDays < PLACEMENT_DAYS;
-      var rawGain = 0, rawLoss = 0, exemptGain = 0;
+      var rawGain = 0, rawLoss = 0, exemptGain = 0, hardcoreLoss = 0, hardestMiss = null;
 
       /* Per-kind daily limits. Sorted by id so the same four of forty count on
          every device - "whichever ones this device happened to see first" is
@@ -527,10 +550,19 @@
           else if (ev.kind === "active_day") focusCredit += ev.delta;
           else if (DAY_SCALED_KINDS[ev.kind]) extras += ev.delta;
           else rawGain += ev.delta;
+        } else if (ev.kind === "hardcore_fail_v2") {
+          /* Parallel commitments share the day's work. Their new-policy
+             misses share one bounded daily cost as well. */
+          if (ev.delta < hardcoreLoss) {
+            if (hardestMiss) hardestMiss.counted = false;
+            hardestMiss = ev;
+            hardcoreLoss = ev.delta;
+          } else ev.counted = false;
         } else {
           rawLoss += ev.delta;
         }
       });
+      rawLoss += hardcoreLoss;
 
       /* The extras ceiling. Everything you ticked today is worth at most what
          today's focus was worth - see DAY_SCALED_KINDS above. The clipped
@@ -819,15 +851,28 @@
     var live = Array.isArray(hc.runs) ? hc.runs
              : (hc.active === true && hc.run ? [hc.run] : []);
     var past = Array.isArray(hc.history) ? hc.history : [];
+    var daily = Object.create(null);
 
     function milestones(run){
       if (!run || !run.id || !isDay(run.startDay)) return;
       var survived = Math.max(0, int(run.daysSurvived));
       var label = (run.requirement && run.requirement.label) ? run.requirement.label : "Hardcore";
       var weight = hardcoreWeight(run.requirement);
+      var earned = Array.isArray(run.rankEarnedDays) ? run.rankEarnedDays.filter(isDay).sort() : null;
+      if (earned && isDay(run.rankDailyFromDay)) earned.forEach(function(day){
+        if (day < run.rankDailyFromDay || day < creditGate || day >= todayKey()) return;
+        var value = hardcoreDailyRP(run.requirement);
+        if (!daily[day] || value > daily[day].delta) {
+          daily[day] = ev("hcday2:" + day, "hardcore_day", day, value,
+            "Hardcore day — strongest completed daily bar", false);
+        }
+      });
       HARDCORE_MILESTONES.forEach(function(m){
         if (survived < m.days) return;
-        var day = addDays(run.startDay, m.days);
+        /* Updated audits carry actual completed dates. Pauses and excuses
+           never advance this list; an open day cannot pay a milestone. Older
+           run summaries retain their original derivation for compatibility. */
+        var day = earned ? earned[m.days - 1] : addDays(run.startDay, m.days);
         if (!day || day < creditGate) return;
         var value = Math.round(m.rp * weight);
         out.push(ev("hcm:" + run.id + ":" + m.days, "hardcore_milestone", day, value,
@@ -845,9 +890,12 @@
       if (!isDay(run.missedDay)) return;
       if (run.missedDay < penaltyGate) return;
       var label = (run.requirement && run.requirement.label) ? run.requirement.label : "Hardcore";
-      out.push(ev("hcf:" + run.id, "hardcore_fail", run.missedDay, RP.hardcoreFail,
+      var fair = run.rankFailurePolicy === 2;
+      out.push(ev("hcf:" + run.id + (fair ? ":" + run.missedDay : ""), fair ? "hardcore_fail_v2" : "hardcore_fail", run.missedDay,
+                  fair ? hardcoreFailureRP(run.requirement) : RP.hardcoreFail,
                   "Hardcore run lost — missed " + label));
     });
+    Object.keys(daily).sort().forEach(function(day){ out.push(daily[day]); });
     return out;
   }
 
@@ -905,29 +953,15 @@
 
   /* ------------------------------------------------------- materialisation */
 
-  /* Union the derived candidates into the stored ledger. Append-only: an id
-     already present is left exactly as it is, so re-deriving is free and a
-     quest deleted after it was missed keeps its cost. */
-  /* v10.39: RETRACTING A MATERIALISED EVENT.
-
-     materialize only ever ADDS. An event whose source later disappears - the
-     run it was derived from leaving the archive, say - stays in the ledger
-     forever, because nothing ever looks back. That is right for earned RP: a
-     pruned log should never silently erase points you actually earned.
-
-     It is wrong for a PENALTY the owner has overturned. Putting a Hardcore run
-     back removes the missed day that justified the -200, so the charge has to
-     go with it; otherwise the run returns but the rank hit is permanent, which
-     is not a restoration, just a partial one.
-
-     Deliberately narrow: this removes one named event. It does not re-derive,
-     does not touch anything else, and callers name the exact id. */
+  /* A withdrawn failure retains its original event plus a dated receipt.
+     Unioning that receipt prevents stale peers from restoring the charge.
+     Historical event amounts are never repriced to the new policy. */
   function retract(s, eventId){
     if (!s || !eventId) return { changed:false };
     var ledger = normalizeLedger(s.fhRank);
     if (!ledger.events || !ledger.events[eventId]) return { changed:false };
     var removed = ledger.events[eventId];
-    delete ledger.events[eventId];
+    if (!markRetraction(ledger, eventId, removed.day)) return { changed:false, removed:removed };
     s.fhRank = ledger;
     return { changed:true, removed:removed };
   }
@@ -953,6 +987,23 @@
     }
 
     var added = 0;
+    /* Revivals carry durable evidence even if the penalty arrives later from
+       a stale peer. Preserve the original event and its exact amount; a
+       withdrawal suppresses that episode instead of minting positive RP. */
+    var hc = s.fh12Hardcore || {};
+    var runs = (Array.isArray(hc.runs) ? hc.runs : (hc.active && hc.run ? [hc.run] : [])).concat(hc.history || []);
+    runs.forEach(function(run){
+      (run.rankReversedFailures || []).forEach(function(row){
+        if (row && (row.id === "hcf:" + run.id || row.id === "hcf:" + run.id + ":" + row.day)) {
+          if (markRetraction(ledger, row.id, row.day)) changed = true;
+        }
+      });
+      /* An old client might charge the legacy id for a new-policy miss. Only
+         that exact day is superseded; earlier recorded penalties stay exact. */
+      if (run.rankFailurePolicy === 2 && isDay(run.missedDay)) {
+        if (markRetraction(ledger, "hcf:" + run.id, run.missedDay)) changed = true;
+      }
+    });
     var candidates = deriveAll(s);
     var truncated = false;
     var derivedIds = Object.create(null);
@@ -960,7 +1011,18 @@
       var cand = normalizeEvent(candidates[i]);
       if (!cand) continue;
       derivedIds[cand.id] = cand;
-      if (ledger.events[cand.id]) continue;
+      if (isRetracted(ledger, cand)) continue;
+      if (ledger.events[cand.id]) {
+        /* One date owns one daily award. A later stronger qualifying run
+           supplies only the difference; duplicate/easier runs supply zero. */
+        var previous = ledger.events[cand.id];
+        if (cand.kind === "hardcore_day" && /^hcday2:/.test(cand.id) &&
+            previous.kind === cand.kind && cand.delta > previous.delta) {
+          ledger.events[cand.id] = cand;
+          changed = true;
+        }
+        continue;
+      }
       if (Object.keys(ledger.events).length >= MAX_EVENTS) { truncated = true; break; }
       ledger.events[cand.id] = cand;
       added++; changed = true;
@@ -1057,11 +1119,19 @@
         var existing = out.events[id];
         if (!existing){ out.events[id] = clone(incoming); return; }
         if (JSON.stringify(existing) === JSON.stringify(incoming)) return;
+        if (/^hcday2:/.test(id) && incoming.kind === "hardcore_day" && existing.kind === "hardcore_day" &&
+            incoming.delta !== existing.delta) {
+          if (incoming.delta > existing.delta) out.events[id] = clone(incoming);
+          return;
+        }
         /* Divergent copies of one event: keep the lexicographically smaller
            serialisation. Arbitrary, but identical on both devices, which is
            the only property that matters - it converges instead of oscillating
            back and forth every time the two sync. */
         if (JSON.stringify(incoming) < JSON.stringify(existing)) out.events[id] = clone(incoming);
+      });
+      Object.keys(src.retractions).forEach(function(id){
+        src.retractions[id].forEach(function(day){ markRetraction(out, id, day); });
       });
     }
     take(a); take(b);
@@ -1140,13 +1210,15 @@
      so the adjustment is never just a number that moved on its own. */
   function periodReport(ledger, fromDay, toDay){
     var out = { minutes:0, activeDays:0, questsKept:0, questsMissed:0,
-                challenges:0, hardcoreDays:0, rp:0 };
+                challenges:0, hardcoreDays:0, hardcoreDailyDays:0, rp:0 };
+    var failureByDay = Object.create(null);
     var evs = sortedEvents(ledger);
     for (var i = 0; i < evs.length; i++){
       var e = evs[i];
       if (fromDay && e.day <= fromDay) continue;
       if (toDay && e.day > toDay) continue;
-      out.rp += e.delta;
+      if (e.kind === "hardcore_fail_v2") failureByDay[e.day] = Math.min(failureByDay[e.day] || 0, e.delta);
+      else out.rp += e.delta;
       if (e.kind === "active_day"){ out.activeDays++;
         var m = /Focused (\d+)h (\d+)m/.exec(e.label || "");
         if (m) out.minutes += (+m[1]) * 60 + (+m[2]);
@@ -1155,7 +1227,9 @@
       else if (e.kind === "quest_miss") out.questsMissed++;
       else if (e.kind === "daily_hit" || e.kind === "weekly_hit" || e.kind === "seasonal_hit") out.challenges++;
       else if (e.kind === "hardcore_milestone") out.hardcoreDays++;
+      else if (e.kind === "hardcore_day") out.hardcoreDailyDays++;
     }
+    Object.keys(failureByDay).forEach(function(day){ out.rp += failureByDay[day]; });
     return out;
   }
 
@@ -1235,19 +1309,31 @@
   }
 
   var refreshing = false;
-  function refresh(reason){
+  async function refresh(reason){
     if (refreshing) return { changed:false };
     var s = S();
     if (!s) return { changed:false };
     refreshing = true;
+    var prior = s.fhRank;
+    var hadRank = Object.prototype.hasOwnProperty.call(s, "fhRank");
+    var installed = prior;
+    var installedJSON = JSON.stringify(prior);
     try {
+      if (typeof window.saveStateDurable !== "function") return { changed:false, error:"Verified saving is unavailable." };
       var res = materialize(s);
-      if (res.changed && typeof window.saveState === "function"){
-        try { window.saveState(); } catch(_){}
+      installed = s.fhRank;
+      installedJSON = JSON.stringify(installed);
+      if (res.changed){
+        var saved = await window.saveStateDurable({ source:"rank-" + String(reason || "refresh").slice(0,40), suppressMilestoneAnnouncement:true });
+        if (saved === false) throw new Error("Verified saving refused the rank change.");
       }
       if (res.changed) { try { render(); } catch(_){} }
       return res;
     } catch (error){
+      if (S() === s && s.fhRank === installed && JSON.stringify(installed) === installedJSON) {
+        if (hadRank) s.fhRank = prior;
+        else delete s.fhRank;
+      }
       try { console.warn("[Life XP] Standing refresh failed safely:", reason, error); } catch(_){}
       return { changed:false, error:String(error && error.message || error) };
     } finally {
@@ -1262,6 +1348,8 @@
     HARDCORE_MILESTONES: HARDCORE_MILESTONES,
     HARDCORE_EARLY: HARDCORE_EARLY,
     hardcoreWeight: hardcoreWeight,
+    hardcoreDailyRP: hardcoreDailyRP,
+    hardcoreFailureRP: hardcoreFailureRP,
     MISS_GRACE_MS: MISS_GRACE_MS,
     DAILY_GAIN_CAP: DAILY_GAIN_CAP,
     DAILY_LOSS_CAP: DAILY_LOSS_CAP,
@@ -1524,6 +1612,7 @@
             rv.report.questsMissed ? ', ' + rv.report.questsMissed + ' missed' : '',
             rv.report.challenges   ? ', ' + rv.report.challenges + ' challenge' + (rv.report.challenges === 1 ? '' : 's') + ' cleared' : '',
             rv.report.hardcoreDays ? ', ' + rv.report.hardcoreDays + ' Hardcore milestone' + (rv.report.hardcoreDays === 1 ? '' : 's') : '',
+            rv.report.hardcoreDailyDays ? ', ' + rv.report.hardcoreDailyDays + ' completed Hardcore day' + (rv.report.hardcoreDailyDays === 1 ? '' : 's') : '',
             '.</div>');
         }
         html.push('<div class="fhr-reviewnext">Next review in <b>', rv.daysUntilNext, ' day',
@@ -1579,8 +1668,7 @@
         });
         html.push('</div>');
         if (d.limited){
-          html.push('<div class="fhr-cap">Only the first ', PER_DAY_KIND_LIMIT.quest_hit,
-                    ' of each kind count in a day — volume is not discipline.</div>');
+          html.push('<div class="fhr-cap">Daily limits apply. Concurrent Hardcore misses share the largest new-policy loss for this date.</div>');
         }
         if (d.capped){
           html.push('<div class="fhr-cap">Capped — a single day can move you at most +',
@@ -1613,12 +1701,20 @@
       ['Daily challenge cleared', RP.dailyHit, 'per challenge, settled the day after'],
       ['Weekly challenge cleared', RP.weeklyHit, 'per challenge, settled when the week closes'],
       ['Seasonal challenge cleared', RP.seasonHit, 'settled when the month closes'],
-      ['Hardcore run lost', RP.hardcoreFail, 'only when the locked daily bar was missed — ending a run on purpose costs nothing'],
       ['A day with nothing on it', RP.idleDay, 'skipped if you were active on ' + REST_MIN_ACTIVE + ' of the previous ' + REST_WINDOW + ' days']
     ].forEach(function(row){
       html.push('<li><b>', signed(row[1]), '</b> — ', esc(row[0]),
                 row[2] ? ' <span style="opacity:.6">(' + esc(row[2]) + ')</span>' : '', '</li>');
     });
+    html.push('<li><b>+12 to +70</b> — a completed Hardcore day. ',
+      '20 × the square root of required hours, with the weight limited to 0.6–3.5; ',
+      'sessions count as 45 minutes. A 4-hour bar pays +40 and an 8-hour bar +57 before taper. ',
+      'Only the strongest completed bar counts each date; a stronger bar reached later adds only the difference. ',
+      'Credit waits until that day’s window closes. Ongoing runs start this daily credit on the next active day after the update.</li>');
+    html.push('<li><b>−24 to −50</b> — new Hardcore misses cost the smaller of 50 RP or twice that run’s daily award. ',
+      'Only the largest new Hardcore loss counts each date, even with several runs. ',
+      'Ending a run on purpose costs nothing. Recorded past rewards and penalties keep their original amounts; ',
+      'reviving a run withdraws its exact failure episode.</li>');
     html.push('<li><b>+', HARDCORE_EARLY.map(function(m){ return m.rp; }).join(' / +'),
               '</b> — Hardcore milestones at ',
               HARDCORE_EARLY.map(function(m){ return m.days; }).join(', '),
@@ -1630,7 +1726,7 @@
               hardcoreWeight({type:"minutes",value:480}),
               '</b> — Hardcore milestones scale with the bar you locked ',
               '<span style="opacity:.6">(2h / 4h / 8h a day, against a 1-hour baseline. ',
-              'Losing a run costs the same whatever bar you set)</span></li>');
+              'Daily rewards follow the normal rank taper down to 25%; milestone rewards taper no lower than 35%)</span></li>');
     html.push('</ul>');
     html.push('<div class="fhr-rules" style="margin-top:9px">',
       '<b>Challenges only ever pay.</b> Letting a daily or weekly challenge lapse costs you ',

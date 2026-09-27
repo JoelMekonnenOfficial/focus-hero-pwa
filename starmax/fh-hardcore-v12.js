@@ -278,6 +278,12 @@
       revivedAt: finiteInt(raw.revivedAt, 0, 0, Number.MAX_SAFE_INTEGER),
       revivedCount: finiteInt(raw.revivedCount, 0, 0, 10000)
     };
+    /* Dated rank receipts never supply focus minutes or survival credit.
+       A run without an enrollment date starts daily RP on its next day. */
+    if (validDay(raw.rankDailyFromDay)) run.rankDailyFromDay = String(raw.rankDailyFromDay);
+    if (Array.isArray(raw.rankEarnedDays)) run.rankEarnedDays = normalizeRankEarnedDays(raw.rankEarnedDays);
+    if (raw.rankFailurePolicy === 2) run.rankFailurePolicy = 2;
+    if (Array.isArray(raw.rankReversedFailures)) run.rankReversedFailures = normalizeRankReversals(raw.rankReversedFailures, run.id);
     if (!archived) {
       /* v10.14.2: when a run is put back after its recorded miss was
          contradicted by merged history, the moment of that decision is part
@@ -291,6 +297,50 @@
       run.missedDay = validDay(raw.missedDay) ? String(raw.missedDay) : null;
     }
     return run;
+  }
+
+  function normalizeRankReversals(rows, runId) {
+    var byKey = Object.create(null);
+    (rows || []).forEach(function (row) {
+      if (!row || !validDay(row.day)) return;
+      if (row.id !== "hcf:" + runId && row.id !== "hcf:" + runId + ":" + row.day) return;
+      byKey[row.id + "|" + row.day] = { id:row.id, day:String(row.day) };
+    });
+    return Object.keys(byKey).sort().map(function (key) { return byKey[key]; });
+  }
+
+  function normalizeRankEarnedDays(rows) {
+    var dates = Object.create(null);
+    (rows || []).forEach(function (day) { if (validDay(day)) dates[day] = true; });
+    return Object.keys(dates).sort();
+  }
+
+  function mergeRankReceipts(merged, left, right) {
+    var floors = [left.rankDailyFromDay, right.rankDailyFromDay].filter(validDay).sort();
+    if (floors.length) merged.rankDailyFromDay = floors[0];
+    if (Array.isArray(left.rankEarnedDays) || Array.isArray(right.rankEarnedDays)) {
+      merged.rankEarnedDays = normalizeRankEarnedDays((left.rankEarnedDays || []).concat(right.rankEarnedDays || []));
+    }
+    var reversals = (left.rankReversedFailures || []).concat(right.rankReversedFailures || []);
+    if (reversals.length) merged.rankReversedFailures = normalizeRankReversals(reversals, merged.id);
+    if ((left.rankFailurePolicy === 2 && left.missedDay === merged.missedDay) ||
+        (right.rankFailurePolicy === 2 && right.missedDay === merged.missedDay)) merged.rankFailurePolicy = 2;
+    return merged;
+  }
+
+  function recordRankAudit(run, audit, today) {
+    if (!validDay(run.rankDailyFromDay)) run.rankDailyFromDay = dayFromOrdinal(dayOrdinal(today) + 1);
+    run.rankEarnedDays = (audit.earnedDays || []).slice();
+  }
+
+  function recordRankReversal(restored, archived) {
+    if (!validDay(archived.missedDay)) return;
+    /* Older clients can still submit the legacy id. Match the missed day so
+       unrelated historical event amounts remain intact. */
+    restored.rankReversedFailures = normalizeRankReversals((restored.rankReversedFailures || []).concat([
+      { id:"hcf:" + archived.id, day:archived.missedDay },
+      { id:"hcf:" + archived.id + ":" + archived.missedDay, day:archived.missedDay }
+    ]), restored.id);
   }
 
   /* ------------------------------------------------------------------
@@ -433,7 +483,7 @@
     merged.lastCheckedAt = Math.max(left.lastCheckedAt, right.lastCheckedAt);
     merged.lastCheckedDay = (leftDay == null ? -1 : leftDay) >= (rightDay == null ? -1 : rightDay)
       ? left.lastCheckedDay : right.lastCheckedDay;
-    return merged;
+    return mergeRankReceipts(merged, left, right);
   }
 
   function sortHistory(rows) {
@@ -546,7 +596,7 @@
   merged.excusedDays = normalizeExcusedDays((left.excusedDays || []).concat(right.excusedDays || []));
   merged.revivedAt = Math.max(left.revivedAt || 0, right.revivedAt || 0);
   merged.revivedCount = Math.max(left.revivedCount || 0, right.revivedCount || 0);
-    return merged;
+    return mergeRankReceipts(merged, left, right);
   }
 
   /* Pause intervals merge by their start moment. When both devices know the
@@ -1070,12 +1120,17 @@
     if (end < start) return { ok: false, reason: "device date is before this run started" };
     if (end - start > MAX_RUN_DAYS) return { ok: false, reason: "run is too long to audit safely" };
     var survived = 0;
+    var earnedDays = [];
     var missedWhilePaused = [];
     var pending = [];
     var nowMs = Date.now();
     for (var ordinal = start; ordinal < end; ordinal++) {
       var day = dayFromOrdinal(ordinal);
-      if (progressOn(day, run.requirement).qualifies) { survived++; continue; }
+      if (progressOn(day, run.requirement).qualifies) {
+        survived++;
+        if (dayIsSettled(day, nowMs)) earnedDays.push(day);
+        continue;
+      }
       /* Its window is still open - there is still time to fill it. Not a
          miss, not yet a survival: it simply has not been decided. */
       if (!dayIsSettled(day, nowMs)) { pending.push(day); continue; }
@@ -1083,7 +1138,7 @@
       if (dateIsPaused(run, day, today)) { missedWhilePaused.push(day); continue; }
       if (dateIsExcused(run, day)) { missedWhilePaused.push(day); continue; }
       return { ok: true, active: false, ended: true, missedDay: day,
-               daysSurvived: survived, missedWhilePaused: missedWhilePaused };
+               daysSurvived: survived, earnedDays:earnedDays, missedWhilePaused: missedWhilePaused };
     }
     var todayProgress = progressOn(today, run.requirement);
     var pausedToday = dateIsPaused(run, today, today);
@@ -1097,6 +1152,7 @@
       /* A paused day still counts if you met it - the pause removes the
          penalty, not the credit. */
       daysSurvived: survived + (todayProgress.qualifies ? 1 : 0),
+      earnedDays: earnedDays,
       missedWhilePaused: missedWhilePaused,
       pending: pending,
       today: todayProgress
@@ -1157,7 +1213,9 @@
       requirementLock: requirementLock(req),
       daysSurvived: progressOn(today, req).qualifies ? 1 : 0,
       lastCheckedDay: today,
-      lastCheckedAt: Date.now()
+      lastCheckedAt: Date.now(),
+      rankDailyFromDay: today,
+      rankEarnedDays: []
     };
     next = withRuns(next, existing.concat([fresh]));
     var saved = await persistReplacementDurable(next, "explicit-start");
@@ -1186,6 +1244,7 @@
       finiteInt(run.reinstatedAt, 0, 0, Number.MAX_SAFE_INTEGER));
     archived.endReason = cleanText(reason, "ended", 120);
     archived.missedDay = validDay(missedDay) ? String(missedDay) : null;
+    if (archived.missedDay) archived.rankFailurePolicy = 2;
     data.history.unshift(archived);
     /* Only this run ends. Every other run carries on: losing a three-day run
        must never cost you a forty-day one. */
@@ -1213,6 +1272,12 @@
     var target = wantedId ? live.find(function (r) { return r.id === wantedId; }) : (live.length === 1 ? live[0] : null);
     if (!target) return { ok: false, reason: "Say which run to end - more than one is going." };
     var next = clone(read.data);
+    target = clone(target);
+    var audit = auditRun(target, hcActiveDay());
+    if (audit.ok) {
+      target.daysSurvived = audit.daysSurvived;
+      recordRankAudit(target, audit, hcActiveDay());
+    }
     var archived = archiveRun(next, target, reason || "ended by you", null, Date.now());
     var saved = await persistReplacementDurable(next, "explicit-end");
     if (!saved.ok) return saved;
@@ -1356,6 +1421,7 @@
       if (String(live[j].id) === String(row.id)) return { ok: false, reason: "that run is already going" };
     }
     var restored = withExcusedDay(row, row.missedDay);
+    recordRankReversal(restored, row);
     delete restored.endedAt;
     delete restored.endReason;
     delete restored.missedDay;
@@ -1378,6 +1444,7 @@
       if (!audit.ok || audit.ended) return { ok: false, reason: "that run has more than one missed day behind it" };
     }
     restored.daysSurvived = audit.daysSurvived;
+    recordRankAudit(restored, audit, today);
     var next = clone(data);
     next.history = next.history.slice(0, index).concat(next.history.slice(index + 1));
     next = withRuns(next, runsOf(next).concat([restored]));
@@ -1390,27 +1457,16 @@
     var today = hcActiveDay();
     var plan = revivePlan(read.data, runId, today);
     if (!plan.ok) return plan;
-    /* Put the rank back too. The -200 was derived from the missed day this
-       revive has just overturned, so leaving it would restore the run and keep
-       the punishment - a half-restoration. The rank ledger lives on the same
-       state object, so retracting here rides along on the one durable save
-       below rather than becoming a second, separately-failable write. */
-    var rankRestored = null;
-    try {
-      var st = S();
-      if (st && window.FH_RANK && typeof window.FH_RANK.retract === "function") {
-        var undone = window.FH_RANK.retract(st, "hcf:" + runId);
-        if (undone && undone.changed) rankRestored = Math.abs(Number(undone.removed && undone.removed.delta) || 0);
-      }
-    } catch (_) {}
+    /* The hcf retraction receipt in plan.next and the rank ledger are saved
+       together below. A failed save must return both to their prior state. */
     var saved = await persistReplacementDurable(plan.next, "revive-run");
     if (!saved.ok) return saved;
     scheduleBoundaryEvaluation();
     try { render(); } catch (_) {}
     toast("Run restored — carrying on at " + plan.days + " day" + (plan.days === 1 ? "" : "s") +
       (plan.excused ? ". " + plan.excused + " is excused, not counted." : ".") +
-      (rankRestored ? " " + rankRestored + " RP returned." : ""), "good");
-    return { ok: true, days: plan.days, excused: plan.excused, rankRestored: rankRestored };
+      (plan.excused ? " Its rank penalty is withdrawn." : ""), "good");
+    return { ok: true, days: plan.days, excused: plan.excused };
   }
 
   function reinstatementPlan(data, today) {
@@ -1426,6 +1482,7 @@
       if (!row || !validDay(row.missedDay)) continue;
       if (liveIds[row.id]) continue;
       var candidate = clone(row);
+      recordRankReversal(candidate, row);
       delete candidate.endedAt;
       delete candidate.endReason;
       delete candidate.missedDay;
@@ -1434,6 +1491,7 @@
       var next = clone(data);
       next.history = next.history.slice(0, i).concat(next.history.slice(i + 1));
       candidate.daysSurvived = recheck.daysSurvived;
+      recordRankAudit(candidate, recheck, today);
       candidate.lastCheckedDay = today;
       candidate.lastCheckedAt = Math.max(
         finiteInt(candidate.lastCheckedAt, 0, 0, Number.MAX_SAFE_INTEGER),
@@ -1465,6 +1523,7 @@
     if (!audit.ok) return audit;
     var next = clone(data);
     var stamp = deterministicEvaluationStamp(today);
+    recordRankAudit(next.run, audit, today);
     if (audit.ended && cloudViewMayBeStale(audit.missedDay) && !deferralExpired(audit.missedDay, today)) {
       /* Cloud work may be missing: our day totals may be incomplete. Hold the
          run open rather than ending it on a view we know is partial.
@@ -1487,7 +1546,7 @@
           + " miss: this device has not confirmed a fresh, complete cloud view, so its daily totals may be"
           + " incomplete. This hold expires after " + DEFER_GRACE_DAYS + " days.");
       } catch (_) {}
-      return { ok:true, changed:false, active:true, deferred:true, next:data };
+      return { ok:true, changed:JSON.stringify(next) !== JSON.stringify(data), active:true, deferred:true, next:next };
     }
     if (audit.ended) {
       next.run.daysSurvived = audit.daysSurvived;
@@ -1707,6 +1766,7 @@
         return { due:false, error:"Hardcore catch-up exceeds the protected calendar limit; nothing changed." };
       }
       if (todayOrdinal > baseline) due = true;
+      if (!validDay(live[i].rankDailyFromDay)) due = true;
     }
     if (!due && mayHaveRevivableRun(read.data, today)) due = true;
     /* Marked checked earlier today, but the window that day owns has closed
@@ -1732,8 +1792,18 @@
     }
     var hadField = Object.prototype.hasOwnProperty.call(state, FIELD);
     var priorField = state[FIELD];
+    var hadRank = Object.prototype.hasOwnProperty.call(state, "fhRank");
+    var priorRank = state.fhRank;
+    var installedRank = priorRank;
+    var installedRankJSON = JSON.stringify(priorRank);
+    var installedHardcoreJSON = JSON.stringify(next);
     state[FIELD] = next;
     try {
+      if (window.FH_RANK && typeof window.FH_RANK.materialize === "function") {
+        window.FH_RANK.materialize(state);
+        installedRank = state.fhRank;
+        installedRankJSON = JSON.stringify(installedRank);
+      }
       var saved = await window.saveStateDurable({
         source:"hardcore-" + cleanText(source, "automatic", 40),
         suppressMilestoneAnnouncement:true
@@ -1746,7 +1816,11 @@
       /* A peer-primary adoption may replace window.state while the awaited
          commit is in flight. Restore only the exact object installed here;
          never overwrite a newer peer state. */
-      if (S() === state && state[FIELD] === next) restoreField(state, hadField, priorField);
+      if (S() === state && state[FIELD] === next && JSON.stringify(next) === installedHardcoreJSON) restoreField(state, hadField, priorField);
+      if (S() === state && state.fhRank === installedRank && JSON.stringify(installedRank) === installedRankJSON) {
+        if (hadRank) state.fhRank = priorRank;
+        else delete state.fhRank;
+      }
       return { ok:false, reason:cleanText(error && error.message, "Hardcore change was not saved.", 180) };
     }
   }
