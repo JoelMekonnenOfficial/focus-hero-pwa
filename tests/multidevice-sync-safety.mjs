@@ -66,7 +66,7 @@ async function device(name,c,old=false,base=null){
   },{sync,base,name});
   return {name,page,ctx,old};
 }
-async function snapshot(d){return d.page.evaluate(()=>({total:state.totalFocusMin,history:state.history,tasks:state.tasks.map(t=>({id:t.id,total:t.totalFocusMin})),sessions:state.sessionsLog.map(s=>({id:s.id,minutes:s.minutes})),receipts:Object.fromEntries(Object.entries(state.loot.sessionRewardReceipts).map(([k,v])=>[k,v.policyVersion])),pending:state.sync.pendingSync,error:state.sync.lastSyncError,rev:state.sync.cloudRev,coins:state.coins,xp:totalXpForLevel(state.hero.level)+state.hero.xp}));}
+async function snapshot(d){return d.page.evaluate(()=>({total:state.totalFocusMin,history:state.history,tasks:state.tasks.map(t=>({id:t.id,total:t.totalFocusMin})),sessions:state.sessionsLog.map(s=>({id:s.id,minutes:s.minutes})),receipts:Object.fromEntries(Object.entries(state.loot.sessionRewardReceipts).map(([k,v])=>[k,v.policyVersion])),pending:state.sync.pendingSync,error:state.sync.lastSyncError,rev:state.sync.cloudRev,coins:state.coins,xp:totalXpForLevel(state.hero.level)+state.hero.xp,economy:window.__fhEconomyTest.totals(),harvests:state.focusEconomy.harvests.length}));}
 async function invoke(d,what){return d.page.evaluate(async what=>{try{const result=await window[what]({force:true,requireRemote:true,reason:'synthetic-audit'});return{ok:true,result:typeof result==='object'?{uploadedCloudRev:result?.uploadedCloudRev,replayRequired:result?.replayRequired}:result};}catch(e){return{ok:false,code:e.code||'',message:e.message};}},what);}
 async function edit(d,taskId,minutes,id){return d.page.evaluate(async({taskId,minutes,id})=>await applyTaskTimeAdjustment(taskId,minutes,{operationId:id,surface:'synthetic-audit'}),{taskId,minutes,id});}
 async function scenario(name,fn){if(process.env.LIFEXP_SYNC_SCENARIO&&!name.includes(process.env.LIFEXP_SYNC_SCENARIO))return;const start=contexts.length;try{await fn();console.log('PASS',name);evidence.push({name,pass:true});}catch(e){console.log('FAIL',name,e.message);evidence.push({name,pass:false,error:e.message});}finally{await Promise.all(contexts.splice(start).map(c=>c.close()));}}
@@ -90,6 +90,7 @@ try{
     evidence.push({detail:'concurrent',pushes,states,requests:c.requests});
     assert.deepEqual(states.map(s=>s.total),[71,71,71]);
     assert(states.every(s=>s.sessions.length===3&&[0,1,2].every(i=>s.receipts[`ledger_concurrent-${i}`]===4)));
+    assert(states.every(s=>s.economy.farmMinutes===71&&s.economy.materials.timber===4&&s.economy.materials.seed===1),'distinct offline session materials are additive');
     for(const d of devices)assert.equal((await edit(d,taskId,17,'concurrent-0')).duplicate,true);
     assert.deepEqual((await Promise.all(devices.map(snapshot))).map(s=>s.total),[71,71,71]);
   });
@@ -181,6 +182,20 @@ try{
     for(const x of devices)await invoke(x,'cloudPull');
     const states=await Promise.all(devices.map(snapshot));evidence.push({detail:'same-target',pushes,states,requests:c.requests});
     assert.deepEqual(states.map(s=>s.total),[84,84,84]);
+  });
+  for(const distinct of[false,true])await scenario(`${distinct?'distinct crops retain both yields':'same crop harvested twice yields once'} through encrypted cloud sync`,async()=>{
+    const {c,devices}=await setup();const[a,b]=devices;
+    const fixture={version:1,installedAt:1,grants:{seed:{id:'seed',sessionId:'seed',source:'session',minutes:60,action:'Travel',priority:false,orbs:0,materials:{seed:0,herb:0,timber:0,ore:0},farmMinutes:60,at:1,updatedAt:100,deleted:false}},spends:[],harvests:[],unlockedPlots:2,plots:[{id:'plot1',crop:'herb',plantedAt:0,updatedAt:12345,plantingId:'shared-crop'},{id:'plot2',crop:distinct?'herb':null,plantedAt:0,updatedAt:12345,plantingId:'second-crop'},{id:'plot3',crop:null,plantedAt:0,updatedAt:0}]};
+    for(const x of devices)await x.page.evaluate(async fixture=>{state.focusEconomy=structuredClone(fixture);await saveStateDurable({fromPull:true,source:'synthetic-ready-crop'});},fixture);
+    assert.equal(await a.page.evaluate(async()=>{const ok=window.__fhEconomyTest.harvest('plot1');await saveStateDurable({fromPull:true,source:'synthetic-crop-harvest'});return ok;}),true);
+    assert.equal(await b.page.evaluate(async plot=>{const ok=window.__fhEconomyTest.harvest(plot);await saveStateDurable({fromPull:true,source:'synthetic-crop-harvest'});return ok;},distinct?'plot2':'plot1'),true);
+    const pushes=await Promise.all([invoke(a,'cloudPush'),invoke(b,'cloudPush')]);
+    for(const x of devices){assert.equal((await invoke(x,'cloudPull')).ok,true);assert.equal((await invoke(x,'cloudPush')).ok,true);}
+    for(const x of devices)await invoke(x,'cloudPull');
+    const states=await Promise.all(devices.map(snapshot));evidence.push({detail:distinct?'distinct-crops':'shared-crop',pushes,states,requests:c.requests});
+    assert.deepEqual(states.map(s=>s.economy.materials.herb),distinct?[8,8,8]:[4,4,4]);
+    assert(states.every(s=>s.harvests===(distinct?2:1)&&s.economy.farmMinutes===60));
+    for(const x of devices)assert.equal(await x.page.evaluate(()=>window.__fhEconomyTest.harvest('plot1')),false,'crop cannot be harvested again after merge');
   });
   await scenario('old merger loses new journey additions if receipt protection is absent (bridge blocker)',async()=>{
     const {c,devices}=await setup([true,false]);const[a,b]=devices;
