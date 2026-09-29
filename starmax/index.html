@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-app-version="10.64.2" data-build-id="fh-2026-09-27-v10-64-2-compatible">
+<html lang="en" data-app-version="10.64.3" data-build-id="fh-2026-09-29-v10-64-3-regressions">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
@@ -8,8 +8,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Life XP">
-<meta name="focus-hero-version" content="10.64.2">
-<meta name="focus-hero-build" content="fh-2026-09-27-v10-64-2-compatible">
+<meta name="focus-hero-version" content="10.64.3">
+<meta name="focus-hero-build" content="fh-2026-09-29-v10-64-3-regressions">
 <meta name="description" content="Life XP - a private, flexible focus dashboard with timers, tasks, rewards, analytics, durable offline saves, and encrypted cloud sync.">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192-lifexp.png">
@@ -18,10 +18,28 @@
 <script>
 /* No profile hydration is allowed under an incomplete or mixed release. */
 window.__FH_ASSET_FAILURES__ = [];
+/* Delivery services may add optional analytics scripts. Only this sealed app
+   bundle is required to open a profile; a blocked tracker is not a broken app.
+   The delivery gate test verifies this list against every runtime script. */
+const FH_REQUIRED_RUNTIME_SCRIPTS = new Set([
+  "fh-primary-store-v13.js", "data-guard.js", "game-shells.js",
+  "fh-cosmetic-clothing-v13.js", "pixel-avatar.js", "fh-gameplay-controls-v13.js",
+  "loot-rework-v1012.js", "character-rebuild.js", "world-depth.js", "fh-models-v12.js",
+  "fh-storage-relief.js", "focus-hero-ui-v11.js", "focus-hero-immersive-v1.js",
+  "fh-identity-v13.js", "fh-calendar-v1.js", "fh-hardcore-v12.js", "fh-rank-v1.js",
+  "fh-navigator-v1.js", "fh-theater-v1.js", "fh-sync-doctor-v1.js", "shop-rework.js",
+  "character-v86-fix.js", "eggs.js", "v8.6.3-patch.js", "focus-economy.js",
+  "loot-purpose-actions.js", "gear-utility.js", "progression-hub.js"
+]);
 window.addEventListener("error", function(event){
   var target=event.target;
   if(target && target.tagName==="SCRIPT" && target.src){
-    window.__FH_ASSET_FAILURES__.push(new URL(target.src,location.href).pathname);
+    const source=new URL(target.src,document.baseURI);
+    const directory=new URL("./",document.baseURI);
+    if(source.origin===directory.origin && source.pathname.startsWith(directory.pathname)
+        && FH_REQUIRED_RUNTIME_SCRIPTS.has(source.pathname.slice(directory.pathname.length))){
+      window.__FH_ASSET_FAILURES__.push(source.pathname);
+    }
   }
 },true);
 window.__FH_ASSET_READY__ = Promise.resolve();
@@ -130,7 +148,7 @@ if (!window.__focusHeroBrowserSmokeDisabled){
   window.__focusHeroPrepaintShell=shell;
 })();
 </script>
-<title>Life XP · v10.64.2</title>
+<title>Life XP · v10.64.3</title>
 <style>
 /* ================================================================
  * Life XP v10.13.4 - stable clock node, animated aura, and hero motion
@@ -4534,7 +4552,7 @@ svg{shape-rendering:geometricPrecision}
 <script src="./world-depth.js" integrity="sha384-zIvKsTf22SP4/M2w7hdCxJmNsX1i7XkHmmNfSniEqB+UxNqMWHtPbsESl4e2M1DB" crossorigin="anonymous"></script>
 <script src="./fh-models-v12.js" integrity="sha384-ogQnT7y+qfJIRv9DEnTuwxUdSBhualSAJmP5XzighgKjeFhBX/I8Ot1Bq01CPeWm" crossorigin="anonymous"></script>
 <script src="./fh-storage-relief.js" integrity="sha384-2I6W3SyY4YJeu2zZGO5LpNzdcUOFPVOgy5PS/hcO790y+qhIaQ1A2QD0u8XwHbvw" crossorigin="anonymous"></script>
-<script src="./focus-hero-ui-v11.js" integrity="sha384-6UL9zvj89GRdJLi/aNLl0hbKynoEKvvioGz2ywHPYiPQ0zGBZfTOOD+AID3jpcnM" crossorigin="anonymous"></script>
+<script src="./focus-hero-ui-v11.js" integrity="sha384-ILth42IHq3J5L+AxrH5WvHMjCM0CFRdaLnNlUU5thhYAX1SPmhBkZ9MuPWsf2qmi" crossorigin="anonymous"></script>
 <script src="./focus-hero-immersive-v1.js" integrity="sha384-lNLnx/16nDrzfoY2PPlSiYQF1GkyZPCQmb66AQ/YvlRiEgHWrOcSecrriqiI3z9F" crossorigin="anonymous"></script>
 <script src="./fh-identity-v13.js" integrity="sha384-MAYX6ulFH+mHWhf8ukbtrUQeUw3k0ZXH/z46YwvhvU+7XQT37C6kj7QP1f/HCxng" crossorigin="anonymous"></script>
 <script src="./fh-calendar-v1.js" integrity="sha384-Bq15GzGnHSne07TLXazlgHXG3vFC77UGG3Z9EwWGjT0t7z9hiYuk1DYLPsZ4MsGg" crossorigin="anonymous"></script>
@@ -14647,6 +14665,30 @@ function noteSuccessfulCloudMetadataContact(sync,at=Date.now()){
   try{renderSyncStatus();}catch(_){}
   return true;
 }
+/* A refused pull can stop before the existing pending-upload receipt is saved.
+   Keep the latest attempt's explanation on this device without turning an
+   unsuccessful read into a profile edit, an upload, or a new retry schedule. */
+let cloudSyncAttemptSerial=0;
+let cloudSyncAttemptResult=null;
+function beginCloudSyncAttempt(){
+  return {serial:++cloudSyncAttemptSerial,generation:syncIdentityGeneration,playerId:state.sync?.playerId};
+}
+function noteCloudSyncAttempt(attempt,error){
+  if(!attempt||attempt.generation!==syncIdentityGeneration||attempt.playerId!==state.sync?.playerId)return;
+  if(cloudSyncAttemptResult&&cloudSyncAttemptResult.serial>attempt.serial)return;
+  if(error&&["FH_SYNC_SUPERSEDED","FH_SYNC_IDENTITY_BUSY","FH_SYNC_LOCAL_CHANGED",
+    "FH_SYNC_WATERMARK_ADVANCED","FH_CLOUD_BUDGET"].includes(error.code))return;
+  const message=error?String(error.message||error).slice(0,600):null;
+  const warningShown=!!(cloudSyncAttemptResult&&cloudSyncAttemptResult.generation===attempt.generation&&
+    cloudSyncAttemptResult.playerId===attempt.playerId&&cloudSyncAttemptResult.error===message&&cloudSyncAttemptResult.warningShown);
+  cloudSyncAttemptResult={...attempt,error:message,warningShown};
+  try{renderSyncStatus();}catch(_){}
+}
+function currentCloudSyncFailure(){
+  const result=cloudSyncAttemptResult;
+  return result&&result.generation===syncIdentityGeneration&&result.playerId===state.sync?.playerId
+    ? result.error : null;
+}
 function syncControlError(code, message){
   const err = new Error(message);
   err.code = code;
@@ -15810,6 +15852,8 @@ function fhCloudTransferFetch(url,init,kind,opts){
 
 async function cloudPush(opts){
   opts = opts||{};
+  const diagnosticAttempt=beginCloudSyncAttempt();
+  try{
   assertAccountingStorageDeterminate();
   if (syncOperationsPaused && !opts.identityOperation){
     throw syncControlError("FH_SYNC_IDENTITY_BUSY", "Cloud push paused while sync identity is changing");
@@ -15901,6 +15945,7 @@ async function cloudPush(opts){
        recorded; it simply must not be called clean. */
     if(cappedByValve)return stablePush;
     if(!await markCloudSynced(opts,stableReceipt)){record.replayRequested=true;throw syncControlError("FH_SYNC_WATERMARK_ADVANCED","Local state advanced before the cloud-clean receipt; it remains queued for replay");}
+    noteCloudSyncAttempt(diagnosticAttempt,null);
     return stablePush;
   })().catch(async err=>{
     if (err&&/^FH_CLOUD_BUDGET(?:_STORAGE)?$/.test(err.code||""))throw err;
@@ -15912,7 +15957,8 @@ async function cloudPush(opts){
     if (cloudPushInFlight === record) cloudPushInFlight = null;
   });
   cloudPushInFlight = record;
-  return record.promise;
+  return await record.promise;
+  }catch(error){noteCloudSyncAttempt(diagnosticAttempt,error);throw error;}
 }
 
 function lastKnownGoodFocusMinutes(){
@@ -16411,6 +16457,8 @@ async function fetchCloudRemote(opts){
 
 async function cloudPull(opts){
   opts = opts||{};
+  const diagnosticAttempt=beginCloudSyncAttempt();
+  try{
   assertAccountingStorageDeterminate();
   /* v4.2: opts.force lets claim/disconnect/manual flows pull regardless of
      state.sync.enabled — the toggle gates BACKGROUND polling, not user-
@@ -16487,8 +16535,10 @@ async function cloudPull(opts){
     if(state===merged&&JSON.stringify(merged)===installedRaw)state=previousState;
     throw syncControlError("FH_SYNC_LOCAL_SAVE_FAILED","Pulled cloud profile could not be saved on this computer");
   }
+  noteCloudSyncAttempt(diagnosticAttempt,null);
   try { renderAll(); renderSyncStatus(); } catch(e){ console.warn("cloud pull render", e); }
   return true;
+  }catch(error){noteCloudSyncAttempt(diagnosticAttempt,error);throw error;}
 }
 
 /* Instance edits are mutable rather than additive. Prefer the branch carrying
@@ -18455,6 +18505,8 @@ function describeSyncFailure(raw){
   if (/was not accepted at revision/i.test(text)){
     return "this device could not take in the cloud's newer copy before saving its own, so the save stayed queued. Open Sync here for the underlying reason.";
   }
+  /* These are protective refusals, not a transient competing upload. */
+  if (/moved backwards|protocol|calendar|timezone|could not be verified|could not be saved/i.test(text))return text;
   if (/\b409\b|revision|conflict/i.test(text)){
     return "another device kept winning the race to save. It normally settles on its own.";
   }
@@ -18628,10 +18680,10 @@ function tabSupersededByPeer(){
   return !!(primaryTabBlocked && primaryTabBlocked.peerPause);
 }
 
-function maybeWarnStuckSync(stuckMs, why){
+function maybeWarnStuckSync(stuckMs, why, attempt=null){
   if (tabSupersededByPeer()) return;
   /* Deliberate pause: say so, once, without the outage language. */
-  const throttled = fhSyncThrottled();
+  const throttled = attempt?null:fhSyncThrottled();
   if (throttled){
     if (stuckSyncNoticeShown) return;
     stuckSyncNoticeShown = true;
@@ -18642,15 +18694,15 @@ function maybeWarnStuckSync(stuckMs, why){
     } catch (_) {}
     return;
   }
-  if (stuckSyncNoticeShown) return;
-  stuckSyncNoticeShown = true;
+  if(attempt){if(attempt.warningShown)return;attempt.warningShown=true;}
+  else{if(stuckSyncNoticeShown)return;stuckSyncNoticeShown=true;}
   try {
     const reason = describeSyncFailure(why);
     const build = document.documentElement.getAttribute("data-app-version") || "?";
     toast("Cloud sync has been failing for " + fhDescribeDuration(stuckMs)
       + ". Your other devices are not seeing this progress."
       + (reason ? " Reason: " + reason : " Open Sync for details.")
-      + " [app v" + build + "]", "warn");
+      + " [app v" + build + "]", "warn",undefined,{record:!attempt});
   } catch (_) {}
   try { console.warn("[fh-sync] stuck for " + fhDescribeDuration(stuckMs) + (why ? ": " + why : "")); } catch (_) {}
 }
@@ -18674,6 +18726,12 @@ function renderSyncStatus(){
     status.dataset.state = state.sync.pendingSync ? "pending" : "ok";
     if (!state.sync.enabled) status.textContent = "Cloud sync is off. Your data is saved on this device.";
     else if (!state.sync.syncCode) status.textContent = "Generate a sync code or claim one from another device.";
+    else if (currentCloudSyncFailure()){
+      status.dataset.state="stale";
+      status.textContent="Sync stopped: "+describeSyncFailure(currentCloudSyncFailure());
+      const since=Number(state.sync.pendingSince)||0;
+      if(since>0&&Date.now()-since>=SYNC_STUCK_WARN_MS)maybeWarnStuckSync(Date.now()-since,currentCloudSyncFailure(),cloudSyncAttemptResult);
+    }
     else if (state.sync.pendingSync){
       /* v10.15: a stuck sync has to look different from a queued retry.
 
@@ -19313,7 +19371,7 @@ function bindSync(){
       if (parts.length) toast("Synced — " + parts.join(" · ") + ".", "good");
       else toast("Synced — your other device had nothing this one was missing.", "good");
     }
-    catch(e){ toast("Saved locally. Cloud retry is queued.","warn"); }
+    catch(e){ toast("Sync stopped: "+describeSyncFailure(e?.message||e),"warn",undefined,{record:false});renderSyncStatus(); }
   };
   $("#btn-disconnect").onclick = async ()=>{
     if (!confirm("Disconnect cloud sync on this device? Local data is untouched.")) return;

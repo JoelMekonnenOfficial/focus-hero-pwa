@@ -1,3 +1,19 @@
+# Life XP 10.64.3 regression follow-up
+
+Build: `fh-2026-09-29-v10-64-3-regressions`. Candidate for validation following the 10.64.2 deployment.
+
+- A blocked optional analytics script no longer stops the game from opening. Missing or corrupt required game modules still prevent profile hydration.
+- The Skills panel no longer rewrites an unchanged label every animation frame. Opening and closing it still updates its label and accessibility state.
+- The Sync panel and manual-sync notification now show the current failure instead of retaining an older explanation or promising an unconfirmed retry. A later successful sync clears that transient explanation; a simple contact with the cloud does not.
+
+These changes leave sync protocol, merge rules, player records, identity, calendar decisions and prior earned rewards unchanged. The earlier requested clock, combat, ranking and theme changes remain.
+
+The reported crash has not been conclusively attributed to these reproduced defects. Chrome was observed running 10.64.2 with successful encrypted cloud contact after the user made it responsive. Opera and phone adoption are not yet verified. The Stats and Focus ledger renderers match the saved pre-release public source; the different layout the user expects still needs identification. See `INCIDENT-10.64.3.md` for evidence and limits.
+
+---
+
+## Previous 10.64.2 review notes (historical)
+
 # Life XP 10.64.2 review candidate
 
 Build: `fh-2026-09-27-v10-64-2-compatible`. Source prepared for independent review, not a published release. It includes the earlier sync/save fixes, gameplay changes and due-diligence corrections. See `AUDIT.md` for findings, coverage and the release boundary.

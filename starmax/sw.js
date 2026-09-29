@@ -116,8 +116,8 @@
  * fallback (and skipped injection). Fetch by URL string instead, and inject
  * into cache-served HTML too.
  */
-const BUILD_ID    = "fh-2026-09-27-v10-64-2-compatible";
-const BUNDLE_HASH = "6433605b79f71100d0a489f704d63c4f96f9a280978c52f500e41944f6a5fe75";
+const BUILD_ID    = "fh-2026-09-29-v10-64-3-regressions";
+const BUNDLE_HASH = "7d17c713da7a089694870650f425d8099ddaf337f01db142ddb80e398c34c8ec";
 const CACHE_NAME  = `focus-hero-${BUILD_ID}-${BUNDLE_HASH}`;
 /* BEGIN MODULE INTEGRITY */
 const MODULE_INTEGRITY = {
@@ -139,7 +139,7 @@ const MODULE_INTEGRITY = {
   "fh-theater-v1.js": "sha384-sINesCJ+dsaF14OkysPDv+Faume1YDsAlvCrliO6jZK5r1hMw5wiXLC8Ioi5i3BI",
   "focus-economy.js": "sha384-R4O/pvD6hqYJ8ZZ0PmqmYAvNAnCHDnr7d0rUZFDqUApBaJoUVPztmz1T8prMnAJQ",
   "focus-hero-immersive-v1.js": "sha384-lNLnx/16nDrzfoY2PPlSiYQF1GkyZPCQmb66AQ/YvlRiEgHWrOcSecrriqiI3z9F",
-  "focus-hero-ui-v11.js": "sha384-6UL9zvj89GRdJLi/aNLl0hbKynoEKvvioGz2ywHPYiPQ0zGBZfTOOD+AID3jpcnM",
+  "focus-hero-ui-v11.js": "sha384-ILth42IHq3J5L+AxrH5WvHMjCM0CFRdaLnNlUU5thhYAX1SPmhBkZ9MuPWsf2qmi",
   "game-shells.js": "sha384-WLEnqLSNJBxaiQtIl51AlWszBf9v6UTxroagZtdExs2v2EEu3lgLH+K/exT/Ynrg",
   "gear-utility.js": "sha384-5wr5Japtyg1xcF4ZoUlvXC+DCBYBEQAFJYtc3k4L86MoVPSm/JCC7C/OFaX1EHib",
   "loot-purpose-actions.js": "sha384-RwF7kfAdNgvSfHQOgI/g9j7/TJeRH3iUQigqcomhxLom/d2ef7gBxcWSre1bRFrp",
