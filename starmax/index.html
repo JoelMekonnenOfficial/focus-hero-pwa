@@ -15881,7 +15881,7 @@ async function cloudPush(opts){
   }
   const record = { generation:operationGeneration, replayRequested:false, promise:null };
   record.promise = (async()=>{
-    let nextOpts = Object.assign({}, opts, { operationGeneration });
+    let nextOpts = Object.assign({}, opts, { operationGeneration, _diagnosticAttempt:diagnosticAttempt });
     let stablePush=null,stableReceipt=null,cappedByValve=false;
     /* v10.48.0 UPLOAD STORM VALVE.
        This loop re-uploads whenever local state changed during the upload.
@@ -15907,7 +15907,7 @@ async function cloudPush(opts){
         else if(JSON.stringify(state)!==stableReceipt.raw)      {record.replayRequested=true;replayReasons.push("memory-state-advanced");}
       }
       assertSyncOperationCurrent(operationGeneration);
-      nextOpts = Object.assign({},opts,{ force:true, reason:"coalesced-save", operationGeneration });
+      nextOpts = Object.assign({},opts,{ force:true, reason:"coalesced-save", operationGeneration, _diagnosticAttempt:diagnosticAttempt });
       if(record.replayRequested){
         replays++;
         if(replays>=CLOUD_PUSH_REPLAY_CAP){
@@ -16092,7 +16092,7 @@ async function cloudPushOnce(opts){
         assertCloudMetadataAuthorized(existing,createProbeState.sync);
         if((existing.cloud_rev|0)<=0)throw new Error("Cloud create preflight found an unconfirmed row; no create or overwrite was attempted");
         const pulled=await cloudPull({force:true,requireRemote:true,reason:"create-response-recovery",
-          operationGeneration,identityOperation:opts.identityOperation});
+          operationGeneration,identityOperation:opts.identityOperation,_diagnosticAttempt:opts._diagnosticAttempt});
         if(!pulled||(state.sync.cloudRev|0)<=0)throw new Error("Existing cloud row could not be verified after a lost create response");
         await clearSyncCreateAuthorizationDurably("cloud-create-existing-row-confirmed",opts);
         state.sync.pendingSync=true;
@@ -16225,7 +16225,7 @@ async function cloudPushOnce(opts){
       if(insertResp.status===409){
         if((opts._retry|0)>=4)throw new Error("First cloud push kept racing; local progress is safe and queued");
         const pulled=await cloudPull({force:true,requireRemote:true,reason:"insert-race",operationGeneration,
-          identityOperation:opts.identityOperation});
+          identityOperation:opts.identityOperation,_diagnosticAttempt:opts._diagnosticAttempt});
         if(!pulled||(state.sync.cloudRev|0)<=0)throw new Error("insert returned 409 but the matching row was not safely pullable");
         await clearSyncCreateAuthorizationDurably("cloud-create-race-confirmed",opts);
         await new Promise(resolve=>setTimeout(resolve,120*((opts._retry|0)+1)));
@@ -16266,7 +16266,8 @@ async function cloudPushOnce(opts){
     // Pull their state, merge with ours, retry the push at the new cloud_rev.
     if ((opts._retry|0) < 4){
       console.info(`Cloud revision changed from ${rev}; merging before retry ${(opts._retry|0)+1}/4`);
-      const pulled = await cloudPull({force:true, reason:"push-conflict", operationGeneration,identityOperation:opts.identityOperation});
+      const pulled = await cloudPull({force:true, reason:"push-conflict", operationGeneration,identityOperation:opts.identityOperation,
+        _diagnosticAttempt:opts._diagnosticAttempt});
       const refreshedRev = state.sync.cloudRev|0;
       if (!pulled || refreshedRev <= rev){
         throw new Error(`Cloud update was not accepted at revision ${rev}; local progress is safe and queued`);
@@ -16457,7 +16458,9 @@ async function fetchCloudRemote(opts){
 
 async function cloudPull(opts){
   opts = opts||{};
-  const diagnosticAttempt=beginCloudSyncAttempt();
+  /* A retry's full read belongs to the same logical push. Its success must
+     not outrank a subsequent failed PATCH, while independent pulls still do. */
+  const diagnosticAttempt=opts._diagnosticAttempt||beginCloudSyncAttempt();
   try{
   assertAccountingStorageDeterminate();
   /* v4.2: opts.force lets claim/disconnect/manual flows pull regardless of
