@@ -1,0 +1,14 @@
+{
+  "name": "lifexp-source-review",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Isolated synthetic checks for the Life XP static application",
+  "scripts": {
+    "test": "node tools/run-tests.mjs",
+    "test:source": "node tests/source-integrity.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.59.1"
+  },
+  "engines": { "node": ">=20" }
+}

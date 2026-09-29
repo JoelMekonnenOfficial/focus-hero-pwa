@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Life XP — check for an update</title>
+<style>:root{color-scheme:dark}body{max-width:34rem;margin:10vh auto;padding:24px;background:#101526;color:#eef3ff;font:17px/1.6 system-ui}button,a{font:inherit;color:#eef3ff}button{padding:12px 20px;background:#293d6e;border:1px solid #809aef;border-radius:10px}a{display:block;margin-top:24px}</style></head><body>
+<h1>Check for a complete update</h1><p>Finish or log any open clocks in your other Life XP windows first. This page checks for updated app files without opening your profile.</p>
+<p id="message" role="status">Existing app files and saved progress will be kept.</p><button id="check" type="button">Check for update</button><a href="./">Return to Life XP</a>
+<script>
+document.getElementById("check").onclick=async function(){
+  var button=this,message=document.getElementById("message");button.disabled=true;
+  try{
+    if(!("serviceWorker" in navigator))throw new Error("unavailable");
+    var registration=await navigator.serviceWorker.getRegistration();
+    if(registration){await registration.update();message.textContent="Update check requested. Give the download a moment, then return to Life XP. Incomplete downloads leave the previous version available.";}
+    else message.textContent="No installed app worker was found. Return to Life XP to load the current version.";
+  }catch(_){message.textContent="The update could not be checked. Connect to the internet and try again.";}
+  finally{button.disabled=false;}
+};
+</script></body></html>
