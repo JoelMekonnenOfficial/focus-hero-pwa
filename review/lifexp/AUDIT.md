@@ -1,3 +1,9 @@
+# Current follow-up: Life XP 10.64.3
+
+The September 29 regression patch is documented in `INCIDENT-10.64.3.md` and the current `RELEASE_NOTES.md`. It addresses the reproduced optional-script startup block, idle Skills redraw loop, and hidden current sync failures. Its exact validation and publication status are recorded separately. The earlier review below is preserved as historical evidence; it does not claim the reported layout difference or every physical-device issue is resolved.
+
+---
+
 # Life XP 10.64.2 — compatibility and due-diligence review
 
 September 27, 2026. Build fh-2026-09-27-v10-64-2-compatible. Source candidate, not a published release.

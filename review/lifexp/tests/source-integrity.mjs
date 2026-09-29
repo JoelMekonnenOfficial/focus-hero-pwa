@@ -29,6 +29,10 @@ for(const match of text.matchAll(/<script\b[^>]*src="([^"?#]+\.js)"[^>]*>/g)){
   assert.ok(match[0].includes('crossorigin="anonymous"'));
 }
 assert.equal(/guardScript.integrity = "([^"]+)"/.exec(text)?.[1],hashes['data-guard.js']);
+const requiredRuntime=JSON.parse(/const FH_REQUIRED_RUNTIME_SCRIPTS = new Set\((\[[\s\S]*?\])\);/.exec(text)[1]);
+const referencedRuntime=Array.from(text.matchAll(/<script\b[^>]*src="([^"?#]+\.js)"[^>]*>/g),match=>match[1].replace(/^\.\//,''));
+referencedRuntime.push(/guardScript.src = "\.\/([^"]+)"/.exec(text)[1]);
+assert.deepEqual([...requiredRuntime].sort(),[...referencedRuntime].sort(),'Fatal boot gate must cover every sealed runtime script, including the dynamic guard');
 const bundle=createHash('sha256');
 for(const name of names.filter(name=>name!=='sw.js'))bundle.update(name+'\0').update(read(name));
 assert.equal(/const BUNDLE_HASH = "([^"]+)"/.exec(worker)?.[1],bundle.digest('hex'),'Bundle changed: run node tools/seal-assets.mjs');

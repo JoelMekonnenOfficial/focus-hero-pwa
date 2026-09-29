@@ -6,6 +6,7 @@ import vm from 'node:vm';
 const src=readFileSync(new URL('../starmax/index.html',import.meta.url),'utf8');
 function section(a,b){const i=src.indexOf(a),j=src.indexOf(b,i);assert.ok(i>=0&&j>i,a);return src.slice(i,j);}
 const actual=[
+  section('let cloudSyncAttemptSerial=0;','function syncControlError(code, message){'),
   section('async function supabaseRequest(path, init){','function supabaseJwtExpiryMs('),
   section('var FH_CLOUD_BUDGET =','async function cloudPush(opts){'),
   section('async function cloudPush(opts){','function lastKnownGoodFocusMinutes(){'),

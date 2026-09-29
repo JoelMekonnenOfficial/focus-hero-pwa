@@ -721,7 +721,10 @@
     if (body && body.hidden === open) body.hidden = !open;
     if (toggle) {
       toggle.setAttribute("aria-expanded", open ? "true" : "false");
-      toggle.textContent = open ? "Close skills" : "Open skills";
+      var label = open ? "Close skills" : "Open skills";
+      /* This runs after document mutations. Replacing identical text would
+         schedule our observer again on every animation frame while idle. */
+      if (toggle.textContent !== label) toggle.textContent = label;
       toggle.title = open ? "Collapse the Skills list" : "Open the Skills list";
     }
     return true;
